@@ -8,6 +8,7 @@ authors = [
 dependencies = [
     "dask==2024.7.0",
     "ipykernel>=6.29.5",
+    "jupyterlab>=4.2.3",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
