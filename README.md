@@ -18,5 +18,6 @@ curl -sSf https://rye.astral.sh/get | bash
 ### Install python dependencies
 
 ```
+cd sheerwater-benchmarking
 rye sync
 ```
