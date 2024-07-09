@@ -14,3 +14,9 @@ Rye to get started.
 ```
 curl -sSf https://rye.astral.sh/get | bash
 ```
+
+### Install python dependencies
+
+```
+rye sync
+```

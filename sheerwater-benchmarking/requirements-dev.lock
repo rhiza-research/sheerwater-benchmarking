@@ -10,3 +10,22 @@
 #   universal: false
 
 -e file:.
+click==8.1.7
+    # via dask
+cloudpickle==3.0.0
+    # via dask
+dask==2024.7.0
+    # via sheerwater-benchmarking
+fsspec==2024.6.1
+    # via dask
+locket==1.0.0
+    # via partd
+packaging==24.1
+    # via dask
+partd==1.4.2
+    # via dask
+pyyaml==6.0.1
+    # via dask
+toolz==0.12.1
+    # via dask
+    # via partd
