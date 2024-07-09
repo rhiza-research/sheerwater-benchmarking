@@ -6,7 +6,8 @@ authors = [
     { name = "Joshua Adkins", email = "josh@nline.io" }
 ]
 dependencies = [
-    "dask==2024.7.0"
+    "dask==2024.7.0",
+    "ipykernel>=6.29.5",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
