@@ -9,6 +9,8 @@ dependencies = [
     "dask==2024.7.0",
     "ipykernel>=6.29.5",
     "jupyterlab>=4.2.3",
+    "gcloud>=0.18.3",
+    "xarray>=2024.6.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
