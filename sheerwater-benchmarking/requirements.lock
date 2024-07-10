@@ -10,6 +10,16 @@
 #   universal: false
 
 -e file:.
+aiobotocore==2.13.1
+    # via s3fs
+aiohttp==3.9.5
+    # via aiobotocore
+    # via coiled
+    # via s3fs
+aioitertools==0.11.0
+    # via aiobotocore
+aiosignal==1.3.1
+    # via aiohttp
 anyio==4.4.0
     # via httpx
     # via jupyter-server
@@ -26,78 +36,174 @@ asttokens==2.4.1
 async-lru==2.0.4
     # via jupyterlab
 attrs==23.2.0
+    # via aiohttp
     # via jsonschema
     # via referencing
 babel==2.15.0
     # via jupyterlab-server
+backoff==2.2.1
+    # via coiled
+bcrypt==4.1.3
+    # via paramiko
 beautifulsoup4==4.12.3
     # via nbconvert
 bleach==6.1.0
     # via nbconvert
+bokeh==3.5.0
+    # via dask
+boto3==1.34.131
+    # via coiled
+botocore==1.34.131
+    # via aiobotocore
+    # via boto3
+    # via s3transfer
+cachetools==5.3.3
+    # via google-auth
 certifi==2024.7.4
     # via httpcore
     # via httpx
     # via requests
 cffi==1.16.0
     # via argon2-cffi-bindings
+    # via cryptography
+    # via pynacl
 charset-normalizer==3.3.2
     # via requests
 click==8.1.7
+    # via coiled
     # via dask
+    # via distributed
 cloudpickle==3.0.0
     # via dask
+    # via distributed
+coiled==1.34.2
+    # via sheerwater-benchmarking
 comm==0.2.2
     # via ipykernel
-dask==2024.7.0
+    # via ipywidgets
+contourpy==1.2.1
+    # via bokeh
+cryptography==42.0.8
+    # via paramiko
     # via sheerwater-benchmarking
+dask==2024.7.0
+    # via coiled
+    # via dask-expr
+    # via distributed
+    # via sheerwater-benchmarking
+dask-expr==1.1.7
+    # via dask
 debugpy==1.8.2
     # via ipykernel
 decorator==5.1.1
+    # via fabric
     # via ipython
 defusedxml==0.7.1
     # via nbconvert
+deprecated==1.2.14
+    # via fabric
+distributed==2024.7.0
+    # via coiled
+    # via dask
 executing==2.0.1
     # via stack-data
+fabric==3.2.2
+    # via coiled
 fastjsonschema==2.20.0
     # via nbformat
+filelock==3.15.4
+    # via coiled
 fqdn==1.5.1
     # via jsonschema
+frozenlist==1.4.1
+    # via aiohttp
+    # via aiosignal
 fsspec==2024.6.1
     # via dask
-gcloud==0.18.3
+    # via s3fs
+gilknocker==0.4.1
+    # via coiled
+google-api-core==2.19.1
+    # via google-api-python-client
+    # via google-cloud-core
+    # via google-cloud-storage
+google-api-python-client==2.137.0
     # via sheerwater-benchmarking
+google-auth==2.32.0
+    # via google-api-core
+    # via google-api-python-client
+    # via google-auth-httplib2
+    # via google-cloud-core
+    # via google-cloud-storage
+google-auth-httplib2==0.2.0
+    # via google-api-python-client
+google-cloud-core==2.4.1
+    # via google-cloud-storage
+google-cloud-storage==2.17.0
+    # via sheerwater-benchmarking
+google-crc32c==1.5.0
+    # via google-cloud-storage
+    # via google-resumable-media
+google-resumable-media==2.7.1
+    # via google-cloud-storage
 googleapis-common-protos==1.63.2
-    # via gcloud
+    # via google-api-core
 h11==0.14.0
     # via httpcore
+h2==4.1.0
+    # via httpx
+hpack==4.0.0
+    # via h2
 httpcore==1.0.5
     # via httpx
 httplib2==0.22.0
-    # via gcloud
-    # via oauth2client
+    # via google-api-python-client
+    # via google-auth-httplib2
+    # via sheerwater-benchmarking
 httpx==0.27.0
+    # via coiled
     # via jupyterlab
+hyperframe==6.0.1
+    # via h2
 idna==3.7
     # via anyio
     # via httpx
     # via jsonschema
     # via requests
+    # via yarl
+importlib-metadata==8.0.0
+    # via coiled
+invoke==2.2.0
+    # via coiled
+    # via fabric
 ipykernel==6.29.5
     # via jupyterlab
     # via sheerwater-benchmarking
 ipython==8.26.0
     # via ipykernel
+    # via ipywidgets
+ipywidgets==8.1.3
+    # via coiled
 isoduration==20.11.0
     # via jsonschema
 jedi==0.19.1
     # via ipython
 jinja2==3.1.4
+    # via bokeh
+    # via dask
+    # via distributed
     # via jupyter-server
     # via jupyterlab
     # via jupyterlab-server
     # via nbconvert
+jmespath==1.0.1
+    # via boto3
+    # via botocore
+    # via coiled
 json5==0.9.25
     # via jupyterlab-server
+jsondiff==2.1.1
+    # via coiled
 jsonpointer==3.0.0
     # via jsonschema
 jsonschema==4.23.0
@@ -126,93 +232,154 @@ jupyter-server==2.14.1
     # via jupyter-lsp
     # via jupyterlab
     # via jupyterlab-server
+    # via notebook
     # via notebook-shim
 jupyter-server-terminals==0.5.3
     # via jupyter-server
 jupyterlab==4.2.3
+    # via notebook
     # via sheerwater-benchmarking
 jupyterlab-pygments==0.3.0
     # via nbconvert
 jupyterlab-server==2.27.2
     # via jupyterlab
+    # via notebook
+jupyterlab-widgets==3.0.11
+    # via ipywidgets
+jupytext==1.16.2
+    # via sheerwater-benchmarking
 locket==1.0.0
+    # via distributed
     # via partd
+lz4==4.3.3
+    # via dask
+markdown-it-py==3.0.0
+    # via jupytext
+    # via mdit-py-plugins
+    # via rich
 markupsafe==2.1.5
     # via jinja2
     # via nbconvert
 matplotlib-inline==0.1.7
     # via ipykernel
     # via ipython
+mdit-py-plugins==0.4.1
+    # via jupytext
+mdurl==0.1.2
+    # via markdown-it-py
 mistune==3.0.2
     # via nbconvert
+msgpack==1.0.8
+    # via distributed
+multidict==6.0.5
+    # via aiohttp
+    # via yarl
 nbclient==0.10.0
     # via nbconvert
 nbconvert==7.16.4
     # via jupyter-server
 nbformat==5.10.4
     # via jupyter-server
+    # via jupytext
     # via nbclient
     # via nbconvert
 nest-asyncio==1.6.0
     # via ipykernel
+notebook==7.2.1
+    # via sheerwater-benchmarking
 notebook-shim==0.2.4
     # via jupyterlab
+    # via notebook
 numpy==2.0.0
+    # via bokeh
+    # via contourpy
+    # via dask
     # via pandas
+    # via pyarrow
     # via xarray
-oauth2client==4.1.3
-    # via gcloud
 overrides==7.7.0
     # via jupyter-server
 packaging==24.1
+    # via bokeh
+    # via coiled
     # via dask
+    # via distributed
     # via ipykernel
     # via jupyter-server
     # via jupyterlab
     # via jupyterlab-server
+    # via jupytext
     # via nbconvert
+    # via pip-requirements-parser
     # via xarray
 pandas==2.2.2
+    # via bokeh
+    # via dask
+    # via dask-expr
     # via xarray
 pandocfilters==1.5.1
     # via nbconvert
+paramiko==3.4.0
+    # via coiled
+    # via fabric
 parso==0.8.4
     # via jedi
 partd==1.4.2
     # via dask
 pexpect==4.9.0
     # via ipython
+pillow==10.4.0
+    # via bokeh
+pip==24.1.2
+    # via coiled
+pip-requirements-parser==32.0.1
+    # via coiled
 platformdirs==4.2.2
     # via jupyter-core
 prometheus-client==0.20.0
+    # via coiled
     # via jupyter-server
 prompt-toolkit==3.0.47
     # via ipython
-protobuf==5.27.2
-    # via gcloud
+proto-plus==1.24.0.dev1
+    # via google-api-core
+    # via sheerwater-benchmarking
+protobuf==4.25.3
+    # via google-api-core
     # via googleapis-common-protos
+    # via proto-plus
 psutil==6.0.0
+    # via distributed
     # via ipykernel
 ptyprocess==0.7.0
     # via pexpect
     # via terminado
 pure-eval==0.2.2
     # via stack-data
+pyarrow==16.1.0
+    # via dask
+    # via dask-expr
+pyarrow-hotfix==0.6
+    # via dask
 pyasn1==0.6.0
-    # via oauth2client
     # via pyasn1-modules
     # via rsa
 pyasn1-modules==0.4.0
-    # via oauth2client
+    # via google-auth
 pycparser==2.22
     # via cffi
 pygments==2.18.0
     # via ipython
     # via nbconvert
+    # via rich
+pynacl==1.5.0
+    # via paramiko
 pyparsing==3.1.2
     # via httplib2
+    # via pip-requirements-parser
 python-dateutil==2.9.0.post0
     # via arrow
+    # via botocore
     # via jupyter-client
     # via pandas
 python-json-logger==2.0.7
@@ -220,8 +387,12 @@ python-json-logger==2.0.7
 pytz==2024.1
     # via pandas
 pyyaml==6.0.1
+    # via bokeh
     # via dask
+    # via distributed
+    # via jsondiff
     # via jupyter-events
+    # via jupytext
 pyzmq==26.0.3
     # via ipykernel
     # via jupyter-client
@@ -231,6 +402,8 @@ referencing==0.35.1
     # via jsonschema-specifications
     # via jupyter-events
 requests==2.32.3
+    # via google-api-core
+    # via google-cloud-storage
     # via jupyterlab-server
 rfc3339-validator==0.1.4
     # via jsonschema
@@ -238,47 +411,63 @@ rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
     # via jsonschema
     # via jupyter-events
+rich==13.7.1
+    # via coiled
 rpds-py==0.19.0
     # via jsonschema
     # via referencing
 rsa==4.9
-    # via oauth2client
+    # via google-auth
+s3fs==2024.6.1
+    # via sheerwater-benchmarking
+s3transfer==0.10.2
+    # via boto3
 send2trash==1.8.3
     # via jupyter-server
 setuptools==70.3.0
+    # via coiled
     # via jupyterlab
 six==1.16.0
     # via asttokens
     # via bleach
-    # via gcloud
-    # via oauth2client
     # via python-dateutil
     # via rfc3339-validator
 sniffio==1.3.1
     # via anyio
     # via httpx
+sortedcontainers==2.4.0
+    # via distributed
 soupsieve==2.5
     # via beautifulsoup4
 stack-data==0.6.3
     # via ipython
+tblib==3.0.0
+    # via distributed
 terminado==0.18.1
     # via jupyter-server
     # via jupyter-server-terminals
 tinycss2==1.3.0
     # via nbconvert
+toml==0.10.2
+    # via coiled
 toolz==0.12.1
     # via dask
+    # via distributed
     # via partd
 tornado==6.4.1
+    # via bokeh
+    # via distributed
     # via ipykernel
     # via jupyter-client
     # via jupyter-server
     # via jupyterlab
+    # via notebook
     # via terminado
 traitlets==5.14.3
     # via comm
     # via ipykernel
     # via ipython
+    # via ipywidgets
     # via jupyter-client
     # via jupyter-core
     # via jupyter-events
@@ -290,11 +479,17 @@ traitlets==5.14.3
     # via nbformat
 types-python-dateutil==2.9.0.20240316
     # via arrow
+typing-extensions==4.12.2
+    # via coiled
 tzdata==2024.1
     # via pandas
 uri-template==1.3.0
     # via jsonschema
+uritemplate==4.1.1
+    # via google-api-python-client
 urllib3==2.2.2
+    # via botocore
+    # via distributed
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit
@@ -305,5 +500,20 @@ webencodings==0.5.1
     # via tinycss2
 websocket-client==1.8.0
     # via jupyter-server
+wheel==0.43.0
+    # via coiled
+widgetsnbextension==4.0.11
+    # via ipywidgets
+wrapt==1.16.0
+    # via aiobotocore
+    # via deprecated
 xarray==2024.6.0
     # via sheerwater-benchmarking
+xyzservices==2024.6.0
+    # via bokeh
+yarl==1.9.4
+    # via aiohttp
+zict==3.0.0
+    # via distributed
+zipp==3.19.2
+    # via importlib-metadata

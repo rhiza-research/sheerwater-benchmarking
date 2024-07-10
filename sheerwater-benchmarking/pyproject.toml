@@ -7,10 +7,19 @@ authors = [
 ]
 dependencies = [
     "dask==2024.7.0",
+    "dask[complete]",
+    "coiled",
+    "httplib2",
+    "s3fs",
+    "google-api-python-client",
+    "proto-plus==1.24.0.dev1",
+    "google-cloud-storage",
+    "cryptography",
     "ipykernel>=6.29.5",
     "jupyterlab>=4.2.3",
-    "gcloud>=0.18.3",
     "xarray>=2024.6.0",
+    "notebook",
+    "jupytext",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
