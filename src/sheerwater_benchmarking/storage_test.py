@@ -13,7 +13,7 @@ def load_netcdf():
 
     # write it back out to ZARR
     gcsmap = fs.get_mapper("gs://sheerwater-datalake/precip.1999.zarr")
-    ds.to_zarr(store=gcsmap)
+    ds.to_zarr(store=gcsmap, mode='w')
 
 @dask_remote
 def load_zarr():
