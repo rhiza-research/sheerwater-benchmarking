@@ -21,6 +21,13 @@ dependencies = [
     "notebook",
     "jupytext",
     "dask-kubernetes>=2024.5.0",
+    "gcsfs",
+    "zarr",
+    "h5py",
+    "netcdf4",
+    "h5netcdf",
+    "tiledb",
+    "scipy",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"

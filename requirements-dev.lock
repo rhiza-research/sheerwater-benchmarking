@@ -15,6 +15,7 @@ aiobotocore==2.13.1
 aiohttp==3.9.5
     # via aiobotocore
     # via coiled
+    # via gcsfs
     # via kopf
     # via kubernetes-asyncio
     # via s3fs
@@ -35,6 +36,8 @@ argon2-cffi-bindings==21.2.0
     # via argon2-cffi
 arrow==1.3.0
     # via isoduration
+asciitree==0.3.3
+    # via zarr
 asttokens==2.4.1
     # via stack-data
 async-lru==2.0.4
@@ -71,11 +74,14 @@ certifi==2024.7.4
     # via httpx
     # via kubernetes
     # via kubernetes-asyncio
+    # via netcdf4
     # via requests
 cffi==1.16.0
     # via argon2-cffi-bindings
     # via cryptography
     # via pynacl
+cftime==1.6.4
+    # via netcdf4
 charset-normalizer==3.3.2
     # via requests
 click==8.1.7
@@ -111,6 +117,7 @@ debugpy==1.8.2
     # via ipykernel
 decorator==5.1.1
     # via fabric
+    # via gcsfs
     # via ipython
 defusedxml==0.7.1
     # via nbconvert
@@ -124,6 +131,8 @@ executing==2.0.1
     # via stack-data
 fabric==3.2.2
     # via coiled
+fasteners==0.19
+    # via zarr
 fastjsonschema==2.20.0
     # via nbformat
 filelock==3.15.4
@@ -135,7 +144,10 @@ frozenlist==1.4.1
     # via aiosignal
 fsspec==2024.6.1
     # via dask
+    # via gcsfs
     # via s3fs
+gcsfs==2024.6.1
+    # via sheerwater-benchmarking
 gilknocker==0.4.1
     # via coiled
 google-api-core==2.19.1
@@ -145,17 +157,22 @@ google-api-core==2.19.1
 google-api-python-client==2.137.0
     # via sheerwater-benchmarking
 google-auth==2.32.0
+    # via gcsfs
     # via google-api-core
     # via google-api-python-client
     # via google-auth-httplib2
+    # via google-auth-oauthlib
     # via google-cloud-core
     # via google-cloud-storage
     # via kubernetes
 google-auth-httplib2==0.2.0
     # via google-api-python-client
+google-auth-oauthlib==1.2.1
+    # via gcsfs
 google-cloud-core==2.4.1
     # via google-cloud-storage
 google-cloud-storage==2.17.0
+    # via gcsfs
     # via sheerwater-benchmarking
 google-crc32c==1.5.0
     # via google-cloud-storage
@@ -169,6 +186,11 @@ h11==0.14.0
     # via wsproto
 h2==4.1.0
     # via httpx
+h5netcdf==1.3.0
+    # via sheerwater-benchmarking
+h5py==3.11.0
+    # via h5netcdf
+    # via sheerwater-benchmarking
 hpack==4.0.0
     # via h2
 httpcore==1.0.5
@@ -317,18 +339,29 @@ nbformat==5.10.4
     # via nbconvert
 nest-asyncio==1.6.0
     # via ipykernel
+netcdf4==1.7.1.post1
+    # via sheerwater-benchmarking
 notebook==7.2.1
     # via sheerwater-benchmarking
 notebook-shim==0.2.4
     # via jupyterlab
     # via notebook
+numcodecs==0.12.1
+    # via zarr
 numpy==2.0.0
     # via bokeh
+    # via cftime
     # via contourpy
     # via dask
+    # via h5py
+    # via netcdf4
+    # via numcodecs
     # via pandas
     # via pyarrow
+    # via scipy
+    # via tiledb
     # via xarray
+    # via zarr
 oauthlib==3.2.2
     # via kubernetes
     # via requests-oauthlib
@@ -339,6 +372,7 @@ packaging==24.1
     # via coiled
     # via dask
     # via distributed
+    # via h5netcdf
     # via ipykernel
     # via jupyter-server
     # via jupyterlab
@@ -451,6 +485,7 @@ referencing==0.35.1
     # via jsonschema-specifications
     # via jupyter-events
 requests==2.32.3
+    # via gcsfs
     # via google-api-core
     # via google-cloud-storage
     # via jupyterlab-server
@@ -458,6 +493,7 @@ requests==2.32.3
     # via pykube-ng
     # via requests-oauthlib
 requests-oauthlib==2.0.0
+    # via google-auth-oauthlib
     # via kubernetes
 rfc3339-validator==0.1.4
     # via jsonschema
@@ -477,6 +513,8 @@ s3fs==2024.6.1
     # via sheerwater-benchmarking
 s3transfer==0.10.2
     # via boto3
+scipy==1.14.0
+    # via sheerwater-benchmarking
 send2trash==1.8.3
     # via jupyter-server
 setuptools==70.3.0
@@ -503,6 +541,8 @@ tblib==3.0.0
 terminado==0.18.1
     # via jupyter-server
     # via jupyter-server-terminals
+tiledb==0.30.2
+    # via sheerwater-benchmarking
 tinycss2==1.3.0
     # via nbconvert
 toml==0.10.2
@@ -577,6 +617,8 @@ xyzservices==2024.6.0
     # via bokeh
 yarl==1.9.4
     # via aiohttp
+zarr==2.18.2
+    # via sheerwater-benchmarking
 zict==3.0.0
     # via distributed
 zipp==3.19.2

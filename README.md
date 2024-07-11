@@ -15,6 +15,12 @@ Rye to get started.
 curl -sSf https://rye.astral.sh/get | bash
 ```
 
+### Install non-python dependencies
+
+```
+brew install hdf5 netcdf
+```
+
 ### Install python dependencies
 
 ```
