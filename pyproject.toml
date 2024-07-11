@@ -20,6 +20,7 @@ dependencies = [
     "xarray>=2024.6.0",
     "notebook",
     "jupytext",
+    "dask-kubernetes>=2024.5.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
