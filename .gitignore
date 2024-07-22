@@ -171,3 +171,5 @@ wheels/
 
 # venv
 .venv
+
+*.swp
