@@ -48,6 +48,7 @@ asyncache==0.3.1
     # via kr8s
 attrs==23.2.0
     # via aiohttp
+    # via cads-api-client
     # via jsonschema
     # via rasterio
     # via referencing
@@ -72,6 +73,10 @@ botocore==1.34.131
 cachetools==5.3.3
     # via asyncache
     # via google-auth
+cads-api-client==1.1.0
+    # via cdsapi
+cdsapi==0.7.0
+    # via sheerwater-benchmarking
 certifi==2024.7.4
     # via httpcore
     # via httpx
@@ -175,6 +180,7 @@ gilknocker==0.4.1
 google-api-core==2.19.1
     # via google-api-python-client
     # via google-cloud-core
+    # via google-cloud-secret-manager
     # via google-cloud-storage
 google-api-python-client==2.137.0
     # via sheerwater-benchmarking
@@ -185,6 +191,7 @@ google-auth==2.32.0
     # via google-auth-httplib2
     # via google-auth-oauthlib
     # via google-cloud-core
+    # via google-cloud-secret-manager
     # via google-cloud-storage
     # via kubernetes
 google-auth-httplib2==0.2.0
@@ -193,6 +200,8 @@ google-auth-oauthlib==1.2.1
     # via gcsfs
 google-cloud-core==2.4.1
     # via google-cloud-storage
+google-cloud-secret-manager==2.20.1
+    # via sheerwater-benchmarking
 google-cloud-storage==2.17.0
     # via gcsfs
     # via sheerwater-benchmarking
@@ -202,6 +211,17 @@ google-crc32c==1.5.0
 google-resumable-media==2.7.1
     # via google-cloud-storage
 googleapis-common-protos==1.63.2
+    # via google-api-core
+    # via grpc-google-iam-v1
+    # via grpcio-status
+grpc-google-iam-v1==0.13.1
+    # via google-cloud-secret-manager
+grpcio==1.65.1
+    # via google-api-core
+    # via googleapis-common-protos
+    # via grpc-google-iam-v1
+    # via grpcio-status
+grpcio-status==1.62.2
     # via google-api-core
 h11==0.14.0
     # via httpcore
@@ -354,6 +374,8 @@ msgpack==1.0.8
 multidict==6.0.5
     # via aiohttp
     # via yarl
+multiurl==0.3.1
+    # via cads-api-client
 nbclient==0.10.0
     # via nbconvert
 nbconvert==7.16.4
@@ -450,10 +472,14 @@ prompt-toolkit==3.0.47
     # via ipython
 proto-plus==1.24.0.dev1
     # via google-api-core
+    # via google-cloud-secret-manager
     # via sheerwater-benchmarking
 protobuf==4.25.3
     # via google-api-core
+    # via google-cloud-secret-manager
     # via googleapis-common-protos
+    # via grpc-google-iam-v1
+    # via grpcio-status
     # via proto-plus
 psutil==6.0.0
     # via distributed
@@ -502,6 +528,7 @@ python-dateutil==2.9.0.post0
     # via kubernetes
     # via kubernetes-asyncio
     # via matplotlib
+    # via multiurl
     # via pandas
 python-json-logger==2.0.7
     # via jupyter-events
@@ -509,6 +536,7 @@ python-json-logger==2.0.7
 python-jsonpath==1.1.1
     # via kr8s
 pytz==2024.1
+    # via multiurl
     # via pandas
 pyyaml==6.0.1
     # via bokeh
@@ -533,11 +561,14 @@ referencing==0.35.1
     # via jsonschema-specifications
     # via jupyter-events
 requests==2.32.3
+    # via cads-api-client
+    # via cdsapi
     # via gcsfs
     # via google-api-core
     # via google-cloud-storage
     # via jupyterlab-server
     # via kubernetes
+    # via multiurl
     # via pykube-ng
     # via requests-oauthlib
     # via sheerwater-benchmarking
@@ -614,6 +645,9 @@ tornado==6.4.1
     # via jupyterlab
     # via notebook
     # via terminado
+tqdm==4.66.4
+    # via cdsapi
+    # via multiurl
 traitlets==5.14.3
     # via comm
     # via ipykernel
@@ -631,6 +665,7 @@ traitlets==5.14.3
 types-python-dateutil==2.9.0.20240316
     # via arrow
 typing-extensions==4.12.2
+    # via cads-api-client
     # via coiled
     # via kopf
 tzdata==2024.1

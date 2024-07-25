@@ -14,6 +14,7 @@ dependencies = [
     "google-api-python-client",
     "proto-plus==1.24.0.dev1",
     "google-cloud-storage",
+    "google-cloud-secret-manager",
     "cryptography",
     "ipykernel",
     "jupyterlab",
@@ -32,6 +33,7 @@ dependencies = [
     "scipy",
     "requests",
     "ecmwf-api-client",
+    "cdsapi",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
