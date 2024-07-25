@@ -9,6 +9,7 @@ dependencies = [
     "dask==2024.7.0",
     "dask[complete]",
     "coiled",
+    "numpy==1.26",
     "httplib2",
     "s3fs",
     "google-api-python-client",
@@ -31,6 +32,7 @@ dependencies = [
     "h5netcdf",
     "tiledb",
     "scipy",
+    "ecmwf-api-client>=1.6.3",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
