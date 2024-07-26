@@ -2,6 +2,9 @@ from functools import partial
 import os
 import gcsfs
 import xarray as xr
+import pandas
+import dateparser
+import datetime
 from inspect import signature, Parameter
 
 def cacheable(data_type, immutable_args, timeseries=False, cache=True):
@@ -21,7 +24,7 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
             validate_cache_timeseries = True
             if 'validate_cache_timeseries' in kwargs:
                 validate_cache_timeseries = kwargs['validate_cache_timeseries']
-                del kwargs['valide_cache_timeseries']
+                del kwargs['validate_cache_timeseries']
 
             params = signature(func).parameters
 
@@ -80,24 +83,29 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
                         print(f"Opening cache {cache_path}")
                         ds = xr.open_dataset(cache_map, engine='zarr')
 
-                        #if validate_cache_timeries and timeseries:
-                        #    # Check to see if the dataset extends roughly the full time series set
-                        #    if 'time' not in ds.dims:
-                        #        print("ERROR: Timeseries array must return a 'time' dimension for slicing. This could be an invalid cache. Try running with `recompute=True` to reset the cache.")
-                        #        return
-                        #    else:
-                        #        if ds.time.
+                        if validate_cache_timeseries and timeseries:
+                            # Check to see if the dataset extends roughly the full time series set
+                            if 'time' not in ds.dims:
+                                print("ERROR: Timeseries array must return a 'time' dimension for slicing. This could be an invalid cache. Try running with `recompute=True` to reset the cache.")
+                                return
+                            else:
+                                # Check if within 1 year at least
+                                if (pandas.Timestamp(ds.time.min().values) < dateparser.parse(start_time) + datetime.timedelta(days=365) and
+                                    pandas.Timestamp(ds.time.max().values) > dateparser.parse(end_time) - datetime.timedelta(days=365)):
 
-
-                        compute_result = False
+                                    compute_result = False
+                                else:
+                                    print("WARNING: The cached array does not have data within 1 year of your start or endtime. Automatically recomputing. If you do not want to recompute the result set `validate_cache_timeseries=False`")
+                        else:
+                            compute_result = False
                 else:
                     print("Auto caching currently only supports array types")
 
             if compute_result:
                 if recompute:
-                    print("Recompute requested. Not checking for cached result.")
+                    print(f"Recompute for {cache_path} requested. Not checking for cached result.")
                 elif not cache:
-                    print("Not a cacheable function. Recomputing result.")
+                    print(f"{func.__name__} not a cacheable function. Recomputing result.")
                 else:
                     print(f"Cache doesn't exist for {cache_path}. Running function")
 
