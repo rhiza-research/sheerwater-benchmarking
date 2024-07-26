@@ -8,6 +8,7 @@ def cacheable(data_type, immutable_args, timeseries=False):
     def create_cacheable(func):
         def wrapper(*args, **kwargs):
             # Calculate the appropriate cache key
+            filepath_only = False
             if 'filepath_only' in kwargs:
                 filepath_only = kwargs['filepath_only']
                 del kwargs['filepath_only']
@@ -17,6 +18,7 @@ def cacheable(data_type, immutable_args, timeseries=False):
             for a in immutable_args:
                 if a in kwargs:
                     immutable_arg_values[a] = kwargs[a]
+                    continue
 
                 for i, p in enumerate(params):
                     if a == p and (params[p].kind == Parameter.VAR_POSITIONAL or params[p].kind == Parameter.POSITIONAL_OR_KEYWORD) and params[p].default == Parameter.empty:
