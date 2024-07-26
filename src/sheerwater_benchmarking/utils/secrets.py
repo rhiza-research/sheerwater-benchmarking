@@ -2,7 +2,7 @@ import os
 from google.cloud import secretmanager
 from pathlib import Path
 
-def cdsapi(func=None):
+def cdsapi_secret(func=None):
 
     def get_secret():
         # Check to see if the CDS secret exists
@@ -18,14 +18,17 @@ def cdsapi(func=None):
             api_key = response.payload.data.decode("UTF-8")
 
             #Write it to a file
-            cdsapirc1 = "url: https://cds.climate.copernicus.eu/api/v2"
-            cdsapirc2 = f"key: {uid}:{api_key}"
+            url = "https://cds.climate.copernicus.eu/api/v2"
+            key = f"{uid}:{api_key}"
+            cdsapirc1 = "url: {url}"
+            cdsapirc2 = f"key: {key}"
 
             f = open(Path.home() / '.cdsapirc', mode='w+')
             f.write(cdsapirc1)
             f.write('\n')
             f.write(cdsapirc2)
             f.close()
+            return url, key
 
     def wrapper(*args, **kwargs):
         get_secret()
@@ -34,7 +37,6 @@ def cdsapi(func=None):
         return func(*args, **kwargs)
 
     if not func:
-        get_secret()
-        return
+        return get_secret()
     else:
         return wrapper

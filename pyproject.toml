@@ -35,6 +35,8 @@ dependencies = [
     "requests",
     "ecmwf-api-client",
     "cdsapi",
+    "dateparser",
+    "bokeh",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"

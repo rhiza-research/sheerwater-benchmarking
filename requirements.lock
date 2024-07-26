@@ -64,6 +64,7 @@ bleach==6.1.0
     # via nbconvert
 bokeh==3.5.0
     # via dask
+    # via sheerwater-benchmarking
 boto3==1.34.131
     # via coiled
 botocore==1.34.131
@@ -133,6 +134,8 @@ dask==2024.7.0
 dask-expr==1.1.8
     # via dask
 dask-kubernetes==2024.5.0
+    # via sheerwater-benchmarking
+dateparser==1.2.0
     # via sheerwater-benchmarking
 debugpy==1.8.2
     # via ipykernel
@@ -525,6 +528,7 @@ python-box==7.2.0
 python-dateutil==2.9.0.post0
     # via arrow
     # via botocore
+    # via dateparser
     # via jupyter-client
     # via kubernetes
     # via kubernetes-asyncio
@@ -537,6 +541,7 @@ python-json-logger==2.0.7
 python-jsonpath==1.1.1
     # via kr8s
 pytz==2024.1
+    # via dateparser
     # via multiurl
     # via pandas
 pyyaml==6.0.1
@@ -561,6 +566,8 @@ referencing==0.35.1
     # via jsonschema
     # via jsonschema-specifications
     # via jupyter-events
+regex==2024.7.24
+    # via dateparser
 requests==2.32.3
     # via cads-api-client
     # via cdsapi
@@ -671,6 +678,8 @@ typing-extensions==4.12.2
     # via kopf
 tzdata==2024.1
     # via pandas
+tzlocal==5.2
+    # via dateparser
 uri-template==1.3.0
     # via jsonschema
 uritemplate==4.1.1

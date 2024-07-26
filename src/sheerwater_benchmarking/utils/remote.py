@@ -18,7 +18,7 @@ def dask_remote(func):
             else:
                 # Just setup a coiled cluster
                 logger.info("Attaching to coiled cluster with default configuration")
-                cluster = coiled.Cluster(name='sheerwater-shared', n_workers=3)
+                cluster = coiled.Cluster(name='sheerwater-shared', n_workers=[3, 10], idle_timeout="45 minutes")
                 client = cluster.get_client()
 
             del kwargs['remote']
