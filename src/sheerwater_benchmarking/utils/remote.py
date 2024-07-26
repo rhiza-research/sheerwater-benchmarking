@@ -2,7 +2,7 @@ import coiled
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-from dask.distributed import Client, get_client
+from dask.distributed import Client, get_client, LocalCluster
 
 def dask_remote(func):
     def wrapper(*args, **kwargs):
@@ -11,7 +11,7 @@ def dask_remote(func):
             if 'remote_config' in kwargs:
                 # setup coiled cluster with remote config
                 logger.info("Attaching to coiled cluster with custom configuration")
-                cluster = coiled.Cluster(name='sheerwater-shared', **kwags['remote_config'])
+                cluster = coiled.Cluster(**kwargs['remote_config'])
                 client = cluster.get_client()
 
                 del kwargs['remote_config']
@@ -28,7 +28,9 @@ def dask_remote(func):
                 client = get_client()
             except ValueError:
                 logger.info("Starting local dask cluster...")
-                client = Client()
+                cluster = LocalCluster(n_workers=2,
+                       threads_per_worker=2)
+                client = Client(cluster)
 
         # call the function and return the result
         return func(*args, **kwargs)

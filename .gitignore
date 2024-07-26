@@ -173,3 +173,5 @@ wheels/
 .venv
 
 *.swp
+
+temp/
