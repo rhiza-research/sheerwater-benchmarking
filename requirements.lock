@@ -163,6 +163,8 @@ fastjsonschema==2.20.0
     # via nbformat
 filelock==3.15.4
     # via coiled
+flox==0.9.8
+    # via sheerwater-benchmarking
 fonttools==4.53.1
     # via matplotlib
 fqdn==1.5.1
@@ -404,11 +406,13 @@ numpy==1.26.0
     # via cftime
     # via contourpy
     # via dask
+    # via flox
     # via geopandas
     # via h5py
     # via matplotlib
     # via netcdf4
     # via numcodecs
+    # via numpy-groupies
     # via pandas
     # via pyarrow
     # via pyogrio
@@ -420,6 +424,8 @@ numpy==1.26.0
     # via snuggs
     # via xarray
     # via zarr
+numpy-groupies==0.11.1
+    # via flox
 oauthlib==3.2.2
     # via kubernetes
     # via requests-oauthlib
@@ -430,6 +436,7 @@ packaging==24.1
     # via coiled
     # via dask
     # via distributed
+    # via flox
     # via geopandas
     # via h5netcdf
     # via ipykernel
@@ -447,6 +454,7 @@ pandas==2.2.2
     # via bokeh
     # via dask
     # via dask-expr
+    # via flox
     # via geopandas
     # via xarray
 pandocfilters==1.5.1
@@ -604,6 +612,7 @@ s3fs==2024.6.1
 s3transfer==0.10.2
     # via boto3
 scipy==1.14.0
+    # via flox
     # via sheerwater-benchmarking
 send2trash==1.8.3
     # via jupyter-server
@@ -643,6 +652,7 @@ toml==0.10.2
 toolz==0.12.1
     # via dask
     # via distributed
+    # via flox
     # via partd
 tornado==6.4.1
     # via bokeh
