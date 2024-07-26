@@ -130,7 +130,9 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
                 if cache:
                     if ds is None:
                         print(f"Autocaching null result for {null_path}.")
-                        Path(null_path).touch()
+                        with fs.open(null_path, 'wb') as f:
+                            f.write(b'')
+                            return None
                     elif data_type == 'array':
                         print(f"Autocaching result for {cache_path}.")
                         write = False
