@@ -9,7 +9,7 @@ import datetime
 from inspect import signature, Parameter
 
 
-def cacheable(data_type, immutable_args, timeseries=False, cache=True):
+def cacheable(data_type, cache_args, timeseries=False, cache=True):
     def create_cacheable(func):
         def wrapper(*args, **kwargs):
             # Calculate the appropriate cache key
@@ -34,9 +34,9 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
             start_time = None
             end_time = None
             if timeseries:
-                if 'start_time' in immutable_args or 'end_time' in immutable_args:
+                if 'start_time' in cache_args or 'end_time' in cache_args:
                     print(
-                        "ERROR: Time series functions must not place their time arguments in immutable_args!")
+                        "ERROR: Time series functions must not place their time arguments in cache_args!")
                     return
 
                 if 'start_time' not in params or 'end_time' not in params:
@@ -49,16 +49,18 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
 
             # Handle keying based on immutable arguments
             immutable_arg_values = {}
-            for a in immutable_args:
+            for a in cache_args:
                 if a in kwargs:
                     immutable_arg_values[a] = kwargs[a]
-                    continue
+                    break
 
                 for i, p in enumerate(params):
-                    if a == p and (params[p].kind == Parameter.VAR_POSITIONAL or params[p].kind == Parameter.POSITIONAL_OR_KEYWORD) and params[p].default == Parameter.empty:
+                    if a == p and (params[p].kind == Parameter.VAR_POSITIONAL or params[p].kind == Parameter.POSITIONAL_OR_KEYWORD) and len(args) >= i:
                         immutable_arg_values[a] = args[i]
+                        break
                     elif a == p and a not in kwargs and params[p].default != Parameter.empty:
                         immutable_arg_values[a] = params[p].default
+                        break
 
             imkeys = list(immutable_arg_values.keys())
             imkeys.sort()

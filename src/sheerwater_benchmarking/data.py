@@ -1,4 +1,4 @@
-
+t 
 import dask
 import cdsapi
 import argparse
@@ -15,7 +15,7 @@ from sheerwater_benchmarking.utils.secrets import cdsapi_secret
 from sheerwater_benchmarking.utils.remote import dask_remote
 from sheerwater_benchmarking.utils.caching import cacheable
 
-@cacheable(data_type='array', immutable_args=['grid'])
+@cacheable(data_type='array', cache_args=['grid'])
 def land_sea_mask(grid=1.5):
 
     times = ['00:00']
@@ -52,7 +52,7 @@ def land_sea_mask(grid=1.5):
 
     return ds
 
-@cacheable(data_type='array', immutable_args=['year', 'variable', 'grid'])
+@cacheable(data_type='array', cache_args=['year', 'variable', 'grid'])
 def single_era5(year, variable, grid=1.5):
     weather_variables = {
         # Static variables (2):
