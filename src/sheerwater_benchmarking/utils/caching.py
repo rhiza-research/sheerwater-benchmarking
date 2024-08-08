@@ -52,7 +52,7 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
             for a in cache_args:
                 if a in kwargs:
                     immutable_arg_values[a] = kwargs[a]
-                    break
+                    continue
 
                 for i, p in enumerate(params):
                     if a == p and (params[p].kind == Parameter.VAR_POSITIONAL or params[p].kind == Parameter.POSITIONAL_OR_KEYWORD) and len(args) > i:
