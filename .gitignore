@@ -175,3 +175,4 @@ wheels/
 *.swp
 
 temp/
+.DS_Store

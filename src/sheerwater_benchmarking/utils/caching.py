@@ -1,5 +1,4 @@
-from functools import partial
-import os
+"""Automated dataframe caching utilities."""
 import gcsfs
 import xarray as xr
 import pandas
@@ -7,7 +6,9 @@ import dateparser
 import datetime
 from inspect import signature, Parameter
 
-def cacheable(data_type, immutable_args, timeseries=False, cache=True):
+
+def cacheable(data_type, cache_args, timeseries=False, cache=True):
+    """Decorator for caching function results."""
     def create_cacheable(func):
         def wrapper(*args, **kwargs):
             # Calculate the appropriate cache key
@@ -28,13 +29,12 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
 
             params = signature(func).parameters
 
-
             # Validate time series params
             start_time = None
             end_time = None
             if timeseries:
-                if 'start_time' in immutable_args or 'end_time' in immutable_args:
-                    print("ERROR: Time series functions must not place their time arguments in immutable_args!")
+                if 'start_time' in cache_args or 'end_time' in cache_args:
+                    print("ERROR: Time series functions must not place their time arguments in cache_args!")
                     return
 
                 if 'start_time' not in params or 'end_time' not in params:
@@ -46,16 +46,20 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
 
             # Handle keying based on immutable arguments
             immutable_arg_values = {}
-            for a in immutable_args:
+            for a in cache_args:
                 if a in kwargs:
                     immutable_arg_values[a] = kwargs[a]
                     continue
 
                 for i, p in enumerate(params):
-                    if a == p and (params[p].kind == Parameter.VAR_POSITIONAL or params[p].kind == Parameter.POSITIONAL_OR_KEYWORD) and params[p].default == Parameter.empty:
+                    if (a == p and len(args) > i and
+                            (params[p].kind == Parameter.VAR_POSITIONAL or
+                             params[p].kind == Parameter.POSITIONAL_OR_KEYWORD)):
                         immutable_arg_values[a] = args[i]
-                    elif a == p and a not in kwargs and params[p].default != Parameter.empty:
+                        break
+                    elif a == p and params[p].default != Parameter.empty:
                         immutable_arg_values[a] = params[p].default
+                        break
 
             imkeys = list(immutable_arg_values.keys())
             imkeys.sort()
@@ -63,8 +67,9 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
 
             if data_type == 'array':
                 cache_key = func.__name__ + '/' + '_'.join(sorted_values) + '.zarr'
-
-            cache_path = "gs://sheerwater-datalake/caches/" + cache_key
+                null_key = func.__name__ + '/' + '_'.join(sorted_values) + '.null'
+                cache_path = "gs://sheerwater-datalake/caches/" + cache_key
+                null_path = "gs://sheerwater-datalake/caches/" + null_key
 
             # Check to see if the cache exists for this key
             fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
@@ -77,7 +82,6 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
                 print(f"Found cache for {cache_path}")
                 if data_type == 'array':
                     if filepath_only:
-                        compute_result = False
                         return cache_map
                     else:
                         print(f"Opening cache {cache_path}")
@@ -86,20 +90,27 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
                         if validate_cache_timeseries and timeseries:
                             # Check to see if the dataset extends roughly the full time series set
                             if 'time' not in ds.dims:
-                                print("ERROR: Timeseries array must return a 'time' dimension for slicing. This could be an invalid cache. Try running with `recompute=True` to reset the cache.")
+                                print("ERROR: Timeseries array must return a 'time' dimension for slicing. "
+                                      "This could be an invalid cache. Try running with `recompute=True` to reset the cache.")
                                 return
                             else:
                                 # Check if within 1 year at least
                                 if (pandas.Timestamp(ds.time.min().values) < dateparser.parse(start_time) + datetime.timedelta(days=365) and
-                                    pandas.Timestamp(ds.time.max().values) > dateparser.parse(end_time) - datetime.timedelta(days=365)):
+                                        pandas.Timestamp(ds.time.max().values) > dateparser.parse(end_time) - datetime.timedelta(days=365)):
 
                                     compute_result = False
                                 else:
-                                    print("WARNING: The cached array does not have data within 1 year of your start or endtime. Automatically recomputing. If you do not want to recompute the result set `validate_cache_timeseries=False`")
+                                    print("WARNING: The cached array does not have data within "
+                                          "1 year of your start or endtime. Automatically recomputing. "
+                                          "If you do not want to recompute the result set "
+                                          "`validate_cache_timeseries=False`")
                         else:
                             compute_result = False
                 else:
                     print("Auto caching currently only supports array types")
+            elif fs.exists(null_path) and not recompute and cache:
+                print(f"Found null cache for {null_path}. Skipping computation.")
+                return None
 
             if compute_result:
                 if recompute:
@@ -114,7 +125,12 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
 
                 # Store the result
                 if cache:
-                    if data_type == 'array':
+                    if ds is None:
+                        print(f"Autocaching null result for {null_path}.")
+                        with fs.open(null_path, 'wb') as f:
+                            f.write(b'')
+                            return None
+                    elif data_type == 'array':
                         print(f"Autocaching result for {cache_path}.")
                         if isinstance(ds, xr.Dataset):
                             ds.chunk(chunks="auto").to_zarr(store=cache_map, mode='w')
