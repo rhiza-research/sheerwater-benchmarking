@@ -55,10 +55,10 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                     break
 
                 for i, p in enumerate(params):
-                    if a == p and (params[p].kind == Parameter.VAR_POSITIONAL or params[p].kind == Parameter.POSITIONAL_OR_KEYWORD) and len(args) >= i:
+                    if a == p and (params[p].kind == Parameter.VAR_POSITIONAL or params[p].kind == Parameter.POSITIONAL_OR_KEYWORD) and len(args) > i:
                         immutable_arg_values[a] = args[i]
                         break
-                    elif a == p and a not in kwargs and params[p].default != Parameter.empty:
+                    elif a == p and params[p].default != Parameter.empty:
                         immutable_arg_values[a] = params[p].default
                         break
 

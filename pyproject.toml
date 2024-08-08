@@ -35,7 +35,7 @@ dependencies = [
     "requests",
     "ecmwf-api-client",
     "cdsapi",
-    "dateparser",
+    "dateparser>=1.2.0",
     "bokeh",
     "flox",
 ]
