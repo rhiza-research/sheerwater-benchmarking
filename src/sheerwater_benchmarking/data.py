@@ -111,6 +111,7 @@ def single_era5(year, variable, grid="global1_5"):
 
 
 @dask_remote
+@cacheable(data_type='array', cache_args=['variable', 'grid'], cache=False, timeseries=True)
 def era5(start_time, end_time, variable, grid="global1_5"):
     # Read and combine all the data into an array
     first_year = dateparser.parse(start_time).year
@@ -125,3 +126,12 @@ def era5(start_time, end_time, variable, grid="global1_5"):
     ds = dask.compute(*datasets)
     x = xr.open_mfdataset(ds, engine='zarr')
     return x
+
+
+@dask_remote
+@cacheable(data_type='array', immutable_args=['variable', 'grid'], timeseries=True)
+def era5_daily(start_time, end_time, variable, grid=1.5):
+    era = era5(start_time, end_time, variable, grid)
+    era = era.resample(time='1D').mean()
+
+    return era

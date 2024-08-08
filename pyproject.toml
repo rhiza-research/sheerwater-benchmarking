@@ -79,8 +79,10 @@ dependencies = [
     "cdsapi>=0.7.0",
     "dateparser",
     "bokeh",
-    "ruff"
+    "ruff",
+    "flox",
 ]
+
 readme = "README.md"
 requires-python = ">= 3.8"
 
