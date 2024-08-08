@@ -34,13 +34,11 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
             end_time = None
             if timeseries:
                 if 'start_time' in cache_args or 'end_time' in cache_args:
-                    print(
-                        "ERROR: Time series functions must not place their time arguments in cache_args!")
+                    print("ERROR: Time series functions must not place their time arguments in cache_args!")
                     return
 
                 if 'start_time' not in params or 'end_time' not in params:
-                    print(
-                        "ERROR: Time series functions must have the parameters 'start_time' and 'end_time'")
+                    print("ERROR: Time series functions must have the parameters 'start_time' and 'end_time'")
                 else:
                     keys = [item for item in params]
                     start_time = args[keys.index('start_time')]
@@ -68,16 +66,13 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
             sorted_values = [str(immutable_arg_values[i]) for i in imkeys]
 
             if data_type == 'array':
-                cache_key = func.__name__ + '/' + \
-                    '_'.join(sorted_values) + '.zarr'
-                null_key = func.__name__ + '/' + \
-                    '_'.join(sorted_values) + '.null'
+                cache_key = func.__name__ + '/' + '_'.join(sorted_values) + '.zarr'
+                null_key = func.__name__ + '/' + '_'.join(sorted_values) + '.null'
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key
                 null_path = "gs://sheerwater-datalake/caches/" + null_key
 
             # Check to see if the cache exists for this key
-            fs = gcsfs.GCSFileSystem(
-                project='sheerwater', token='google_default')
+            fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
             cache_map = fs.get_mapper(cache_path)
 
             ds = None
@@ -95,9 +90,8 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                         if validate_cache_timeseries and timeseries:
                             # Check to see if the dataset extends roughly the full time series set
                             if 'time' not in ds.dims:
-                                print(
-                                    "ERROR: Timeseries array must return a 'time' dimension for slicing. "
-                                    "This could be an invalid cache. Try running with `recompute=True` to reset the cache.")
+                                print("ERROR: Timeseries array must return a 'time' dimension for slicing. "
+                                      "This could be an invalid cache. Try running with `recompute=True` to reset the cache.")
                                 return
                             else:
                                 # Check if within 1 year at least
@@ -115,20 +109,16 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                 else:
                     print("Auto caching currently only supports array types")
             elif fs.exists(null_path) and not recompute and cache:
-                print(f"Found null cache for {
-                      null_path}. Skipping computation.")
+                print(f"Found null cache for {null_path}. Skipping computation.")
                 return None
 
             if compute_result:
                 if recompute:
-                    print(f"Recompute for {
-                          cache_path} requested. Not checking for cached result.")
+                    print(f"Recompute for {cache_path} requested. Not checking for cached result.")
                 elif not cache:
-                    print(
-                        f"{func.__name__} not a cacheable function. Recomputing result.")
+                    print(f"{func.__name__} not a cacheable function. Recomputing result.")
                 else:
-                    print(f"Cache doesn't exist for {
-                          cache_path}. Running function")
+                    print(f"Cache doesn't exist for {cache_path}. Running function")
 
                 ##### IF NOT EXISTS ######
                 ds = func(*args, **kwargs)
@@ -141,7 +131,6 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                             f.write(b'')
                             return None
                     elif data_type == 'array':
-                        print(f"Autocaching result for {cache_path}.")
                         write = False
                         if fs.exists(cache_path):
                             inp = input(f'A cache already exists at {cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -163,8 +152,7 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                 # Do the time series filtering
                 if timeseries:
                     if 'time' not in ds.dims:
-                        print(
-                            "ERROR: Timeseries array must return a 'time' dimension for slicing.")
+                        print("ERROR: Timeseries array must return a 'time' dimension for slicing.")
                         return
 
                     ds = ds.sel(time=slice(start_time, end_time))
