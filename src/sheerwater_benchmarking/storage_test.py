@@ -1,9 +1,11 @@
+import dask.dataframe as dd
 from sheerwater_benchmarking.utils.remote import dask_remote
 import gcsfs
 import numpy as np
 import xarray as xr
 import os
 import pandas as pd
+
 
 @dask_remote
 def load_netcdf(filepath):
@@ -17,8 +19,10 @@ def load_netcdf(filepath):
     gcsmap = fs.get_mapper(os.path.splitext(filepath)[0]+".zarr")
     ds.to_zarr(store=gcsmap, mode='w')
 
+
 @dask_remote
 def load_zarr(filepath):
+    """Load a Zarr file from Google Cloud Storage."""
     # Load the dataset
     fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
     gcsmap = fs.get_mapper(filepath)
@@ -52,9 +56,6 @@ df
 
 df["start_date"].sort_values()
 
-import dask.dataframe as dd
 
 filepath = "/Users/avocet/content/forecast_rodeo_ii/data/dataframes/iri-ecmwf-tmp2m-all-global1_5-ef-forecast.h5"
-df = dd.read_hdf(filepath, "data")  
-
-
+df = dd.read_hdf(filepath, "data")

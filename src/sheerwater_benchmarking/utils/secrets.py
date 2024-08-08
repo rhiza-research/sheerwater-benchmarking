@@ -1,3 +1,4 @@
+"""This module contains functions to fetch the CDS and ECMWF API keys from the secret manager."""
 import os
 from google.cloud import secretmanager
 from pathlib import Path
@@ -30,11 +31,12 @@ def cdsapi_secret():
     else:
         with open(Path.home() / '.cdsapirc', mode='r') as f:
             lines = [line.strip() for line in f.readlines()[:2]]
-        url, key = [l.split(":", 1)[1].strip() for l in lines]
+        url, key = [line.split(":", 1)[1].strip() for line in lines]
         return url, key
 
 
 def ecmwf_secret():
+    """Fetches the ECMWF secret from the secret manager."""
     # Check to see if the ECMWF secret exists
     if not os.path.exists("~/.ecmwfrc"):
         # Fetch the api key from google-secret-manager
