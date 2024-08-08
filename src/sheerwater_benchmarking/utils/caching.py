@@ -1,6 +1,4 @@
-from functools import partial
-from pathlib import Path
-import os
+"""Automated dataframe caching utilities."""
 import gcsfs
 import xarray as xr
 import pandas
@@ -10,6 +8,7 @@ from inspect import signature, Parameter
 
 
 def cacheable(data_type, cache_args, timeseries=False, cache=True):
+    """Decorator for caching function results."""
     def create_cacheable(func):
         def wrapper(*args, **kwargs):
             # Calculate the appropriate cache key
@@ -55,7 +54,9 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                     continue
 
                 for i, p in enumerate(params):
-                    if a == p and (params[p].kind == Parameter.VAR_POSITIONAL or params[p].kind == Parameter.POSITIONAL_OR_KEYWORD) and len(args) > i:
+                    if (a == p and len(args) > i and
+                            (params[p].kind == Parameter.VAR_POSITIONAL or
+                             params[p].kind == Parameter.POSITIONAL_OR_KEYWORD)):
                         immutable_arg_values[a] = args[i]
                         break
                     elif a == p and params[p].default != Parameter.empty:
@@ -95,7 +96,8 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                             # Check to see if the dataset extends roughly the full time series set
                             if 'time' not in ds.dims:
                                 print(
-                                    "ERROR: Timeseries array must return a 'time' dimension for slicing. This could be an invalid cache. Try running with `recompute=True` to reset the cache.")
+                                    "ERROR: Timeseries array must return a 'time' dimension for slicing. "
+                                    "This could be an invalid cache. Try running with `recompute=True` to reset the cache.")
                                 return
                             else:
                                 # Check if within 1 year at least
@@ -104,7 +106,10 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
 
                                     compute_result = False
                                 else:
-                                    print("WARNING: The cached array does not have data within 1 year of your start or endtime. Automatically recomputing. If you do not want to recompute the result set `validate_cache_timeseries=False`")
+                                    print("WARNING: The cached array does not have data within "
+                                          "1 year of your start or endtime. Automatically recomputing. "
+                                          "If you do not want to recompute the result set "
+                                          "`validate_cache_timeseries=False`")
                         else:
                             compute_result = False
                 else:

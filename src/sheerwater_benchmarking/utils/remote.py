@@ -1,10 +1,13 @@
+"""Utilities for running functions on a remote dask cluster."""
+from dask.distributed import Client, get_client, LocalCluster
 import coiled
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-from dask.distributed import Client, get_client, LocalCluster
+
 
 def dask_remote(func):
+    """Decorator to run a function on a remote dask cluster."""
     def wrapper(*args, **kwargs):
         # See if there are extra function args to run this remotely
         if 'remote' in kwargs:
@@ -18,7 +21,8 @@ def dask_remote(func):
             else:
                 # Just setup a coiled cluster
                 logger.info("Attaching to coiled cluster with default configuration")
-                cluster = coiled.Cluster(name='sheerwater-shared', n_workers=[3, 10], idle_timeout="45 minutes")
+                cluster = coiled.Cluster(name='sheerwater-shared',
+                                         n_workers=[3, 10], idle_timeout="45 minutes")
                 client = cluster.get_client()
 
             del kwargs['remote']
@@ -28,8 +32,7 @@ def dask_remote(func):
                 client = get_client()
             except ValueError:
                 logger.info("Starting local dask cluster...")
-                cluster = LocalCluster(n_workers=2,
-                       threads_per_worker=2)
+                cluster = LocalCluster(n_workers=2, threads_per_worker=2)
                 client = Client(cluster)
 
         # call the function and return the result
