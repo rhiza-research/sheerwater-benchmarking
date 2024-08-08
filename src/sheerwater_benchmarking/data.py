@@ -119,8 +119,7 @@ def era5(start_time, end_time, variable, grid="global1_5"):
 
     datasets = []
     for year in years:
-        ds = dask.delayed(single_era5)(
-            year, variable, grid, filepath_only=True)
+        ds = dask.delayed(single_era5)(year, variable, grid, filepath_only=True)
         datasets.append(ds)
 
     ds = dask.compute(*datasets)
