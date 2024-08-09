@@ -117,7 +117,13 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
                     if data_type == 'array':
                         print(f"Autocaching result for {cache_path}.")
                         if isinstance(ds, xr.Dataset):
-                            ds.chunk(chunks="auto").to_zarr(store=cache_map, mode='w')
+                            try:
+                                ds.chunk(chunks="auto").to_zarr(store=cache_map, mode='w')
+                            except FileNotFoundError:
+                                # TODO: sometimes getting a dobule release error on the temp file
+                                # Temporary fix to catch and pass; the zarr write seems to work
+                                pass
+                            
 
             if filepath_only:
                 return cache_map
