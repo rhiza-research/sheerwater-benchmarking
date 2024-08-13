@@ -36,7 +36,7 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
             end_time = None
             if timeseries:
                 if 'start_time' in cache_args or 'end_time' in cache_args:
-                    raise ValueError("Time series functions must not place their time arguments in cacheable_args!"
+                    raise ValueError("Time series functions must not place their time arguments in cacheable_args!")
 
                 if 'start_time' not in params or 'end_time' not in params:
                     raise ValueError("Time series functions must have the parameters 'start_time' and 'end_time'")
@@ -79,6 +79,9 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                 null_key = func.__name__ + '/' + '_'.join(sorted_values) + '.null'
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key
                 null_path = "gs://sheerwater-datalake/caches/" + null_key
+            else:
+                raise ValueError("Caching currently only supports the 'array' datatype")
+
 
             # Check to see if the cache exists for this key
             fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
