@@ -115,9 +115,18 @@ def cacheable(data_type, immutable_args, timeseries=False, cache=True):
                 # Store the result
                 if cache:
                     if data_type == 'array':
-                        print(f"Autocaching result for {cache_path}.")
-                        if isinstance(ds, xr.Dataset):
-                            ds.chunk(chunks="auto").to_zarr(store=cache_map, mode='w')
+                        write = False
+                        if fs.exists(cache_path):
+                            inp = input(f'A cache already exists at {cache_path}. Are you sure you want to overwrite it? (y/n)')
+                            if inp == 'y' or inp == 'Y':
+                                write = True
+                        else:
+                            write = True
+
+                        if write:
+                            print(f"Caching result for {cache_path}.")
+                            if isinstance(ds, xr.Dataset):
+                                ds.chunk(chunks="auto").to_zarr(store=cache_map, mode='w')
 
             if filepath_only:
                 return cache_map

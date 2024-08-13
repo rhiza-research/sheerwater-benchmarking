@@ -113,7 +113,10 @@ def single_era5(year, variable, grid=1.5):
                 path)
 
     # Read the data and return individual datasets
-    return xr.open_dataset(path)
+    ds = xr.open_dataset(path)
+
+    # Materialize the dataset into memory to ensure caching works
+    ds = ds.compute()
 
 @dask_remote
 @cacheable(data_type='array', immutable_args=['variable', 'grid'], cache=False, timeseries=True)
