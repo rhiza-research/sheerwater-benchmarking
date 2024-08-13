@@ -36,10 +36,12 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
             end_time = None
             if timeseries:
                 if 'start_time' in cache_args or 'end_time' in cache_args:
-                    raise ValueError("Time series functions must not place their time arguments in cacheable_args!")
+                    raise ValueError(
+                        "Time series functions must not place their time arguments in cacheable_args!")
 
                 if 'start_time' not in params or 'end_time' not in params:
-                    raise ValueError("Time series functions must have the parameters 'start_time' and 'end_time'")
+                    raise ValueError(
+                        "Time series functions must have the parameters 'start_time' and 'end_time'")
                 else:
                     keys = [item for item in params]
                     start_time = args[keys.index('start_time')]
@@ -48,7 +50,6 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
             # Handle keying based on immutable arguments
             immutable_arg_values = {}
 
-
             for a in cache_args:
                 # If it's in kwargs, great
                 if a in kwargs:
@@ -56,19 +57,22 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                     continue
 
                 # If it's not in kwargs it must either be (1) in args or (2) passed as default
-                # The length
+                found = False
                 for i, p in enumerate(params):
                     if (a == p and len(args) > i and
                             (params[p].kind == Parameter.VAR_POSITIONAL or
                              params[p].kind == Parameter.POSITIONAL_OR_KEYWORD)):
                         immutable_arg_values[a] = args[i]
+                        found = True
                         break
                     elif a == p and params[p].default != Parameter.empty:
                         immutable_arg_values[a] = params[p].default
+                        found = True
                         break
-                    else:
-                        raise RuntimeError(f"Specified cacheable argument {a} not discovered as passed argument or default arugment.")
 
+                if not found:
+                    raise RuntimeError(f"Specified cacheable argument {a} 
+                                       not discovered as passed argument or default arugment.")
 
             imkeys = list(immutable_arg_values.keys())
             imkeys.sort()
@@ -81,7 +85,6 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                 null_path = "gs://sheerwater-datalake/caches/" + null_key
             else:
                 raise ValueError("Caching currently only supports the 'array' datatype")
-
 
             # Check to see if the cache exists for this key
             fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
@@ -144,7 +147,8 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                     elif data_type == 'array':
                         write = False
                         if fs.exists(cache_path):
-                            inp = input(f'A cache already exists at {cache_path}. Are you sure you want to overwrite it? (y/n)')
+                            inp = input(f'A cache already exists at {
+                                        cache_path}. Are you sure you want to overwrite it? (y/n)')
                             if inp == 'y' or inp == 'Y':
                                 write = True
                         else:
@@ -155,7 +159,8 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                             if isinstance(ds, xr.Dataset):
                                 ds.chunk(chunks="auto").to_zarr(store=cache_map, mode='w')
                             else:
-                                raise RuntimeError(f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
+                                raise RuntimeError(
+                                    f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
 
             if filepath_only:
                 return cache_map
@@ -163,7 +168,8 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                 # Do the time series filtering
                 if timeseries:
                     if 'time' not in ds.dims:
-                        raise RuntimeError("Timeseries array must return a 'time' dimension for slicing.")
+                        raise RuntimeError(
+                            "Timeseries array must return a 'time' dimension for slicing.")
 
                     ds = ds.sel(time=slice(start_time, end_time))
 
