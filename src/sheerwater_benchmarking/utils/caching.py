@@ -71,8 +71,8 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                         break
 
                 if not found:
-                    raise RuntimeError(f"Specified cacheable argument {a} 
-                                       not discovered as passed argument or default arugment.")
+                    raise RuntimeError(f"Specified cacheable argument {a}"
+                                       "not discovered as passed argument or default arugment.")
 
             imkeys = list(immutable_arg_values.keys())
             imkeys.sort()
