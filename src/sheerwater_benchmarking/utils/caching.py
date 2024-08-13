@@ -5,6 +5,8 @@ import pandas
 import dateparser
 import datetime
 from inspect import signature, Parameter
+import logging
+logger = logging.getLogger(__name__)
 
 
 def cacheable(data_type, cache_args, timeseries=False, cache=True):
@@ -34,11 +36,10 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
             end_time = None
             if timeseries:
                 if 'start_time' in cache_args or 'end_time' in cache_args:
-                    print("ERROR: Time series functions must not place their time arguments in cache_args!")
-                    return
+                    raise ValueError("Time series functions must not place their time arguments in cacheable_args!"
 
                 if 'start_time' not in params or 'end_time' not in params:
-                    print("ERROR: Time series functions must have the parameters 'start_time' and 'end_time'")
+                    raise ValueError("Time series functions must have the parameters 'start_time' and 'end_time'")
                 else:
                     keys = [item for item in params]
                     start_time = args[keys.index('start_time')]
@@ -46,11 +47,16 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
 
             # Handle keying based on immutable arguments
             immutable_arg_values = {}
+
+
             for a in cache_args:
+                # If it's in kwargs, great
                 if a in kwargs:
                     immutable_arg_values[a] = kwargs[a]
                     continue
 
+                # If it's not in kwargs it must either be (1) in args or (2) passed as default
+                # The length
                 for i, p in enumerate(params):
                     if (a == p and len(args) > i and
                             (params[p].kind == Parameter.VAR_POSITIONAL or
@@ -60,6 +66,9 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                     elif a == p and params[p].default != Parameter.empty:
                         immutable_arg_values[a] = params[p].default
                         break
+                    else:
+                        raise RuntimeError(f"Specified cacheable argument {a} not discovered as passed argument or default arugment.")
+
 
             imkeys = list(immutable_arg_values.keys())
             imkeys.sort()
@@ -90,9 +99,8 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                         if validate_cache_timeseries and timeseries:
                             # Check to see if the dataset extends roughly the full time series set
                             if 'time' not in ds.dims:
-                                print("ERROR: Timeseries array must return a 'time' dimension for slicing. "
-                                      "This could be an invalid cache. Try running with `recompute=True` to reset the cache.")
-                                return
+                                raise RuntimeError("Timeseries array functions must return a 'time' dimension for slicing. "
+                                                   "This could be an invalid cache. Try running with recompute=True to reset the cache.")
                             else:
                                 # Check if within 1 year at least
                                 if (pandas.Timestamp(ds.time.min().values) < dateparser.parse(start_time) + datetime.timedelta(days=365) and
@@ -152,8 +160,7 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                 # Do the time series filtering
                 if timeseries:
                     if 'time' not in ds.dims:
-                        print("ERROR: Timeseries array must return a 'time' dimension for slicing.")
-                        return
+                        raise RuntimeError("Timeseries array must return a 'time' dimension for slicing.")
 
                     ds = ds.sel(time=slice(start_time, end_time))
 
