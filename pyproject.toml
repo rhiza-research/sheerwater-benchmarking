@@ -97,4 +97,4 @@ dev-dependencies = []
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sheerwater_benchmarking"]
+packages = ["./sheerwater_benchmarking"]
