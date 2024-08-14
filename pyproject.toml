@@ -50,6 +50,7 @@ authors = [
 dependencies = [
     "dask==2024.7.0",
     "dask[complete]",
+    "click",
     "coiled",
     "numpy==1.26",
     "httplib2",
