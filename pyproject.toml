@@ -1,3 +1,45 @@
+[tool.autopep8]
+max_line_length = 100
+
+[tool.ruff]
+# Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
+# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
+# McCabe complexity (`C901`) by default.
+# Enable all `pydocstyle` rules, limiting to those that adhere to the
+# Google convention via `convention = "google"`, below.
+select = ["E", "F", "W", "D", "ARG"]
+ignore = [
+  "E722", # bare except
+]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+  ".dist",
+  ".env",
+  ".git",
+  ".git-rewrite",
+  ".github",
+  ".ipynb_checkpoints",
+  ".ruff_cache",
+  ".venv",
+  "__pycache__",
+  "__pypackages__",
+]
+
+line-length = 100
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+target-version = "py38"
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
 [project]
 name = "sheerwater-benchmarking"
 version = "0.1.0"
@@ -8,6 +50,7 @@ authors = [
 dependencies = [
     "dask==2024.7.0",
     "dask[complete]",
+    "click",
     "coiled",
     "numpy==1.26",
     "httplib2",
@@ -25,7 +68,7 @@ dependencies = [
     "rioxarray",
     "notebook",
     "jupytext",
-    "dask-kubernetes>=2024.5.0",
+    "dask-kubernetes",
     "gcsfs",
     "zarr",
     "h5py",
@@ -34,10 +77,11 @@ dependencies = [
     "scipy",
     "requests",
     "ecmwf-api-client",
-    "cdsapi",
+    "cdsapi>=0.7.0",
     "dateparser",
     "bokeh",
     "flox",
+    "ruff>=0.5.7",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
@@ -54,4 +98,4 @@ dev-dependencies = []
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sheerwater_benchmarking"]
+packages = ["./sheerwater_benchmarking"]

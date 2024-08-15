@@ -607,6 +607,8 @@ rpds-py==0.19.1
     # via referencing
 rsa==4.9
     # via google-auth
+ruff==0.5.7
+    # via sheerwater-benchmarking
 s3fs==2024.6.1
     # via sheerwater-benchmarking
 s3transfer==0.10.2
