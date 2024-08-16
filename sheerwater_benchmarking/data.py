@@ -3,7 +3,7 @@ import cdsapi
 import os
 import xarray as xr
 import dateparser
-from sheerwater_benchmarking.utils import cdsapi_secret, dask_remote, cacheable, get_grid
+from sheerwater_benchmarking.utils import cdsapi_secret, dask_remote, cacheable, get_grid, get_variable, regrid
 
 
 @cacheable(data_type='array', cache_args=['grid'])
@@ -46,29 +46,8 @@ def land_sea_mask(grid="global1_5"):
 @cacheable(data_type='array', cache_args=['year', 'variable', 'grid'])
 def single_era5(year, variable, grid="global1_5"):
     """Fetches a single variable from the ERA5 dataset."""
-    weather_variables = {
-        # Static variables (2):
-        "z": "geopotential",  # geopotential at surface
-        "lsm": "land_sea_mask",
-        # Surface variables (6):
-        "tmp2m": "2m_temperature",
-        "precip": "total_precipitation",
-        "vwind10m": "10m_v_component_of_wind",
-        "uwind10m": "10m_u_component_of_wind",
-        "msl": "mean_sea_level_pressure",
-        "tisr": "toa_incident_solar_radiation",
-        # Atmospheric variables (6):
-        "tmp": "temperature",
-        "uwind": "u_component_of_wind",
-        "vwind": "v_component_of_wind",
-        "hgt": "geopotential",
-        "q": "specific_humidity",
-        "w": "vertical_velocity",
-    }
 
-    # Enable variable shortcuts
-    if variable in weather_variables:
-        variable = weather_variables[variable]
+    variable = get_variable(variable, 'era5')
 
     times = ['00:00', '01:00', '02:00',
              '03:00', '04:00', '05:00',
@@ -114,8 +93,8 @@ def single_era5(year, variable, grid="global1_5"):
 
 
 @dask_remote
-@cacheable(data_type='array', cache_args=['variable', 'grid'], cache=False, timeseries=True)
-def era5(start_time, end_time, variable, grid="global1_5"):
+def era5_cds(start_time, end_time, variable, grid="global1_5"):
+    """Read the raw ERA5 data from the CDS API."""
     # Read and combine all the data into an array
     first_year = dateparser.parse(start_time).year
     last_year = dateparser.parse(end_time).year
@@ -132,7 +111,33 @@ def era5(start_time, end_time, variable, grid="global1_5"):
 
 
 @dask_remote
-@cacheable(data_type='array', cache_args=['variable', 'grid'], timeseries=True)
+@cacheable(data_type='array',
+           cache_args=['variable', 'grid'],
+           timeseries='time',
+           cache_disable_if={'grid': 'global0_25'})
+def era5(start_time, end_time, variable, grid="global0_25"):
+    """ERA5 function that returns data from Google ARCO"""
+    # Pull the google dataset
+    ds = xr.open_zarr('gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3',
+                      chunks={'time': 50, 'latitude': 721, 'longitude': 1440})
+
+    # Select the right variable
+    variable = get_variable(variable, 'era5')
+    ds = ds[variable].to_dataset()
+
+    # Rename variable into our variable space
+    ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+
+    # Regrid if necessary
+    if grid != 'global0_25':
+        print(f"Regridding Google ARCO ERA5 from global0_25 to {grid}")
+        ds = regrid(ds, grid)
+
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array', cache_args=['variable', 'grid'], timeseries='time')
 def era5_daily(start_time, end_time, variable, grid='global1_5'):
     era = era5(start_time, end_time, variable, grid)
     era = era.resample(time='1D').mean()

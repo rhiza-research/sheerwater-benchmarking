@@ -55,7 +55,7 @@ def drop_encoded_chunks(ds):
     return ds
 
 
-def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechunk=False):
+def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechunk=False, cache=True, cache_disable_if=None):
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
         "filepath_only": False,
@@ -88,12 +88,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
-            nonlocal data_type, cache_args, timeseries, chunking, auto_rechunk
+            nonlocal data_type, cache_args, timeseries, chunking, auto_rechunk, cache, cache_disable_if
 
             # Calculate the appropriate cache key
-            filepath_only, recompute, cache, validate_cache_timeseries, \
+            filepath_only, recompute, passed_cache, validate_cache_timeseries, \
                 force_overwrite, retry_null_cache = get_cache_args(
                     kwargs, cache_kwargs)
+
+            if not cache or not passed_cache:
+                cache = False
 
             params = signature(func).parameters
 
@@ -116,13 +119,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                     start_time = args[keys.index('start_time')]
                     end_time = args[keys.index('end_time')]
 
-            # Handle keying based on immutable arguments
-            immutable_arg_values = {}
+            # Handle keying based on cache arguments
+            cache_arg_values = {}
 
             for a in cache_args:
                 # If it's in kwargs, great
                 if a in kwargs:
-                    immutable_arg_values[a] = kwargs[a]
+                    cache_arg_values[a] = kwargs[a]
                     continue
 
                 # If it's not in kwargs it must either be (1) in args or (2) passed as default
@@ -131,11 +134,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                     if (a == p and len(args) > i and
                             (params[p].kind == Parameter.VAR_POSITIONAL or
                              params[p].kind == Parameter.POSITIONAL_OR_KEYWORD)):
-                        immutable_arg_values[a] = args[i]
+                        cache_arg_values[a] = args[i]
                         found = True
                         break
                     elif a == p and params[p].default != Parameter.empty:
-                        immutable_arg_values[a] = params[p].default
+                        cache_arg_values[a] = params[p].default
                         found = True
                         break
 
@@ -143,9 +146,35 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                     raise RuntimeError(f"Specified cacheable argument {a}"
                                        "not discovered as passed argument or default arugment.")
 
-            imkeys = list(immutable_arg_values.keys())
+            # Now that we have all the immutable arge values we can calulcate whether
+            # the cache should be disable from them
+            if isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
+
+                if isinstance(cache_disable_if, dict):
+                    cache_disable_if = [cache_disable_if]
+
+                for d in cache_disable_if:
+                    if not isinstance(d, dict):
+                        raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
+
+                    # Get the common keys
+                    common_keys = set(cache_arg_values).intersection(d)
+
+                    # Remove any args not passed
+                    comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
+                    d = {key: d[key] for key in common_keys}
+
+                    # If they match then disable caching
+                    if comp_arg_values == d:
+                        print(f"Caching disabled for arg values {d}")
+                        cache = False
+                        break
+            else if cache_disable_if is not None:
+                raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
+
+            imkeys = list(cache_arg_values.keys())
             imkeys.sort()
-            sorted_values = [str(immutable_arg_values[i]) for i in imkeys]
+            sorted_values = [str(cache_arg_values[i]) for i in imkeys]
 
             if data_type == 'array':
                 cache_key = func.__name__ + '/' + '_'.join(sorted_values) + '.zarr'
