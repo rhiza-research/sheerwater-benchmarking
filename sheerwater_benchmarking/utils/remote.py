@@ -10,7 +10,7 @@ def dask_remote(func):
     """Decorator to run a function on a remote dask cluster."""
     def wrapper(*args, **kwargs):
         # See if there are extra function args to run this remotely
-        if 'remote' in kwargs:
+        if 'remote' in kwargs and kwargs['remote']:
             if 'remote_config' in kwargs:
                 # setup coiled cluster with remote config
                 logger.info("Attaching to coiled cluster with custom configuration")
