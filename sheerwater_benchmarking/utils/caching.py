@@ -87,7 +87,8 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                 raise ValueError("Caching currently only supports the 'array' datatype")
 
             # Check to see if the cache exists for this key
-            fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+            fs = gcsfs.GCSFileSystem(
+                project='sheerwater', token='google_default')
             cache_map = fs.get_mapper(cache_path)
 
             ds = None
@@ -128,11 +129,14 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
 
             if compute_result:
                 if recompute:
-                    print(f"Recompute for {cache_path} requested. Not checking for cached result.")
+                    print(f"Recompute for {
+                          cache_path} requested. Not checking for cached result.")
                 elif not cache:
-                    print(f"{func.__name__} not a cacheable function. Recomputing result.")
+                    print(
+                        f"{func.__name__} not a cacheable function. Recomputing result.")
                 else:
-                    print(f"Cache doesn't exist for {cache_path}. Running function")
+                    print(f"Cache doesn't exist for {
+                          cache_path}. Running function")
 
                 ##### IF NOT EXISTS ######
                 ds = func(*args, **kwargs)
@@ -157,7 +161,11 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                         if write:
                             print(f"Caching result for {cache_path}.")
                             if isinstance(ds, xr.Dataset):
-                                ds.chunk(chunks="auto").to_zarr(store=cache_map, mode='w')
+                                if hasattr(ds, '_sw_chunk_dict'):
+                                    chunks = ds._sw_chunk_dict
+                                else:
+                                    chunks = 'auto'
+                                ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
                             else:
                                 raise RuntimeError(
                                     f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
