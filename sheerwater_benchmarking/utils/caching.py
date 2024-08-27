@@ -9,8 +9,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def cacheable(data_type, cache_args, timeseries=None, cache=True):
-    """Decorator for caching function results."""
+def cacheable(data_type, cache_args, timeseries=None, cache=True, force_overwrite=False):
+    """Decorator for caching function results.
+
+    Args:
+        data_type (str): The type of data being cached. Currently only 'array' is supported.
+        cache_args (list): The arguments to use as the cache key.
+        timeseries (str): The name of the time series dimension in the cached array. If not a 
+            time series, set to None (default).
+        cache (bool): Whether to cache the result.
+        force_overwrite (bool): Whether to overwrite the cache forecable on recompute if it 
+            already exists (if False, will prompt the user before overwriting).
+    """
     def create_cacheable(func):
         def wrapper(*args, **kwargs):
             # Calculate the appropriate cache key
@@ -146,7 +156,7 @@ def cacheable(data_type, cache_args, timeseries=None, cache=True):
                             return None
                     elif data_type == 'array':
                         write = False
-                        if fs.exists(cache_path):
+                        if fs.exists(cache_path) and not force_overwrite:
                             inp = input(f'A cache already exists at {
                                         cache_path}. Are you sure you want to overwrite it? (y/n)')
                             if inp == 'y' or inp == 'Y':
