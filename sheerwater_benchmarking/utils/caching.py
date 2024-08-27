@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def cacheable(data_type, cache_args, timeseries=False, cache=True):
+def cacheable(data_type, cache_args, timeseries=None, cache=True):
     """Decorator for caching function results."""
     def create_cacheable(func):
         def wrapper(*args, **kwargs):
@@ -34,7 +34,7 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
             # Validate time series params
             start_time = None
             end_time = None
-            if timeseries:
+            if timeseries is not None:
                 if 'start_time' in cache_args or 'end_time' in cache_args:
                     raise ValueError(
                         "Time series functions must not place their time arguments in cacheable_args!")
@@ -102,15 +102,15 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                         print(f"Opening cache {cache_path}")
                         ds = xr.open_dataset(cache_map, engine='zarr')
 
-                        if validate_cache_timeseries and timeseries:
+                        if validate_cache_timeseries and timeseries is not None:
                             # Check to see if the dataset extends roughly the full time series set
-                            if 'time' not in ds.dims:
-                                raise RuntimeError("Timeseries array functions must return a 'time' dimension for slicing. "
+                            if timeseries not in ds.dims:
+                                raise RuntimeError("Timeseries array functions must return a time dimension for slicing. "
                                                    "This could be an invalid cache. Try running with recompute=True to reset the cache.")
                             else:
                                 # Check if within 1 year at least
-                                if (pandas.Timestamp(ds.time.min().values) < dateparser.parse(start_time) + datetime.timedelta(days=365) and
-                                        pandas.Timestamp(ds.time.max().values) > dateparser.parse(end_time) - datetime.timedelta(days=365)):
+                                if (pandas.Timestamp(ds[timeseries].min().values) < dateparser.parse(start_time) + datetime.timedelta(days=365) and
+                                        pandas.Timestamp(ds[timeseries].max().values) > dateparser.parse(end_time) - datetime.timedelta(days=365)):
 
                                     compute_result = False
                                 else:
@@ -170,12 +170,12 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                 return cache_map
             else:
                 # Do the time series filtering
-                if timeseries:
-                    if 'time' not in ds.dims:
+                if timeseries is not None:
+                    if timeseries not in ds.dims:
                         raise RuntimeError(
                             "Timeseries array must return a 'time' dimension for slicing.")
 
-                    ds = ds.sel(time=slice(start_time, end_time))
+                    ds = ds.sel({timeseries: slice(start_time, end_time)})
 
                 return ds
 
