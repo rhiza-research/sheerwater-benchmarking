@@ -110,7 +110,7 @@ def cacheable(data_type, cache_args, timeseries=None, cache=True, force_overwrit
                         return cache_map
                     else:
                         print(f"Opening cache {cache_path}")
-                        ds = xr.open_dataset(cache_map, engine='zarr')
+                        ds = xr.open_dataset(cache_map, engine='zarr', chunks='auto')
 
                         if validate_cache_timeseries and timeseries is not None:
                             # Check to see if the dataset extends roughly the full time series set
