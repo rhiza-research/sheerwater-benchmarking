@@ -161,8 +161,8 @@ def cacheable(data_type, cache_args, timeseries=False, cache=True):
                         if write:
                             print(f"Caching result for {cache_path}.")
                             if isinstance(ds, xr.Dataset):
-                                if hasattr(ds, '_sw_chunk_dict'):
-                                    chunks = ds._sw_chunk_dict
+                                if hasattr(ds, '_chunk_dict'):
+                                    chunks = ds._chunk_dict
                                 else:
                                     chunks = 'auto'
                                 ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
