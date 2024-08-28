@@ -24,8 +24,6 @@ def dask_remote(func):
                 cluster = coiled.Cluster(name='sheerwater-shared',
                                          n_workers=[3, 10], idle_timeout="45 minutes")
                 client = cluster.get_client()
-
-            del kwargs['remote']
         else:
             # Setup a local cluster
             try:
@@ -36,5 +34,8 @@ def dask_remote(func):
                 client = Client(cluster)
 
         # call the function and return the result
+        if 'remote' in kwargs:
+            del kwargs['remote']
+
         return func(*args, **kwargs)
     return wrapper
