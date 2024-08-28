@@ -9,7 +9,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def cacheable(data_type, cache_args, timeseries=None, cache=True, force_overwrite=False):
+def cacheable(data_type, cache_args, timeseries=None, cache=True, force_overwrite=False,
+              retry_null_cache=False):
     """Decorator for caching function results.
 
     Args:
@@ -20,6 +21,8 @@ def cacheable(data_type, cache_args, timeseries=None, cache=True, force_overwrit
         cache (bool): Whether to cache the result.
         force_overwrite (bool): Whether to overwrite the cache forecable on recompute if it 
             already exists (if False, will prompt the user before overwriting).
+        retry_null_cache (bool): If True, ignore the null caches and attempts to recompute
+            result for null values. If False (default), will return None for null caches.
     """
     def create_cacheable(func):
         def wrapper(*args, **kwargs):
@@ -132,7 +135,7 @@ def cacheable(data_type, cache_args, timeseries=None, cache=True, force_overwrit
                             compute_result = False
                 else:
                     print("Auto caching currently only supports array types")
-            elif fs.exists(null_path) and not recompute and cache:
+            elif fs.exists(null_path) and not recompute and cache and not retry_null_cache:
                 print(f"Found null cache for {null_path}. Skipping computation.")
                 return None
 
