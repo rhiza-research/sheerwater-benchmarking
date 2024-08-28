@@ -9,38 +9,51 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def cacheable(data_type, cache_args, timeseries=None, cache=True, force_overwrite=False,
-              retry_null_cache=False):
+def get_cache_args(kwargs, cache_kwargs):
+    """Extract the cache arguments from the kwargs and return them."""
+    cache_args = []
+    for k in cache_kwargs:
+        if k in kwargs:
+            cache_args.append(kwargs[k])
+            del kwargs[k]
+        else:
+            cache_args.append(cache_kwargs[k])
+    return cache_args
+
+
+def cacheable(data_type, cache_args, timeseries=None):
+    # Valid configuration kwargs for the cacheable decorator
+    cache_kwargs = {
+        "filepath_only": False,
+        "recompute": False,
+        "cache": True,
+        "validate_cache_timeseries": True,
+        "force_overwrite": False,
+        "retry_null_cache": False
+    }
+
     """Decorator for caching function results.
 
     Args:
         data_type (str): The type of data being cached. Currently only 'array' is supported.
         cache_args (list): The arguments to use as the cache key.
-        timeseries (str): The name of the time series dimension in the cached array. If not a 
+        timeseries (str): The name of the time series dimension in the cached array. If not a
             time series, set to None (default).
         cache (bool): Whether to cache the result.
-        force_overwrite (bool): Whether to overwrite the cache forecable on recompute if it 
+        validate_cache_timeseries (bool): Whether to validate the cache timeseries against the
+            requested timeseries. If False, will not validate the cache timeseries.
+        force_overwrite (bool): Whether to overwrite the cache forecable on recompute if it
             already exists (if False, will prompt the user before overwriting).
         retry_null_cache (bool): If True, ignore the null caches and attempts to recompute
             result for null values. If False (default), will return None for null caches.
     """
+
     def create_cacheable(func):
         def wrapper(*args, **kwargs):
             # Calculate the appropriate cache key
-            filepath_only = False
-            if 'filepath_only' in kwargs:
-                filepath_only = kwargs['filepath_only']
-                del kwargs['filepath_only']
-
-            recompute = False
-            if 'recompute' in kwargs:
-                recompute = kwargs['recompute']
-                del kwargs['recompute']
-
-            validate_cache_timeseries = True
-            if 'validate_cache_timeseries' in kwargs:
-                validate_cache_timeseries = kwargs['validate_cache_timeseries']
-                del kwargs['validate_cache_timeseries']
+            filepath_only, recompute, cache, validate_cache_timeseries, \
+                force_overwrite, retry_null_cache = get_cache_args(
+                    kwargs, cache_kwargs)
 
             params = signature(func).parameters
 
