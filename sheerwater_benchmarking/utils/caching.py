@@ -173,8 +173,7 @@ def cacheable(data_type, cache_args, timeseries=None):
                     elif data_type == 'array':
                         write = False
                         if fs.exists(cache_path) and not force_overwrite:
-                            inp = input(f'A cache already exists at '
-                                        f'{cache_path}. Are you sure you want to overwrite it? (y/n)')
+                            inp = input(f'A cache already exists at {cache_path}. Are you sure you want to overwrite it? (y/n)')
                             if inp == 'y' or inp == 'Y':
                                 write = True
                         else:
