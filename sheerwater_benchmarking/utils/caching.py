@@ -126,7 +126,7 @@ def cacheable(data_type, cache_args, timeseries=None):
                         return cache_map
                     else:
                         print(f"Opening cache {cache_path}")
-                        ds = xr.open_dataset(cache_map, engine='zarr', chunks='auto')
+                        ds = xr.open_dataset(cache_map, engine='zarr', chunks=True)
 
                         if validate_cache_timeseries and timeseries is not None:
                             # Check to see if the dataset extends roughly the full time series set
@@ -173,7 +173,8 @@ def cacheable(data_type, cache_args, timeseries=None):
                     elif data_type == 'array':
                         write = False
                         if fs.exists(cache_path) and not force_overwrite:
-                            inp = input(f'A cache already exists at {cache_path}. Are you sure you want to overwrite it? (y/n)')
+                            inp = input(f'A cache already exists at {
+                                        cache_path}. Are you sure you want to overwrite it? (y/n)')
                             if inp == 'y' or inp == 'Y':
                                 write = True
                         else:
