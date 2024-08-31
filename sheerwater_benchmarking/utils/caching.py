@@ -126,6 +126,9 @@ def cacheable(data_type, cache_args, timeseries=None):
                         return cache_map
                     else:
                         print(f"Opening cache {cache_path}")
+                        # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
+                        # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
+                        # every chunk is only 4B!
                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
 
                         if validate_cache_timeseries and timeseries is not None:
