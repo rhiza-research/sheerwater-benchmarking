@@ -1,4 +1,5 @@
 """Automated dataframe caching utilities."""
+import dask
 import gcsfs
 import xarray as xr
 import pandas
