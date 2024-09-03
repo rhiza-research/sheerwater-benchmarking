@@ -29,7 +29,8 @@ def cacheable(data_type, cache_args, timeseries=None):
         "cache": True,
         "validate_cache_timeseries": True,
         "force_overwrite": False,
-        "retry_null_cache": False
+        "retry_null_cache": False,
+        "rechunk": False,
     }
 
     """Decorator for caching function results.
@@ -131,6 +132,24 @@ def cacheable(data_type, cache_args, timeseries=None):
                         # every chunk is only 4B!
                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
 
+                        # If rechunk is passed then check to see if the rechunk array matches chunking. If not then rechunk
+                        if rechunk:
+                            # Get the chunks for the zeroth variable
+                            ds_chunks = None
+                            for var in ds.data_vars:
+                                 ds_chunks = ds[var].chunks
+                                 break
+
+                             # Compare the dict to the rechunk dict
+                             if ds_chunks != rechunk:
+                                 print("Rechunk was passed and cached chunks do not match rechunk request. Performing recunking")
+                                 with dask.config.set({"array.slicing.split_large_chunks": False}):
+                                     ds.chunk(chunks=rechunk).to_zarr(store=cache_map, mode='w')
+                             else:
+                                 print("Requested chunks already match rechunk.")
+
+
+
                         if validate_cache_timeseries and timeseries is not None:
                             # Check to see if the dataset extends roughly the full time series set
                             if timeseries not in ds.dims:
@@ -187,10 +206,13 @@ def cacheable(data_type, cache_args, timeseries=None):
                             print(f"Caching result for {cache_path}.")
                             if isinstance(ds, xr.Dataset):
                                 if hasattr(ds, '_chunk_dict'):
+                                    # If we aren't doing auto chunking delete the encoding chunks
                                     chunks = ds._chunk_dict
+                                    with dask.config.set({"array.slicing.split_large_chunks": False}):
+                                        ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
                                 else:
                                     chunks = 'auto'
-                                ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
+                                    ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
                             else:
                                 raise RuntimeError(
                                     f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
