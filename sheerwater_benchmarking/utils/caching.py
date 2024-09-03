@@ -137,16 +137,16 @@ def cacheable(data_type, cache_args, timeseries=None):
                             # Get the chunks for the zeroth variable
                             ds_chunks = None
                             for var in ds.data_vars:
-                                 ds_chunks = ds[var].chunks
-                                 break
+                                ds_chunks = ds[var].chunks
+                                break
 
-                             # Compare the dict to the rechunk dict
-                             if ds_chunks != rechunk:
-                                 print("Rechunk was passed and cached chunks do not match rechunk request. Performing recunking")
-                                 with dask.config.set({"array.slicing.split_large_chunks": False}):
-                                     ds.chunk(chunks=rechunk).to_zarr(store=cache_map, mode='w')
-                             else:
-                                 print("Requested chunks already match rechunk.")
+                            # Compare the dict to the rechunk dict
+                            if ds_chunks != rechunk:
+                                print("Rechunk was passed and cached chunks do not match rechunk request. Performing recunking")
+                                with dask.config.set({"array.slicing.split_large_chunks": False}):
+                                    ds.chunk(chunks=rechunk).to_zarr(store=cache_map, mode='w')
+                            else:
+                                print("Requested chunks already match rechunk.")
 
 
 
