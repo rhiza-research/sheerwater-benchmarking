@@ -53,7 +53,7 @@ def cacheable(data_type, cache_args, timeseries=None):
         def wrapper(*args, **kwargs):
             # Calculate the appropriate cache key
             filepath_only, recompute, cache, validate_cache_timeseries, \
-                force_overwrite, retry_null_cache = get_cache_args(
+                force_overwrite, retry_null_cache, rechunk = get_cache_args(
                     kwargs, cache_kwargs)
 
             params = signature(func).parameters
