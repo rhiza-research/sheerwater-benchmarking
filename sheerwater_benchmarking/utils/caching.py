@@ -147,6 +147,11 @@ def cacheable(data_type, cache_args, timeseries=None):
                                 # write to a temp cache map
                                 temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key
                                 temp_cache_map = fs.get_mapper(temp_cache_path)
+
+                                for var in ds.data_vars:
+                                    if 'chunks' in ds[var].encoding:
+                                        del ds[var].encoding['chunks']
+
                                 ds.chunk(chunks=rechunk).to_zarr(store=temp_cache_map, mode='w')
 
                                 # move to a permanent cache map
