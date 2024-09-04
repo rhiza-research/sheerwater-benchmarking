@@ -22,7 +22,7 @@ def get_cache_args(kwargs, cache_kwargs):
     return cache_args
 
 
-def cacheable(data_type, cache_args, timeseries=None):
+def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechunk=False):
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
         "filepath_only": False,
@@ -31,7 +31,6 @@ def cacheable(data_type, cache_args, timeseries=None):
         "validate_cache_timeseries": True,
         "force_overwrite": False,
         "retry_null_cache": False,
-        "rechunk": False,
     }
 
     """Decorator for caching function results.
@@ -41,6 +40,9 @@ def cacheable(data_type, cache_args, timeseries=None):
         cache_args (list): The arguments to use as the cache key.
         timeseries (str): The name of the time series dimension in the cached array. If not a
             time series, set to None (default).
+        chunking (dict): Specifies chunking if that coordinate exists. If coordinate does not exist
+            the chunking specified will be dropped.
+        auto_rechunk (bool): If True will aggressively rechunk a cache on load.
         cache (bool): Whether to cache the result.
         validate_cache_timeseries (bool): Whether to validate the cache timeseries against the
             requested timeseries. If False, will not validate the cache timeseries.
@@ -54,7 +56,7 @@ def cacheable(data_type, cache_args, timeseries=None):
         def wrapper(*args, **kwargs):
             # Calculate the appropriate cache key
             filepath_only, recompute, cache, validate_cache_timeseries, \
-                force_overwrite, retry_null_cache, rechunk = get_cache_args(
+                force_overwrite, retry_null_cache = get_cache_args(
                     kwargs, cache_kwargs)
 
             params = signature(func).parameters
@@ -134,14 +136,20 @@ def cacheable(data_type, cache_args, timeseries=None):
                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
 
                         # If rechunk is passed then check to see if the rechunk array matches chunking. If not then rechunk
-                        if rechunk:
+                        if auto_rechunk:
+                            if not isinstance(chunking, dict):
+                                raise ValueError("If auto_rechunk is True, a chunking dict must be supplied.")
+
                             # Get the chunks for the dataset
                             ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
 
+                            # Drop any dimensions that don't exist in the ds_chunks
+                            for dim in chunking:
+                                if dim not in ds_chunks:
+                                    del chunking[dim]
+
                             # Compare the dict to the rechunk dict
-                            print(ds_chunks)
-                            print(rechunk)
-                            if ds_chunks != rechunk:
+                            if ds_chunks != chunking:
                                 print("Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
 
                                 # write to a temp cache map
@@ -152,7 +160,7 @@ def cacheable(data_type, cache_args, timeseries=None):
                                     if 'chunks' in ds[var].encoding:
                                         del ds[var].encoding['chunks']
 
-                                ds.chunk(chunks=rechunk).to_zarr(store=temp_cache_map, mode='w')
+                                ds.chunk(chunks=chunking).to_zarr(store=temp_cache_map, mode='w')
 
                                 # move to a permanent cache map
                                 fs.rm(cache_path, recursive=True)
@@ -161,7 +169,8 @@ def cacheable(data_type, cache_args, timeseries=None):
                                 # Reopen the dataset
                                 ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
                             else:
-                                print("Requested chunks already match rechunk.")
+                                #print("Requested chunks already match rechunk.")
+                                pass
 
 
 
@@ -220,9 +229,22 @@ def cacheable(data_type, cache_args, timeseries=None):
                         if write:
                             print(f"Caching result for {cache_path}.")
                             if isinstance(ds, xr.Dataset):
-                                if hasattr(ds, '_chunk_dict'):
+                                if chunking:
                                     # If we aren't doing auto chunking delete the encoding chunks
-                                    chunks = ds._chunk_dict
+                                    for var in ds.data_vars:
+                                        if 'chunks' in ds[var].encoding:
+                                            del ds[var].encoding['chunks']
+.
+
+                                    # Get the chunks for the dataset
+                                    ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
+
+                                    # Drop any dimensions that don't exist in the ds_chunks
+                                    for dim in chunking:
+                                        if dim not in ds_chunks:
+                                            del chunking[dim]
+
+                                    chunks = chunking
                                     ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
                                 else:
                                     chunks = 'auto'
