@@ -144,9 +144,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                             ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
 
                             # Drop any dimensions that don't exist in the ds_chunks
+                            dims_to_drop = []
                             for dim in chunking:
                                 if dim not in ds_chunks:
-                                    del chunking[dim]
+                                    dims_to_drop.append(dim)
+
+                            for dim in dims_to_drop:
+                                del chunking[dim]
 
                             # Compare the dict to the rechunk dict
                             if ds_chunks != chunking:
@@ -239,9 +243,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                                     ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
 
                                     # Drop any dimensions that don't exist in the ds_chunks
+                                    dims_to_drop = []
                                     for dim in chunking:
                                         if dim not in ds_chunks:
-                                            del chunking[dim]
+                                            dims_to_drop.append(dim)
+
+                                    for dim in dims_to_drop:
+                                        del chunking[dim]
 
                                     chunks = chunking
                                     ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
