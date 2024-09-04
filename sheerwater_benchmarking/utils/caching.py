@@ -22,7 +22,7 @@ def get_cache_args(kwargs, cache_kwargs):
     return cache_args
 
 
-def cacheable(data_type, cache_args, timeseries=None):
+def cacheable(data_type, cache_args, timeseries=None, chunking=None):
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
         "filepath_only": False,
@@ -31,7 +31,6 @@ def cacheable(data_type, cache_args, timeseries=None):
         "validate_cache_timeseries": True,
         "force_overwrite": False,
         "retry_null_cache": False,
-        "rechunk": False,
     }
 
     """Decorator for caching function results.
@@ -54,7 +53,7 @@ def cacheable(data_type, cache_args, timeseries=None):
         def wrapper(*args, **kwargs):
             # Calculate the appropriate cache key
             filepath_only, recompute, cache, validate_cache_timeseries, \
-                force_overwrite, retry_null_cache, rechunk = get_cache_args(
+                force_overwrite, retry_null_cache = get_cache_args(
                     kwargs, cache_kwargs)
 
             params = signature(func).parameters
@@ -133,16 +132,16 @@ def cacheable(data_type, cache_args, timeseries=None):
                         # every chunk is only 4B!
                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
 
-                        # If rechunk is passed then check to see if the rechunk array matches chunking. If not then rechunk
-                        if rechunk:
+                        # If chunking is specified aggressively overwrite the cache with the chunks
+                        if chunking:
                             # Get the chunks for the dataset
                             ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
 
                             # Compare the dict to the rechunk dict
                             print(ds_chunks)
-                            print(rechunk)
-                            if ds_chunks != rechunk:
-                                print("Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
+                            print(chunking)
+                            if ds_chunks != chunking:
+                                print("Chunking was specified and cached chunks do not match specified chunking. Performing rechunking")
 
                                 # write to a temp cache map
                                 temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key
@@ -152,7 +151,7 @@ def cacheable(data_type, cache_args, timeseries=None):
                                     if 'chunks' in ds[var].encoding:
                                         del ds[var].encoding['chunks']
 
-                                ds.chunk(chunks=rechunk).to_zarr(store=temp_cache_map, mode='w')
+                                ds.chunk(chunks=chunking).to_zarr(store=temp_cache_map, mode='w')
 
                                 # move to a permanent cache map
                                 fs.rm(cache_path, recursive=True)
@@ -161,7 +160,7 @@ def cacheable(data_type, cache_args, timeseries=None):
                                 # Reopen the dataset
                                 ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
                             else:
-                                print("Requested chunks already match rechunk.")
+                                #print("Requested chunks already match rechunk.")
 
 
 
