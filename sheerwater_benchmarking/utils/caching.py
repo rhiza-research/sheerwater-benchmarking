@@ -136,7 +136,7 @@ def cacheable(data_type, cache_args, timeseries=None):
                         # If rechunk is passed then check to see if the rechunk array matches chunking. If not then rechunk
                         if rechunk:
                             # Get the chunks for the dataset
-                            ds_chunks = {dim: ds1.chunks[dim][0] for dim in ds1.chunks}
+                            ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
 
                             # Compare the dict to the rechunk dict
                             print(ds_chunks)
