@@ -143,7 +143,14 @@ def cacheable(data_type, cache_args, timeseries=None):
                             print(rechunk)
                             if ds_chunks != rechunk:
                                 print("Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
-                                ds.chunk(chunks=rechunk).to_zarr(store=cache_map, mode='w')
+
+                                # write to a temp cache map
+                                temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key
+                                temp_cache_map = fs.get_mapper(temp_cache_path)
+                                ds.chunk(chunks=rechunk).to_zarr(store=temp_cache_map, mode='w')
+
+                                # move to a permanent cache map
+                                fs.mv(temp_cache_path, cache_path)
 
                                 # Reopen the dataset
                                 ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
