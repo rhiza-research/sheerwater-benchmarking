@@ -155,7 +155,7 @@ def cacheable(data_type, cache_args, timeseries=None):
                                 ds.chunk(chunks=rechunk).to_zarr(store=temp_cache_map, mode='w')
 
                                 # move to a permanent cache map
-                                fs.mv(temp_cache_path, cache_path)
+                                fs.mv(temp_cache_path, cache_path, recusrive=True)
 
                                 # Reopen the dataset
                                 ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
