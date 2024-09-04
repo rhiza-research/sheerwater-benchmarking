@@ -131,8 +131,7 @@ def cacheable(data_type, cache_args, timeseries=None):
                         # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
                         # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
                         # every chunk is only 4B!
-                        with dask.config.set({"array.slicing.split_large_chunks": False}):
-                            ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
 
                         # If rechunk is passed then check to see if the rechunk array matches chunking. If not then rechunk
                         if rechunk:
@@ -143,10 +142,14 @@ def cacheable(data_type, cache_args, timeseries=None):
                                 break
 
                             # Compare the dict to the rechunk dict
+                            print(ds_chunks)
+                            print(rechunk)
                             if ds_chunks != rechunk:
                                 print("Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
-                                with dask.config.set({"array.slicing.split_large_chunks": False}):
-                                    ds.chunk(chunks=rechunk).to_zarr(store=cache_map, mode='w')
+                                ds.chunk(chunks=rechunk).to_zarr(store=cache_map, mode='w')
+
+                                # Reopen the dataset
+                                ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
                             else:
                                 print("Requested chunks already match rechunk.")
 
@@ -210,8 +213,7 @@ def cacheable(data_type, cache_args, timeseries=None):
                                 if hasattr(ds, '_chunk_dict'):
                                     # If we aren't doing auto chunking delete the encoding chunks
                                     chunks = ds._chunk_dict
-                                    with dask.config.set({"array.slicing.split_large_chunks": False}):
-                                        ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
+                                    ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
                                 else:
                                     chunks = 'auto'
                                     ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
