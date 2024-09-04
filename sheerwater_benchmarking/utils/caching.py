@@ -234,7 +234,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                                     for var in ds.data_vars:
                                         if 'chunks' in ds[var].encoding:
                                             del ds[var].encoding['chunks']
-.
 
                                     # Get the chunks for the dataset
                                     ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
