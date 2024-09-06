@@ -167,7 +167,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                                 ds.chunk(chunks=chunking).to_zarr(store=temp_cache_map, mode='w')
 
                                 # move to a permanent cache map
-                                if fs.exists(cache_path)
+                                if fs.exists(cache_path):
                                     print(f"Deleting {cache_path} to replace.")
                                     fs.rm(cache_path, recursive=True)
                                     print(f"Confirm deleted {cache_path} to replace.")
