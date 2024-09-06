@@ -257,9 +257,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
 
                                     chunks = chunking
                                     ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
+
+                                    # Reopen the dataset to truncate the computational path
+                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
                                 else:
                                     chunks = 'auto'
                                     ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
+
+                                    # Reopen the dataset to truncate the computational path
+                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
                             else:
                                 raise RuntimeError(
                                     f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
