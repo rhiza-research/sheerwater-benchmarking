@@ -15,13 +15,13 @@ def dask_remote(func):
                 # setup coiled cluster with remote config
                 logger.info("Attaching to coiled cluster with custom configuration")
                 cluster = coiled.Cluster(**kwargs['remote_config'])
-                _ = cluster.get_client()
+                client = cluster.get_client()
             else:
                 # Just setup a coiled cluster
                 logger.info("Attaching to coiled cluster with default configuration")
                 cluster = coiled.Cluster(name='sheerwater-shared',
                                          n_workers=4, idle_timeout="45 minutes")
-                _ = cluster.get_client()
+                client = cluster.get_client()
         else:
             # Setup a local cluster
             try:
