@@ -38,8 +38,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
     Args:
         data_type (str): The type of data being cached. Currently only 'array' is supported.
         cache_args (list): The arguments to use as the cache key.
-        timeseries (str): The name of the time series dimension in the cached array. If not a
-            time series, set to None (default).
+        timeseries (str, list): The name of the time series dimension in the cached array. If not a
+            time series, set to None (default). If a list, will use the first mactchin coordinate in the list.
         chunking (dict): Specifies chunking if that coordinate exists. If coordinate does not exist
             the chunking specified will be dropped.
         auto_rechunk (bool): If True will aggressively rechunk a cache on load.
@@ -65,6 +65,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
             start_time = None
             end_time = None
             if timeseries is not None:
+                if not isinstance(timeseries, list):
+                    timeseries = [timeseries]
+
                 if 'start_time' in cache_args or 'end_time' in cache_args:
                     raise ValueError(
                         "Time series functions must not place their time arguments in cacheable_args!")
@@ -138,7 +141,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                         # If rechunk is passed then check to see if the rechunk array matches chunking. If not then rechunk
                         if auto_rechunk:
                             if not isinstance(chunking, dict):
-                                raise ValueError("If auto_rechunk is True, a chunking dict must be supplied.")
+                                raise ValueError(
+                                    "If auto_rechunk is True, a chunking dict must be supplied.")
 
                             # Get the chunks for the dataset
                             ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
@@ -154,7 +158,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
 
                             # Compare the dict to the rechunk dict
                             if ds_chunks != chunking:
-                                print("Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
+                                print(
+                                    "Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
 
                                 # write to a temp cache map
                                 temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key
@@ -177,20 +182,20 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                                 # Reopen the dataset
                                 ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
                             else:
-                                #print("Requested chunks already match rechunk.")
+                                # print("Requested chunks already match rechunk.")
                                 pass
-
-
 
                         if validate_cache_timeseries and timeseries is not None:
                             # Check to see if the dataset extends roughly the full time series set
-                            if timeseries not in ds.dims:
+                            match_time = [t for t in timeseries if t in ds.dims]
+                            if len(match_time) == 0:
                                 raise RuntimeError("Timeseries array functions must return a time dimension for slicing. "
                                                    "This could be an invalid cache. Try running with recompute=True to reset the cache.")
                             else:
+                                time_col = match_time[0]
                                 # Check if within 1 year at least
-                                if (pandas.Timestamp(ds[timeseries].min().values) < dateparser.parse(start_time) + datetime.timedelta(days=365) and
-                                        pandas.Timestamp(ds[timeseries].max().values) > dateparser.parse(end_time) - datetime.timedelta(days=365)):
+                                if (pandas.Timestamp(ds[time_col].min().values) < dateparser.parse(start_time) + datetime.timedelta(days=365) and
+                                        pandas.Timestamp(ds[time_col].max().values) > dateparser.parse(end_time) - datetime.timedelta(days=365)):
 
                                     compute_result = False
                                 else:
@@ -275,11 +280,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
             else:
                 # Do the time series filtering
                 if timeseries is not None:
-                    if timeseries not in ds.dims:
+                    match_time = [t for t in timeseries if t in ds.dims]
+                    if len(match_time) == 0:
                         raise RuntimeError(
                             "Timeseries array must return a 'time' dimension for slicing.")
 
-                    ds = ds.sel({timeseries: slice(start_time, end_time)})
+                    time_col = match_time[0]
+                    ds = ds.sel({time_col: slice(start_time, end_time)})
 
                 return ds
 
