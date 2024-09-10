@@ -32,7 +32,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
         "force_overwrite": False,
         "retry_null_cache": False,
     }
-
     """Decorator for caching function results.
 
     Args:
@@ -65,8 +64,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
             start_time = None
             end_time = None
             if timeseries is not None:
-                if not isinstance(timeseries, list):
-                    timeseries = [timeseries]
+                # Convert to a list if not
+                tl = [timeseries if isinstance(timeseries, list) else [timeseries]]
 
                 if 'start_time' in cache_args or 'end_time' in cache_args:
                     raise ValueError(
@@ -187,7 +186,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
 
                         if validate_cache_timeseries and timeseries is not None:
                             # Check to see if the dataset extends roughly the full time series set
-                            match_time = [t for t in timeseries if t in ds.dims]
+                            match_time = [t for t in tl if t in ds.dims]
                             if len(match_time) == 0:
                                 raise RuntimeError("Timeseries array functions must return a time dimension for slicing. "
                                                    "This could be an invalid cache. Try running with recompute=True to reset the cache.")
@@ -280,7 +279,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
             else:
                 # Do the time series filtering
                 if timeseries is not None:
-                    match_time = [t for t in timeseries if t in ds.dims]
+                    match_time = [t for t in tl if t in ds.dims]
                     if len(match_time) == 0:
                         raise RuntimeError(
                             "Timeseries array must return a 'time' dimension for slicing.")
