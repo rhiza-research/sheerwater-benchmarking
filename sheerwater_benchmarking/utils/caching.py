@@ -65,7 +65,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
             end_time = None
             if timeseries is not None:
                 # Convert to a list if not
-                tl = [timeseries if isinstance(timeseries, list) else [timeseries]]
+                tl = timeseries if isinstance(timeseries, list) else [timeseries]
 
                 if 'start_time' in cache_args or 'end_time' in cache_args:
                     raise ValueError(
