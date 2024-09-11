@@ -9,8 +9,8 @@ import numpy as np
 from sheerwater_benchmarking.utils.remote import dask_remote
 from sheerwater_benchmarking.utils.caching import cacheable
 
-from sw_data.utils.secrets import cdsapi_secret
-from sw_data.utils.data_util import get_grid, apply_mask
+from sheerwater_benchmarking.utils.secrets import cdsapi_secret
+from sheerwater_benchmarking.utils.data_utils import get_grid, apply_mask
 
 from .masks import land_sea_mask
 

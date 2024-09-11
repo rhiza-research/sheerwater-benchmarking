@@ -33,3 +33,26 @@ def test_iri_ecmwf(start_iri_ecmwf, end_iri_ecmwf):
 
         # Check that there is majority non-null data for each start date
         assert (df.isnull().mean("start_date") < 0.5).all()
+
+def test_climatology(start_iri_ecmwf, end_iri_ecmwf):
+    """Test the IRI ECMWF data for validity."""
+    # Configurations of IRI ECMWF
+    forecast_type = ["forecast", "reforecast"]
+    run_type = ["average", "control"]
+    forecast_type = ["forecast"]
+    var = ["precip", "tmp2m"]
+    run_type = ["average"]
+
+    for f, v, r in itertools.product(forecast_type, var, run_type):
+        print("Testing data for:", v, f, r)
+        df = iri_ecmwf(start_iri_ecmwf, end_iri_ecmwf,
+                       variable=v,
+                       forecast_type=f,
+                       run_type=r,
+                       grid="global1_5")
+
+        # Perform lazy checks for data validity
+        assert len(df.coords) > 0
+
+        # Check that there is majority non-null data for each start date
+        assert (df.isnull().mean("start_date") < 0.5).all()

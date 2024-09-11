@@ -104,6 +104,7 @@ click==8.1.7
     # via distributed
     # via kopf
     # via rasterio
+    # via sheerwater-benchmarking
 click-plugins==1.1.1
     # via rasterio
 cligj==0.7.2
@@ -264,6 +265,8 @@ idna==3.7
     # via yarl
 importlib-metadata==8.2.0
     # via coiled
+iniconfig==2.0.0
+    # via pytest
 invoke==2.2.0
     # via coiled
     # via fabric
@@ -448,6 +451,7 @@ packaging==24.1
     # via nbconvert
     # via pip-requirements-parser
     # via pyogrio
+    # via pytest
     # via rioxarray
     # via xarray
 pandas==2.2.2
@@ -477,6 +481,8 @@ pip-requirements-parser==32.0.1
     # via coiled
 platformdirs==4.2.2
     # via jupyter-core
+pluggy==1.5.0
+    # via pytest
 prometheus-client==0.20.0
     # via coiled
     # via jupyter-server
@@ -531,6 +537,8 @@ pyparsing==3.1.2
 pyproj==3.6.1
     # via geopandas
     # via rioxarray
+pytest==8.3.3
+    # via sheerwater-benchmarking
 python-box==7.2.0
     # via kr8s
 python-dateutil==2.9.0.post0

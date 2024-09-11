@@ -9,11 +9,11 @@ import xarray as xr
 import dateparser
 from sheerwater_benchmarking.utils import dask_remote, cacheable
 
-from sw_data.utils.secrets import ecmwf_secret
-from sw_data.utils.data_util import (get_grid, print_ok, print_info,
-                                     print_warning, print_error,
-                                     download_url, get_dates,
-                                     is_valid_forecast_date, apply_mask)
+from sheerwater_benchmarking.utils.secrets import ecmwf_secret
+from sheerwater_benchmarking.utils.data_utils import (get_grid, print_ok, print_info,
+                                                      print_warning, print_error,
+                                                      download_url, get_dates,
+                                                      is_valid_forecast_date, apply_mask)
 
 from .masks import land_sea_mask
 

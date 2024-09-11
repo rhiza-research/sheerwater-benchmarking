@@ -5,8 +5,8 @@ import xarray as xr
 
 from sheerwater_benchmarking.utils import cacheable
 
-from sw_data.utils.secrets import cdsapi_secret
-from sw_data.utils.data_util import get_grid
+from sheerwater_benchmarking.utils.secrets import cdsapi_secret
+from sheerwater_benchmarking.utils.data_utils import get_grid
 
 
 @cacheable(data_type='array', cache_args=['grid'])

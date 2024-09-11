@@ -85,6 +85,7 @@ dependencies = [
     "bokeh",
     "flox",
     "ruff>=0.5.7",
+    "pytest>=8.3.3",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
