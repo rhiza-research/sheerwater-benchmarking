@@ -263,7 +263,7 @@ def apply_mask(ds, mask, var, val, rename_dict={}):
         mask (xr.Dataset): Mask to apply.
         var (str): Variable to mask.
         val (int): Value to mask.
-        rename_dict (dict): Dictionary to rename variables. 
+        rename_dict (dict): Dictionary to rename variables.
     """
     # Apply mask
     if mask is not None:

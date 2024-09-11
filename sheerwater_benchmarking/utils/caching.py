@@ -56,15 +56,6 @@ def drop_encoded_chunks(ds):
 
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechunk=False):
-    # Valid configuration kwargs for the cacheable decorator
-    cache_kwargs = {
-        "filepath_only": False,
-        "recompute": False,
-        "cache": True,
-        "validate_cache_timeseries": True,
-        "force_overwrite": False,
-        "retry_null_cache": False,
-    }
     """Decorator for caching function results.
 
     Args:
@@ -83,6 +74,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
         retry_null_cache (bool): If True, ignore the null caches and attempts to recompute
             result for null values. If False (default), will return None for null caches.
     """
+    # Valid configuration kwargs for the cacheable decorator
+    cache_kwargs = {
+        "filepath_only": False,
+        "recompute": False,
+        "cache": True,
+        "validate_cache_timeseries": True,
+        "force_overwrite": False,
+        "retry_null_cache": False,
+    }
 
     def create_cacheable(func):
         @wraps(func)
@@ -174,7 +174,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                         # every chunk is only 4B!
                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
 
-                        # If rechunk is passed then check to see if the rechunk array matches chunking. If not then rechunk
+                        # If rechunk is passed then check to see if the rechunk array
+                        # matches chunking. If not then rechunk
                         if auto_rechunk:
                             if not isinstance(chunking, dict):
                                 raise ValueError(
@@ -214,13 +215,17 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                             # Check to see if the dataset extends roughly the full time series set
                             match_time = [t for t in tl if t in ds.dims]
                             if len(match_time) == 0:
-                                raise RuntimeError("Timeseries array functions must return a time dimension for slicing. "
-                                                   "This could be an invalid cache. Try running with recompute=True to reset the cache.")
+                                raise RuntimeError("Timeseries array functions must return "
+                                                   "a time dimension for slicing. "
+                                                   "This could be an invalid cache. "
+                                                   "Try running with recompute=True to reset the cache.")
                             else:
                                 time_col = match_time[0]
                                 # Check if within 1 year at least
-                                if (pandas.Timestamp(ds[time_col].min().values) < dateparser.parse(start_time) + datetime.timedelta(days=365) and
-                                        pandas.Timestamp(ds[time_col].max().values) > dateparser.parse(end_time) - datetime.timedelta(days=365)):
+                                if (pandas.Timestamp(ds[time_col].min().values) <
+                                    dateparser.parse(start_time) + datetime.timedelta(days=365) and
+                                        pandas.Timestamp(ds[time_col].max().values) >
+                                        dateparser.parse(end_time) - datetime.timedelta(days=365)):
 
                                     compute_result = False
                                 else:

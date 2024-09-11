@@ -15,7 +15,7 @@ def land_sea_mask(grid="global1_5"):
 
     Args:
         grid (str): The grid resolution to fetch the data at. One of:
-            - global1_5: 1.5 degree 
+            - global1_5: 1.5 degree
     """
     times = ['00:00']
     days = ['01']

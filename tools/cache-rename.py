@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""Tooling for cache management."""
 
 import argparse
 import click
@@ -38,7 +39,7 @@ for i, f in enumerate(files_to_rename):
     print(f"\t {f} -> {new_names[i]}")
 
 
-if click.confirm(f"Do you want to rename these files?"):
+if click.confirm("Do you want to rename these files?"):
     for i, f in enumerate(files_to_rename):
         fs.mv(f, new_names[i], recursive=True)
 

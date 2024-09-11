@@ -98,7 +98,7 @@ def single_era5(year, variable, grid="global1_5"):
 def single_era5_cleaned(year, variable, grid="global1_5"):
     """Fetches a single year of ERA5 data and cleans it up.
 
-    Handles the two different formats of ERA5 data. 
+    Handles the two different formats of ERA5 data.
     Has the same interface as single_era5.
     """
     ds = single_era5(year, variable, grid)
