@@ -1,5 +1,5 @@
 [tool.autopep8]
-max_line_length = 100
+max_line_length = 120
 
 [tool.ruff]
 # Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
@@ -30,7 +30,7 @@ exclude = [
   "__pypackages__",
 ]
 
-line-length = 100
+line-length = 120
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
@@ -39,6 +39,9 @@ target-version = "py38"
 
 [tool.ruff.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "D104"]
 
 [project]
 name = "sheerwater-benchmarking"

@@ -1,14 +1,14 @@
-"""This module contains functions to fetch the CDS and ECMWF API keys from the secret manager."""
+"""Data download secret manager functions."""
 import os
 from google.cloud import secretmanager
 from pathlib import Path
-import json
 
 
 def cdsapi_secret():
     """Fetches the CDS API secret from the secret manager."""
     # Check to see if the CDS secret exists
-    if not os.path.exists(Path.home() / ".cdsapirc"):
+    path = Path.home() / ".cdsapirc"
+    if not os.path.exists(path):
         # Fetch the api key from google-secret-manager
         # Access the secret version.
         client = secretmanager.SecretManagerServiceClient()
@@ -22,36 +22,42 @@ def cdsapi_secret():
         cdsapirc1 = f"url: {url}"
         cdsapirc2 = f"key: {key}"
 
-        f = open(Path.home() / '.cdsapirc', mode='w+')
+        f = open(path, mode='w+')
         f.write(cdsapirc1)
         f.write('\n')
         f.write(cdsapirc2)
         f.close()
         return url, key
-    else:
-        with open(Path.home() / '.cdsapirc', mode='r') as f:
-            lines = [line.strip() for line in f.readlines()[:2]]
-        url, key = [line.split(":", 1)[1].strip() for line in lines]
-        return url, key
+
+    with open(path, mode='r') as f:
+        lines = [line.strip() for line in f.readlines()[:2]]
+    url, key = [line.split(":", 1)[1].strip() for line in lines]
+    return url, key
 
 
 def ecmwf_secret():
-    """Fetches the ECMWF secret from the secret manager."""
+    """Get the ECMWF API key from the secret manager."""
     # Check to see if the ECMWF secret exists
-    if not os.path.exists("~/.ecmwfrc"):
+    path = Path.home() / '.ecmwfrc'
+    if not os.path.exists(path):
         # Fetch the api key from google-secret-manager
         # Access the secret version.
         client = secretmanager.SecretManagerServiceClient()
 
         response = client.access_secret_version(
             request={"name": "projects/750045969992/secrets/ecmwf-iri/versions/latest"})
-        uid = response.payload.data.decode("UTF-8")
+        val = response.payload.data.decode("UTF-8")
+        secret = f"key: {val}"
 
         # Write it to a file
-        f = open(Path.home() / '.ecmwfrc', mode='w+')
-        json.dump(uid, f)
+        f = open(path, mode='w+')
+        f.write(secret)
+        f.write('\n')
         f.close()
 
-    f = open(Path.home() / '.ecmwfrc', mode='r+')
-    val = json.load(f)
-    return json.loads(val)["ecmwf_key"]
+        return val
+
+    with open(path, mode='r') as f:
+        lines = [line.strip() for line in f.readlines()]
+    val = [line.split(":", 1)[1].strip() for line in lines][0]
+    return val
