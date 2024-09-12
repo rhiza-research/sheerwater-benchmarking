@@ -176,7 +176,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                                     "If auto_rechunk is True, a chunking dict must be supplied.")
 
                             # Compare the dict to the rechunk dict
-                            if !chunking_compare(ds, chunking):
+                            if not chunking_compare(ds, chunking):
                                 print(
                                     "Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
 
