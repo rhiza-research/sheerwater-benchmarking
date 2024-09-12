@@ -21,7 +21,7 @@ def get_cache_args(kwargs, cache_kwargs):
             cache_args.append(cache_kwargs[k])
     return cache_args
 
-def prune_chunking_dimensions(ds, chunking)
+def prune_chunking_dimensions(ds, chunking):
     # Get the chunks for the dataset
     ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
 
