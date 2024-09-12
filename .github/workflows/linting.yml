@@ -24,8 +24,8 @@ jobs:
       - name: Lint Code Base
         uses: chartboost/ruff-action@v1
         with: 
-          src: src
+          src: sheerwater_benchmarking 
           args: 
             check
-            --exclude src/sw_models,scratch
+            --exclude scratch
             --fix

@@ -233,10 +233,10 @@ def salient_era5(start_time, end_time, variable, grid="global1_5", agg=14, mask=
             - None: No mask
     """
     # Fetch the data from Salient
-    ds =  # Get additional historical data beyond end_date to make sure we have enough
+    # ds =  # Get additional historical data beyond end_date to make sure we have enough
     # observed days to compare with the final forecast.
     duration = {"sub-seasonal": 8 * 5, "seasonal": 31 * 3, "long-range": 95 * 4}[timescale]
-    hist = sk.data_timeseries(
+    ds = sk.data_timeseries(
         loc=loc,
         variable=var,
         field=fld,

@@ -1,5 +1,4 @@
 """Model utility functions for all parts of the evaluation."""
-import numpy as np
 
 import salientsdk as sk
 

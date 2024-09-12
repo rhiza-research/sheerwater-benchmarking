@@ -30,7 +30,7 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
         agg_col (str): Column to aggregate over.
         agg_fn (str): Aggregation function. One of:
             - mean
-            - sum 
+            - sum
     """
     agg_kwargs = {
         f"{agg_col}": agg,
