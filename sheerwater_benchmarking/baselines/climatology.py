@@ -6,7 +6,7 @@ from sheerwater_benchmarking.data import era5_agg
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['first_year', 'last_year', 'variable', 'grid', 'mask'],
-           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunking={"lat": 121, "lon": 240, "doy": 366},
            auto_rechunk=True)
 def climatology(first_year, last_year, variable, grid="global1_5", mask="lsm"):
     """Compute the climatology of the ERA5 data. Years are inclusive."""
