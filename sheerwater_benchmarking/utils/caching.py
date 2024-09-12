@@ -181,6 +181,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                                     "Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
 
                                 # write to a temp cache map
+                                # writing to temp cache is necessary because if you overwrite
+                                # the original cache map it will write it before reading the
+                                # data leading to corruption.
                                 temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key
                                 temp_cache_map = fs.get_mapper(temp_cache_path)
 
