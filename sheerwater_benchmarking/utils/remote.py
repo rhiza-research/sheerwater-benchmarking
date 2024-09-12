@@ -2,12 +2,14 @@
 from dask.distributed import Client, get_client, LocalCluster
 import coiled
 import logging
+from functools import wraps
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
 def dask_remote(func):
     """Decorator to run a function on a remote dask cluster."""
+    @wraps(func)
     def wrapper(*args, **kwargs):
         # See if there are extra function args to run this remotely
         if 'remote' in kwargs and kwargs['remote']:

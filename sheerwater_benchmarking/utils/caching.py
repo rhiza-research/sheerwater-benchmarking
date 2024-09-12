@@ -1,9 +1,9 @@
 """Automated dataframe caching utilities."""
-import dask
 import gcsfs
 import xarray as xr
 import pandas
 import dateparser
+from functools import wraps
 import datetime
 from inspect import signature, Parameter
 import logging
@@ -20,6 +20,7 @@ def get_cache_args(kwargs, cache_kwargs):
         else:
             cache_args.append(cache_kwargs[k])
     return cache_args
+
 
 def prune_chunking_dimensions(ds, chunking):
     # Get the chunks for the dataset
@@ -84,7 +85,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
     """
 
     def create_cacheable(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
+            # Proper variable scope for the decorator args
+            nonlocal data_type, cache_args, timeseries, chunking, auto_rechunk
+
             # Calculate the appropriate cache key
             filepath_only, recompute, cache, validate_cache_timeseries, \
                 force_overwrite, retry_null_cache = get_cache_args(
