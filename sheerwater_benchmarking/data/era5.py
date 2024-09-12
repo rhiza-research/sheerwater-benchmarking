@@ -216,8 +216,8 @@ def era5(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm"):
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'grid'],
-           chunking={"lat": 292, "lon": 396, "time": 500},
-           auto_rechunk=False)
+           chunking={"lat": 292, "lon": 396, "time": 300},
+           auto_rechunk=True)
 def salient_era5_raw(start_time, end_time, variable, grid="africa0_25", verbose=False):
     """Fetches ground truth data from Saleint's SDK and applies aggregation and masking .
 
