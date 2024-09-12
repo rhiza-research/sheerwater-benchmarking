@@ -263,7 +263,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                                     # If we aren't doing auto chunking delete the encoding chunks
                                     ds = drop_encoded_chunks(ds)
 
-                                    chunking = prune_chunking_dimension(ds, chunking)
+                                    chunking = prune_chunking_dimensions(ds, chunking)
 
                                     ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')
 
