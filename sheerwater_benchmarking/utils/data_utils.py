@@ -15,7 +15,7 @@ def apply_mask(ds, mask, var, val, rename_dict={}):
     # Apply mask
     if mask is not None:
         # This will mask and include any location where there is any land
-        ds = ds[var].where(mask >= val, drop=False)
+        ds = ds[var].where(mask > val, drop=False)
         ds = ds.rename(rename_dict)
     return ds
 

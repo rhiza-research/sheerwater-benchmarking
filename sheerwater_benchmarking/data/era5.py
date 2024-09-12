@@ -183,7 +183,7 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
            cache_args=['variable', 'grid', 'agg', 'mask'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            auto_rechunk=False)
-def era5(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm"):
+def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm"):
     """Fetches ground truth data from ERA5 and applies aggregation and masking .
 
     Args:
@@ -231,11 +231,12 @@ def salient_era5_raw(start_time, end_time, variable, grid="africa0_25", verbose=
 
     # Fetch the data from Salient
     loc = get_salient_loc(grid)
+    var_name = {'tmp2m': 'temp', 'precip': 'precip'}[variable]
 
     # Fetch and load the data
     data = sk.data_timeseries(
         loc=loc,
-        variable=variable,
+        variable=var_name,
         field="vals",
         start=np.datetime64(start_time),
         end=np.datetime64(end_time),

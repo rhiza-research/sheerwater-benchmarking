@@ -1,6 +1,6 @@
 """A climatology baseline for benchmarking."""
 from sheerwater_benchmarking.utils import dask_remote, cacheable
-from sheerwater_benchmarking.data import era5
+from sheerwater_benchmarking.data import era5_agg
 
 
 @dask_remote
@@ -14,7 +14,7 @@ def climatology(first_year, last_year, variable, grid="global1_5"):
     end_time = f"{last_year}-12-31"
 
     # Get single day, masked data between start and end years
-    ds = era5(start_time, end_time, variable=variable,
+    ds = era5_agg(start_time, end_time, variable=variable,
                   grid=grid, agg=1, mask="lsm")
 
     # Take average over the period to produce climatology

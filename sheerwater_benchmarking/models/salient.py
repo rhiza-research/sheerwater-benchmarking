@@ -27,6 +27,7 @@ def salient_blend_raw(start_time, end_time, variable, grid="africa0_25", verbose
 
     # Fetch the data from Salient
     loc = get_salient_loc(grid)
+    var_name = {'tmp2m': 'temp', 'precip': 'precip'}[variable]
 
     # Fetch and load the data
     # date_range = pd.date_range(start=np.datetime64(start_time), end=np.datetime64(end_time),
@@ -35,9 +36,9 @@ def salient_blend_raw(start_time, end_time, variable, grid="africa0_25", verbose
 
     fcst = sk.forecast_timeseries(
         loc=loc,
-        variable=variable,
+        variable=var_name,
         field="vals",
-        date=target_dates,  # request multiple forecast dates
+        date=target_dates,  # to request multiple forecast dates
         timescale=timescale,
         model="blend",
         # reference_clim="30_yr",  # this is the climatology used by data_timeseries
