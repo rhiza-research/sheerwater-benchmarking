@@ -21,6 +21,38 @@ def get_cache_args(kwargs, cache_kwargs):
             cache_args.append(cache_kwargs[k])
     return cache_args
 
+def prune_chunking_dimensions(ds, chunking)
+    # Get the chunks for the dataset
+    ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
+
+    # Drop any dimensions that don't exist in the ds_chunks
+    dims_to_drop = []
+    for dim in chunking:
+        if dim not in ds_chunks:
+            dims_to_drop.append(dim)
+
+    for dim in dims_to_drop:
+        del chunking[dim]
+
+    return chunking
+
+
+def chunking_compare(ds, chunking):
+    # Get the chunks for the dataset
+    ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
+
+    chunking = prune_chunking_dimensions(ds, chunking)
+
+    return ds_chunks == chunking
+
+
+def drop_encoded_chunks(ds):
+    for var in ds.data_vars:
+        if 'chunks' in ds[var].encoding:
+            del ds[var].encoding['chunks']
+
+    return ds
+
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechunk=False):
     # Valid configuration kwargs for the cacheable decorator
@@ -143,20 +175,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                                 raise ValueError(
                                     "If auto_rechunk is True, a chunking dict must be supplied.")
 
-                            # Get the chunks for the dataset
-                            ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
-
-                            # Drop any dimensions that don't exist in the ds_chunks
-                            dims_to_drop = []
-                            for dim in chunking:
-                                if dim not in ds_chunks:
-                                    dims_to_drop.append(dim)
-
-                            for dim in dims_to_drop:
-                                del chunking[dim]
-
                             # Compare the dict to the rechunk dict
-                            if ds_chunks != chunking:
+                            if !chunking_compare(ds, chunking):
                                 print(
                                     "Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
 
@@ -164,9 +184,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                                 temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key
                                 temp_cache_map = fs.get_mapper(temp_cache_path)
 
-                                for var in ds.data_vars:
-                                    if 'chunks' in ds[var].encoding:
-                                        del ds[var].encoding['chunks']
+                                ds = drop_encoded_chunks(ds)
 
                                 ds.chunk(chunks=chunking).to_zarr(store=temp_cache_map, mode='w')
 
@@ -243,24 +261,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                             if isinstance(ds, xr.Dataset):
                                 if chunking:
                                     # If we aren't doing auto chunking delete the encoding chunks
-                                    for var in ds.data_vars:
-                                        if 'chunks' in ds[var].encoding:
-                                            del ds[var].encoding['chunks']
+                                    ds = drop_encoded_chunks(ds)
 
-                                    # Get the chunks for the dataset
-                                    ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
+                                    chunking = prune_chunking_dimension(ds, chunking)
 
-                                    # Drop any dimensions that don't exist in the ds_chunks
-                                    dims_to_drop = []
-                                    for dim in chunking:
-                                        if dim not in ds_chunks:
-                                            dims_to_drop.append(dim)
-
-                                    for dim in dims_to_drop:
-                                        del chunking[dim]
-
-                                    chunks = chunking
-                                    ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
+                                    ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')
 
                                     # Reopen the dataset to truncate the computational path
                                     ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
