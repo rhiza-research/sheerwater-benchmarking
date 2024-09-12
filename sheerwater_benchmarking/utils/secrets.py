@@ -2,6 +2,7 @@
 import os
 from google.cloud import secretmanager
 from pathlib import Path
+import salientsdk as sk
 
 
 def cdsapi_secret():
@@ -61,3 +62,42 @@ def ecmwf_secret():
         lines = [line.strip() for line in f.readlines()]
     val = [line.split(":", 1)[1].strip() for line in lines][0]
     return val
+
+
+def salient_secret():
+    """Get the Salient API login from the secret manager."""
+    # Check to see if the Salient secret exists
+    path = Path.home() / '.salientrc'
+    if not os.path.exists(path):
+        # Fetch the api key from google-secret-manager
+        # Access the secret version.
+        client = secretmanager.SecretManagerServiceClient()
+
+        response = client.access_secret_version(
+            request={"name": "projects/750045969992/secrets/salient-api/versions/latest"})
+        val = response.payload.data.decode("UTF-8")
+        username, password = val.split(":")
+
+        # # Write it to a file
+        f = open(path, mode='w+')
+        f.write(val)
+        f.close()
+
+        return username, password
+
+    with open(path, mode='r') as f:
+        lines = [line.strip() for line in f.readlines()]
+
+    username, password = lines[0].split(":")
+    return username, password
+
+
+def salient_auth(func):
+    """Decorator to run function with Salient API login permissions."""
+    def wrapper(*args, **kwargs):
+        # See if there are extra function args to run this remotely
+        username, password = salient_secret()
+        sk.login(username, password)
+
+        return func(*args, **kwargs)
+    return wrapper

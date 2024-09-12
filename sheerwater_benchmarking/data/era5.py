@@ -6,11 +6,14 @@ import xarray as xr
 import dateparser
 import numpy as np
 
-from sheerwater_benchmarking.utils.remote import dask_remote
-from sheerwater_benchmarking.utils.caching import cacheable
+import salientsdk as sk
 
-from sheerwater_benchmarking.utils.secrets import cdsapi_secret
-from sheerwater_benchmarking.utils.data_utils import get_grid, apply_mask
+from sheerwater_benchmarking.utils import dask_remote, cacheable
+
+
+from sheerwater_benchmarking.utils.secrets import cdsapi_secret, salient_auth
+from sheerwater_benchmarking.utils.general_utils import get_grid
+from sheerwater_benchmarking.utils.data_utils import apply_mask, roll_and_agg
 
 from .masks import land_sea_mask
 
@@ -115,7 +118,7 @@ def single_era5_cleaned(year, variable, grid="global1_5"):
 
 
 @dask_remote
-def era5(start_time, end_time, variable, grid="global1_5"):
+def era5_raw(start_time, end_time, variable, grid="global1_5"):
     """Aggregrate yeary ERA5 data into a single dataset."""
     # Read and combine all the data into an array
     first_year = dateparser.parse(start_time).year
@@ -151,15 +154,9 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
         agg (str): The aggregation period to use, in days
     """
     # Read and combine all the data into an array
-    ds = era5(start_time, end_time, variable, grid=grid)
+    ds = era5_raw(start_time, end_time, variable, grid=grid)
     ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
-    agg_col = 'time'
-    agg_kwargs = {
-        f"{agg_col}": agg,
-        "min_periods": agg,
-        "center": False
-    }
     # Convert hourly data to daily data and then aggregrate
     if variable == 'tmp2m':
         ds = ds.rename_vars(name_dict={'t2m': 'tmp2m'})
@@ -167,9 +164,6 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
         if ds[variable].units == 'K':
             ds[variable] = ds[variable] - 273.15
         ds = ds.resample(time='D').mean(dim='time')
-
-        # Apply n-day rolling aggregation
-        ds_agg = ds.rolling(**agg_kwargs).mean()
     elif variable == 'precip':
         ds = ds.rename_vars(name_dict={'tp': 'precip'})
         # Convert from m to mm
@@ -177,16 +171,9 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
             ds[variable] = ds[variable] * 1000.0
         ds = ds.resample(time='D').sum(dim='time')
 
-        # Apply n-day rolling aggregation
-        ds_agg = ds.rolling(**agg_kwargs).sum()
-
-    # Drop the nan values added by the rolling aggregration at the end
-    ds_agg = ds_agg.dropna(agg_col, how="all")
-
-    # Correct coords to left-align the aggregated forecast window
-    # (default is right aligned)
-    ds_agg = ds_agg.assign_coords(**{f"{agg_col}": ds_agg[agg_col]-np.timedelta64(agg-1, 'D')})
-    return ds_agg
+    agg_fn = "sum" if variable == "precip" else "mean"
+    ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
+    return ds
 
 
 @dask_remote
@@ -195,7 +182,7 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
            cache_args=['variable', 'grid', 'agg', 'mask'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            auto_rechunk=False)
-def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm"):
+def era5(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm"):
     """Fetches ground truth data from ERA5 and applies aggregation and masking .
 
     Args:
@@ -210,6 +197,60 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
             - None: No mask
     """
     ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg)
+
+    if mask == "lsm":
+        # Select varibles and apply mask
+        mask_ds = land_sea_mask(grid=grid).compute()
+    elif mask is None:
+        mask_ds = None
+    else:
+        raise NotImplementedError("Only land-sea or None mask is implemented.")
+
+    ds = apply_mask(ds, mask_ds, variable, val=0.0, rename_dict={"mask": variable})
+
+    return ds
+
+
+@salient_auth
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'grid', 'agg', 'mask'],
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           auto_rechunk=False)
+def salient_era5(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm"):
+    """Fetches ground truth data from Saleint's SDK and applies aggregation and masking .
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+        agg (str): The aggregation period to use, in days
+        mask (str): The mask to apply to the data. One of:
+            - lsm: Land-sea mask
+            - None: No mask
+    """
+    # Fetch the data from Salient
+    ds =  # Get additional historical data beyond end_date to make sure we have enough
+    # observed days to compare with the final forecast.
+    duration = {"sub-seasonal": 8 * 5, "seasonal": 31 * 3, "long-range": 95 * 4}[timescale]
+    hist = sk.data_timeseries(
+        loc=loc,
+        variable=var,
+        field=fld,
+        start=np.datetime64(start_date) - np.timedelta64(5, "D"),
+        end=np.datetime64(end_date) + np.timedelta64(duration, "D"),
+        frequency="daily",
+        # reference_clim="30_yr",  implicitly uses 30 yr climatology
+        verbose=False,
+        force=False,
+    )
+    print(xr.load_dataset(hist))
+
+    agg_fn = "sum" if variable == "precip" else "mean"
+    ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
 
     if mask == "lsm":
         # Select varibles and apply mask

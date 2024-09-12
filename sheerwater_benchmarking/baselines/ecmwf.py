@@ -10,12 +10,13 @@ import dateparser
 from sheerwater_benchmarking.utils import dask_remote, cacheable
 
 from sheerwater_benchmarking.utils.secrets import ecmwf_secret
-from sheerwater_benchmarking.utils.data_utils import (get_grid, print_ok, print_info,
-                                                      print_warning, print_error,
-                                                      download_url, get_dates,
-                                                      is_valid_forecast_date, apply_mask)
+from sheerwater_benchmarking.utils.general_utils import (get_grid, print_ok, print_info,
+                                                         print_warning, print_error,
+                                                         download_url, get_dates,
+                                                         is_valid_forecast_date)
 
-from .masks import land_sea_mask
+from sheerwater_benchmarking.data import land_sea_mask
+from sheerwater_benchmarking.utils.data_utils import apply_mask, roll_and_agg
 
 
 @dask_remote
@@ -361,26 +362,10 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                         forecast_type,
                         grid=grid, verbose=verbose)
 
-    agg_func = "sum" if variable == "precip" else "mean"
-    agg_col = 'lead_time'
-
-    agg_kwargs = {
-        f"{agg_col}": agg,
-        "min_periods": agg,
-        "center": False
-    }
-
-    if agg_func == "mean":
-        # Sum for precip
-        ds_agg = ds.rolling(**agg_kwargs).sum().dropna(agg_col, how="all")
-    elif agg_func == "sum":
-        # Average for temperature
-        ds_agg = ds.rolling(**agg_kwargs).mean().dropna(agg_col, how="all")
-
-    # Correct coords to left-align the aggregated forecast window
-    # (default is right aligned)
-    ds_agg = ds_agg.assign_coords(**{"lead_time": ds_agg["lead_time"]-np.timedelta64(agg-1, 'D')})
-    return ds_agg
+    # Roll and aggregate the data
+    agg_fn = "sum" if variable == "precip" else "mean"
+    ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn=agg_fn)
+    return ds
 
 
 @dask_remote

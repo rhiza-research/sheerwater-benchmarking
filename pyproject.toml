@@ -58,7 +58,7 @@ dependencies = [
     "dask[complete]",
     "click",
     "coiled",
-    "numpy==1.26",
+    "numpy",
     "httplib2",
     "s3fs",
     "google-api-python-client",
@@ -83,12 +83,13 @@ dependencies = [
     "scipy",
     "requests",
     "ecmwf-api-client",
-    "cdsapi>=0.7.0",
+    "cdsapi>=0.7.0", # Required for the CDS API beta
     "dateparser",
     "bokeh",
     "flox",
-    "ruff>=0.5.7",
-    "pytest>=8.3.3",
+    "ruff",
+    "pytest",
+    "salientsdk>=0.2.7",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
