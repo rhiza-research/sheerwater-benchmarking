@@ -11,9 +11,10 @@ import salientsdk as sk
 from sheerwater_benchmarking.utils import dask_remote, cacheable
 
 
-from sheerwater_benchmarking.utils.secrets import cdsapi_secret, salient_auth
+from sheerwater_benchmarking.utils.secrets import cdsapi_secret, salient_auth, salient_secret
 from sheerwater_benchmarking.utils.general_utils import get_grid
 from sheerwater_benchmarking.utils.data_utils import apply_mask, roll_and_agg
+from sheerwater_benchmarking.utils.model_utils import get_salient_loc
 
 from .masks import land_sea_mask
 
@@ -212,13 +213,46 @@ def era5(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm"):
 
 
 @salient_auth
-@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'grid'],
+           chunking={"lat": 292, "lon": 396, "time": 500},
+           auto_rechunk=False)
+def salient_era5_raw(start_time, end_time, variable, grid="africa0_25", verbose=False):
+    """Fetches ground truth data from Saleint's SDK and applies aggregation and masking .
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        grid (str): The grid resolution to fetch the data at. One of:
+            - africa0_25: 0.25 degree African grid
+    """
+
+    # Fetch the data from Salient
+    loc = get_salient_loc(grid)
+
+    # Fetch and load the data
+    data = sk.data_timeseries(
+        loc=loc,
+        variable=variable,
+        field="vals",
+        start=np.datetime64(start_time),
+        end=np.datetime64(end_time),
+        frequency="daily",
+        verbose=verbose,
+        force=True,
+    )
+    return xr.load_dataset(data)
+
+
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'grid', 'agg', 'mask'],
-           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunking={"lat": 292, "lon": 396, "time": 500},
            auto_rechunk=False)
-def salient_era5(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm"):
+def salient_era5(start_time, end_time, variable, grid="africa0_25",
+                 agg=14, mask="lsm", verbose=False):
     """Fetches ground truth data from Saleint's SDK and applies aggregation and masking .
 
     Args:
@@ -232,22 +266,8 @@ def salient_era5(start_time, end_time, variable, grid="global1_5", agg=14, mask=
             - lsm: Land-sea mask
             - None: No mask
     """
-    # Fetch the data from Salient
-    # ds =  # Get additional historical data beyond end_date to make sure we have enough
-    # observed days to compare with the final forecast.
-    duration = {"sub-seasonal": 8 * 5, "seasonal": 31 * 3, "long-range": 95 * 4}[timescale]
-    ds = sk.data_timeseries(
-        loc=loc,
-        variable=var,
-        field=fld,
-        start=np.datetime64(start_date) - np.timedelta64(5, "D"),
-        end=np.datetime64(end_date) + np.timedelta64(duration, "D"),
-        frequency="daily",
-        # reference_clim="30_yr",  implicitly uses 30 yr climatology
-        verbose=False,
-        force=False,
-    )
-    print(xr.load_dataset(hist))
+    # Get raw salient data
+    ds = salient_era5_raw(start_time, end_time, variable, grid=grid, verbose=verbose)
 
     agg_fn = "sum" if variable == "precip" else "mean"
     ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
@@ -261,5 +281,4 @@ def salient_era5(start_time, end_time, variable, grid="global1_5", agg=14, mask=
         raise NotImplementedError("Only land-sea or None mask is implemented.")
 
     ds = apply_mask(ds, mask_ds, variable, val=0.0, rename_dict={"mask": variable})
-
     return ds

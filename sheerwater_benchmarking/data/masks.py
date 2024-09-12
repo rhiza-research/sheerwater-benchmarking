@@ -14,8 +14,8 @@ def land_sea_mask(grid="global1_5"):
     """Get the ECMWF land sea mask for the given grid.
 
     Args:
-        grid (str): The grid resolution to fetch the data at. One of:
-            - global1_5: 1.5 degree
+        grid (str): The grid to fetch the data at.  Note that only
+            the resolution of the specified grid is used.
     """
     times = ['00:00']
     days = ['01']

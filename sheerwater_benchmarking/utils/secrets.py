@@ -98,6 +98,7 @@ def salient_auth(func):
         # See if there are extra function args to run this remotely
         username, password = salient_secret()
         sk.login(username, password)
+        sk.set_file_destination("./temp")
 
         return func(*args, **kwargs)
     return wrapper
