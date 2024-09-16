@@ -84,7 +84,14 @@ dependencies = [
     "ruff>=0.5.7",
 ]
 readme = "README.md"
-requires-python = ">= 3.8"
+requires-python = ">= 3.12"
+
+# This is a custom property to instantiate a coiled software environment
+[tool.sheerwater_benchmarking.coiled]
+conda-dependencies = [
+    "xesmf",
+    "esmpy",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -93,6 +100,13 @@ build-backend = "hatchling.build"
 [tool.rye]
 managed = true
 dev-dependencies = []
+
+[tool.rye.scripts]
+# These three options are equivalent:
+coiled-env = "python ./tools/create-coiled-software-environment.py"
+coiled-run-keepalive = "coiled run --software sheerwater-env --keepalive 20m --name $USER"
+coiled-run = "./tools/create-and-run.sh"
+coiled-notebook = "./tools/create-and-notebook.sh"
 
 [tool.hatch.metadata]
 allow-direct-references = true
