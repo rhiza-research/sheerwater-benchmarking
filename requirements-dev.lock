@@ -306,6 +306,8 @@ jmespath==1.0.1
     # via boto3
     # via botocore
     # via coiled
+joblib==1.4.2
+    # via scikit-learn
 json5==0.9.25
     # via jupyterlab-server
 jsondiff==2.2.0
@@ -436,6 +438,7 @@ numpy==1.26.4
     # via rasterio
     # via rioxarray
     # via salientsdk
+    # via scikit-learn
     # via scipy
     # via shapely
     # via sheerwater-benchmarking
@@ -649,10 +652,13 @@ s3transfer==0.10.2
     # via boto3
 salientsdk==0.2.7
     # via sheerwater-benchmarking
+scikit-learn==1.5.2
+    # via sheerwater-benchmarking
 scipy==1.14.0
     # via flox
     # via pvlib
     # via salientsdk
+    # via scikit-learn
     # via sheerwater-benchmarking
 send2trash==1.8.3
     # via jupyter-server
@@ -686,6 +692,8 @@ tblib==3.0.0
 terminado==0.18.1
     # via jupyter-server
     # via jupyter-server-terminals
+threadpoolctl==3.5.0
+    # via scikit-learn
 tinycss2==1.3.0
     # via nbconvert
 toml==0.10.2

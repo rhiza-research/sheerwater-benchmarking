@@ -89,10 +89,11 @@ dependencies = [
     "flox",
     "ruff",
     "pytest",
-    "salientsdk>=0.2.7",
+    "salientsdk",
+    "scikit-learn",
 ]
 readme = "README.md"
-requires-python = ">= 3.8"
+requires-python = ">= 3.12"
 
 [build-system]
 requires = ["hatchling"]
