@@ -425,5 +425,5 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
     else:
         raise NotImplementedError("Only land-sea or None mask is implemented.")
 
-    ds = apply_mask(ds, mask_ds, variable, val=0.0, rename_dict={"mask": variable})
+    ds = apply_mask(ds, mask_ds, variable)
     return ds

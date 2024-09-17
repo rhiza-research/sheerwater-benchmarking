@@ -204,6 +204,6 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
     else:
         raise NotImplementedError("Only land-sea or None mask is implemented.")
 
-    ds = apply_mask(ds, mask_ds, variable, val=0.0, rename_dict={"mask": variable})
+    ds = apply_mask(ds, mask_ds, variable)
 
     return ds
