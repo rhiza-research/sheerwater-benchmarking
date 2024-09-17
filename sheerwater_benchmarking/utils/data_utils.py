@@ -58,7 +58,21 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
 
 
 def regrid(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon'):
+    """Regrid a dataset to a new grid.
 
+    Args:
+        ds (xr.Dataset): Dataset to regrid.
+        output_grid (str): The output grid resolution. One of valid named grids.
+        method (str): The regridding method. One of:
+            - bilinear
+            - conservative
+            - nearest_s2d
+            - nearest_d2s
+            - patch
+            - regrid
+        lat_col (str): The name of the latitude column.
+        lon_col (str): The name of the longitude column.
+    """
     # Attempt to import xesmf and throw an error if it doesn't exist
     try:
         import xesmf as xe

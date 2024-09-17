@@ -23,6 +23,12 @@ def get_cache_args(kwargs, cache_kwargs):
 
 
 def prune_chunking_dimensions(ds, chunking):
+    """Prune the chunking dimensions to only those that exist in the dataset.
+
+    Args:
+        ds (xr.Dataset): The dataset to check for chunking dimensions.
+        chunking (dict): The chunking dimensions to prune.
+    """
     # Get the chunks for the dataset
     updated_chunks = chunking.copy()
 
@@ -41,6 +47,12 @@ def prune_chunking_dimensions(ds, chunking):
 
 
 def chunking_compare(ds, chunking):
+    """Compare the chunking of a dataset to a specified chunking.
+
+    Args:
+        ds (xr.Dataset): The dataset to check the chunking of.
+        chunking (dict): The chunking to compare to.
+    """
     # Get the chunks for the dataset
     ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
 
@@ -50,6 +62,7 @@ def chunking_compare(ds, chunking):
 
 
 def drop_encoded_chunks(ds):
+    """Drop the encoded chunks from a dataset."""
     for var in ds.data_vars:
         if 'chunks' in ds[var].encoding:
             del ds[var].encoding['chunks']
@@ -62,20 +75,23 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
     """Decorator for caching function results.
 
     Args:
-        data_type (str): The type of data being cached. Currently only 'array' is supported.
-        cache_args (list): The arguments to use as the cache key.
-        timeseries (str, list): The name of the time series dimension in the cached array. If not a
-            time series, set to None (default). If a list, will use the first mactchin coordinate in the list.
-        chunking (dict): Specifies chunking if that coordinate exists. If coordinate does not exist
+        data_type(str): The type of data being cached. Currently only 'array' is supported.
+        cache_args(list): The arguments to use as the cache key.
+        timeseries(str, list): The name of the time series dimension in the cached array. If not a
+            time series, set to None (default). If a list, will use the first matching coordinate in the list.
+        chunking(dict): Specifies chunking if that coordinate exists. If coordinate does not exist
             the chunking specified will be dropped.
-        auto_rechunk (bool): If True will aggressively rechunk a cache on load.
-        cache (bool): Whether to cache the result.
-        validate_cache_timeseries (bool): Whether to validate the cache timeseries against the
+        auto_rechunk(bool): If True will aggressively rechunk a cache on load.
+        cache(bool): Whether to cache the result.
+        validate_cache_timeseries(bool): Whether to validate the cache timeseries against the
             requested timeseries. If False, will not validate the cache timeseries.
-        force_overwrite (bool): Whether to overwrite the cache forecable on recompute if it
+        force_overwrite(bool): Whether to overwrite the cache if it
             already exists (if False, will prompt the user before overwriting).
-        retry_null_cache (bool): If True, ignore the null caches and attempts to recompute
+        retry_null_cache(bool): If True, ignore the null caches and attempts to recompute
             result for null values. If False (default), will return None for null caches.
+        cache_disable_if(dict, list): If the cache arguments match the dict or list of dicts
+            then the cache will be disabled. This is useful for disabling caching based on
+            certain arguments. Defaults to None.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -91,7 +107,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
-            nonlocal data_type, cache_args, timeseries, chunking, auto_rechunk, cache, cache_disable_if
+            nonlocal data_type, cache_args, timeseries, chunking, auto_rechunk, \
+                cache, cache_disable_if
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, validate_cache_timeseries, \
@@ -147,9 +164,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
                 if not found:
                     raise RuntimeError(f"Specified cacheable argument {a}"
-                                       "not discovered as passed argument or default arugment.")
+                                       "not discovered as passed argument or default argument.")
 
-            # Now that we have all the immutable arge values we can calulcate whether
+            # Now that we have all the cacheable args values we can calculate whether
             # the cache should be disable from them
             if isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
 
@@ -172,7 +189,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                         print(f"Caching disabled for arg values {d}")
                         cache = False
                         break
-            else if cache_disable_if is not None:
+            elif cache_disable_if is not None:
                 raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
 
             imkeys = list(cache_arg_values.keys())
@@ -216,7 +233,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                             # Compare the dict to the rechunk dict
                             if not chunking_compare(ds, chunking):
                                 print(
-                                    "Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
+                                    "Rechunk was passed and cached chunks do not match rechunk request. "
+                                    "Performing rechunking.")
 
                                 # write to a temp cache map
                                 # writing to temp cache is necessary because if you overwrite

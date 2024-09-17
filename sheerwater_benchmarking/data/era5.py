@@ -120,8 +120,8 @@ def era5_cds(start_time, end_time, variable, grid="global1_5"):
            cache_args=['variable', 'grid'],
            timeseries='time',
            cache_disable_if={'grid': 'global0_25'})
-def era5(start_time, end_time, variable, grid="global0_25"):
-    """ERA5 function that returns data from Google ARCO"""
+def era5(start_time, end_time, variable, grid="global0_25"): # noqa ARG001
+    """ERA5 function that returns data from Google ARCO."""
     # Pull the google dataset
     ds = xr.open_zarr('gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3',
                       chunks={'time': 50, 'latitude': 721, 'longitude': 1440})
@@ -231,6 +231,7 @@ def salient_era5_raw(start_time, end_time, variable, grid="africa0_25", verbose=
         variable (str): The weather variable to fetch.
         grid (str): The grid resolution to fetch the data at. One of:
             - africa0_25: 0.25 degree African grid
+        verbose (bool): Whether to print verbose output.
     """
     # Fetch the data from Salient
     loc = get_salient_loc(grid)
@@ -269,6 +270,7 @@ def salient_era5(start_time, end_time, variable, grid="africa0_25",
         mask (str): The mask to apply to the data. One of:
             - lsm: Land-sea mask
             - None: No mask
+        verbose (bool): Whether to print verbose output.
     """
     # Get raw salient data
     ds = salient_era5_raw(start_time, end_time, variable, grid=grid, verbose=verbose)

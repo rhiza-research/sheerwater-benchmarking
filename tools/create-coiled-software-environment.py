@@ -1,6 +1,6 @@
 """Interprets the arguments passed to tools.sheerwater_benchmarking.coiled.
 
-Interprets as as conda dependencies in the pyproject.toml and instantiates 
+Interprets as as conda dependencies in the pyproject.toml and instantiates
 the SheerWater coiled software environment with them.
 """
 
