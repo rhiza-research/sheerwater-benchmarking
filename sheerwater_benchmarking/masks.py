@@ -51,3 +51,7 @@ def land_sea_mask(grid="global1_5"):
     ds = ds.compute()
     os.remove(path)
     return ds
+
+
+# Use __all__ to define what is part of the public API.
+__all__ = [land_sea_mask]

@@ -9,14 +9,11 @@ import numpy as np
 import salientsdk as sk
 
 from sheerwater_benchmarking.utils import dask_remote, cacheable
-
-
 from sheerwater_benchmarking.utils.secrets import cdsapi_secret, salient_auth
 from sheerwater_benchmarking.utils.general_utils import get_grid, get_variable
 from sheerwater_benchmarking.utils.data_utils import apply_mask, roll_and_agg, regrid
 from sheerwater_benchmarking.utils.model_utils import get_salient_loc
-
-from .masks import land_sea_mask
+from sheerwater_benchmarking.masks import land_sea_mask
 
 
 @cacheable(data_type='array', cache_args=['year', 'variable', 'grid'])
@@ -120,7 +117,7 @@ def era5_cds(start_time, end_time, variable, grid="global1_5"):
            cache_args=['variable', 'grid'],
            timeseries='time',
            cache_disable_if={'grid': 'global0_25'})
-def era5(start_time, end_time, variable, grid="global0_25"): # noqa ARG001
+def era5(start_time, end_time, variable, grid="global0_25"):  # noqa ARG001
     """ERA5 function that returns data from Google ARCO."""
     # Pull the google dataset
     ds = xr.open_zarr('gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3',

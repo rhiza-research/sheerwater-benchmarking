@@ -3,12 +3,12 @@
 
 """Test file for ECMWF data validation.
 
-This testing should be run ater data generation, to ensure data
+This testing should be run after data generation, to ensure data
 validity.
 """
 import itertools
 
-from sheerwater_benchmarking.data import iri_ecmwf
+from sheerwater_benchmarking.reanalysis import iri_ecmwf
 from sheerwater_benchmarking.baselines import climatology
 
 

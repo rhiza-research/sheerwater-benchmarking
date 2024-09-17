@@ -6,16 +6,50 @@ from datetime import datetime
 import os
 import xarray as xr
 import dateparser
+import requests
+import ssl
+from urllib3 import poolmanager
+import time
+
 from sheerwater_benchmarking.utils import dask_remote, cacheable
-
 from sheerwater_benchmarking.utils.secrets import ecmwf_secret
-from sheerwater_benchmarking.utils.general_utils import (get_grid, print_ok, print_info,
-                                                         print_warning, print_error,
-                                                         download_url, get_dates,
-                                                         is_valid_forecast_date)
-
-from sheerwater_benchmarking.data import land_sea_mask
+from sheerwater_benchmarking.utils.general_utils import get_grid, get_dates, is_valid_forecast_date
+from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.utils.data_utils import apply_mask, roll_and_agg
+
+
+class TLSAdapter(requests.adapters.HTTPAdapter):
+    """Transport adapter that allows us to use TLSv1.2."""
+
+    def init_poolmanager(self, connections, maxsize, block=False):
+        """Create and initialize the urllib3 PoolManager."""
+        ctx = ssl.create_default_context()
+        ctx.set_ciphers('DEFAULT@SECLEVEL=1')
+        self.poolmanager = poolmanager.PoolManager(
+            num_pools=connections,
+            maxsize=maxsize,
+            block=block,
+            ssl_version=ssl.PROTOCOL_TLS,
+            ssl_context=ctx)
+
+
+def download_url(url, timeout=600, retry=3, cookies={}):
+    """Download URL, waiting some time between retries."""
+    r = None
+    session = requests.session()
+    session.mount('https://', TLSAdapter())
+
+    for i in range(retry):
+        try:
+            r = session.get(url, timeout=timeout, cookies=cookies)
+            return r
+        except requests.exceptions.Timeout as e:
+            # Wait until making another request
+            if i == retry - 1:
+                raise e
+            print(f"Request to url {url} has timed out. Trying again...")
+            time.sleep(3)
+    print(f"Failed to retrieve file after {retry} attempts. Stopping...")
 
 
 @dask_remote
@@ -54,9 +88,9 @@ def single_iri_ecmwf(time, variable, forecast_type,
     average_model_runs_url = "[M]average/" if run_type == "average" else ""
     single_model_run_url = f"M/({run_type})VALUES/" if isinstance(run_type, int) else ""
 
-    longitudes, latitudes, grid_size = get_grid(grid)
-    restrict_lat_url = f"Y/{latitudes[0]}/{grid_size}/{latitudes[1]}/GRID/"
-    restrict_lon_url = f"X/{longitudes[0]}/{grid_size}/{longitudes[1]}/GRID/"
+    lons, lats, grid_size = get_grid(grid)
+    restrict_lat_url = f"Y/{lats[0]}/{grid_size}/{lats[-1]}/GRID/"
+    restrict_lon_url = f"X/{lons[0]}/{grid_size}/{lons[-1]}/GRID/"
 
     if variable == "tmp2m":
         # Convert from Kelvin to Celsius.
@@ -67,7 +101,7 @@ def single_iri_ecmwf(time, variable, forecast_type,
         convert_units_url = "c://name//water_density/def/998/(kg/m3)/:c/div/(mm)/unitconvert/"
 
     if verbose:
-        print_ok("ecmwf", bold=True)
+        print("ecmwf")
 
     date = dateparser.parse(time)
     day, month, year = datetime.strftime(date, "%d,%b,%Y").split(",")
@@ -76,8 +110,8 @@ def single_iri_ecmwf(time, variable, forecast_type,
 
     if not is_valid_forecast_date("ecmwf", forecast_type, date):
         if verbose:
-            print_warning(
-                f"Skipping: {day} {month} {year} (not a valid {forecast_type} date).", skip_line_before=False,
+            print(
+                f"Skipping: {day} {month} {year} (not a valid {forecast_type} date)."
             )
         return None
 
@@ -98,23 +132,18 @@ def single_iri_ecmwf(time, variable, forecast_type,
     file = f"./temp/{variable}-{grid}-{run_type}-{forecast_type}-{time}.nc"
     r = download_url(URL, cookies={"__dlauth_id": ecmwf_secret()})
     if r.status_code == 200 and r.headers["Content-Type"] == "application/x-netcdf":
-        print_info(f"Downloading: {day} {month} {year}.", verbose=verbose)
+        if verbose:
+            print(f"Downloading: {day} {month} {year}.")
         with open(file, "wb") as f:
             f.write(r.content)
 
-        print_info(
-            f"-done (downloaded {sys.getsizeof(r.content) / 1024:.2f} KB).\n",
-            verbose=verbose,
-        )
+        if verbose:
+            print(f"-done (downloaded {sys.getsizeof(r.content) / 1024:.2f} KB).\n")
     elif r.status_code == 404:
-        print_warning(bold=True, verbose=verbose)
-        print_info(
-            f"Data for {day} {month} {year} is not available for model ecmwf.\n", verbose=verbose)
+        print(f"Data for {day} {month} {year} is not available for model ecmwf.\n")
         return None
     else:
-        print_error(bold=True)
-        print_info(
-            f"Unknown error occurred when trying to download data for {day} {month} {year} for model ecmwf.\n")
+        print(f"Unknown error occurred when trying to download data for {day} {month} {year} for model ecmwf.\n")
         return None
 
     rename_dict = {
@@ -155,18 +184,14 @@ def single_iri_ecmwf(time, variable, forecast_type,
             ds = ds.dropna(dim="hdate", how="all")
             if ds.sizes["hdate"] == 0:
                 # If no forecast dates are available, return None
-                print_warning(
-                    f"No data found for: {day} {month} {year} (a valid {forecast_type} date).", skip_line_before=False,
-                )
+                print(f"No data found for: {day} {month} {year} (a valid {forecast_type} date).")
                 return None
 
             # Reforecast-specific renaming
             rename_dict["hdate"] = "start_date"
             rename_dict["S"] = "model_issuance_date"
     except OSError:
-        print_warning(
-            f"Failed to load data for: {day} {month} {year} (a valid {forecast_type} date).", skip_line_before=False,
-        )
+        print(f"Failed to load data for: {day} {month} {year} (a valid {forecast_type} date).")
         return None
 
     # Deal with model runs

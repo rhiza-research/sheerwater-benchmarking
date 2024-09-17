@@ -2,7 +2,7 @@
 import numpy as np
 import xarray as xr
 
-from .general_utils import get_grid
+from .data_utils import get_grid
 
 
 def apply_mask(ds, mask, var, val, rename_dict={}):
