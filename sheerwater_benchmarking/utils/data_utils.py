@@ -76,7 +76,7 @@ def regrid(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon'):
     # Attempt to import xesmf and throw an error if it doesn't exist
     try:
         import xesmf as xe
-    except:
+    except ImportError:
         raise RuntimeError(
             "Failed to import XESMF. Try running in coiled instead: 'rye run coiled-run ...")
 
