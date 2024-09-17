@@ -52,8 +52,7 @@ def single_iri_ecmwf(time, variable, forecast_type,
     forecast_runs = "control" if run_type == "control" else "perturbed"
     leads_id = "LA" if variable == "tmp2m" else "L"
     average_model_runs_url = "[M]average/" if run_type == "average" else ""
-    single_model_run_url = f"M/({run_type})VALUES/" if type(
-        run_type) is int else ""
+    single_model_run_url = f"M/({run_type})VALUES/" if isinstance(run_type, int) else ""
 
     longitudes, latitudes, grid_size = get_grid(grid)
     restrict_lat_url = f"Y/{latitudes[0]}/{grid_size}/{latitudes[1]}/GRID/"

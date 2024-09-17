@@ -223,7 +223,6 @@ def get_dates(start_time, end_time, stride="day", return_string=False):
 
 def get_variable(variable_name, variable_type='era5'):
     """Converts a variable in any other type to a variable name of the requested type"""
-
     variable_ordering = ['sheerwater', 'era5']
 
     weather_variables = [

@@ -1,9 +1,9 @@
-"""Pulls Saleint Predictions S2S forecasts from the Salient API."""
+"""Pulls Salient Predictions S2S forecasts from the Salient API."""
 import numpy as np
 import xarray as xr
 import salientsdk as sk
 
-from sheerwater_benchmarking.utils import dask_remote, cacheable, salient_auth
+from sheerwater_benchmarking.utils import cacheable, salient_auth
 from sheerwater_benchmarking.utils.general_utils import get_dates
 from sheerwater_benchmarking.utils.model_utils import get_salient_loc
 
@@ -14,8 +14,9 @@ from sheerwater_benchmarking.utils.model_utils import get_salient_loc
            cache_args=['variable', 'grid'],
            chunking={"lat": 292, "lon": 396, "time": 500},
            auto_rechunk=False)
-def salient_blend_raw(start_time, end_time, variable, grid="africa0_25", verbose=False):
-    """Fetches ground truth data from Saleint's SDK and applies aggregation and masking .
+def salient_blend_raw(start_time, end_time, variable, grid="africa0_25",
+                      timescale="subseasonal", verbose=False):
+    """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
 
     Args:
         start_time (str): The start date to fetch data for.
@@ -24,7 +25,6 @@ def salient_blend_raw(start_time, end_time, variable, grid="africa0_25", verbose
         grid (str): The grid resolution to fetch the data at. One of:
             - africa0_25: 0.25 degree African grid
     """
-
     # Fetch the data from Salient
     loc = get_salient_loc(grid)
     var_name = {'tmp2m': 'temp', 'precip': 'precip'}[variable]

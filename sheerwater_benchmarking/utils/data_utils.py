@@ -1,7 +1,6 @@
 """Data utility functions for all parts of the data pipeline."""
 import numpy as np
 import xarray as xr
-import numpy as np
 
 from .general_utils import get_grid
 

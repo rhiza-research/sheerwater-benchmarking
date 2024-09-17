@@ -11,7 +11,7 @@ import salientsdk as sk
 from sheerwater_benchmarking.utils import dask_remote, cacheable
 
 
-from sheerwater_benchmarking.utils.secrets import cdsapi_secret, salient_auth, salient_secret
+from sheerwater_benchmarking.utils.secrets import cdsapi_secret, salient_auth
 from sheerwater_benchmarking.utils.general_utils import get_grid, get_variable
 from sheerwater_benchmarking.utils.data_utils import apply_mask, roll_and_agg, regrid
 from sheerwater_benchmarking.utils.model_utils import get_salient_loc
@@ -98,7 +98,7 @@ def single_era5_cleaned(year, variable, grid="global1_5"):
 
 @dask_remote
 def era5_cds(start_time, end_time, variable, grid="global1_5"):
-    """Aggregrate yeary ERA5 data into a single dataset."""
+    """Aggregate yearly ERA5 data into a single dataset."""
     # Read and combine all the data into an array
     first_year = dateparser.parse(start_time).year
     last_year = dateparser.parse(end_time).year
@@ -159,10 +159,10 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
         agg (str): The aggregation period to use, in days
     """
     # Read and combine all the data into an array
-    ds = era5_raw(start_time, end_time, variable, grid=grid)
+    ds = era5(start_time, end_time, variable, grid=grid)
     ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
-    # Convert hourly data to daily data and then aggregrate
+    # Convert hourly data to daily data and then aggregate
     if variable == 'tmp2m':
         ds = ds.rename_vars(name_dict={'t2m': 'tmp2m'})
         # Convert from Kelvin to Celsius
@@ -204,7 +204,7 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
     ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg)
 
     if mask == "lsm":
-        # Select varibles and apply mask
+        # Select variables and apply mask
         mask_ds = land_sea_mask(grid=grid).compute()
     elif mask is None:
         mask_ds = None
@@ -223,7 +223,7 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
            chunking={"lat": 292, "lon": 396, "time": 300},
            auto_rechunk=True)
 def salient_era5_raw(start_time, end_time, variable, grid="africa0_25", verbose=False):
-    """Fetches ground truth data from Saleint's SDK and applies aggregation and masking .
+    """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
 
     Args:
         start_time (str): The start date to fetch data for.
@@ -232,7 +232,6 @@ def salient_era5_raw(start_time, end_time, variable, grid="africa0_25", verbose=
         grid (str): The grid resolution to fetch the data at. One of:
             - africa0_25: 0.25 degree African grid
     """
-
     # Fetch the data from Salient
     loc = get_salient_loc(grid)
     var_name = {'tmp2m': 'temp', 'precip': 'precip'}[variable]
@@ -258,7 +257,7 @@ def salient_era5_raw(start_time, end_time, variable, grid="africa0_25", verbose=
            auto_rechunk=False)
 def salient_era5(start_time, end_time, variable, grid="africa0_25",
                  agg=14, mask="lsm", verbose=False):
-    """Fetches ground truth data from Saleint's SDK and applies aggregation and masking .
+    """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
 
     Args:
         start_time (str): The start date to fetch data for.
@@ -278,7 +277,7 @@ def salient_era5(start_time, end_time, variable, grid="africa0_25",
     ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
 
     if mask == "lsm":
-        # Select varibles and apply mask
+        # Select variables and apply mask
         mask_ds = land_sea_mask(grid=grid).compute()
     elif mask is None:
         mask_ds = None
