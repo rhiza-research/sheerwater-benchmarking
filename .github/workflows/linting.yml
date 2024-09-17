@@ -17,9 +17,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          # Full git history is needed to get a proper list of changed files within `super-linter`
-          fetch-depth: 0
 
       - name: Lint Code Base
         uses: chartboost/ruff-action@v1
@@ -27,5 +24,10 @@ jobs:
           src: sheerwater_benchmarking 
           args: 
             check
-            --exclude scratch
             --fix
+
+      - name: Commit Safe Fixes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: 'style fixes by ruff'
+
