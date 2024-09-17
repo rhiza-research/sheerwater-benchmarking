@@ -3,11 +3,8 @@ import time
 
 import numpy as np
 
-import requests
-import ssl
 import gcsfs
 import xarray as xr
-from urllib3 import poolmanager
 from datetime import datetime, timedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY, WEEKLY, YEARLY
 
