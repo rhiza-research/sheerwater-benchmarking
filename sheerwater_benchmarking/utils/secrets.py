@@ -1,7 +1,8 @@
 """Data download secret manager functions."""
 import os
-from google.cloud import secretmanager
 from pathlib import Path
+
+from google.cloud import secretmanager
 import salientsdk as sk
 
 

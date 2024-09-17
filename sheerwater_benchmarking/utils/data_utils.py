@@ -2,24 +2,24 @@
 import numpy as np
 import xarray as xr
 
-from .data_utils import get_grid
+from .general_utils import get_grid
 
 
-def apply_mask(ds, mask, var, val, rename_dict={}):
+def apply_mask(ds, mask, var, val=0.0):
     """Apply a mask to a dataset.
 
     Args:
         ds (xr.Dataset): Dataset to apply mask to.
         mask (xr.Dataset): Mask to apply.
         var (str): Variable to mask.
-        val (int): Value to mask.
-        rename_dict (dict): Dictionary to rename variables.
+        val (int): Value to mask above (any value that is 
+            strictly greater than this value will be masked).
     """
     # Apply mask
     if mask is not None:
         # This will mask and include any location where there is any land
         ds = ds[var].where(mask > val, drop=False)
-        ds = ds.rename(rename_dict)
+        ds = ds.rename({"mask": var})
     return ds
 
 
