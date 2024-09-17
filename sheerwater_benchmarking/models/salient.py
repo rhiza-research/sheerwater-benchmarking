@@ -3,8 +3,7 @@ import numpy as np
 import xarray as xr
 import salientsdk as sk
 
-from sheerwater_benchmarking.utils import cacheable, salient_auth, get_grid
-
+from sheerwater_benchmarking.utils import salient_auth, get_grid
 
 @salient_auth
 def get_salient_loc(grid):
