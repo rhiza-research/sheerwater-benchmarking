@@ -3,10 +3,7 @@ import os
 import cdsapi
 import xarray as xr
 
-from sheerwater_benchmarking.utils import cacheable
-
-from sheerwater_benchmarking.utils.secrets import cdsapi_secret
-from sheerwater_benchmarking.utils.general_utils import get_grid
+from sheerwater_benchmarking.utils import cacheable, cdsapi_secret, get_grid
 
 
 @cacheable(data_type='array', cache_args=['grid'])

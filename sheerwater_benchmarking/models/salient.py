@@ -1,11 +1,9 @@
 """Pulls Salient Predictions S2S forecasts from the Salient API."""
-# import numpy as np
-# import xarray as xr
+import numpy as np
+import xarray as xr
 import salientsdk as sk
 
-from sheerwater_benchmarking.utils import cacheable, salient_auth, get_dates, get_grid
-from sheerwater_benchmarking.utils.general_utils import get_dates
-# from sheerwater_benchmarking.utils.model_utils import get_salient_loc
+from sheerwater_benchmarking.utils import cacheable, salient_auth, get_grid
 
 
 @salient_auth
@@ -23,6 +21,41 @@ def get_salient_loc(grid):
         force=True))
 
     return loc
+
+
+@salient_auth
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'grid'],
+           chunking={"lat": 292, "lon": 396, "time": 300},
+           auto_rechunk=True)
+def salient_era5_raw(start_time, end_time, variable, grid="africa0_25", verbose=False):
+    """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        grid (str): The grid resolution to fetch the data at. One of:
+            - africa0_25: 0.25 degree African grid
+        verbose (bool): Whether to print verbose output.
+    """
+    # Fetch the data from Salient
+    loc = get_salient_loc(grid)
+    var_name = {'tmp2m': 'temp', 'precip': 'precip'}[variable]
+
+    # Fetch and load the data
+    data = sk.data_timeseries(
+        loc=loc,
+        variable=var_name,
+        field="vals",
+        start=np.datetime64(start_time),
+        end=np.datetime64(end_time),
+        frequency="daily",
+        verbose=verbose,
+        force=True,
+    )
+    return xr.load_dataset(data)
 
 # @salient_auth
 # @cacheable(data_type='array',

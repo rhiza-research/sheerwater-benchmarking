@@ -1,11 +1,9 @@
 """General utility functions for all parts of the data pipeline."""
-import time
-
 import numpy as np
 
 import gcsfs
 import xarray as xr
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil.rrule import rrule, DAILY, MONTHLY, WEEKLY, YEARLY
 
 
@@ -65,33 +63,6 @@ def is_valid_forecast_date(model, forecast_type, forecast_date):
             *valid_forecast_dates[forecast_type][model])
     except KeyError:
         return False
-
-
-def generate_dates_in_between(first_date, last_date, date_frequency):
-    """Generates dates between two dates based on the frequency.
-
-    Args:
-        first_date (datetime): The first date.
-        last_date (datetime): The last date.
-        date_frequency (str): The frequency of the dates.
-            One of "daily", "weekly", "monday/thursday".
-    """
-    if date_frequency == "monday/thursday":
-        dates = [
-            date
-            for date in generate_dates_in_between(first_date, last_date, "daily")
-            if date.strftime("%A") in ["Monday", "Thursday"]
-        ]
-        return dates
-    else:
-        frequency_to_int = {"daily": 1, "weekly": 7}
-        dates = [
-            first_date +
-            timedelta(days=x * frequency_to_int[date_frequency])
-            for x in range(0, int((last_date - first_date).days /
-                                  (frequency_to_int[date_frequency])) + 1,)
-        ]
-        return dates
 
 
 def get_dates(start_time, end_time, stride="day", return_string=False):

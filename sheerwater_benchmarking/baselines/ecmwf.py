@@ -11,11 +11,10 @@ import ssl
 from urllib3 import poolmanager
 import time
 
-from sheerwater_benchmarking.utils import dask_remote, cacheable
-from sheerwater_benchmarking.utils.secrets import ecmwf_secret
-from sheerwater_benchmarking.utils.general_utils import get_grid, get_dates, is_valid_forecast_date
 from sheerwater_benchmarking.masks import land_sea_mask
-from sheerwater_benchmarking.utils.data_utils import apply_mask, roll_and_agg
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
+                                           get_grid, get_dates, is_valid_forecast_date,
+                                           apply_mask, roll_and_agg)
 
 
 class TLSAdapter(requests.adapters.HTTPAdapter):
