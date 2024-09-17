@@ -1,6 +1,8 @@
 """General utility functions for all parts of the data pipeline."""
 import time
 
+import numpy as np
+
 import requests
 import ssl
 import gcsfs
@@ -95,42 +97,6 @@ def generate_dates_in_between(first_date, last_date, date_frequency):
                                   (frequency_to_int[date_frequency])) + 1,)
         ]
         return dates
-
-
-def get_grid(region_id):
-    """Returns the longitudes, latitudes, and grid size for a given region."""
-    if region_id == "global1_5":
-        longitudes = ["0", "358.5"]
-        latitudes = ["-90.0", "90.0"]
-        grid_size = "1.5"
-    elif region_id == "global0_5":
-        longitudes = ["0.25", "359.75"]
-        latitudes = ["-89.75", "89.75"]
-        grid_size = "0.5"
-    elif region_id == "global0_25":
-        longitudes = ["0.00", "360.00"]
-        latitudes = ["-90.00", "90.00"]
-        grid_size = "0.25"
-    elif region_id == "us1_0":
-        longitudes = ["-125.0", "-67.0"]
-        latitudes = ["25.0", "50.0"]
-        grid_size = "1.0"
-    elif region_id == "us1_5":
-        longitudes = ["-123", "-67.5"]
-        latitudes = ["25.5", "48"]
-        grid_size = "1.5"
-    elif region_id == "africa1_5":
-        longitudes = ["-26.0", "73.0"]
-        latitudes = ["-35.0", "38.0"]
-        grid_size = "1.5"
-    elif region_id == "africa0_25":
-        longitudes = ["-26.0", "73.0"]
-        latitudes = ["-35.0", "38.0"]
-        grid_size = "0.25"
-    else:
-        raise NotImplementedError(
-            f"Grid {region_id} has not been implemented.")
-    return longitudes, latitudes, grid_size
 
 
 def printf(str):
@@ -253,3 +219,72 @@ def get_dates(start_time, end_time, stride="day", return_string=False):
     if return_string:
         dates = [date.strftime(DATETIME_FORMAT) for date in dates]
     return dates
+
+
+def get_variable(variable_name, variable_type='era5'):
+    """Converts a variable in any other type to a variable name of the requested type"""
+
+    variable_ordering = ['sheerwater', 'era5']
+
+    weather_variables = [
+        # Static variables (2):
+        ('z', 'geopotential'),
+        ('lsm', 'land_sea_mask'),
+
+        # Surface variables (6):
+        ('tmp2m', '2m_temperature'),
+        ("precip", "total_precipitation"),
+        ("vwind10m", "10m_v_component_of_wind"),
+        ("uwind10m", "10m_u_component_of_wind"),
+        ("msl", "mean_sea_level_pressure"),
+        ("tisr", "toa_incident_solar_radiation"),
+
+        # Atmospheric variables (6):
+        ("tmp", "temperature"),
+        ("uwind", "u_component_of_wind"),
+        ("vwind", "v_component_of_wind"),
+        ("hgt", "geopotential"),
+        ("q", "specific_humidity"),
+        ("w", "vertical_velocity"),
+    ]
+
+    name_index = variable_ordering.index(variable_type)
+
+    for tup in weather_variables:
+        for name in tup:
+            if name == variable_name:
+                return tup[name_index]
+
+    raise ValueError(f"Variable {variable_name} not found")
+
+
+def get_grid(region_id):
+    """Get the longitudes, latitudes and grid size for a named region."""
+    if region_id == "global1_5":
+        longitudes = np.arange(0, 360, 1.5)
+        latitudes = np.arange(-90, 90, 1.5)
+        grid_size = 1.5
+    elif region_id == "global0_5":
+        longitudes = np.arange(0.25, 360, 0.5)
+        latitudes = np.arange(-89.75, 90, 0.5)
+        grid_size = 0.5
+    elif region_id == "global0_25":
+        longitudes = np.arange(0, 360, 0.25)
+        latitudes = np.arange(-90, 90, 0.25)
+        grid_size = 0.25
+    elif region_id == "us1_0":
+        longitudes = np.arange(-125.0, -67.0, 1)
+        latitudes = np.arange(25.0, 50.0, 1)
+        grid_size = 1.0
+    elif region_id == "us1_5":
+        longitudes = np.arange(-123.0, -67.5, 1.5)
+        latitudes = np.arange(25.5, 48, 1.5)
+        grid_size = 1.5
+    elif region_id == "salient_common":
+        longitudes = np.arange(0.125, 360, 0.25)
+        latitudes = np.arange(-89.875, 90, 0.25)
+        grid_size = 0.25
+    else:
+        raise NotImplementedError(
+            "Only grids global1_5, us1_0 and us1_5 have been implemented.")
+    return longitudes, latitudes, grid_size

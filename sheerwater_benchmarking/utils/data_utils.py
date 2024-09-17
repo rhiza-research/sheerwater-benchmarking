@@ -1,5 +1,9 @@
 """Data utility functions for all parts of the data pipeline."""
 import numpy as np
+import xarray as xr
+import numpy as np
+
+from .general_utils import get_grid
 
 
 def apply_mask(ds, mask, var, val, rename_dict={}):
@@ -52,3 +56,48 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
     # (default is right aligned)
     ds_agg = ds_agg.assign_coords(**{f"{agg_col}": ds_agg[agg_col]-np.timedelta64(agg-1, 'D')})
     return ds_agg
+
+
+def regrid(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon'):
+
+    # Attempt to import xesmf and throw an error if it doesn't exist
+    try:
+        import xesmf as xe
+    except:
+        raise RuntimeError(
+            "Failed to import XESMF. Try running in coiled instead: 'rye run coiled-run ...")
+
+    # Interpret the grid
+    lons, lats, _ = get_grid(output_grid)
+
+    ds_out = xr.Dataset(
+        {
+            "lat": (["lat"], lats, {"units": "degrees_north"}),
+            "lon": (["lon"], lons, {"units": "degrees_east"}),
+        })
+
+    # Rename the columns if necessary
+    if lat_col != 'lat' or lon_col != 'lon':
+        ds = ds.rename({lat_col: 'lat', lon_col: 'lon'})
+
+    # Reorder the data columns data if necessary - extra dimensions must be on the left
+    # TODO: requires that all vars have the same dims; should be fixed
+    coords = None
+    for var in ds.data_vars:
+        coords = ds.data_vars[var].dims
+        break
+
+    if coords[-2] != 'lat' and coords[-1] != 'lon':
+        # Get coords that are not lat and lon
+        other_coords = [x for x in coords if x != 'lat' and x != 'lon']
+        ds = ds.transpose(*other_coords, 'lat', 'lon')
+
+    # Do the regridding
+    regridder = xe.Regridder(ds, ds_out, method)
+    ds = regridder(ds)
+
+    # Change the column names back
+    if lat_col != 'lat' or lon_col != 'lon':
+        ds = ds.rename({'lat': lat_col, 'lon': lon_col})
+
+    return ds

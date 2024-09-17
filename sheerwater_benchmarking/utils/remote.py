@@ -13,16 +13,27 @@ def dask_remote(func):
     def wrapper(*args, **kwargs):
         # See if there are extra function args to run this remotely
         if 'remote' in kwargs and kwargs['remote']:
+
+            coiled_default_options = {
+                'name': 'sheerwater_shared',
+                'n_workers': [3, 8],
+                'idle_timeout': "45 minutes",
+                'scheduler_cpu': 8,
+                'scheduler_memory': "32GiB",
+                'worker_vm_types': ['c2-standard-8', 'c3-standard-8'],
+                'spot_policy': 'spot_with_fallback',
+            }
+
             if 'remote_config' in kwargs:
                 # setup coiled cluster with remote config
                 logger.info("Attaching to coiled cluster with custom configuration")
-                cluster = coiled.Cluster(**kwargs['remote_config'])
+                coiled_default_options.update(kwargs['remote_config'])
+                cluster = coiled.Cluster(**coiled_default_options)
                 cluster.get_client()
             else:
                 # Just setup a coiled cluster
                 logger.info("Attaching to coiled cluster with default configuration")
-                cluster = coiled.Cluster(name='sheerwater-shared',
-                                         n_workers=4, idle_timeout="45 minutes")
+                cluster = coiled.Cluster(**coiled_default_options)
                 cluster.get_client()
         else:
             # Setup a local cluster
