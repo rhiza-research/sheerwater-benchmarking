@@ -3,8 +3,7 @@
 # import xarray as xr
 import salientsdk as sk
 
-from sheerwater_benchmarking.utils import cacheable, salient_auth, get_dates, get_grid
-from sheerwater_benchmarking.utils.general_utils import get_dates
+from sheerwater_benchmarking.utils import salient_auth, get_grid
 # from sheerwater_benchmarking.utils.model_utils import get_salient_loc
 
 

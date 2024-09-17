@@ -1,5 +1,4 @@
 """General utility functions for all parts of the data pipeline."""
-import time
 
 import numpy as np
 
