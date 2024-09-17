@@ -25,7 +25,7 @@ def load_netcdf(filepath):
 
 
 def write_zarr(ds, filepath):
-    """Write an xarry to a Zarr file in cloud bucket."""
+    """Write an xarray to a Zarr file in cloud bucket."""
     # Load the dataset
     fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
     _ = fs.open(filepath)

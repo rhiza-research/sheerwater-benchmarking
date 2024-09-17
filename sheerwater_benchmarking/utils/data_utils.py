@@ -48,7 +48,7 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
     else:
         raise NotImplementedError(f"Aggregation function {agg_fn} not implemented.")
 
-    # Drop the nan values added by the rolling aggregration at the end
+    # Drop the nan values added by the rolling aggregation at the end
     ds_agg = ds_agg.dropna(agg_col, how="all")
 
     # Correct coords to left-align the aggregated forecast window

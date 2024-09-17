@@ -280,7 +280,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                     compute_result = False
                                 else:
                                     print("WARNING: The cached array does not have data within "
-                                          "1 year of your start or endtime. Automatically recomputing. "
+                                          "1 year of your start or end time. Automatically recomputing. "
                                           "If you do not want to recompute the result set "
                                           "`validate_cache_timeseries=False`")
                         else:

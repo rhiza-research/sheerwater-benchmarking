@@ -64,7 +64,6 @@ def single_iri_ecmwf(time, variable, forecast_type,
         convert_units_url = "(Celsius_scale)/unitconvert/"
     else:
         differences_url = "[L]differences/"
-        # convert_units_url = "(mm)/unitconvert/"
         convert_units_url = "c://name//water_density/def/998/(kg/m3)/:c/div/(mm)/unitconvert/"
 
     if verbose:
@@ -115,7 +114,7 @@ def single_iri_ecmwf(time, variable, forecast_type,
     else:
         print_error(bold=True)
         print_info(
-            f"Unknown error occured when trying to download data for {day} {month} {year} for model ecmwf.\n")
+            f"Unknown error occurred when trying to download data for {day} {month} {year} for model ecmwf.\n")
         return None
 
     rename_dict = {
@@ -242,7 +241,7 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
     target_dates = get_dates(start_time, end_time,
                              stride="day", return_string=True)
 
-    # Get correct single funtion
+    # Get correct single function
     fn = single_iri_ecmwf if forecast_type == "forecast" else single_iri_ecmwf_dense
     datasets = []
     for date in target_dates:
@@ -324,10 +323,10 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type,
         M = 10.0  # reforecast average is made up of 10 ensemble members
 
     # Need to run a merge here, because sometimes pert and control
-    # are available for differnt dates
+    # are available for different dates
     df = xr.merge([df_control, df_pert], join="outer")
 
-    # Take a weigthed average of the control and perturbed runs
+    # Take a weighted average of the control and perturbed runs
     df[variable] = df[f"{variable}_control"] * 1./(M+1.) + df[f"{variable}_pert"] * M/(M+1.)
     df = df.drop([f"{variable}_control", f"{variable}_pert"])
 
@@ -395,7 +394,7 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
                       verbose=verbose)
 
     if mask == "lsm":
-        # Select varibles and apply mask
+        # Select variables and apply mask
         mask_ds = land_sea_mask(grid=grid).compute()
     elif mask is None:
         mask_ds = None
