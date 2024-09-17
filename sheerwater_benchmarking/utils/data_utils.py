@@ -12,7 +12,7 @@ def apply_mask(ds, mask, var, val=0.0):
         ds (xr.Dataset): Dataset to apply mask to.
         mask (xr.Dataset): Mask to apply.
         var (str): Variable to mask.
-        val (int): Value to mask above (any value that is 
+        val (int): Value to mask above (any value that is
             strictly greater than this value will be masked).
     """
     # Apply mask
