@@ -29,20 +29,20 @@ def dask_remote(func):
                 logger.info("Attaching to coiled cluster with custom configuration")
                 coiled_default_options.update(kwargs['remote_config'])
                 cluster = coiled.Cluster(**coiled_default_options)
-                client = cluster.get_client()
+                cluster.get_client()
             else:
                 # Just setup a coiled cluster
                 logger.info("Attaching to coiled cluster with default configuration")
                 cluster = coiled.Cluster(**coiled_default_options)
-                client = cluster.get_client()
+                cluster.get_client()
         else:
             # Setup a local cluster
             try:
-                client = get_client()
+                get_client()
             except ValueError:
                 logger.info("Starting local dask cluster...")
                 cluster = LocalCluster(n_workers=2, threads_per_worker=2)
-                client = Client(cluster)
+                Client(cluster)
 
         # call the function and return the result
         if 'remote' in kwargs:

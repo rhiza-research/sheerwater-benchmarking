@@ -23,6 +23,12 @@ def get_cache_args(kwargs, cache_kwargs):
 
 
 def prune_chunking_dimensions(ds, chunking):
+    """Prune the chunking dimensions to only those that exist in the dataset.
+
+    Args:
+        ds (xr.Dataset): The dataset to check for chunking dimensions.
+        chunking (dict): The chunking dimensions to prune.
+    """
     # Get the chunks for the dataset
     ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
 
@@ -39,6 +45,12 @@ def prune_chunking_dimensions(ds, chunking):
 
 
 def chunking_compare(ds, chunking):
+    """Compare the chunking of a dataset to a specified chunking.
+
+    Args:
+        ds (xr.Dataset): The dataset to check the chunking of.
+        chunking (dict): The chunking to compare to.
+    """
     # Get the chunks for the dataset
     ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
 
@@ -48,6 +60,7 @@ def chunking_compare(ds, chunking):
 
 
 def drop_encoded_chunks(ds):
+    """Drop the encoded chunks from a dataset."""
     for var in ds.data_vars:
         if 'chunks' in ds[var].encoding:
             del ds[var].encoding['chunks']
@@ -55,7 +68,29 @@ def drop_encoded_chunks(ds):
     return ds
 
 
-def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechunk=False, cache=True, cache_disable_if=None):
+def cacheable(data_type, cache_args, timeseries=None, chunking=None,
+              auto_rechunk=False, cache=True, cache_disable_if=None):
+    """Decorator for caching function results.
+
+    Args:
+        data_type(str): The type of data being cached. Currently only 'array' is supported.
+        cache_args(list): The arguments to use as the cache key.
+        timeseries(str, list): The name of the time series dimension in the cached array. If not a
+            time series, set to None (default). If a list, will use the first matching coordinate in the list.
+        chunking(dict): Specifies chunking if that coordinate exists. If coordinate does not exist
+            the chunking specified will be dropped.
+        auto_rechunk(bool): If True will aggressively rechunk a cache on load.
+        cache(bool): Whether to cache the result.
+        validate_cache_timeseries(bool): Whether to validate the cache timeseries against the
+            requested timeseries. If False, will not validate the cache timeseries.
+        force_overwrite(bool): Whether to overwrite the cache if it
+            already exists (if False, will prompt the user before overwriting).
+        retry_null_cache(bool): If True, ignore the null caches and attempts to recompute
+            result for null values. If False (default), will return None for null caches.
+        cache_disable_if(dict, list): If the cache arguments match the dict or list of dicts
+            then the cache will be disabled. This is useful for disabling caching based on
+            certain arguments. Defaults to None.
+    """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
         "filepath_only": False,
@@ -65,30 +100,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
         "force_overwrite": False,
         "retry_null_cache": False,
     }
-    """Decorator for caching function results.
-
-    Args:
-        data_type (str): The type of data being cached. Currently only 'array' is supported.
-        cache_args (list): The arguments to use as the cache key.
-        timeseries (str, list): The name of the time series dimension in the cached array. If not a
-            time series, set to None (default). If a list, will use the first mactchin coordinate in the list.
-        chunking (dict): Specifies chunking if that coordinate exists. If coordinate does not exist
-            the chunking specified will be dropped.
-        auto_rechunk (bool): If True will aggressively rechunk a cache on load.
-        cache (bool): Whether to cache the result.
-        validate_cache_timeseries (bool): Whether to validate the cache timeseries against the
-            requested timeseries. If False, will not validate the cache timeseries.
-        force_overwrite (bool): Whether to overwrite the cache forecable on recompute if it
-            already exists (if False, will prompt the user before overwriting).
-        retry_null_cache (bool): If True, ignore the null caches and attempts to recompute
-            result for null values. If False (default), will return None for null caches.
-    """
 
     def create_cacheable(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
-            nonlocal data_type, cache_args, timeseries, chunking, auto_rechunk, cache, cache_disable_if
+            nonlocal data_type, cache_args, timeseries, chunking, auto_rechunk, \
+                cache, cache_disable_if
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, validate_cache_timeseries, \
@@ -144,9 +162,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
 
                 if not found:
                     raise RuntimeError(f"Specified cacheable argument {a}"
-                                       "not discovered as passed argument or default arugment.")
+                                       "not discovered as passed argument or default argument.")
 
-            # Now that we have all the immutable arge values we can calulcate whether
+            # Now that we have all the cacheable args values we can calculate whether
             # the cache should be disable from them
             if isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
 
@@ -169,7 +187,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                         print(f"Caching disabled for arg values {d}")
                         cache = False
                         break
-            else if cache_disable_if is not None:
+            elif cache_disable_if is not None:
                 raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
 
             imkeys = list(cache_arg_values.keys())
@@ -203,7 +221,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                         # every chunk is only 4B!
                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
 
-                        # If rechunk is passed then check to see if the rechunk array matches chunking. If not then rechunk
+                        # If rechunk is passed then check to see if the rechunk array
+                        # matches chunking. If not then rechunk
                         if auto_rechunk:
                             if not isinstance(chunking, dict):
                                 raise ValueError(
@@ -212,7 +231,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                             # Compare the dict to the rechunk dict
                             if not chunking_compare(ds, chunking):
                                 print(
-                                    "Rechunk was passed and cached chunks do not match rechunk request. Performing rechunking")
+                                    "Rechunk was passed and cached chunks do not match rechunk request. "
+                                    "Performing rechunking.")
 
                                 # write to a temp cache map
                                 # writing to temp cache is necessary because if you overwrite
@@ -243,18 +263,22 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, auto_rechun
                             # Check to see if the dataset extends roughly the full time series set
                             match_time = [t for t in tl if t in ds.dims]
                             if len(match_time) == 0:
-                                raise RuntimeError("Timeseries array functions must return a time dimension for slicing. "
-                                                   "This could be an invalid cache. Try running with recompute=True to reset the cache.")
+                                raise RuntimeError("Timeseries array functions must return "
+                                                   "a time dimension for slicing. "
+                                                   "This could be an invalid cache. "
+                                                   "Try running with recompute=True to reset the cache.")
                             else:
                                 time_col = match_time[0]
                                 # Check if within 1 year at least
-                                if (pandas.Timestamp(ds[time_col].min().values) < dateparser.parse(start_time) + datetime.timedelta(days=365) and
-                                        pandas.Timestamp(ds[time_col].max().values) > dateparser.parse(end_time) - datetime.timedelta(days=365)):
+                                if (pandas.Timestamp(ds[time_col].min().values) <
+                                    dateparser.parse(start_time) + datetime.timedelta(days=365) and
+                                        pandas.Timestamp(ds[time_col].max().values) >
+                                        dateparser.parse(end_time) - datetime.timedelta(days=365)):
 
                                     compute_result = False
                                 else:
                                     print("WARNING: The cached array does not have data within "
-                                          "1 year of your start or endtime. Automatically recomputing. "
+                                          "1 year of your start or end time. Automatically recomputing. "
                                           "If you do not want to recompute the result set "
                                           "`validate_cache_timeseries=False`")
                         else:

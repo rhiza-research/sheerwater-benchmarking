@@ -1,83 +1,82 @@
-"""Utility functions for data processing."""
-import xarray as xr
+"""Data utility functions for all parts of the data pipeline."""
 import numpy as np
+import xarray as xr
+
+from .general_utils import get_grid
 
 
-def get_variable(variable_name, variable_type='era5'):
-    """Converts a variable in any other type to a variable name of the requested type"""
+def apply_mask(ds, mask, var, val=0.0):
+    """Apply a mask to a dataset.
 
-    variable_ordering = ['sheerwater', 'era5']
-
-    weather_variables = [
-        # Static variables (2):
-        ('z', 'geopotential'),
-        ('lsm', 'land_sea_mask'),
-
-        # Surface variables (6):
-        ('tmp2m', '2m_temperature'),
-        ("precip", "total_precipitation"),
-        ("vwind10m", "10m_v_component_of_wind"),
-        ("uwind10m", "10m_u_component_of_wind"),
-        ("msl", "mean_sea_level_pressure"),
-        ("tisr", "toa_incident_solar_radiation"),
-
-        # Atmospheric variables (6):
-        ("tmp", "temperature"),
-        ("uwind", "u_component_of_wind"),
-        ("vwind", "v_component_of_wind"),
-        ("hgt", "geopotential"),
-        ("q", "specific_humidity"),
-        ("w", "vertical_velocity"),
-    ]
-
-    name_index = variable_ordering.index(variable_type)
-
-    for tup in weather_variables:
-        for name in tup:
-            if name == variable_name:
-                return tup[name_index]
-
-    raise ValueError(f"Variable {variable} not found")
+    Args:
+        ds (xr.Dataset): Dataset to apply mask to.
+        mask (xr.Dataset): Mask to apply.
+        var (str): Variable to mask.
+        val (int): Value to mask above (any value that is
+            strictly greater than this value will be masked).
+    """
+    # Apply mask
+    if mask is not None:
+        # This will mask and include any location where there is any land
+        ds = ds[var].where(mask > val, drop=False)
+        ds = ds.rename({"mask": var})
+    return ds
 
 
-def get_grid(region_id):
-    """Get the longitudes, latitudes and grid size for a named region."""
-    if region_id == "global1_5":
-        longitudes = np.arange(0, 360, 1.5)
-        latitudes = np.arange(-90, 90, 1.5)
-        grid_size = 1.5
-    elif region_id == "global0_5":
-        longitudes = np.arange(0.25, 360, 0.5)
-        latitudes = np.arange(-89.75, 90, 0.5)
-        grid_size = 0.5
-    elif region_id == "global0_25":
-        longitudes = np.arange(0, 360, 0.25)
-        latitudes = np.arange(-90, 90, 0.25)
-        grid_size = 0.25
-    elif region_id == "us1_0":
-        longitudes = np.arange(-125.0, -67.0, 1)
-        latitudes = np.arange(25.0, 50.0, 1)
-        grid_size = 1.0
-    elif region_id == "us1_5":
-        longitudes = np.arange(-123.0, -67.5, 1.5)
-        latitudes = np.arange(25.5, 48, 1.5)
-        grid_size = 1.5
-    elif region_id == "salient_common":
-        longitudes = np.arange(0.125, 360, 0.25)
-        latitudes = np.arange(-89.875, 90, 0.25)
-        grid_size = 0.25
+def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
+    """Rolling aggregation of the dataset.
+
+    Args:
+        ds (xr.Dataset): Dataset to aggregate.
+        variable (str): Variable to aggregate.
+        agg (int): Aggregation period in days.
+        agg_col (str): Column to aggregate over.
+        agg_fn (str): Aggregation function. One of:
+            - mean
+            - sum
+    """
+    agg_kwargs = {
+        f"{agg_col}": agg,
+        "min_periods": agg,
+        "center": False
+    }
+    # Apply n-day rolling aggregation
+    if agg_fn == "mean":
+        ds_agg = ds.rolling(**agg_kwargs).mean()
+    elif agg_fn == "sum":
+        ds_agg = ds.rolling(**agg_kwargs).sum()
     else:
-        raise NotImplementedError(
-            "Only grids global1_5, us1_0 and us1_5 have been implemented.")
-    return longitudes, latitudes, grid_size
+        raise NotImplementedError(f"Aggregation function {agg_fn} not implemented.")
+
+    # Drop the nan values added by the rolling aggregation at the end
+    ds_agg = ds_agg.dropna(agg_col, how="all")
+
+    # Correct coords to left-align the aggregated forecast window
+    # (default is right aligned)
+    ds_agg = ds_agg.assign_coords(**{f"{agg_col}": ds_agg[agg_col]-np.timedelta64(agg-1, 'D')})
+    return ds_agg
 
 
 def regrid(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon'):
+    """Regrid a dataset to a new grid.
 
+    Args:
+        ds (xr.Dataset): Dataset to regrid.
+        output_grid (str): The output grid resolution. One of valid named grids.
+        method (str): The regridding method. One of:
+            - bilinear
+            - conservative
+            - nearest_s2d
+            - nearest_d2s
+            - patch
+            - regrid
+        lat_col (str): The name of the latitude column.
+        lon_col (str): The name of the longitude column.
+    """
     # Attempt to import xesmf and throw an error if it doesn't exist
     try:
         import xesmf as xe
-    except:
+    except ImportError:
         raise RuntimeError(
             "Failed to import XESMF. Try running in coiled instead: 'rye run coiled-run ...")
 
