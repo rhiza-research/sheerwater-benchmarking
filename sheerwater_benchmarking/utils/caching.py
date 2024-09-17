@@ -30,13 +30,11 @@ def prune_chunking_dimensions(ds, chunking):
         chunking (dict): The chunking dimensions to prune.
     """
     # Get the chunks for the dataset
-    updated_chunks = chunking.copy()
-
     ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
 
     # Drop any dimensions that don't exist in the ds_chunks
     dims_to_drop = []
-    for dim in updated_chunks:
+    for dim in chunking:
         if dim not in ds_chunks:
             dims_to_drop.append(dim)
 
