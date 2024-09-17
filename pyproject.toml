@@ -36,9 +36,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Enable all `pydocstyle` rules, limiting to those that adhere to the
 # Google convention via `convention = "google"`, below.
 select = ["E", "F", "W", "D", "ARG"]
-ignore = [
-  "E722", # bare except
-]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
