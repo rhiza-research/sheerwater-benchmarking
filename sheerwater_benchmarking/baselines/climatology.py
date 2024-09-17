@@ -1,6 +1,6 @@
 """A climatology baseline for benchmarking."""
 from sheerwater_benchmarking.utils import dask_remote, cacheable
-from sheerwater_benchmarking.data import era5_agg
+from sheerwater_benchmarking.reanalysis import era5_agg
 
 
 @dask_remote
