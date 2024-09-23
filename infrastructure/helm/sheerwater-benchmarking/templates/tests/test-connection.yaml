@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "sheerwater-benchmarking.fullname" . }}-test-connection"
+  labels:
+    {{- include "sheerwater-benchmarking.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['{{ include "sheerwater-benchmarking.fullname" . }}:{{ .Values.service.port }}']
+  restartPolicy: Never
