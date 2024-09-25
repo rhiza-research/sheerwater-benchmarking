@@ -15,10 +15,10 @@ def apply_mask(ds, mask, var, val=0.0):
         val (int): Value to mask above (any value that is
             strictly greater than this value will be masked).
     """
-    if check_bases(ds, mask) == -1:
-        raise ValueError("Datasets have different bases. Cannot mask.")
     # Apply mask
     if mask is not None:
+        if check_bases(ds, mask) == -1:
+            raise ValueError("Datasets have different bases. Cannot mask.")
         # This will mask and include any location where there is any land
         ds = ds[var].where(mask > val, drop=False)
         ds = ds.rename({"mask": var})
@@ -118,7 +118,7 @@ def regrid(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon'):
     return ds
 
 
-def get_globe_slice(ds, lon_slice, lat_slice, lon_col='lon', lat_col='lat', base="base360"):
+def get_globe_slice(ds, lon_slice, lat_slice, lon_col='lon', lat_col='lat', base="base180"):
     """Get a slice of the globe from the dataset.
 
     Handle the wrapping of the globe when slicing.
@@ -176,7 +176,16 @@ def lon_base_change(ds, to_base="base180", lon_col='lon'):
     else:
         raise ValueError(f"Invalid base {to_base}.")
 
+    # Check if original data is wrapped
+    wrapped = is_wrapped(ds.lon.values)
+
     ds = ds.assign_coords({lon_col: lons})
+
+    # Sort the lons after conversion, unless the slice
+    # you're considering wraps around the meridian
+    # in the resultant base.
+    if not wrapped:
+        ds = ds.sortby('lon')
     return ds
 
 

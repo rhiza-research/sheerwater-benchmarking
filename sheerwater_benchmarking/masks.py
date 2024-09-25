@@ -72,7 +72,6 @@ def land_sea_mask(grid="global1_5", base="base180"):
     # Convert to our standard base 180 format
     if base == "base180":
         ds = lon_base_change(ds, to_base="base180")
-        ds = ds.sortby('lon')
 
     ds = ds.compute()
     os.remove(path)

@@ -13,8 +13,10 @@ import time
 
 from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
-                                           get_grid, get_dates, is_valid_forecast_date,
-                                           apply_mask, roll_and_agg, lon_base_change)
+                                           get_grid, get_global_grid, get_dates,
+                                           is_valid_forecast_date,
+                                           apply_mask, roll_and_agg,
+                                           lon_base_change, get_globe_slice)
 
 
 ########################################################################
@@ -419,8 +421,10 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
             - None: no mask
         verbose (bool): Whether to print verbose output.
     """
+    lons, lats, _ = get_grid(grid)
+    global_grid = get_global_grid(grid)
     ds = ecmwf_rolled(start_time, end_time, variable,
-                      forecast_type, grid=grid, agg=agg,
+                      forecast_type, grid=global_grid, agg=agg,
                       verbose=verbose)
 
     # Convert to base180 longitude
@@ -435,4 +439,5 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
         raise NotImplementedError("Only land-sea or None mask is implemented.")
 
     ds = apply_mask(ds, mask_ds, variable)
+    ds = get_globe_slice(ds, lons, lats)
     return ds

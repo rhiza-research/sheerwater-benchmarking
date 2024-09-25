@@ -216,6 +216,16 @@ def get_grid(region_id, base="base360"):
     return lons, lats, grid_size
 
 
+def get_global_grid(region_id):
+    """Get the corresponding global grid to a specified grid."""
+    if '0_25' in region_id:
+        return 'global0_25'
+    elif '1_5' in region_id:
+        return 'global1_5'
+    else:
+        raise NotImplementedError(f"Global grid {region_id} has not been implemented.")
+
+
 def base360_to_base180(lons):
     """Converts a list of longitudes from base 360 to base 180.
 

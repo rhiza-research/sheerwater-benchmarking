@@ -7,9 +7,8 @@ import dateparser
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            cdsapi_secret,
-                                           get_grid, get_variable,
-                                           apply_mask, roll_and_agg, regrid,
-                                           lon_base_change)
+                                           get_grid, get_global_grid, get_variable,
+                                           apply_mask, roll_and_agg, lon_base_change, get_globe_slice)
 from sheerwater_benchmarking.masks import land_sea_mask
 
 
@@ -116,21 +115,24 @@ def era5_cds(start_time, end_time, variable, grid="global1_5"):
            cache_disable_if={'grid': 'global0_25'})
 def era5(start_time, end_time, variable, grid="global0_25"):  # noqa ARG001
     """ERA5 function that returns data from Google ARCO."""
-    # Pull the google dataset
-    ds = xr.open_zarr('gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3',
-                      chunks={'time': 50, 'latitude': 721, 'longitude': 1440})
+    if "0_25" in grid:
+        # Pull the google dataset
+        ds = xr.open_zarr('gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3',
+                          chunks={'time': 50, 'latitude': 721, 'longitude': 1440})
 
-    # Select the right variable
-    variable = get_variable(variable, 'era5')
-    ds = ds[variable].to_dataset()
+        # Select the right variable
+        variable = get_variable(variable, 'era5')
+        ds = ds[variable].to_dataset()
 
-    # Rename variable into our variable space
-    ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
-
-    # Regrid if necessary
-    if grid != 'global0_25':
-        print(f"Regridding Google ARCO ERA5 from global0_25 to {grid}")
-        ds = regrid(ds, grid)
+        # Rename variable into our variable space
+        ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+    elif "1_5" in grid:
+        # For now, pull from the cached CDS data
+        ds = era5_cds(start_time, end_time, variable, grid=grid)
+    else:
+        # print(f"Regridding Google ARCO ERA5 from global0_25 to {grid}")
+        # ds = regrid(ds, grid)
+        raise NotImplementedError("Only 0.25 and 1.5 degree grids are implemented.")
 
     return ds
 
@@ -195,7 +197,9 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
             - lsm: Land-sea mask
             - None: No mask
     """
-    ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg)
+    lons, lats, _ = get_grid(grid)
+    global_grid = get_global_grid(grid)
+    ds = era5_rolled(start_time, end_time, variable, grid=global_grid, agg=agg)
 
     # Convert to base180 longitude
     ds = lon_base_change(ds, to_base="base180")
@@ -209,5 +213,6 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
         raise NotImplementedError("Only land-sea or None mask is implemented.")
 
     ds = apply_mask(ds, mask_ds, variable)
+    ds = get_globe_slice(ds, lons, lats)
 
     return ds
