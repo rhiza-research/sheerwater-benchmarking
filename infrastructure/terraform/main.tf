@@ -153,6 +153,7 @@ resource "random_password" "grafana_admin_password" {
 # Create a domain name and IP address
 resource "google_compute_global_address" "grafana_address" {
   name = "sheerwater-benchmarking-grafana-address"
+  project = "rhiza-shared"
 }
 
 resource "google_dns_record_set" "grafana_recordset" {
