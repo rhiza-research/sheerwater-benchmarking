@@ -137,6 +137,9 @@ def get_globe_slice(ds, lon_slice, lat_slice, lon_col='lon', lat_col='lat', base
     if base == "base180" and (lon_slice > 180.0).any():
         raise ValueError("Longitude slice not in base 180 format.")
 
+    # Ensure that latitude is sorted before slicing
+    ds = ds.sortby(lat_col)
+
     wrapped = is_wrapped(lon_slice)
     if not wrapped:
         return ds.sel(**{lon_col: slice(lon_slice[0], lon_slice[-1]),

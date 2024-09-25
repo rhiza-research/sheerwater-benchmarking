@@ -169,13 +169,13 @@ def get_grid(region_id, base="base180"):
             - base180: 180 degree base longitude grid
     """
     if region_id == "global1_5":
-        lons = np.arange(-180, 180, 1.5)
-        lats = np.arange(-90, 90, 1.5)
         grid_size = 1.5
+        lons = np.arange(-180, 180, 1.5)
+        lats = np.arange(-90, 90+grid_size, 1.5)
     elif region_id == "global0_25":
-        lons = np.arange(-180, 180, 0.25)
-        lats = np.arange(-90, 90, 0.25)
         grid_size = 0.25
+        lons = np.arange(-180, 180, 0.25)
+        lats = np.arange(-90, 90+grid_size, 0.25)
     elif region_id == "salient_common":
         lons = np.arange(-25.875, 73.0, 0.25)
         lats = np.arange(-34.875, 38.0, 0.25)

@@ -104,8 +104,8 @@ def era5_cds(start_time, end_time, variable, grid="global1_5"):
         datasets.append(ds)
 
     ds = dask.compute(*datasets)
-    x = xr.open_mfdataset(ds, engine='zarr')
-    return x
+    ds = xr.open_mfdataset(ds, engine='zarr')
+    return ds
 
 
 @dask_remote
@@ -121,11 +121,8 @@ def era5(start_time, end_time, variable, grid="global0_25"):  # noqa ARG001
                           chunks={'time': 50, 'latitude': 721, 'longitude': 1440})
 
         # Select the right variable
-        variable = get_variable(variable, 'era5')
-        ds = ds[variable].to_dataset()
-
-        # Rename variable into our variable space
-        ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+        var = get_variable(variable, 'era5')
+        ds = ds[var].to_dataset()
     elif "1_5" in grid:
         # For now, pull from the cached CDS data
         ds = era5_cds(start_time, end_time, variable, grid=grid)
@@ -156,24 +153,23 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
     """
     # Read and combine all the data into an array
     ds = era5(start_time, end_time, variable, grid=grid)
-    ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
     # Convert hourly data to daily data and then aggregate
+    ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+    # Convert local dataset naming and units
+    var = get_variable(variable, 'era5')
+    ds = ds.rename_vars(name_dict={var: variable})
+
     if variable == 'tmp2m':
-        ds = ds.rename_vars(name_dict={'t2m': 'tmp2m'})
-        # Convert from Kelvin to Celsius
         if ds[variable].units == 'K':
             ds[variable] = ds[variable] - 273.15
         ds = ds.resample(time='D').mean(dim='time')
+        ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn="mean")
     elif variable == 'precip':
-        ds = ds.rename_vars(name_dict={'tp': 'precip'})
-        # Convert from m to mm
         if ds[variable].units == 'm':
             ds[variable] = ds[variable] * 1000.0
         ds = ds.resample(time='D').sum(dim='time')
-
-    agg_fn = "sum" if variable == "precip" else "mean"
-    ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
+        ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn="sum")
     return ds
 
 
