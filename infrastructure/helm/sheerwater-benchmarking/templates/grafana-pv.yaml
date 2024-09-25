@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-grafana-pv-{{ .Release.Namespace }}
+  labels:
+    app: {{ include "sheerwater-benchmarking.name" . }}-grafana
+    release: {{ .Release.Name }}
+spec:
+  storageClassName: ""
+  capacity:
+    storage: {{ .Values.pv.size }}
+  accesModes:
+    - ReadWriteOnce
+  gcePersistentDisk:
+    pdName: {{ .Values.pv.name }}
+    fsType: ext4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-grafana
+  labels:
+    app: {{ include "sheerwater-benchmarking.name" . }}-grafana
+    release: {{ .Release.Name }}
+spec:
+  storageClassName: ""
+  volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-grafana-pv-{{ .Release.Namespace }}
+  accesModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.pv.size }}
+
