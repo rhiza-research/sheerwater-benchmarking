@@ -198,7 +198,7 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
     ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg)
 
     # Convert to base180 longitude
-    ds = lon_base_change(ds, base="base180")
+    ds = lon_base_change(ds, to_base="base180")
 
     if mask == "lsm":
         # Select variables and apply mask

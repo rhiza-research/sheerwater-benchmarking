@@ -424,7 +424,7 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
                       verbose=verbose)
 
     # Convert to base180 longitude
-    ds = lon_base_change(ds, base="base180")
+    ds = lon_base_change(ds, to_base="base180")
 
     if mask == "lsm":
         # Select variables and apply mask
