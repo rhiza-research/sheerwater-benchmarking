@@ -14,7 +14,7 @@ import time
 from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
                                            get_grid, get_dates, is_valid_forecast_date,
-                                           apply_mask, roll_and_agg)
+                                           apply_mask, roll_and_agg, lon_base_change)
 
 
 ########################################################################
@@ -423,9 +423,12 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
                       forecast_type, grid=grid, agg=agg,
                       verbose=verbose)
 
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, base="base180")
+
     if mask == "lsm":
         # Select variables and apply mask
-        mask_ds = land_sea_mask(grid=grid).compute()
+        mask_ds = land_sea_mask(grid=grid, base="base180").compute()
     elif mask is None:
         mask_ds = None
     else:
