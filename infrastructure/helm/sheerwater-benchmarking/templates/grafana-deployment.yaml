@@ -23,15 +23,14 @@ spec:
     spec:
       containers:
         - name: {{ .Chart.Name }}-grafana
-          image: {{ .Values.grafana.image.repository }}
-          image: {{ .Values.grafana.image.tag }}
+          image: {{ .Values.grafana.image.repository }}:{{ .Values.grafana.image.tag }}
           imagePullPolicy: IfNotPresent
           resources:
             requests:
               cpu: {{ .Values.grafana.resources.cpu }}
               memory: {{ .Values.grafana.resources.memory }}
           ports:
-              containerPort: 3000
+            - containerPort: 3000
           readinessProbe:
             failureThreshold: 3
             httpGet:
@@ -81,7 +80,7 @@ spec:
             value: "true"
           envFrom:
             - secretRef:
-              name: {{ include "sheerwater-benchmarking.fullname" . }}-grafana-secrets
+                name: {{ include "sheerwater-benchmarking.fullname" . }}-grafana-secrets
           volumneMounts:
             - mountPath: /var/lib/grafnaa
               name: grafanadb

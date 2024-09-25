@@ -30,17 +30,18 @@ provider "google" {
 
 data "google_client_config" "provider" {}
 
-data "google_container_cluster" "rhiza-shared" {
+data "google_container_cluster" "rhiza_shared" {
   name     = "rhiza-cluster"
   location = "us-central1-a"
+  project = "rhiza-shared"
 }
 
 # Connect to the kubernetes cluster
 provider "kubernetes" {
-  host  = "https://${data.google_container_cluster.rhiza-shared.endpoint}"
+  host  = "https://${data.google_container_cluster.rhiza_shared.endpoint}"
   token = data.google_client_config.provider.access_token
   cluster_ca_certificate = base64decode(
-    data.google_container_cluster.rhiza-shared.master_auth[0].cluster_ca_certificate,
+    data.google_container_cluster.rhiza_shared.master_auth[0].cluster_ca_certificate,
   )
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
@@ -50,10 +51,10 @@ provider "kubernetes" {
 
 provider "helm" {
   kubernetes {
-    host  = "https://${data.google_container_cluster.rhiza-shared.endpoint}"
+    host  = "https://${data.google_container_cluster.rhiza_shared.endpoint}"
     token = data.google_client_config.provider.access_token
     cluster_ca_certificate = base64decode(
-      data.google_container_cluster.rhiza-shared.master_auth[0].cluster_ca_certificate,
+      data.google_container_cluster.rhiza_shared.master_auth[0].cluster_ca_certificate,
     )
     exec {
       api_version = "client.authentication.k8s.io/v1beta1"
@@ -63,7 +64,7 @@ provider "helm" {
 }
 
 # Create the sheerwater namespace
-resource "kubernetes_namespace" "sheerwater-benchmarking" {
+resource "kubernetes_namespace" "sheerwater_benchmarking" {
   metadata {
     name = "sheerwater-benchmarking"
   }
@@ -80,35 +81,16 @@ resource "random_password" "db_admin_password" {
   special          = true
 }
 
-resource "random_password" "db_write_password" {
-  length           = 16
-  special          = true
-}
-
-resource "random_password" "db_read_password" {
-  length           = 16
-  special          = true
-}
-
-
 # Persistent disk
-resource "google_compute_disk" "sheerwater-benchmarking-db" {
+resource "google_compute_disk" "sheerwater_benchmarking_db" {
   name  = "sheerwater-benchmarking-db"
   type  = "pd-balanced"
   zone  = "us-central1-a"
-  size  = "20GiB"
+  size  = 20
+  project = "rhiza-shared"
 }
 
-# Create a snapshot backup policy for the database
-resource "google_compute_snapshot" "sheerwater-benchmarking-db-snapshot" {
-  name        = "sheerwater-benchmarking-db-snapshot"
-  zone        = "us-central1-a"
-  storage_locations = ["us-central1"]
-
-
-}
-
-resource "google_compute_resource_policy" "db-snapshot-policy" {
+resource "google_compute_resource_policy" "db_snapshot_policy" {
   name = "sheerwater-benchmarking-db-snapshot-policy"
   region = "us-central1"
   snapshot_schedule_policy {
@@ -123,12 +105,14 @@ resource "google_compute_resource_policy" "db-snapshot-policy" {
       on_source_disk_delete = "KEEP_AUTO_SNAPSHOTS"
     }
   }
+  project = "rhiza-shared"
 }
 
 resource "google_compute_disk_resource_policy_attachment" "attachment" {
-  name = google_compute_resource_policy.db-snapshot-policy.name
-  disk = google_compute_disk.sheerwater-benchmarking-db.id
+  name = google_compute_resource_policy.db_snapshot_policy.name
+  disk = google_compute_disk.sheerwater_benchmarking_db.name
   zone = "us-central1-a"
+  project = "rhiza-shared"
 }
 
 
@@ -137,38 +121,86 @@ resource "google_compute_disk_resource_policy_attachment" "attachment" {
 #################
 
 # Gcloud secrets for Single sign on
-data "google_secret_manager_secret_version" "sheerwater-oauth-client-id" {
+data "google_secret_manager_secret_version" "sheerwater_oauth_client_id" {
  secret   = "sheerwater-oauth-client-id"
 }
 
-data "google_secret_manager_secret_version" "sheerwater-oauth-client-secret" {
+data "google_secret_manager_secret_version" "sheerwater_oauth_client_secret" {
  secret   = "sheerwater-oauth-client-secret"
 }
 
 
 # Persistent disk
-resource "google_compute_disk" "sheerwater-benchmarking-grafana" {
+resource "google_compute_disk" "sheerwater_benchmarking_grafana" {
   name  = "sheerwater-benchmarking-grafana"
   type  = "pd-balanced"
   zone  = "us-central1-a"
-  size  = "10GiB"
+  size  = 10
+  project = "rhiza-shared"
 }
 
 # SMTP secrets for inviting users
-data "google_secret_manager_secret_version" "sheerwater-sendgrid-api-key" {
+data "google_secret_manager_secret_version" "sheerwater_sendgrid_api_key" {
  secret   = "sheerwater-sendgrid-api-key"
 }
 
+# grafana password
+resource "random_password" "grafana_admin_password" {
+  length           = 16
+  special          = true
+}
+
 # Create a domain name and IP address
+resource "google_compute_global_address" "grafana_address" {
+  name = "sheerwater-benchmarking-grafana-address"
+}
+
+resource "google_dns_record_set" "grafana_recordset" {
+  managed_zone = "sheerwater"
+  name = "benchmarks.sheerwater.rhizaresearch.org."
+  type = "A"
+  rrdatas = [google_compute_global_address.grafana_address.address]
+  ttl = 300
+}
 
 
 
-
-#################
-# Tile Server
+################
+## Helm Release
 ################
 
-
 # Now the helm release to release all of the kubernetes manifest
+locals {
+  chart_values = {
+    grafana = {
+      admin_password = "${random_password.grafana_admin_password.result}"
+      smtp_password = "${data.google_secret_manager_secret_version.sheerwater_sendgrid_api_key.secret_data}"
+      google_oauth = {
+        client_id = "${data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data}"
+        client_secret = "${data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data}"
+      }
+      pv = {
+        name = "${google_compute_disk.sheerwater_benchmarking_grafana.name}"
+        size = "${google_compute_disk.sheerwater_benchmarking_grafana.size}"
+      }
+      domain_name = "${trimsuffix(google_dns_record_set.grafana_recordset.name, ".")}"
+      ip_name = "${google_compute_global_address.grafana_address.name}"
+    }
+    postgres = {
+      pv = {
+        name = "${google_compute_disk.sheerwater_benchmarking_db.name}"
+        size = "${google_compute_disk.sheerwater_benchmarking_db.size}"
+      }
+      admin_password = "${random_password.db_admin_password.result}"
+    }
+  }
+}
+
 
 # Now monitor the deployed resources with uptime robot
+resource "helm_release" "sheerwater_benchmarking" {
+  name = "sheerwater-benchmarking"
+  chart = "../helm/sheerwater-benchmarking"
+  namespace = "sheerwater-benchmarking"
+  values = [yamlencode(local.chart_values)]
+}

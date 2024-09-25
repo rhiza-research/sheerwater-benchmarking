@@ -8,7 +8,7 @@ metadata:
 spec:
   capacity:
     storage: {{ .Values.postgres.pv.size }}
-  accesModes:
+  accessModes:
     - ReadWriteOnce
   gcePersistentDisk:
     pdName: {{ .Values.postgres.pv.name }}
@@ -24,7 +24,7 @@ metadata:
 spec:
   storageClassName: ""
   volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-postgres-pv-{{ .Release.Namespace }}
-  accesModes:
+  accessModes:
     - ReadWriteOnce
   resources:
     requests:

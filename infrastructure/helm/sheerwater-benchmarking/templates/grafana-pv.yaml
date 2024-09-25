@@ -9,7 +9,7 @@ spec:
   storageClassName: ""
   capacity:
     storage: {{ .Values.grafana.pv.size }}
-  accesModes:
+  accessModes:
     - ReadWriteOnce
   gcePersistentDisk:
     pdName: {{ .Values.grafana.pv.name }}
@@ -25,7 +25,7 @@ metadata:
 spec:
   storageClassName: ""
   volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-grafana-pv-{{ .Release.Namespace }}
-  accesModes:
+  accessModes:
     - ReadWriteOnce
   resources:
     requests:

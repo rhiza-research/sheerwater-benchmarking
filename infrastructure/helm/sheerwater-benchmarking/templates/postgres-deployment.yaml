@@ -23,21 +23,20 @@ spec:
     spec:
       containers:
         - name: {{ .Chart.Name }}-postgres
-          image: {{ .Values.postgres.image.repository }}
-          image: {{ .Values.postgres.image.tag }}
+          image: {{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}
           imagePullPolicy: IfNotPresent
           resources:
             requests:
               cpu: {{ .Values.postgres.resources.cpu }}
               memory: {{ .Values.postgres.resources.memory }}
           ports:
-              containerPort: 5432
+            - containerPort: 5432
           env:
           - name: PGDATA
-            values: /var/lib/postgresql/{{ regexFind "[0-9]+([.][0-9]+)?$" .Values.postgres.image.tag }}/data
+            value: /var/lib/postgresql/data
           envFrom:
             - secretRef:
-              name: {{ include "sheerwater-benchmarking.fullname" . }}-postgres-secrets
+                name: {{ include "sheerwater-benchmarking.fullname" . }}-postgres-secrets
           volumneMounts:
             - mountPath: /var/lib/postgresql
               name: postgresdb

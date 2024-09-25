@@ -14,7 +14,7 @@ spec:
       port:
         number: 80
 ---
-apiVersion: networking.gke.io/v1
+apiVersion: networking.gke.io/v1beta1
 kind: FrontendConfig
 metadata:
   name: {{ include "sheerwater-benchmarking.fullname" . }}-grafana
