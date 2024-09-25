@@ -3,24 +3,19 @@ import os
 import cdsapi
 import xarray as xr
 
-from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid,
-                                           lon_base_change, get_globe_slice)
+from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid, get_global_grid,
+                                           lon_base_change, get_globe_slice, load_zarr)
 
 
-@cacheable(data_type='array', cache_args=['grid', 'base'])
-def land_sea_mask(grid="global1_5", base="base180"):
-    """Get the ECMWF land sea mask for the given grid.
+@cacheable(data_type='array', cache_args=['grid'])
+def land_sea_mask_global(grid="global1_5"):
+    """Get the ECMWF global land sea mask for the given grid.
 
     Args:
         grid (str): The grid to fetch the data at.  Note that only
             the resolution of the specified grid is used.
-        base (str): The longitude base to return the data in. One of:
-            - base180, base360
     """
-    if base not in ["base180", "base360"]:
-        raise ValueError("Base must be either 'base180' or 'base360'.")
-
-    lons, lats, grid_size = get_grid(grid)
+    lons, lats, grid_size = get_grid(grid, base="base360")
 
     # Get data from the CDS API
     times = ['00:00']
@@ -65,16 +60,28 @@ def land_sea_mask(grid="global1_5", base="base180"):
     if 'expver' in ds.coords:
         ds = ds.drop('expver')
 
-    # Sort and select a subset of the data
-    ds = ds.sortby('lat')  # CDS API returns lat data in descending order, breaks slicing
-    ds = get_globe_slice(ds, lons, lats, base="base360")
-
     # Convert to our standard base 180 format
-    if base == "base180":
-        ds = lon_base_change(ds, to_base="base180")
+    ds = lon_base_change(ds, to_base="base180")
+
+    # Sort and select a subset of the data
+    ds = ds.sortby(['lon', 'lat'])  # CDS API returns lat data in descending order, breaks slicing
 
     ds = ds.compute()
     os.remove(path)
+    return ds
+
+
+@cacheable(data_type='array', cache_args=['grid'])
+def land_sea_mask(grid="global1_5"):
+    """Get the ECMWF land sea mask for the given grid.
+
+    Args:
+        grid (str): The grid to fetch the data at.
+    """
+    global_grid = get_global_grid(grid)
+    ds = land_sea_mask_global(grid=global_grid)
+    lons, lats, _ = get_grid(grid)
+    ds = get_globe_slice(ds, lons, lats, base='base180')
     return ds
 
 

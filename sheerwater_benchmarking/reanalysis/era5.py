@@ -198,6 +198,8 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
             - None: No mask
     """
     lons, lats, _ = get_grid(grid)
+
+    # Get ERA5 on the corresponding global grid
     global_grid = get_global_grid(grid)
     ds = era5_rolled(start_time, end_time, variable, grid=global_grid, agg=agg)
 

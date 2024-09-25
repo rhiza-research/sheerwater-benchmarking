@@ -178,7 +178,6 @@ def lon_base_change(ds, to_base="base180", lon_col='lon'):
 
     # Check if original data is wrapped
     wrapped = is_wrapped(ds.lon.values)
-
     ds = ds.assign_coords({lon_col: lons})
 
     # Sort the lons after conversion, unless the slice

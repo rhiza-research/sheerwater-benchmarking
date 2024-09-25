@@ -151,7 +151,7 @@ def get_variable(variable_name, variable_type='era5'):
     raise ValueError(f"Variable {variable_name} not found")
 
 
-def get_grid(region_id, base="base360"):
+def get_grid(region_id, base="base180"):
     """Get the longitudes, latitudes and grid size for a named region.
 
     Args:
@@ -169,50 +169,30 @@ def get_grid(region_id, base="base360"):
             - base180: 180 degree base longitude grid
     """
     if region_id == "global1_5":
-        lons = np.arange(0, 360, 1.5)
+        lons = np.arange(-180, 180, 1.5)
         lats = np.arange(-90, 90, 1.5)
         grid_size = 1.5
-    elif region_id == "global0_5":
-        lons = np.arange(0, 360, 0.5)
-        lats = np.arange(-90, 90, 0.5)
-        grid_size = 0.5
     elif region_id == "global0_25":
-        lons = np.arange(0, 360, 0.25)
+        lons = np.arange(-180, 180, 0.25)
         lats = np.arange(-90, 90, 0.25)
         grid_size = 0.25
-    elif region_id == "us1_0":
-        lons = np.arange(235, 303, 1.0)
-        lats = np.arange(25.5, 48, 1.0)
-        grid_size = 1.0
-    elif region_id == "us1_5":
-        lons = np.arange(235, 303, 1.5)
-        lats = np.arange(25.5, 48, 1.5)
-        grid_size = 1.5
     elif region_id == "salient_common":
-        # Continuous representation in base180
-        lons_180 = np.arange(-25.875, 73.0, 0.25)
-        lons = base180_to_base360(lons_180)
+        lons = np.arange(-25.875, 73.0, 0.25)
         lats = np.arange(-34.875, 38.0, 0.25)
         grid_size = 0.25
     elif region_id == "africa1_5":
-        # Continuous representation in base180
-        lons_180 = np.arange(-26.0, 73.0, 1.5)
-        # Convert to base 360 (default)
-        lons = base180_to_base360(lons_180)
+        lons = np.arange(-26.0, 73.0, 1.5)
         lats = np.arange(-35.0, 38.0, 1.5)
         grid_size = 1.5
     elif region_id == "africa0_25":
-        # Continuous representation in base180
-        lons_180 = np.arange(-26.0, 73.0, 0.25)
-        # Convert to base 360 (default)
-        lons = base180_to_base360(lons_180)
+        lons = np.arange(-26.0, 73.0, 0.25)
         lats = np.arange(-35.0, 38.0, 0.25)
         grid_size = 0.25
     else:
         raise NotImplementedError(
             f"Grid {region_id} has not been implemented.")
-    if base == "base180":
-        lons = base360_to_base180(lons)
+    if base == "base360":
+        lons = base180_to_base360(lons)
     return lons, lats, grid_size
 
 
