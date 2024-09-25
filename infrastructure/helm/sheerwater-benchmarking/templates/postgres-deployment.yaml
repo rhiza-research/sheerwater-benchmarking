@@ -28,13 +28,13 @@ spec:
           imagePullPolicy: IfNotPresent
           resources:
             requests:
-              cpu: {{ .Values.resources.cpu }}
-              memory: {{ .Values.resources.memory }}
+              cpu: {{ .Values.postgres.resources.cpu }}
+              memory: {{ .Values.postgres.resources.memory }}
           ports:
               containerPort: 5432
           env:
           - name: PGDATA
-            values: /var/lib/postgresql/{{ regexFind "[0-9]+([.][0-9]+)?$" .Values.image.tag }}/data
+            values: /var/lib/postgresql/{{ regexFind "[0-9]+([.][0-9]+)?$" .Values.postgres.image.tag }}/data
           envFrom:
             - secretRef:
               name: {{ include "sheerwater-benchmarking.fullname" . }}-postgres-secrets
@@ -43,6 +43,6 @@ spec:
               name: postgresdb
               subpath: db
       volumes:
-        - name: postgresdb:
+        - name: postgresdb
           persistentVolumeClaim:
             claimName: {{ include "sheerwater-benchmarking.fullname" . }}-postgres 

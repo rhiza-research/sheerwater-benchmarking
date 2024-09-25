@@ -8,11 +8,11 @@ metadata:
 spec:
   storageClassName: ""
   capacity:
-    storage: {{ .Values.pv.size }}
+    storage: {{ .Values.grafana.pv.size }}
   accesModes:
     - ReadWriteOnce
   gcePersistentDisk:
-    pdName: {{ .Values.pv.name }}
+    pdName: {{ .Values.grafana.pv.name }}
     fsType: ext4
 ---
 apiVersion: v1
@@ -29,5 +29,5 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.pv.size }}
+      storage: {{ .Values.grafana.pv.size }}
 

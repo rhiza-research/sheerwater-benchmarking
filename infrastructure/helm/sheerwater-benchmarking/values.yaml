@@ -35,7 +35,7 @@ grafana:
 postgres:
   image: 
     repository: postgres
-    tag: 15.8
+    tag: "15.8"
 
   pv:
     name: name

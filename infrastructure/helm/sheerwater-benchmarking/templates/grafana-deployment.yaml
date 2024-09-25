@@ -28,8 +28,8 @@ spec:
           imagePullPolicy: IfNotPresent
           resources:
             requests:
-              cpu: {{ .Values.resources.cpu }}
-              memory: {{ .Values.resources.memory }}
+              cpu: {{ .Values.grafana.resources.cpu }}
+              memory: {{ .Values.grafana.resources.memory }}
           ports:
               containerPort: 3000
           readinessProbe:
@@ -86,6 +86,6 @@ spec:
             - mountPath: /var/lib/grafnaa
               name: grafanadb
       volumes:
-        - name: grafanadb:
+        - name: grafanadb
           persistentVolumeClaim:
             claimName: {{ include "sheerwater-benchmarking.fullname" . }}-grafana 
