@@ -2,7 +2,7 @@
 import numpy as np
 import xarray as xr
 
-from .general_utils import get_grid
+from .general_utils import get_grid, base360_to_base180, base180_to_base360, is_wrapped, check_bases
 
 
 def apply_mask(ds, mask, var, val=0.0):
@@ -15,6 +15,8 @@ def apply_mask(ds, mask, var, val=0.0):
         val (int): Value to mask above (any value that is
             strictly greater than this value will be masked).
     """
+    if check_bases(ds, mask) == -1:
+        raise ValueError("Datasets have different bases. Cannot mask.")
     # Apply mask
     if mask is not None:
         # This will mask and include any location where there is any land
@@ -114,3 +116,78 @@ def regrid(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon'):
         ds = ds.rename({'lat': lat_col, 'lon': lon_col})
 
     return ds
+
+
+def get_globe_slice(ds, lon_slice, lat_slice, lon_col='lon', lat_col='lat', base="base360"):
+    """Get a slice of the globe from the dataset.
+
+    Handle the wrapping of the globe when slicing.  
+
+    Args:
+        ds (xr.Dataset): Dataset to slice.
+        lon_slice (np.ndarray): The longitude slice.
+        lat_slice (np.ndarray): The latitude slice.
+    """
+    if base == "base360" and (lon_slice < 0.0).any():
+        raise ValueError("Longitude slice not in base 360 format.")
+    if base == "base180" and (lon_slice > 180.0).any():
+        raise ValueError("Longitude slice not in base 180 format.")
+
+    wrapped = is_wrapped(lon_slice)
+    if not wrapped:
+        return ds.sel(**{lon_col: slice(lon_slice[0], lon_slice[-1]),
+                         lat_col: slice(lat_slice[0], lat_slice[-1])})
+    # A single wrapping discontinuity
+    if base == "base360":
+        slices = [[lon_slice[0], 360.0], [0.0, lon_slice[-1]]]
+    else:
+        slices = [[lon_slice[0], 180.0], [-180.0, lon_slice[-1]]]
+    ds_subs = []
+    for s in slices:
+        ds_subs.append(ds.sel(**{
+            lon_col: slice(s[0], s[-1]),
+            lat_col: slice(lat_slice[0], lat_slice[-1])
+        }))
+    return xr.concat(ds_subs, dim=lon_col)
+
+
+def lon_base_change(ds, to_base="base180", lon_col='lon'):
+    """Change the base of the dataset from base 360 to base 180 or vice versa.
+
+    Args:
+        ds (xr.Dataset): Dataset to change.
+        to_base (str): The base to change to. One of:
+            - base180
+            - base360
+    """
+    if to_base == "base180":
+        if (ds[lon_col] < 0.0).any():
+            raise ValueError("Longitude slice must be in base 360 format.")
+        lons = base360_to_base180(ds[lon_col].values)
+    elif to_base == "base360":
+        if (ds[lon_col] > 180.0).any():
+            raise ValueError("Longitude slice must be in base 180 format.")
+        lons = base180_to_base360(ds[lon_col].values)
+    else:
+        raise ValueError(f"Invalid base {to_base}.")
+
+    ds = ds.assign_coords({lon_col: lons})
+    return ds
+
+
+def plot_map(ds, var, lon_col='lon'):
+    """Plot a map of the dataset, handling longitude wrapping.
+
+    Args:
+        ds (xr.Dataset): Dataset to change.
+        lon_col (str): The longitude column name.
+    """
+    if is_wrapped(ds[lon_col].values):
+        print("Warning: Wrapped data cannot be plotted. Converting bases for visualization")
+        if ds[lon_col].max() > 180.0:
+            plot_ds = lon_base_change(ds, to_base="base180")
+        else:
+            plot_ds = lon_base_change(ds, to_base="base360")
+    else:
+        plot_ds = ds
+    plot_ds[var].plot(x=lon_col)

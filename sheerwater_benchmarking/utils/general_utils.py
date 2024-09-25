@@ -151,45 +151,132 @@ def get_variable(variable_name, variable_type='era5'):
     raise ValueError(f"Variable {variable_name} not found")
 
 
-def get_grid(region_id):
-    """Get the longitudes, latitudes and grid size for a named region."""
+def get_grid(region_id, base="base360"):
+    """Get the longitudes, latitudes and grid size for a named region.
+
+    Args:
+        region_id (str): The region to get the grid for. One of:
+            - global1_5: 1.5 degree global grid
+            - global0_5: 0.5 degree global grid
+            - global0_25: 0.25 degree global grid
+            - us1_0: 1.0 degree US grid
+            - us1_5: 1.5 degree US grid
+            - salient_common: Salient common grid
+            - africa1_5: 1.5 degree African grid
+            - africa0_25: 0.25 degree African grid
+        base (str): The base grid to use. One of:
+            - base360: 360 degree base longitude grid
+            - base180: 180 degree base longitude grid
+    """
     if region_id == "global1_5":
-        longitudes = np.arange(0, 360, 1.5)
-        latitudes = np.arange(-90, 90, 1.5)
+        lons = np.arange(0, 360, 1.5)
+        lats = np.arange(-90, 90, 1.5)
         grid_size = 1.5
     elif region_id == "global0_5":
-        longitudes = np.arange(0.25, 360, 0.5)
-        latitudes = np.arange(-89.75, 90, 0.5)
+        lons = np.arange(0, 360, 0.5)
+        lats = np.arange(-90, 90, 0.5)
         grid_size = 0.5
     elif region_id == "global0_25":
-        longitudes = np.arange(0, 360, 0.25)
-        latitudes = np.arange(-90, 90, 0.25)
+        lons = np.arange(0, 360, 0.25)
+        lats = np.arange(-90, 90, 0.25)
         grid_size = 0.25
     elif region_id == "us1_0":
-        longitudes = np.arange(-125.0, -67.0, 1)
-        latitudes = np.arange(25.0, 50.0, 1)
+        lons = np.arange(235, 303, 1.0)
+        lats = np.arange(25.5, 48, 1.0)
         grid_size = 1.0
     elif region_id == "us1_5":
-        longitudes = np.arange(-123.0, -67.5, 1.5)
-        latitudes = np.arange(25.5, 48, 1.5)
+        lons = np.arange(235, 303, 1.5)
+        lats = np.arange(25.5, 48, 1.5)
         grid_size = 1.5
     elif region_id == "salient_common":
-        longitudes = np.arange(0.125, 360, 0.25)
-        latitudes = np.arange(-89.875, 90, 0.25)
-        grid_size = 0.25
-    elif region_id == "africa0_25":
-        longitudes = np.arange(0.125, 360, 0.25)
-        latitudes = np.arange(-89.875, 90, 0.25)
+        # Continuous representation in base180
+        lons_180 = np.arange(-25.875, 73.0, 0.25)
+        lons = base180_to_base360(lons_180)
+        lats = np.arange(-34.875, 38.0, 0.25)
         grid_size = 0.25
     elif region_id == "africa1_5":
-        longitudes = np.arange(-26.0, 73.0, 1.5)
-        latitudes = np.arange(-35.0, 38.0, 1.5)
+        # Continuous representation in base180
+        lons_180 = np.arange(-26.0, 73.0, 1.5)
+        # Convert to base 360 (default)
+        lons = base180_to_base360(lons_180)
+        lats = np.arange(-35.0, 38.0, 1.5)
         grid_size = 1.5
     elif region_id == "africa0_25":
-        longitudes = np.arange(-26.0, 73.0, 0.25)
-        latitudes = np.arange(-35.0, 38.0, 0.25)
+        # Continuous representation in base180
+        lons_180 = np.arange(-26.0, 73.0, 0.25)
+        # Convert to base 360 (default)
+        lons = base180_to_base360(lons_180)
+        lats = np.arange(-35.0, 38.0, 0.25)
         grid_size = 0.25
     else:
         raise NotImplementedError(
             f"Grid {region_id} has not been implemented.")
-    return longitudes, latitudes, grid_size
+    if base == "base180":
+        lons = base360_to_base180(lons)
+    return lons, lats, grid_size
+
+
+def base360_to_base180(lons):
+    """Converts a list of longitudes from base 360 to base 180.
+
+    Args:
+        lons (list, float): A list of longitudes, or a single longitude
+    """
+    if not isinstance(lons, np.ndarray) and not isinstance(lons, list):
+        lons = [lons]
+    val = [x - 360.0 if x >= 180.0 else x for x in lons]
+    if len(val) == 1:
+        return val[0]
+    return np.array(val)
+
+
+def base180_to_base360(lons):
+    """Converts a list of longitudes from base 180 to base 360.
+
+    Args:
+        lons (list, float): A list of longitudes, or a single longitude
+    """
+    if not isinstance(lons, np.ndarray) and not isinstance(lons, list):
+        lons = [lons]
+    val = [x + 360.0 if x < 0.0 else x for x in lons]
+    if len(val) == 1:
+        return val[0]
+    return np.array(val)
+
+
+def is_wrapped(lons):
+    """Check if the longitudes are wrapped.
+
+    Works for both base180 and base360 longitudes. Requires that 
+    longitudes are in increasing order, outside of a wrap point.
+    """
+    wraps = (np.diff(lons) < 0.0).sum()
+    if wraps > 1:
+        raise ValueError("Only one wrapping discontinuity allowed.")
+    elif wraps == 1:
+        return True
+    return False
+
+
+def check_bases(ds, dsp, lon_col='lon', lon_colp='lon'):
+    """Check if the bases of two datasets are the same."""
+    if ds[lon_col].max() > 180.0:
+        base = "base360"
+    elif ds[lon_col].min() < 0.0:
+        base = "base180"
+    else:
+        print("Warning: Dataset base is ambiguous")
+        return 0
+
+    if dsp[lon_colp].max() > 180.0:
+        basep = "base360"
+    elif dsp[lon_colp].min() < 0.0:
+        basep = "base180"
+    else:
+        print("Warning: Dataset base is ambiguous")
+        return 0
+
+    # If bases are identifiable and unequal
+    if base != basep:
+        return -1
+    return 0

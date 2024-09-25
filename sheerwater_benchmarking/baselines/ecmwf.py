@@ -17,6 +17,9 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
                                            apply_mask, roll_and_agg)
 
 
+########################################################################
+# IRI download utility functions
+########################################################################
 class TLSAdapter(requests.adapters.HTTPAdapter):
     """Transport adapter that allows us to use TLSv1.2."""
 
@@ -51,6 +54,9 @@ def download_url(url, timeout=600, retry=3, cookies={}):
     print(f"Failed to retrieve file after {retry} attempts. Stopping...")
 
 
+########################################################################
+#  IRI ECMWF download and process functions
+########################################################################
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['time', 'variable', 'forecast_type', 'run_type', 'grid'],

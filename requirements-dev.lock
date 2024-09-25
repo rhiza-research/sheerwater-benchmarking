@@ -75,11 +75,11 @@ botocore==1.34.131
 cachetools==5.4.0
     # via asyncache
     # via google-auth
-cads-api-client==1.1.0
+cads-api-client==1.3.2
     # via cdsapi
 cartopy==0.23.0
     # via salientsdk
-cdsapi==0.7.0
+cdsapi==0.7.3
     # via sheerwater-benchmarking
 certifi==2024.7.4
     # via httpcore

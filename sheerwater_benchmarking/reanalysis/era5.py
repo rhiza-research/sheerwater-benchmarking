@@ -8,7 +8,8 @@ import dateparser
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            cdsapi_secret,
                                            get_grid, get_variable,
-                                           apply_mask, roll_and_agg, regrid)
+                                           apply_mask, roll_and_agg, regrid,
+                                           lon_base_change)
 from sheerwater_benchmarking.masks import land_sea_mask
 
 
@@ -196,9 +197,12 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
     """
     ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg)
 
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, base="base180")
+
     if mask == "lsm":
         # Select variables and apply mask
-        mask_ds = land_sea_mask(grid=grid).compute()
+        mask_ds = land_sea_mask(grid=grid, base="base180").compute()
     elif mask is None:
         mask_ds = None
     else:
