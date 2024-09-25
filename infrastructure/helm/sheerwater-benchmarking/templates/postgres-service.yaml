@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: postgres
   labels:
-    app: {{ include "sheerwater-benchmarking.name" . }}-postgress
+    app: {{ include "sheerwater-benchmarking.name" . }}-postgres
     release: {{ .Release.Name }}
   annotations:
     tailscale.com/expose: "true"

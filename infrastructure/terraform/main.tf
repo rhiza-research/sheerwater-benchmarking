@@ -81,6 +81,18 @@ resource "random_password" "db_admin_password" {
   special          = true
 }
 
+resource "google_secret_manager_secret" "db_admin_password" {
+  secret_id = "sheerwater-postgres-admin-password"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "db_admin_password" {
+  secret = google_secret_manager_secret.db_admin_password.id
+  secret_data = random_password.db_admin_password.result
+}
+
 # Persistent disk
 resource "google_compute_disk" "sheerwater_benchmarking_db" {
   name  = "sheerwater-benchmarking-db"
@@ -120,15 +132,6 @@ resource "google_compute_disk_resource_policy_attachment" "attachment" {
 # Grafana
 #################
 
-# Gcloud secrets for Single sign on
-data "google_secret_manager_secret_version" "sheerwater_oauth_client_id" {
- secret   = "sheerwater-oauth-client-id"
-}
-
-data "google_secret_manager_secret_version" "sheerwater_oauth_client_secret" {
- secret   = "sheerwater-oauth-client-secret"
-}
-
 
 # Persistent disk
 resource "google_compute_disk" "sheerwater_benchmarking_grafana" {
@@ -149,6 +152,19 @@ resource "random_password" "grafana_admin_password" {
   length           = 16
   special          = true
 }
+
+resource "google_secret_manager_secret" "grafana_admin_password" {
+  secret_id = "sheerwater-grafana-admin-password"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "grafana_admin_password" {
+  secret = google_secret_manager_secret.grafana_admin_password.id
+  secret_data = random_password.grafana_admin_password.result
+}
+
 
 # Create a domain name and IP address
 resource "google_compute_global_address" "grafana_address" {
@@ -176,10 +192,6 @@ locals {
     grafana = {
       admin_password = "${random_password.grafana_admin_password.result}"
       smtp_password = "${data.google_secret_manager_secret_version.sheerwater_sendgrid_api_key.secret_data}"
-      google_oauth = {
-        client_id = "${data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data}"
-        client_secret = "${data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data}"
-      }
       pv = {
         name = "${google_compute_disk.sheerwater_benchmarking_grafana.name}"
         size = "${google_compute_disk.sheerwater_benchmarking_grafana.size}"

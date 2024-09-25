@@ -16,10 +16,6 @@ grafana:
     from_address: info@rhizaresearch.org
     from_name: Sheerwater Benchmarking Project
 
-  google_oauth:
-    client_id: id
-    client_secret: secret
-
   pv:
     name: name
     size: 10GiB
