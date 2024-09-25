@@ -47,41 +47,50 @@ def dt_to_string(dt):
     return datetime.strftime(dt, DATETIME_FORMAT)
 
 
-def generate_dates_in_between(first_date, last_date, date_frequency):
+def generate_dates_in_between(start_time, end_time, date_frequency, return_string=True):
     """Generates dates between two dates based on the frequency.
 
     Args:
-        first_date (datetime): The first date.
-        last_date (datetime): The last date.
+        start_time (str): The start date.
+        end_time (str): The end date.
         date_frequency (str): The frequency of the dates.
-            One of "daily", "weekly", "monday/thursday".
+            One of "daily", "weekly", a day of the week (e.g., "Monday"), or a combination of days
+            separated by a slash (e.g., "Monday/Thursday").
     """
-    if date_frequency == "monday/thursday":
+    start_date = datetime.strptime(start_time, DATETIME_FORMAT)
+    end_date = datetime.strptime(end_time, DATETIME_FORMAT)
+
+    if date_frequency not in ["daily", "weekly"]:
         dates = [
             date
-            for date in generate_dates_in_between(first_date, last_date, "daily")
-            if date.strftime("%A") in ["Monday", "Thursday"]
+            for date in generate_dates_in_between(start_time, end_time, "daily",
+                                                  return_string=False)
+            if date.strftime("%A") in date_frequency.split("/")
         ]
-        return dates
     else:
         frequency_to_int = {"daily": 1, "weekly": 7}
         dates = [
-            first_date +
+            start_date +
             timedelta(days=x * frequency_to_int[date_frequency])
-            for x in range(0, int((last_date - first_date).days /
+            for x in range(0, int((end_date - start_date).days /
                                   (frequency_to_int[date_frequency])) + 1,)
         ]
-        return dates
+
+    if return_string:
+        dates = [date.strftime(DATETIME_FORMAT) for date in dates]
+    return dates
 
 
 def is_valid_forecast_date(model, forecast_type, forecast_date):
     """Checks if the forecast date is valid for the given model and forecast type."""
     valid_forecast_dates = {
         "reforecast": {
-            "ecmwf": (string_to_dt("2015-05-14"), datetime.today(), "monday/thursday"),
+            "ecmwf": (string_to_dt("2015-05-14"), datetime.today(), "Monday/Thursday"),
+            "salient": (string_to_dt("2022-01-01"), datetime.today(), "Wednesday"),
         },
         "forecast": {
-            "ecmwf": (string_to_dt("2015-05-14"), datetime.today(), "monday/thursday"),
+            "ecmwf": (string_to_dt("2015-05-14"), datetime.today(), "Monday/Thursday"),
+            "salient": (string_to_dt("2022-01-01"), datetime.today(), "Wednesday"),
         },
     }
     assert isinstance(forecast_date, datetime)
