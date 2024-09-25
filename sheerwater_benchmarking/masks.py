@@ -39,7 +39,6 @@ def land_sea_mask_global(grid="global1_5"):
                    'time': times,
                    'format': 'netcdf',
                    'grid': [str(grid_size), str(grid_size)],
-                   'area': [lats[0], lons[0], lats[-1], lons[-1]],
                },
                path)
 
