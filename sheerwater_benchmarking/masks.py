@@ -4,7 +4,7 @@ import cdsapi
 import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid, get_global_grid,
-                                           lon_base_change, get_globe_slice, load_zarr)
+                                           lon_base_change, get_globe_slice)
 
 
 @cacheable(data_type='array', cache_args=['grid'])
