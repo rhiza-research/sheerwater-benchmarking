@@ -161,7 +161,7 @@ def get_grid(region_id, base="base180"):
             - global0_25: 0.25 degree global grid
             - us1_0: 1.0 degree US grid
             - us1_5: 1.5 degree US grid
-            - salient_common: Salient common grid
+            - salient_africa0_25: Salient common grid in Africa
             - africa1_5: 1.5 degree African grid
             - africa0_25: 0.25 degree African grid
         base (str): The base grid to use. One of:
@@ -181,13 +181,22 @@ def get_grid(region_id, base="base180"):
         lats = np.arange(-34.875, 38.0, 0.25)
         grid_size = 0.25
     elif region_id == "africa1_5":
+        grid_size = 1.5
         lons = np.arange(-26.0, 73.0, 1.5)
         lats = np.arange(-35.0, 38.0, 1.5)
-        grid_size = 1.5
     elif region_id == "africa0_25":
+        grid_size = 0.25
         lons = np.arange(-26.0, 73.0, 0.25)
         lats = np.arange(-35.0, 38.0, 0.25)
+    elif region_id == "salient_africa0_25":
         grid_size = 0.25
+        lons = np.arange(-25.875, 72.125, 0.25)
+        lats = np.arange(-34.875, 38.125, 0.25)
+    elif region_id == "salient_global0_25":
+        grid_size = 0.25
+        offset = 0.125
+        lons = np.arange(-180.0+offset, 180.0, 0.25)
+        lats = np.arange(-90.0+offset, 90.0, 0.25)
     else:
         raise NotImplementedError(
             f"Grid {region_id} has not been implemented.")
@@ -198,9 +207,9 @@ def get_grid(region_id, base="base180"):
 
 def get_global_grid(region_id):
     """Get the corresponding global grid to a specified grid."""
-    if '0_25' in region_id:
+    if '0_25' in region_id and 'salient' not in region_id:
         return 'global0_25'
-    elif '1_5' in region_id:
+    elif '1_5' in region_id and 'salient' not in region_id:
         return 'global1_5'
     else:
         raise NotImplementedError(f"Global grid {region_id} has not been implemented.")

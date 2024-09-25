@@ -77,8 +77,10 @@ def land_sea_mask(grid="global1_5"):
     Args:
         grid (str): The grid to fetch the data at.
     """
-    global_grid = get_global_grid(grid)
-    ds = land_sea_mask_global(grid=global_grid)
+    # Get global land sea mask
+    ds = land_sea_mask_global(grid=get_global_grid(grid))
+
+    # Select relevant subset
     lons, lats, _ = get_grid(grid)
     ds = get_globe_slice(ds, lons, lats, base='base180')
     return ds
