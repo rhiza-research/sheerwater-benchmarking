@@ -247,7 +247,7 @@ def base180_to_base360(lons):
 def is_wrapped(lons):
     """Check if the longitudes are wrapped.
 
-    Works for both base180 and base360 longitudes. Requires that 
+    Works for both base180 and base360 longitudes. Requires that
     longitudes are in increasing order, outside of a wrap point.
     """
     wraps = (np.diff(lons) < 0.0).sum()

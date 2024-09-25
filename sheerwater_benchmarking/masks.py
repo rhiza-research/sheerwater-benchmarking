@@ -4,7 +4,7 @@ import cdsapi
 import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid,
-                                           lon_base_change, get_globe_slice, is_wrapped)
+                                           lon_base_change, get_globe_slice)
 
 
 @cacheable(data_type='array', cache_args=['grid', 'base'])
@@ -14,6 +14,8 @@ def land_sea_mask(grid="global1_5", base="base180"):
     Args:
         grid (str): The grid to fetch the data at.  Note that only
             the resolution of the specified grid is used.
+        base (str): The longitude base to return the data in. One of:
+            - base180, base360
     """
     if base not in ["base180", "base360"]:
         raise ValueError("Base must be either 'base180' or 'base360'.")

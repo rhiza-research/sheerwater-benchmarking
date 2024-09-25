@@ -121,12 +121,16 @@ def regrid(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon'):
 def get_globe_slice(ds, lon_slice, lat_slice, lon_col='lon', lat_col='lat', base="base360"):
     """Get a slice of the globe from the dataset.
 
-    Handle the wrapping of the globe when slicing.  
+    Handle the wrapping of the globe when slicing.
 
     Args:
         ds (xr.Dataset): Dataset to slice.
         lon_slice (np.ndarray): The longitude slice.
         lat_slice (np.ndarray): The latitude slice.
+        lon_col (str): The longitude column name.
+        lat_col (str): The latitude column name.
+        base (str): The base of the longitudes. One of:
+            - base180, base360
     """
     if base == "base360" and (lon_slice < 0.0).any():
         raise ValueError("Longitude slice not in base 360 format.")
@@ -159,6 +163,7 @@ def lon_base_change(ds, to_base="base180", lon_col='lon'):
         to_base (str): The base to change to. One of:
             - base180
             - base360
+        lon_col (str): The longitude column name.
     """
     if to_base == "base180":
         if (ds[lon_col] < 0.0).any():
@@ -180,6 +185,7 @@ def plot_map(ds, var, lon_col='lon'):
 
     Args:
         ds (xr.Dataset): Dataset to change.
+        var (str): The variable in the dataset to plot.
         lon_col (str): The longitude column name.
     """
     if is_wrapped(ds[lon_col].values):
