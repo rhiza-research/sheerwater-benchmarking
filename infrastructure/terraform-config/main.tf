@@ -68,6 +68,14 @@ resource postgresql_grant "readonly_public" {
   privileges  = ["SELECT"]
 }
 
+resource postgresql_grant "readonly_public_terracotta" {
+  database    = "terracotta"
+  role        = postgresql_role.read.name
+  schema      = "public"
+  object_type = "table"
+  privileges  = ["SELECT"]
+}
+
 resource "postgresql_default_privileges" "read_only_default_admin" {
   database = "postgres"
   role        = postgresql_role.read.name
@@ -82,6 +90,24 @@ resource "postgresql_default_privileges" "read_only_default" {
   role        = postgresql_role.read.name
   schema   = "public"
   owner       = "write"
+  object_type = "table"
+  privileges  = ["SELECT"]
+}
+
+resource "postgresql_default_privileges" "read_only_default_terracotta" {
+  database = "terracotta"
+  role        = postgresql_role.read.name
+  schema   = "public"
+  owner       = "write"
+  object_type = "table"
+  privileges  = ["SELECT"]
+}
+
+resource "postgresql_default_privileges" "read_only_default_admin_terracotta" {
+  database = "terracotta"
+  role        = postgresql_role.read.name
+  schema   = "public"
+  owner       = "postgres"
   object_type = "table"
   privileges  = ["SELECT"]
 }
@@ -108,6 +134,7 @@ resource "postgresql_role" "write" {
   name = "write"
   password = "${random_password.postgres_write_password.result}"
   login = true
+  create_database = true
 }
 
 resource postgresql_grant "write_public" {
@@ -123,6 +150,14 @@ resource postgresql_grant "write_schema_public" {
   role        = postgresql_role.write.name
   schema      = "public"
   object_type = "schema"
+  privileges  = ["CREATE"]
+}
+
+resource postgresql_grant "write_database_public" {
+  database    = "postgres"
+  role        = postgresql_role.write.name
+  schema      = "public"
+  object_type = "database"
   privileges  = ["CREATE"]
 }
 

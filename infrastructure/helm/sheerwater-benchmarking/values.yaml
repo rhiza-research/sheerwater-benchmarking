@@ -54,7 +54,7 @@ terracotta:
   tailscale: true
 
   raster_bucket: sheerwater-datalake
-  driver_path: postgresql://postgres:5432/postgres
+  driver_path: postgresql://postgres:5432/terracotta
 
   sql_user: read
   sql_password: read_password
