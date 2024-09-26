@@ -49,27 +49,14 @@ provider "grafana" {
   auth = "admin:${data.google_secret_manager_secret_version.grafana_admin_password.secret_data}"
 }
 
-# Create postgres users and grant them permissions
-resource "random_password" "postgres_read_password" {
-  length           = 16
-  special          = true
-}
-
-resource "google_secret_manager_secret" "postgres_read_password" {
-  secret_id = "sheerwater-postgres-read-password"
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret_version" "postgres_read_password" {
-  secret = google_secret_manager_secret.postgres_read_password.id
-  secret_data = random_password.postgres_read_password.result
+# Gcloud secrets for Single sign on
+data "google_secret_manager_secret_version" "postgres_read_password" {
+ secret   = "sheerwater-postgres-read-password"
 }
 
 resource "postgresql_role" "read" {
   name = "read"
-  password = "${random_password.postgres_read_password.result}"
+  password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
   login = true
 }
 
@@ -182,7 +169,7 @@ resource "grafana_data_source" "postgres" {
   username                = "read"
   
   secure_json_data_encoded = jsonencode({
-    password = "${random_password.postgres_read_password.result}"
+    password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
   })
 
   json_data_encoded = jsonencode({
