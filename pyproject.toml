@@ -85,6 +85,9 @@ dependencies = [
     "pytest",
     "salientsdk",
     "scikit-learn",
+    "terracotta",
+    "sqlalchemy",
+    "psycopg2"
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

@@ -55,6 +55,18 @@ resource "random_password" "postgres_read_password" {
   special          = true
 }
 
+resource "google_secret_manager_secret" "postgres_read_password" {
+  secret_id = "sheerwater-postgres-read-password"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "postgres_read_password" {
+  secret = google_secret_manager_secret.postgres_read_password.id
+  secret_data = random_password.postgres_read_password.result
+}
+
 resource "postgresql_role" "read" {
   name = "read"
   password = "${random_password.postgres_read_password.result}"
@@ -93,6 +105,18 @@ resource "random_password" "postgres_write_password" {
   special          = true
 }
 
+resource "google_secret_manager_secret" "postgres_write_password" {
+  secret_id = "sheerwater-postgres-write-password"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "postgres_write_password" {
+  secret = google_secret_manager_secret.postgres_write_password.id
+  secret_data = random_password.postgres_write_password.result
+}
+
 resource "postgresql_role" "write" {
   name = "write"
   password = "${random_password.postgres_write_password.result}"
@@ -106,6 +130,16 @@ resource postgresql_grant "write_public" {
   object_type = "table"
   privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
 }
+
+resource postgresql_grant "write_schema_public" {
+  database    = "postgres"
+  role        = postgresql_role.write.name
+  schema      = "public"
+  object_type = "schema"
+  privileges  = ["CREATE"]
+}
+
+
 
 
 # Gcloud secrets for Single sign on
