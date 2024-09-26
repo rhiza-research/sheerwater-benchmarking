@@ -16,29 +16,39 @@ spec:
   template:
     metadata:
       annotations:
-        timestamp: '{{ now | date "20050000000000" }}'
+        timestamp: '{{ now | date "2006-01-02T15:04:05" }}'
       labels:
         app: {{ include "sheerwater-benchmarking.name" . }}-grafana
         release: {{ .Release.Name }}
     spec:
+      initContainers:
+      - name: volume-permissions
+        image: busybox
+        command: ['sh', '-c', 'chown -R 472:472 /var/lib/grafana']
+        envFrom:
+          - secretRef:
+              name: {{ include "sheerwater-benchmarking.fullname" . }}-grafana-secrets
+        volumeMounts:
+        - name: grafanadb
+          mountPath: /var/lib/grafana
       containers:
         - name: {{ .Chart.Name }}-grafana
           image: {{ .Values.grafana.image.repository }}:{{ .Values.grafana.image.tag }}
           imagePullPolicy: IfNotPresent
           resources:
             requests:
-              cpu: {{ .Values.grafana.resources.cpu }}
-              memory: {{ .Values.grafana.resources.memory }}
+              cpu: {{ .Values.grafana.resources.requests.cpu }}
+              memory: {{ .Values.grafana.resources.requests.memory }}
           ports:
             - containerPort: 3000
           readinessProbe:
-            failureThreshold: 3
+            failureThreshold: 5
             httpGet:
               path: "/api/health"
               port: 3000
               scheme: HTTP
-            initialDelaySeconds: 60
-            periodSeconds: 30
+            initialDelaySeconds: 15
+            periodSeconds: 15
             successThreshold: 1
             timeoutSeconds: 5
           env:
@@ -67,8 +77,8 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-grafana-secrets
-          volumneMounts:
-            - mountPath: /var/lib/grafnaa
+          volumeMounts:
+            - mountPath: /var/lib/grafana
               name: grafanadb
       volumes:
         - name: grafanadb

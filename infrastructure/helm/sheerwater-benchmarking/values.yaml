@@ -45,3 +45,22 @@ postgres:
     requests:
       cpu: 250m
       memory: 1Gi
+
+terracotta:
+  image: 
+    repository: dhigras/terracotta
+    tag: "v0.8.5"
+
+  tailscale: true
+
+  raster_bucket: sheerwater-datalake
+  driver_path: postgresql://postgres:5432/postgres
+
+  sql_user: read
+  sql_password: read_password
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 500Mi
+

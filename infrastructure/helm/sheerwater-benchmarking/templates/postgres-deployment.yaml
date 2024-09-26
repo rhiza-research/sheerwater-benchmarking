@@ -16,7 +16,7 @@ spec:
   template:
     metadata:
       annotations:
-        timestamp: '{{ now | date "20050000000000" }}'
+        timestamp: '{{ now | date "2006-01-02T15:04:05" }}'
       labels:
         app: {{ include "sheerwater-benchmarking.name" . }}-postgres
         release: {{ .Release.Name }}
@@ -27,8 +27,8 @@ spec:
           imagePullPolicy: IfNotPresent
           resources:
             requests:
-              cpu: {{ .Values.postgres.resources.cpu }}
-              memory: {{ .Values.postgres.resources.memory }}
+              cpu: {{ .Values.postgres.resources.requests.cpu }}
+              memory: {{ .Values.postgres.resources.requests.memory }}
           ports:
             - containerPort: 5432
           env:
@@ -37,10 +37,9 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-postgres-secrets
-          volumneMounts:
-            - mountPath: /var/lib/postgresql
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/
               name: postgresdb
-              subpath: db
       volumes:
         - name: postgresdb
           persistentVolumeClaim:

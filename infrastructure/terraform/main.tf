@@ -70,6 +70,24 @@ resource "kubernetes_namespace" "sheerwater_benchmarking" {
   }
 }
 
+# Create a kubernetes service account in the namespace
+resource "kubernetes_service_account" "sheerwater_sa" {
+  metadata {
+    name = "sheerwater-sa"
+    namespace = "sheerwater-benchmarking"
+  }
+}
+
+# Bind the service account to a cloud storage reader policy
+resource "google_project_iam_binding" "project" {
+  project = "sheerwater"
+  role    = "roles/storage.objectViewer"
+
+  members = [
+    "principal://iam.googleapis.com/projects/730596460290/locations/global/workloadIdentityPools/rhiza-shared.svc.id.goog/subject/ns/sheerwater-benchmarking/sa/sheerwater-sa",
+  ]
+}
+
 
 #################
 # Database
@@ -91,6 +109,24 @@ resource "google_secret_manager_secret" "db_admin_password" {
 resource "google_secret_manager_secret_version" "db_admin_password" {
   secret = google_secret_manager_secret.db_admin_password.id
   secret_data = random_password.db_admin_password.result
+}
+
+# Create postgres users and grant them permissions
+resource "random_password" "postgres_read_password" {
+  length           = 16
+  special          = true
+}
+
+resource "google_secret_manager_secret" "postgres_read_password" {
+  secret_id = "sheerwater-postgres-read-password"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "postgres_read_password" {
+  secret = google_secret_manager_secret.postgres_read_password.id
+  secret_data = random_password.postgres_read_password.result
 }
 
 # Persistent disk
@@ -205,6 +241,10 @@ locals {
         size = "${google_compute_disk.sheerwater_benchmarking_db.size}"
       }
       admin_password = "${random_password.db_admin_password.result}"
+    }
+    terracotta = {
+      sql_user = "read"
+      sql_password = "${random_password.postgres_read_password.result}"
     }
   }
 }
