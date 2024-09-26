@@ -115,17 +115,78 @@ def salient_era5(start_time, end_time, variable, grid="salient_africa0_25",
     ds = apply_mask(ds, mask_ds, variable)
     return ds
 
+# @dask_remote
+# @salient_auth
+# @cacheable(data_type='array',
+#            timeseries='forecast_date_weekly',
+#            cache_args=['variable', 'grid', 'timescale'],
+#            chunking={"lat": 292, "lon": 396, "time": 500},
+#            auto_rechunk=False)
+# def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
+#                       timescale="sub-seasonal", verbose=False):
+#     """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
 
-@dask_remote
+#     Args:
+#         time (str): The date to fetch.
+#         variable (str): The weather variable to fetch.
+#         grid (str): The grid resolution to fetch the data at. One of:
+#             - salient_africa0_25: 0.25 degree African grid from Salient
+#         timescale (str): The timescale of the forecast. One of:
+#             - sub-seasonal
+#             - seasonal
+#             - long-term
+#             - all
+#     """
+#     # Fetch the data from Salient
+#     loc = get_salient_loc(grid)
+#     var_name = {'tmp2m': 'temp', 'precip': 'precip'}[variable]
+
+#     # stride = {"sub-seasonal": "week", "seasonal": "month", "long-term": "year"}[timescale]
+#     # target_dates = generate_dates_in_between(start_time, end_time, "Wednesday", return_string=True)
+#     target_dates = get_dates(start_time, end_time, stride="day", return_string=True)
+#     # Fetch and load the data
+#     fcst = sk.forecast_timeseries(
+#         loc=loc,
+#         variable=var_name,
+#         field="vals",
+#         date=target_dates,
+#         timescale=timescale,
+#         model="blend",
+#         # reference_clim="30_yr",  # this is the climatology used by data_timeseries
+#         version="v8",
+#         verbose=verbose,
+#         force=False,  # use local data if already downloaded
+#         strict=False,  # There is missing data in 2020.  work around it.
+#     )
+
+#     filenames = fcst["file_name"].tolist()
+#     ds = xr.open_mfdataset(filenames,
+#                            concat_dim='forecast_date_weekly',
+#                            combine="nested",
+#                            parallel=True,
+#                            chunks={'lat': 292, 'lon': 316, 'lead_weekly': 5,
+#                                    'quantiles': 23, 'forecast_date_weekly': 3})
+
+#     # Drop down to the subset of dates that have unique forecasts
+#     ds = ds.drop_duplicates(dim='forecast_date_weekly', keep='first')
+
+#     # Rename and clean variables
+#     var_name = {'sub-seasonal': 'vals_weekly', 'seasonal': 'vals_monthly', 'long-term': 'vals_yearly'}[timescale]
+#     ds = ds.rename_vars(name_dict={var_name: variable})
+
+#     # ds = ds.compute()
+#     # os.remove(fcst)
+#     return ds
+
+
 @salient_auth
 @cacheable(data_type='array',
-           timeseries='forecast_date_weekly',
-           cache_args=['variable', 'grid', 'timescale'],
+           cache_args=['time', 'variable', 'grid', 'timescale'],
            chunking={"lat": 292, "lon": 396, "time": 500},
            auto_rechunk=False)
-def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
-                      timescale="sub-seasonal", verbose=False):
-    """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
+def single_salient_blend_raw(time, variable, grid="salient_africa0_25",
+                             timescale="sub-seasonal", verbose=False):
+    """Fetches ground truth data from Salient's SDK.
 
     Args:
         time (str): The date to fetch.
@@ -144,13 +205,13 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
 
     # stride = {"sub-seasonal": "week", "seasonal": "month", "long-term": "year"}[timescale]
     # target_dates = generate_dates_in_between(start_time, end_time, "Wednesday", return_string=True)
-    target_dates = get_dates(start_time, end_time, stride="day", return_string=True)
+    # target_dates = get_dates(start_time, end_time, stride="day", return_string=True)
     # Fetch and load the data
     fcst = sk.forecast_timeseries(
         loc=loc,
         variable=var_name,
         field="vals",
-        date=target_dates,
+        date=time,
         timescale=timescale,
         model="blend",
         # reference_clim="30_yr",  # this is the climatology used by data_timeseries
@@ -160,73 +221,80 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
         strict=False,  # There is missing data in 2020.  work around it.
     )
 
-    filenames = fcst["file_name"].tolist()
-    ds = xr.open_mfdataset(filenames,
-                           concat_dim='forecast_date_weekly',
-                           combine="nested",
-                           parallel=True,
-                           chunks={'lat': 292, 'lon': 316, 'lead_weekly': 5,
-                                   'quantiles': 23, 'forecast_date_weekly': 3})
+    ds = xr.open_dataset(fcst)
+
+    # Salient doesn't have a reforecast for this time
+    if np.datetime_as_string(ds.forecast_date_weekly.values, 'D') != time:
+        return None
+
+    # filenames = fcst["file_name"].tolist()
+    # ds = xr.open_mfdataset(filenames,
+    #                        concat_dim='forecast_date_weekly',
+    #                        combine="nested",
+    #                        parallel=True,
+    #                        chunks={'lat': 292, 'lon': 316, 'lead_weekly': 5,
+    #                                'quantiles': 23, 'forecast_date_weekly': 3})
 
     # Drop down to the subset of dates that have unique forecasts
-    ds = ds.drop_duplicates(dim='forecast_date_weekly', keep='first')
+    # ds = ds.drop_duplicates(dim='forecast_date_weekly', keep='first')
 
     # Rename and clean variables
     var_name = {'sub-seasonal': 'vals_weekly', 'seasonal': 'vals_monthly', 'long-term': 'vals_yearly'}[timescale]
     ds = ds.rename_vars(name_dict={var_name: variable})
 
-    # ds = ds.compute()
-    # os.remove(fcst)
+    ds = ds.compute()
+    os.remove(fcst)
     return ds
 
 
-# @dask_remote
+@dask_remote
 # @salient_auth
 # @cacheable(data_type='array',
-#            timeseries='time',
+#            timeseries='forecast_date_weekly',
 #            cache_args=['variable', 'grid', 'timescale'],
 #            chunking={"lat": 292, "lon": 396, "time": 500},
 #            auto_rechunk=False)
-# def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
-#                       timescale="sub-seasonal", verbose=False):
-#     """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
+def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
+                      timescale="sub-seasonal", verbose=False):
+    """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
 
-#     Args:
-#         start_time (str): The start date to fetch data for.
-#         end_time (str): The end date to fetch.
-#         variable (str): The weather variable to fetch.
-#         grid (str): The grid resolution to fetch the data at. One of:
-#             - salient_africa0_25: 0.25 degree African grid from Salient
-#         timescale (str): The timescale of the forecast. One of:
-#             - sub-seasonal
-#             - seasonal
-#             - long-term
-#             - all
-#     """
-#     # Read and combine all the data into an array
-#     target_dates = get_dates(start_time, end_time,
-#                              stride="day", return_string=True)
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        grid (str): The grid resolution to fetch the data at. One of:
+            - salient_africa0_25: 0.25 degree African grid from Salient
+        timescale (str): The timescale of the forecast. One of:
+            - sub-seasonal
+            - seasonal
+            - long-term
+            - all
+    """
+    # Read and combine all the data into an array
+    target_dates = get_dates(start_time, end_time,
+                             stride="day", return_string=True)
 
-#     # Get correct single function
-#     datasets = []
-#     for date in target_dates:
-#         ds = dask.delayed(single_salient_blend_raw)(
-#             date, variable, grid, timescale, recompute=True, force_overwrite=True,
-#             verbose=verbose, filepath_only=True)
-#         # ds = single_salient_blend_raw(
-#         # #     date, variable, grid, timescale, recompute=True, force_overwrite=True,
-#         #     verbose=verbose)
-#         datasets.append(ds)
-#     datasets = dask.compute(*datasets)
-#     data = [d for d in datasets if d is not None]
-#     if len(data) == 0:
-#         return None
+    # Get correct single function
+    datasets = []
+    for date in target_dates:
+        # ds = dask.delayed(single_salient_blend_raw)(
+        #     date, variable, grid, timescale, recompute=False, force_overwrite=True,
+        #     verbose=verbose, filepath_only=True)
+        ds = single_salient_blend_raw(
+            date, variable, grid, timescale, recompute=False, force_overwrite=True,
+            verbose=verbose, filepath_only=True)
+        datasets.append(ds)
+    datasets = dask.compute(*datasets)
+    data = [d for d in datasets if d is not None]
+    if len(data) == 0:
+        return None
 
-#     x = xr.open_mfdataset(data,
-#                           concat_dim='forecast_date_weekly',
-#                           combine="nested",
-#                           parallel=True,
-#                           chunks={'lat': 292, 'lon': 316, 'lead_weekly': 5,
-#                                   'quantiles': 23, 'forecast_date_weekly': 3})
+    x = xr.open_mfdataset(data,
+                          concat_dim='forecast_date_weekly',
+                          combine="nested",
+                          engine='zarr',
+                          parallel=True,
+                          chunks={'lat': 292, 'lon': 316, 'lead_weekly': 5,
+                                  'quantiles': 23, 'forecast_date_weekly': 3})
 
-#     return x
+    return x
