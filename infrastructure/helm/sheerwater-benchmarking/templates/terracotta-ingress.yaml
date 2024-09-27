@@ -10,7 +10,7 @@ metadata:
 spec:
   defaultBackend:
     service:
-      name: terracotta
+      name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
       port:
         number: 80
 ---

@@ -1,12 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: terracotta
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
   labels:
     app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
     release: {{ .Release.Name }}
-  annotations:
-    tailscale.com/expose: "true"
 spec:
   type: NodePort
   ports:
