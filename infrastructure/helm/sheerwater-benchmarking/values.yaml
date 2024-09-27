@@ -59,6 +59,9 @@ terracotta:
   sql_user: read
   sql_password: read_password
 
+  domain_name: domain.com
+  ip_name: gcloud-ip
+
   resources:
     requests:
       cpu: 250m

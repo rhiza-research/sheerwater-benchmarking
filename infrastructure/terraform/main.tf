@@ -216,6 +216,20 @@ resource "google_dns_record_set" "grafana_recordset" {
   ttl = 300
 }
 
+# Create a domain name and IP address
+resource "google_compute_global_address" "terracotta_address" {
+  name = "sheerwater-benchmarking-terracotta-address"
+  project = "rhiza-shared"
+}
+
+resource "google_dns_record_set" "terracotta_recordset" {
+  managed_zone = "sheerwater"
+  name = "terracotta.sheerwater.rhizaresearch.org."
+  type = "A"
+  rrdatas = [google_compute_global_address.terracotta_address.address]
+  ttl = 300
+}
+
 
 
 ################
@@ -245,6 +259,8 @@ locals {
     terracotta = {
       sql_user = "read"
       sql_password = "${random_password.postgres_read_password.result}"
+      domain_name = "${trimsuffix(google_dns_record_set.terracotta_recordset.name, ".")}"
+      ip_name = "${google_compute_global_address.terracotta_address.name}"
     }
   }
 }
