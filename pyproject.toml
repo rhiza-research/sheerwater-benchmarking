@@ -77,13 +77,14 @@ dependencies = [
     "scipy",
     "requests",
     "ecmwf-api-client",
-    "cdsapi>=0.7.3", # Required for the CDS API beta
+    "cdsapi>=0.7.3",
+    # Required for the CDS API beta
     "dateparser",
     "bokeh",
     "flox",
     "ruff",
     "pytest",
-    "salientsdk",
+    "salientsdk>=0.3.4",
     "scikit-learn",
 ]
 readme = "README.md"

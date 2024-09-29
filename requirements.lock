@@ -650,7 +650,7 @@ s3fs==2024.6.1
     # via sheerwater-benchmarking
 s3transfer==0.10.2
     # via boto3
-salientsdk==0.2.7
+salientsdk==0.3.4
     # via sheerwater-benchmarking
 scikit-learn==1.5.2
     # via sheerwater-benchmarking
