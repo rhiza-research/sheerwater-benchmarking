@@ -1,5 +1,4 @@
 """Pulls Salient Predictions S2S forecasts from the Salient API."""
-import os
 import dask
 import pandas as pd
 import dateparser
@@ -94,6 +93,7 @@ def salient_era5(start_time, end_time, variable, grid="salient_africa0_25",
         mask (str): The mask to apply to the data. One of:
             - lsm: Land-sea mask
             - None: No mask
+        verbose (bool): Whether to print verbose output.
     """
     # Get raw salient data
     ds = salient_era5_raw(start_time, end_time, variable, grid=grid, verbose=verbose)
@@ -132,7 +132,7 @@ def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
             - sub-seasonal
             - seasonal
             - long-term
-        verbose (bool): Whether to print verbose output. 
+        verbose (bool): Whether to print verbose output.
     """
     # Fetch data from Salient API
     start_time = f"{year}-01-01"
@@ -203,6 +203,7 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
             - seasonal
             - long-term
             - all
+        verbose (bool): Whether to print verbose output.
     """
     start_year = dateparser.parse(start_time).year
     end_year = dateparser.parse(end_time).year
