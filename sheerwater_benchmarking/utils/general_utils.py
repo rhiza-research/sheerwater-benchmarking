@@ -56,6 +56,7 @@ def generate_dates_in_between(start_time, end_time, date_frequency, return_strin
         date_frequency (str): The frequency of the dates.
             One of "daily", "weekly", a day of the week (e.g., "Monday"), or a combination of days
             separated by a slash (e.g., "Monday/Thursday").
+        return_string (bool): Whether to return the dates as strings or datetime objects.
     """
     start_date = datetime.strptime(start_time, DATETIME_FORMAT)
     end_date = datetime.strptime(end_time, DATETIME_FORMAT)
