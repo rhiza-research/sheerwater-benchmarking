@@ -73,7 +73,6 @@ def regrid(ds, output_grid, method='conservative'):
             - conservative
             - most_common
     """
-
     # Interpret the grid
     lons, lats, _ = get_grid(output_grid)
     ds_out = xr.Dataset(
