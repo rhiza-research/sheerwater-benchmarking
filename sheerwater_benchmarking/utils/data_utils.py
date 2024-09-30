@@ -74,7 +74,6 @@ def regrid(ds, output_grid, method='conservative', base="base180"):
             - conservative
             - most_common
     """
-
     # Interpret the grid
     ds_out = get_grid_ds(output_grid)
     regridder = getattr(ds.regrid, method)
