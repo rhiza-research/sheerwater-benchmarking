@@ -114,18 +114,17 @@ def salient_era5(start_time, end_time, variable, grid="salient_africa0_25",
     return ds
 
 
-@dask_remote
 @salient_auth
 @cacheable(data_type='array',
            cache_args=['year', 'variable', 'grid', 'timescale'],
-           chunking={"lat": 292, "lon": 396, "time": 500},
+           chunking={"lat": 292, "lon": 396, "forecast_date": 3, 'lead': 5, 'quantiles': 23},
            auto_rechunk=False)
 def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
-                           timescale="sub-seasonal", verbose=False):
-    """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
+                           timescale="sub-seasonal", verbose=True):
+    """Fetch a year of Salient data and cache.
 
     Args:
-        year (str, int): The year of data to fetch.
+        year (int, str): The year to fetch data for.
         variable (str): The weather variable to fetch.
         grid (str): The grid resolution to fetch the data at. One of:
             - salient_africa0_25: 0.25 degree African grid from Salient
@@ -133,18 +132,16 @@ def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
             - sub-seasonal
             - seasonal
             - long-term
-            - all
+        verbose (bool): Whether to print verbose output. 
     """
-    # Fetch the data from Salient
+    # Fetch data from Salient API
+    start_time = f"{year}-01-01"
+    end_time = f"{year}-12-31"
+    target_dates = get_dates(start_time, end_time, stride="day", return_string=True)
+
     loc = get_salient_loc(grid)
     var_name = {'tmp2m': 'temp', 'precip': 'precip'}[variable]
 
-    # TODO: could update this to specify some regular interval
-    start_time = f"{year}-01-01"
-    end_time = f"{year}-12-31"
-    # stride = {"sub-seasonal": "week", "seasonal": "month", "long-term": "year"}[timescale]
-    target_dates = get_dates(start_time, end_time, stride="day", return_string=True)
-    # Fetch and load the data
     fcst = sk.forecast_timeseries(
         loc=loc,
         variable=var_name,
@@ -154,28 +151,36 @@ def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
         model="blend",
         verbose=verbose,
         force=False,  # use local data if already downloaded
-        strict=False,  # There is missing data in 2020.  work around it.
+        strict=False,
     )
 
+    # Get locally downloaded file and load into xarray
     filenames = fcst["file_name"].tolist()
     filenames = [f for f in filenames if not pd.isnull(f)]
+
+    # Get variable renaming for Salient timescales
+    fcst_date, fcst_lead, \
+        fcst_vals, _ = {"sub-seasonal": ("forecast_date_weekly", "lead_weekly", "vals_weekly", "week"),
+                        "seasonal": ("forecast_date_monthly", "lead_monthly", "vals_monthly", "month"),
+                        "long-term": ("forecast_date_yearly", "lead_yearly", "vals_yearly", "year")
+                        }[timescale]
+
+    # Open locally downloaded netcdf files
     ds = xr.open_mfdataset(filenames,
-                           concat_dim='forecast_date_weekly',
+                           concat_dim=fcst_date,
+                           engine='netcdf4',
                            combine="nested",
                            parallel=True,
-                           chunks={'lat': 292, 'lon': 316, 'lead_weekly': 5,
-                                   'quantiles': 23, 'forecast_date_weekly': 3})
+                           chunks={'lat': 292, 'lon': 316, fcst_lead: 5,
+                                   'quantiles': 23, fcst_date: 3})
 
-    # Drop down to the subset of dates that have unique forecasts
-    ds = ds.drop_duplicates(dim='forecast_date_weekly', keep='first')
+    # Remove duplicated downloads from API
+    ds = ds.sel(forecast_date_weekly=~ds['forecast_date_weekly'].to_index().duplicated())
 
     # Rename and clean variables
-    var_name = {'sub-seasonal': 'vals_weekly', 'seasonal': 'vals_monthly', 'long-term': 'vals_yearly'}[timescale]
-    ds = ds.rename_vars(name_dict={var_name: variable})
+    ds = ds.rename_vars(name_dict={fcst_vals: variable})
+    ds = ds.rename({fcst_date: "forecast_date", fcst_lead: "lead"})
 
-    ds = ds.compute()
-    for f in filenames:
-        os.remove(f)
     return ds
 
 
@@ -184,7 +189,7 @@ def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
            cache_args=['variable', 'grid', 'timescale'],
            cache=False)
 def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
-                      timescale="sub-seasonal", verbose=False):
+                      timescale="sub-seasonal", verbose=True):
     """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
 
     Args:
@@ -202,9 +207,8 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
     start_year = dateparser.parse(start_time).year
     end_year = dateparser.parse(end_time).year
 
-    # Get correct single function
     datasets = []
-    for year in range(start_year, end_year+1):
+    for year in range(start_year, end_year + 1):
         # Can't use dask delayed here because it doesn't work with the Salient API
         ds = year_salient_blend_raw(year, variable, grid, timescale,
                                     verbose=verbose, filepath_only=True)
@@ -215,11 +219,11 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
         return None
 
     x = xr.open_mfdataset(data,
-                          concat_dim='forecast_date_weekly',
+                          concat_dim='forecast_date',
                           combine="nested",
                           engine='zarr',
                           parallel=True,
-                          chunks={'lat': 292, 'lon': 316, 'lead_weekly': 5,
-                                  'quantiles': 23, 'forecast_date_weekly': 3})
+                          chunks={'lat': 292, 'lon': 316, 'lead': 5,
+                                  'quantiles': 23, 'forecast_date': 3})
 
     return x
