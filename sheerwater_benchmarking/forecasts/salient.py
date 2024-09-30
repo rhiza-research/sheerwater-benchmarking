@@ -158,6 +158,10 @@ def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
     filenames = fcst["file_name"].tolist()
     filenames = [f for f in filenames if not pd.isnull(f)]
 
+    # If no non-null files were downloaded, return None
+    if len(filenames) == 0:
+        return None
+
     # Get variable renaming for Salient timescales
     fcst_date, fcst_lead, \
         fcst_vals, _ = {"sub-seasonal": ("forecast_date_weekly", "lead_weekly", "vals_weekly", "week"),
