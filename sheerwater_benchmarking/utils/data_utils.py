@@ -1,6 +1,7 @@
 """Data utility functions for all parts of the data pipeline."""
 import numpy as np
 import xarray as xr
+import xarray_regrid # noqa: F401
 
 from .general_utils import get_grid, base360_to_base180, base180_to_base360, is_wrapped, check_bases
 
@@ -59,7 +60,34 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
     return ds_agg
 
 
-def regrid(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon'):
+def regrid(ds, output_grid, method='conservative'):
+    """Regrid a dataset to a new grid.
+
+    Args:
+        ds (xr.Dataset): Dataset to regrid.
+        output_grid (str): The output grid resolution. One of valid named grids.
+        method (str): The regridding method. One of:
+            - linear
+            - nearest
+            - cubic
+            - conservative
+            - most_common
+    """
+
+    # Interpret the grid
+    lons, lats, _ = get_grid(output_grid)
+    ds_out = xr.Dataset(
+        {
+            "lat": (["lat"], lats, {"units": "degrees_north"}),
+            "lon": (["lon"], lons, {"units": "degrees_east"}),
+        })
+
+    regridder = getattr(ds.regrid, method)
+    ds = regridder(ds_out)
+    return ds
+
+
+def regrid_xesmf(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon'):
     """Regrid a dataset to a new grid.
 
     Args:

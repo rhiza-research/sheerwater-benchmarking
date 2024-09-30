@@ -170,6 +170,7 @@ filelock==3.15.4
     # via coiled
 flox==0.9.8
     # via sheerwater-benchmarking
+    # via xarray-regrid
 fonttools==4.53.1
     # via matplotlib
 fqdn==1.5.1
@@ -444,6 +445,7 @@ numpy==1.26.4
     # via sheerwater-benchmarking
     # via snuggs
     # via xarray
+    # via xarray-regrid
     # via zarr
 numpy-groupies==0.11.1
     # via flox
@@ -660,6 +662,7 @@ scipy==1.14.0
     # via salientsdk
     # via scikit-learn
     # via sheerwater-benchmarking
+    # via xarray-regrid
 send2trash==1.8.3
     # via jupyter-server
 setuptools==71.1.0
@@ -773,6 +776,9 @@ wsproto==1.2.0
 xarray==2024.6.0
     # via rioxarray
     # via salientsdk
+    # via sheerwater-benchmarking
+    # via xarray-regrid
+xarray-regrid==0.4.0
     # via sheerwater-benchmarking
 xyzservices==2024.6.0
     # via bokeh

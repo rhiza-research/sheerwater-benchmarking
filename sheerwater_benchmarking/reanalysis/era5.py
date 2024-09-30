@@ -4,11 +4,13 @@ import cdsapi
 import os
 import xarray as xr
 import dateparser
+import numpy as np
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            cdsapi_secret,
                                            get_grid, get_global_grid, get_variable,
-                                           apply_mask, roll_and_agg, lon_base_change, get_globe_slice)
+                                           apply_mask, roll_and_agg, lon_base_change, get_globe_slice,
+                                           regrid)
 from sheerwater_benchmarking.masks import land_sea_mask
 
 
@@ -104,7 +106,11 @@ def era5_cds(start_time, end_time, variable, grid="global1_5"):
         datasets.append(ds)
 
     ds = dask.compute(*datasets)
-    ds = xr.open_mfdataset(ds, engine='zarr')
+    ds = xr.open_mfdataset(ds,
+                           engine='zarr',
+                           parallel=True,
+                           chunks={'lat': 121, 'lon': 240, 'time': 1000}
+                           )
     return ds
 
 
@@ -123,13 +129,63 @@ def era5(start_time, end_time, variable, grid="global0_25"):  # noqa ARG001
         # Select the right variable
         var = get_variable(variable, 'era5')
         ds = ds[var].to_dataset()
-    elif "1_5" in grid:
-        # For now, pull from the cached CDS data
-        ds = era5_cds(start_time, end_time, variable, grid=grid)
+    # elif "1_5" in grid and False:
+    #     # For now, pull from the cached CDS data
+    #     ds = era5_cds(start_time, end_time, variable, grid=grid)
     else:
-        # print(f"Regridding Google ARCO ERA5 from global0_25 to {grid}")
-        # ds = regrid(ds, grid)
-        raise NotImplementedError("Only 0.25 and 1.5 degree grids are implemented.")
+        raise NotImplementedError("Only ERA5 native 0.25 degree grid is implemented.")
+
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'grid'],
+           chunking={"lat": 721, "lon": 1440, "time": 30},
+           auto_rechunk=False)
+def era5_daily(start_time, end_time, variable, grid="global1_5"):
+    """Aggregates the hourly ERA5 data into daily data.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+            - global0_25: 0.25 degree global grid
+    """
+    if grid != 'global0_25':
+        # Recursively call the function with the global1_5 grid
+        ds = era5_daily(start_time, end_time, variable, grid='global0_25')
+
+        # Regrid the data to the desired grid
+        ds = regrid(ds, grid)
+
+        # Manually reset the chunking for this smaller grid
+        # TODO: implement this via a better API
+        if '1_5' in grid:
+            era5_daily.chunking = {"lat": 121, "lon": 240, "time": 1000}
+    else:
+        # Read and combine all the data into an array
+        ds = era5(start_time, end_time, variable, grid='global0_25')
+
+        # Convert hourly data to daily data and then aggregate
+        if 'lat' not in ds.coords:
+            ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+        # Convert local dataset naming and units
+        var = get_variable(variable, 'era5')
+        ds = ds.rename_vars(name_dict={var: variable})
+
+        if variable == 'tmp2m':
+            if ds[variable].units == 'K':
+                ds[variable] = ds[variable] - 273.15
+            ds = ds.resample(time='D').mean(dim='time')
+        elif variable == 'precip':
+            if ds[variable].units == 'm':
+                ds[variable] = ds[variable] * 1000.0
+            ds = ds.resample(time='D').sum(dim='time')
+            ds = np.maximum(ds, 0)
 
     return ds
 
@@ -138,7 +194,7 @@ def era5(start_time, end_time, variable, grid="global0_25"):  # noqa ARG001
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'grid', 'agg'],
-           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunking={"lat": 721, "lon": 1441, "time": 30},
            auto_rechunk=False)
 def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
     """Aggregates the hourly ERA5 data into daily data and rolls.
@@ -149,27 +205,18 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
         variable (str): The weather variable to fetch.
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
+            - global0_25: 0.25 degree global grid
         agg (str): The aggregation period to use, in days
     """
     # Read and combine all the data into an array
-    ds = era5(start_time, end_time, variable, grid=grid)
+    ds = era5_daily(start_time, end_time, variable, grid=grid)
+    agg_fn = "sum" if variable == "precip" else "mean"
+    ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
 
-    # Convert hourly data to daily data and then aggregate
-    ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
-    # Convert local dataset naming and units
-    var = get_variable(variable, 'era5')
-    ds = ds.rename_vars(name_dict={var: variable})
-
-    if variable == 'tmp2m':
-        if ds[variable].units == 'K':
-            ds[variable] = ds[variable] - 273.15
-        ds = ds.resample(time='D').mean(dim='time')
-        ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn="mean")
-    elif variable == 'precip':
-        if ds[variable].units == 'm':
-            ds[variable] = ds[variable] * 1000.0
-        ds = ds.resample(time='D').sum(dim='time')
-        ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn="sum")
+    # Manually reset the chunking for this smaller grid
+    # TODO: implement this via a better API
+    if '1_5' in grid:
+        era5_rolled.chunking = {"lat": 121, "lon": 240, "time": 1000}
     return ds
 
 
@@ -177,7 +224,7 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'grid', 'agg', 'mask'],
-           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunking={"lat": 721, "lon": 1441, "time": 30},
            auto_rechunk=False)
 def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm"):
     """Fetches ground truth data from ERA5 and applies aggregation and masking .
@@ -212,5 +259,10 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
 
     ds = apply_mask(ds, mask_ds, variable)
     ds = get_globe_slice(ds, lons, lats)
+
+    # Manually reset the chunking for this smaller grid
+    # TODO: implement this via a better API
+    if '1_5' in grid:
+        era5_agg.chunking = {"lat": 121, "lon": 240, "time": 1000}
 
     return ds
