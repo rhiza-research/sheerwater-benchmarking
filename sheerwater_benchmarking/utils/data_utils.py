@@ -73,9 +73,12 @@ def regrid(ds, output_grid, method='conservative', base="base180"):
             - cubic
             - conservative
             - most_common
+        base (str): The base of the longitudes. One of:
+            - base180
+            - base360
     """
     # Interpret the grid
-    ds_out = get_grid_ds(output_grid)
+    ds_out = get_grid_ds(output_grid, base=base)
     regridder = getattr(ds.regrid, method)
     ds = regridder(ds_out)
     return ds

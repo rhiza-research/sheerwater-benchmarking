@@ -1,7 +1,5 @@
 """General utility functions for all parts of the data pipeline."""
 import numpy as np
-import geopandas as gpd
-import rioxarray  # Needed for spatial operations in xarray
 import gcsfs
 import xarray as xr
 from datetime import datetime, timedelta
