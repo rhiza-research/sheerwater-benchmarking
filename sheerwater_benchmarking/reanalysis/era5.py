@@ -38,7 +38,7 @@ def single_era5(year, variable, grid="global1_5"):
     months = ["01", "02", "03", "04", "05", "06",
               "07", "08", "09", "10", "11", "12"]
 
-    _, _, grid_size = get_grid(grid)
+    _, _, grid_size, _ = get_grid(grid)
 
     url, key = cdsapi_secret()
     c = cdsapi.Client(url=url, key=key)
@@ -159,8 +159,8 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
         # Recursively call the function with the global1_5 grid
         ds = era5_daily(start_time, end_time, variable, grid='global0_25')
 
-        # Regrid the data to the desired grid
-        ds = regrid(ds, grid)
+        # Regrid the data to the desired grid, on base360 longitudes
+        ds = regrid(ds, grid, base="base360")
 
         # Manually reset the chunking for this smaller grid
         # TODO: implement this via a better API
@@ -240,7 +240,7 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
             - lsm: Land-sea mask
             - None: No mask
     """
-    lons, lats, _ = get_grid(grid)
+    lons, lats, _, _ = get_grid(grid)
 
     # Get ERA5 on the corresponding global grid
     global_grid = get_global_grid(grid)

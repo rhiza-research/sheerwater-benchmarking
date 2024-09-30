@@ -1,6 +1,7 @@
 """General utility functions for all parts of the data pipeline."""
 import numpy as np
-
+import geopandas as gpd
+import rioxarray  # Needed for spatial operations in xarray
 import gcsfs
 import xarray as xr
 from datetime import datetime, timedelta
@@ -8,6 +9,12 @@ from dateutil.rrule import rrule, DAILY, MONTHLY, WEEKLY, YEARLY
 
 
 DATETIME_FORMAT = "%Y-%m-%d"
+
+
+def load_object(filepath):
+    """Load a file from cloud bucket."""
+    fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+    return fs.open(filepath)
 
 
 def load_netcdf(filepath):
@@ -161,7 +168,18 @@ def get_variable(variable_name, variable_type='era5'):
     raise ValueError(f"Variable {variable_name} not found")
 
 
-def get_grid(region_id, base="base180"):
+def get_grid_ds(region_id, base="base180"):
+    """Get a dataset equal to ones for a given region."""
+    lons, lats, _, _ = get_grid(region_id, base=base)
+    data = np.ones((len(lons), len(lats)))
+    ds = xr.Dataset(
+        {"mask": (['lon', 'lat'], data)},
+        coords={"lon": lons, "lat": lats}
+    )
+    return ds
+
+
+def get_grid(region_id, base="base180", sorted=True):
     """Get the longitudes, latitudes and grid size for a named region.
 
     Args:
@@ -177,42 +195,48 @@ def get_grid(region_id, base="base180"):
         base (str): The base grid to use. One of:
             - base360: 360 degree base longitude grid
             - base180: 180 degree base longitude grid
+        sorted (bool): Whether to sort the longitudes before returning.
+            Invalid for wrapped longitudes.
     """
     if region_id == "global1_5":
         grid_size = 1.5
         lons = np.arange(-180, 180, 1.5)
         lats = np.arange(-90, 90+grid_size, 1.5)
+        region = 'global'
     elif region_id == "global0_25":
         grid_size = 0.25
         lons = np.arange(-180, 180, 0.25)
         lats = np.arange(-90, 90+grid_size, 0.25)
-    elif region_id == "salient_common":
-        lons = np.arange(-25.875, 73.0, 0.25)
-        lats = np.arange(-34.875, 38.0, 0.25)
-        grid_size = 0.25
+        region = 'global'
     elif region_id == "africa1_5":
         grid_size = 1.5
         lons = np.arange(-26.0, 73.0, 1.5)
         lats = np.arange(-35.0, 38.0, 1.5)
+        region = 'africa'
     elif region_id == "africa0_25":
         grid_size = 0.25
         lons = np.arange(-26.0, 73.0, 0.25)
         lats = np.arange(-35.0, 38.0, 0.25)
+        region = 'africa'
     elif region_id == "salient_africa0_25":
         grid_size = 0.25
         lons = np.arange(-25.875, 72.125, 0.25)
         lats = np.arange(-34.875, 38.125, 0.25)
+        region = None
     elif region_id == "salient_global0_25":
         grid_size = 0.25
         offset = 0.125
         lons = np.arange(-180.0+offset, 180.0, 0.25)
         lats = np.arange(-90.0+offset, 90.0, 0.25)
+        region = None
     else:
         raise NotImplementedError(
             f"Grid {region_id} has not been implemented.")
     if base == "base360":
         lons = base180_to_base360(lons)
-    return lons, lats, grid_size
+        if sorted:
+            lons = np.sort(lons)
+    return lons, lats, grid_size, region
 
 
 def get_global_grid(region_id):

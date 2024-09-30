@@ -8,10 +8,12 @@ import numpy as np
 import xarray as xr
 import salientsdk as sk
 
+from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            salient_auth,
                                            get_grid, get_dates,
-                                           roll_and_agg, apply_mask)
+                                           roll_and_agg, apply_mask,
+                                           regrid)
 
 
 @salient_auth
@@ -21,7 +23,7 @@ def get_salient_loc(grid):
         raise NotImplementedError("Only the Salient African 0.25 grid is supported.")
 
     # Upload location shapefile to Salient backend
-    lons, lats, _ = get_grid(grid)
+    lons, lats, _, _ = get_grid(grid)
     coords = [(lons[0], lats[0]), (lons[-1], lats[0]), (lons[-1], lats[-1]), (lons[0], lats[-1])]
     loc = sk.Location(shapefile=sk.upload_shapefile(
         coords=coords,
@@ -188,8 +190,9 @@ def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
     return ds
 
 
+@dask_remote
 @cacheable(data_type='array',
-           timeseries='forecast_date_weekly',
+           timeseries='forecast_date',
            cache_args=['variable', 'grid', 'timescale'],
            cache=False)
 def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
@@ -232,3 +235,30 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
                                   'quantiles': 23, 'forecast_date': 3})
 
     return x
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='forecast_date',
+           cache_args=['variable', 'grid', 'timescale', 'mask'])
+def salient_blend(start_time, end_time, variable, grid="africa0_25",
+                  timescale="sub-seasonal", mask='lsm'):
+    """Processed Salient forecast files."""
+    if grid == 'salient_africa0_25' and mask is not None:
+        raise NotImplementedError('Masking not implemented for Salient native grid.')
+
+    ds = salient_blend_raw(start_time, end_time, variable, 'salient_africa0_25', timescale)
+
+    if grid != "salient_africa0_25":
+        ds = regrid(ds, grid)
+
+    if mask == "lsm":
+        # Select variables and apply mask
+        mask_ds = land_sea_mask(grid=grid, base="base180").compute()
+    elif mask is None:
+        mask_ds = None
+    else:
+        raise NotImplementedError("Only land-sea or None mask is implemented.")
+
+    ds = apply_mask(ds, mask_ds, variable)
+    return ds

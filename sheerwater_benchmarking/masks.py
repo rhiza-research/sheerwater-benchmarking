@@ -1,10 +1,12 @@
 """Mask data objects."""
 import os
 import cdsapi
+import geopandas as gpd
 import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid, get_global_grid,
-                                           lon_base_change, get_globe_slice)
+                                           lon_base_change, get_globe_slice, get_grid_ds, load_object,
+                                           apply_mask)
 
 
 @cacheable(data_type='array', cache_args=['grid'])
@@ -15,7 +17,7 @@ def land_sea_mask_global(grid="global1_5"):
         grid (str): The grid to fetch the data at.  Note that only
             the resolution of the specified grid is used.
     """
-    lons, lats, grid_size = get_grid(grid, base="base360")
+    lons, lats, grid_size, _ = get_grid(grid, base="base360")
 
     # Get data from the CDS API
     times = ['00:00']
@@ -81,8 +83,31 @@ def land_sea_mask(grid="global1_5"):
     ds = land_sea_mask_global(grid=get_global_grid(grid))
 
     # Select relevant subset
-    lons, lats, _ = get_grid(grid)
+    lons, lats, _, region = get_grid(grid)
     ds = get_globe_slice(ds, lons, lats, base='base180')
+
+    if region == 'africa':
+        ds = clip_africa(ds)
+    return ds
+
+
+def clip_africa(ds):
+    """Get a mask of African countries.
+
+    Args:
+        grid (str): The grid resolution to fetch the data at. 
+    """
+    # Get the rectangle boundary of Africa
+    ds = ds.rio.write_crs("EPSG:4326")
+    ds = ds.rio.set_spatial_dims('lon', 'lat')
+
+    # Get the countries of Africa shapefile
+    filepath = 'gs://sheerwater-datalake/africa.geojson'
+    gdf = gpd.read_file(load_object(filepath))
+
+    # Clip the grid to the boundary of Africa
+    ds = ds.rio.clip(gdf.geometry, gdf.crs, drop=False)
+
     return ds
 
 

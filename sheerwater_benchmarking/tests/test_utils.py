@@ -9,7 +9,7 @@ def test_get_grid():
     """Test the get_grid function."""
     grids = ["global1_5", "global0_5", "global0_25", "us1_0", "us1_5", "salient_common", "africa1_5", "africa0_25"]
     for grid in grids:
-        lons, lats, size = get_grid(grid)
+        lons, lats, size, _ = get_grid(grid)
         diffs_lon = np.diff(lons)
         diffs_lat = np.diff(lats)
         # We expect one jump -360 jump on the longitude at the boundary,

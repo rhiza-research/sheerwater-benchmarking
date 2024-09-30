@@ -1,9 +1,10 @@
 """Data utility functions for all parts of the data pipeline."""
 import numpy as np
 import xarray as xr
-import xarray_regrid # noqa: F401
+import xarray_regrid  # noqa: F401
 
-from .general_utils import get_grid, base360_to_base180, base180_to_base360, is_wrapped, check_bases
+from .general_utils import (get_grid, get_grid_ds,
+                            base360_to_base180, base180_to_base360, is_wrapped, check_bases)
 
 
 def apply_mask(ds, mask, var, val=0.0):
@@ -60,7 +61,7 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
     return ds_agg
 
 
-def regrid(ds, output_grid, method='conservative'):
+def regrid(ds, output_grid, method='conservative', base="base180"):
     """Regrid a dataset to a new grid.
 
     Args:
@@ -75,13 +76,7 @@ def regrid(ds, output_grid, method='conservative'):
     """
 
     # Interpret the grid
-    lons, lats, _ = get_grid(output_grid)
-    ds_out = xr.Dataset(
-        {
-            "lat": (["lat"], lats, {"units": "degrees_north"}),
-            "lon": (["lon"], lons, {"units": "degrees_east"}),
-        })
-
+    ds_out = get_grid_ds(output_grid)
     regridder = getattr(ds.regrid, method)
     ds = regridder(ds_out)
     return ds
@@ -111,7 +106,7 @@ def regrid_xesmf(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon
             "Failed to import XESMF. Try running in coiled instead: 'rye run coiled-run ...")
 
     # Interpret the grid
-    lons, lats, _ = get_grid(output_grid)
+    lons, lats, _, _ = get_grid(output_grid)
 
     ds_out = xr.Dataset(
         {
