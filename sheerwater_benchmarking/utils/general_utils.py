@@ -1,5 +1,6 @@
 """General utility functions for all parts of the data pipeline."""
 import numpy as np
+import dateparser
 import gcsfs
 import xarray as xr
 from datetime import datetime, timedelta
@@ -42,29 +43,19 @@ def load_zarr(filename):
     return ds
 
 
-def string_to_dt(string):
-    """Transforms string to datetime."""
-    return datetime.strptime(string, DATETIME_FORMAT)
-
-
-def dt_to_string(dt):
-    """Transforms datetime to string."""
-    return datetime.strftime(dt, DATETIME_FORMAT)
-
-
 def generate_dates_in_between(start_time, end_time, date_frequency, return_string=True):
     """Generates dates between two dates based on the frequency.
 
     Args:
-        start_time (str): The start date.
-        end_time (str): The end date.
+        start_time (str, datetime): The start date.
+        end_time (str, datetime): The end date.
         date_frequency (str): The frequency of the dates.
             One of "daily", "weekly", a day of the week (e.g., "Monday"), or a combination of days
             separated by a slash (e.g., "Monday/Thursday").
         return_string (bool): Whether to return the dates as strings or datetime objects.
     """
-    start_date = datetime.strptime(start_time, DATETIME_FORMAT)
-    end_date = datetime.strptime(end_time, DATETIME_FORMAT)
+    start_date = dateparser.parse(start_time)
+    end_date = dateparser.parse(end_time)
 
     if date_frequency not in ["daily", "weekly"]:
         dates = [
@@ -91,18 +82,18 @@ def is_valid_forecast_date(model, forecast_type, forecast_date):
     """Checks if the forecast date is valid for the given model and forecast type."""
     valid_forecast_dates = {
         "reforecast": {
-            "ecmwf": (string_to_dt("2015-05-14"), datetime.today(), "Monday/Thursday"),
-            "salient": (string_to_dt("2022-01-01"), datetime.today(), "Wednesday"),
+            "ecmwf": (dateparser.parse("2015-05-14"), datetime.today(), "Monday/Thursday"),
+            "salient": (dateparser.parse("2022-01-01"), datetime.today(), "Wednesday"),
         },
         "forecast": {
-            "ecmwf": (string_to_dt("2015-05-14"), datetime.today(), "Monday/Thursday"),
-            "salient": (string_to_dt("2022-01-01"), datetime.today(), "Wednesday"),
+            "ecmwf": (dateparser.parse("2015-05-14"), datetime.today(), "Monday/Thursday"),
+            "salient": (dateparser.parse("2022-01-01"), datetime.today(), "Wednesday"),
         },
     }
     assert isinstance(forecast_date, datetime)
     try:
         return forecast_date in generate_dates_in_between(
-            *valid_forecast_dates[forecast_type][model])
+            *valid_forecast_dates[forecast_type][model], return_string=False)
     except KeyError:
         return False
 
@@ -110,8 +101,8 @@ def is_valid_forecast_date(model, forecast_type, forecast_date):
 def get_dates(start_time, end_time, stride="day", return_string=False):
     """Outputs the list of dates corresponding to input date string."""
     # Input is of the form '20170101-20180130'
-    start_date = datetime.strptime(start_time, DATETIME_FORMAT)
-    end_date = datetime.strptime(end_time, DATETIME_FORMAT)
+    start_date = dateparser.parse(start_time)
+    end_date = dateparser.parse(end_time)
 
     if stride == "day":
         stride = DAILY

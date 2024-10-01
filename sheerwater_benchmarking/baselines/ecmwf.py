@@ -74,7 +74,7 @@ def single_iri_ecmwf(time, variable, forecast_type,
     Args:
         time (str): The date to fetch data for (by day).
         variable (str): The weather variable to fetch.
-        forecast_type (str): The type of forecast to fetch. One of "forecast" or "hindcast".
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
         run_type (str): The type of run to fetch. One of:
             - average: to download the averaged of the perturbed runs
             - control: to download the control forecast
@@ -260,7 +260,7 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
-        forecast_type (str): The type of forecast to fetch. One of "forecast" or "hindcast".
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
         run_type (str): The type of run to fetch. One of:
             - average: to download the averaged of the perturbed runs
             - control: to download the control forecast
@@ -455,7 +455,9 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
 def ecmwf_agg_flat(start_time, end_time, variable, forecast_type,
                    grid="global1_5", agg=14, mask="lsm", verbose=True):
 
-    ds = ecmwf_agg("2015-05-01", "2024-01-01", variable, forecast_type,
+    # Get the full ECMWF set of model issuance dates
+    ds = ecmwf_agg(None, None, variable=variable,
+                   forecast_type=forecast_type,
                    grid=grid, agg=agg, mask=mask, verbose=verbose)
 
     if forecast_type == "forecast":
