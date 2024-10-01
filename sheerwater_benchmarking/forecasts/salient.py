@@ -241,8 +241,8 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
 @cacheable(data_type='array',
            timeseries='forecast_date',
            cache_args=['variable', 'grid', 'timescale', 'mask'])
-def salient_blend(start_time, end_time, variable, grid="africa0_25",
-                  timescale="sub-seasonal", mask='lsm'):
+def salient_blend_proc(start_time, end_time, variable, grid="africa0_25",
+                       timescale="sub-seasonal", mask='lsm'):
     """Processed Salient forecast files."""
     if grid == 'salient_africa0_25' and mask is not None:
         raise NotImplementedError('Masking not implemented for Salient native grid.')
@@ -261,4 +261,43 @@ def salient_blend(start_time, end_time, variable, grid="africa0_25",
         raise NotImplementedError("Only land-sea or None mask is implemented.")
 
     ds = apply_mask(ds, mask_ds, variable)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'dorp', 'grid', 'mask'])
+def salient_blend(start_time, end_time, variable, lead, dorp='d',
+                  grid='africa0_25', mask='lsm'):
+    """Standard format forecast data for Salient."""
+    lead_params = {
+        "week1": ("sub-seasonal", 1),
+        "week2": ("sub-seasonal", 2),
+        "week3": ("sub-seasonal", 3),
+        "week4": ("sub-seasonal", 4),
+        "week5": ("sub-seasonal", 5),
+        "month1": ("seasonal", 1),
+        "month2": ("seasonal", 2),
+        "month3": ("seasonal", 3),
+        "quarter1": ("sub-seasonal", 1),
+        "quarter2": ("sub-seasonal", 2),
+        "quarter3": ("sub-seasonal", 3),
+        "quarter4": ("sub-seasonal", 4),
+    }
+    timescale, lead_id = lead_params.get(lead, (None, None))
+    if timescale is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
+
+    ds = salient_blend_proc(start_time, end_time, variable, grid=grid,
+                            timescale=timescale, mask=mask)
+    ds = ds.sel(lead=lead_id)
+    if dorp == 'd':
+        # Get the median forecast
+        ds = ds.sel(quantiles=0.5)
+        ds['quantiles'] = -1
+    ds = ds.rename({'quantiles': 'member'})
+    ds = ds.rename({'forecast_date': 'time'})
+
     return ds

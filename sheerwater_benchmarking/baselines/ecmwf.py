@@ -441,3 +441,35 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
     lons, lats, _, region = get_grid(grid)
     ds = get_globe_slice(ds, lons, lats)
     return ds
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'grid', 'mask'])
+def forecast_ecmwf(start_time, end_time, variable, lead,
+                           grid="africa0_25", mask='lsm'):
+    """Standard format forecast data for Salient."""
+    lead_params = {
+        "week1": ("sub-seasonal", 1),
+        "week2": ("sub-seasonal", 2),
+        "week3": ("sub-seasonal", 3),
+        "week4": ("sub-seasonal", 4),
+        "week5": ("sub-seasonal", 5),
+        "month1": ("seasonal", 1),
+        "month2": ("seasonal", 2),
+        "month3": ("seasonal", 3),
+        "quarter1": ("sub-seasonal", 1),
+        "quarter2": ("sub-seasonal", 2),
+        "quarter3": ("sub-seasonal", 3),
+        "quarter4": ("sub-seasonal", 4),
+    }
+    timescale, lead_id = lead_params.get(lead, (None, None))
+    if timescale is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
+
+    ds = salient_blend(start_time, end_time, variable, grid=grid, timescale=timescale, mask=mask)
+    ds = ds.sel(lead=lead_id)
+    ds = ds.rename({'forecast_date': 'time'})
+
+    return ds
