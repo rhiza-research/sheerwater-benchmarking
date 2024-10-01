@@ -2,10 +2,11 @@
 import dask
 import sys
 import pandas as pd
+import numpy as np
 from datetime import datetime
+import dateparser
 import os
 import xarray as xr
-import dateparser
 import requests
 import ssl
 from urllib3 import poolmanager
@@ -442,34 +443,114 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
     ds = get_globe_slice(ds, lons, lats)
     return ds
 
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'forecast_type', 'grid', 'agg', 'mask'],
+           chunking={"lat": 141, "lon": 240, "lead_time": 1, 'time': 100},
+           cache_disable_if={'forecast_type': 'forecast'},
+           cache=False,
+           auto_rechunk=False)
+def ecmwf_agg_flat(start_time, end_time, variable, forecast_type,
+                   grid="global1_5", agg=14, mask="lsm", verbose=True):
+
+    ds = ecmwf_agg("2015-05-01", "2024-01-01", variable, forecast_type,
+                   grid=grid, agg=agg, mask=mask, verbose=verbose)
+
+    if forecast_type == "forecast":
+        return ds.rename({'start_date': 'time'})
+
+    # Flatten the model_issuance_date and start_year dimensions
+    ds = ds.stack(time=['model_issuance_date', 'start_year'])
+
+    # Convert the MultiIndex into a single index
+    parsed_vals = [dateparser.parse(f"{start_year}-{mid.month}-{mid.day}")
+                   for mid, start_year in ds.time.values]
+    ds = ds.drop_vars(['time', 'model_issuance_date', 'start_year'])
+    ds = ds.assign_coords(time=parsed_vals)
+
+    # Keep the most recent ECMWF reforecast
+    ds = ds.drop_duplicates(dim="time", keep="last")
+    ds = ds.sortby("time")
+
+    ds = ds.dropna(dim="time", how="all")
+
+    return ds
+
+
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
            cache=False,
-           cache_args=['variable', 'lead', 'grid', 'mask'])
-def forecast_ecmwf(start_time, end_time, variable, lead,
-                           grid="africa0_25", mask='lsm'):
-    """Standard format forecast data for Salient."""
+           cache_args=['variable', 'lead', 'dorp', 'grid', 'mask'])
+def forecast_ecmwf(start_time, end_time, variable, lead, dorp='d',
+                   grid='africa0_25', mask='lsm'):
+    """Standard format forecast data for ECMWF forecasts."""
     lead_params = {
-        "week1": ("sub-seasonal", 1),
-        "week2": ("sub-seasonal", 2),
-        "week3": ("sub-seasonal", 3),
-        "week4": ("sub-seasonal", 4),
-        "week5": ("sub-seasonal", 5),
-        "month1": ("seasonal", 1),
-        "month2": ("seasonal", 2),
-        "month3": ("seasonal", 3),
-        "quarter1": ("sub-seasonal", 1),
-        "quarter2": ("sub-seasonal", 2),
-        "quarter3": ("sub-seasonal", 3),
-        "quarter4": ("sub-seasonal", 4),
+        "week1": (7, 0),
+        "week2": (7, 7),
+        "week3": (7, 21),
+        "week4": (7, 28),
+        "week5": (7, 35),
+        "week6": (7, 42),
+        "weeks12": (14, 0),
+        "weeks23": (14, 7),
+        "weeks34": (14, 14),
+        "weeks45": (14, 21),
+        "weeks56": (14, 28),
     }
-    timescale, lead_id = lead_params.get(lead, (None, None))
-    if timescale is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
+    agg, lead_id = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
 
-    ds = salient_blend(start_time, end_time, variable, grid=grid, timescale=timescale, mask=mask)
-    ds = ds.sel(lead=lead_id)
-    ds = ds.rename({'forecast_date': 'time'})
+    ds = ecmwf_agg(start_time, end_time, variable, forecast_type="forecast",
+                   grid=grid, agg=agg, mask=mask)
+    # Leads are 12 hours offset from the forecast date
+    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
+    ds = ds.rename({'start_date': 'time'})
+    if dorp == 'd':
+        ds = ds.assign_coords(member=-1)
+    else:
+        raise NotImplementedError(f"Only deterministic forecasts are available for ECMWF.")
+
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'dorp', 'grid', 'mask'])
+def reforecast_ecmwf(start_time, end_time, variable, lead, dorp='d',
+                     grid='africa0_25', mask='lsm'):
+    """Standard format forecast data for ECMWF forecasts."""
+    lead_params = {
+        "week1": (7, 0),
+        "week2": (7, 7),
+        "week3": (7, 21),
+        "week4": (7, 28),
+        "week5": (7, 35),
+        "week6": (7, 42),
+        "weeks12": (14, 0),
+        "weeks23": (14, 7),
+        "weeks34": (14, 14),
+        "weeks45": (14, 21),
+        "weeks56": (14, 28),
+    }
+    agg, lead_id = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
+
+    ds = ecmwf_agg(start_time, end_time, variable, forecast_type="reforecast",
+                   grid=grid, agg=agg, mask=mask)
+
+    # Leads are 12 hours offset from the forecast date
+    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
+    ds = ds.rename({'start_date': 'time'})
+    if dorp == 'd':
+        ds = ds.assign_coords(member=-1)
+    else:
+        raise NotImplementedError(f"Only deterministic forecasts are available for ECMWF.")
 
     return ds
