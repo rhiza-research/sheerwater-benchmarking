@@ -48,7 +48,7 @@ authors = [
     { name = "Joshua Adkins", email = "josh@nline.io" }
 ]
 dependencies = [
-    "dask==2024.7.0",
+    "dask",
     "dask[complete]",
     "click",
     "coiled",
@@ -86,8 +86,8 @@ dependencies = [
     "pytest",
     "salientsdk>=0.3.4",
     "scikit-learn",
-    "xarray-regrid>=0.4.0",
-    "weatherbench2 @ file:///Users/avocet/content/sheerwater-benchmarking/../weatherbench2-fork",
+    "xarray-regrid",
+    "weatherbench2 @ git+https://github.com/geflaspohler/weatherbench2",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
