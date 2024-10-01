@@ -63,9 +63,9 @@ def download_url(url, timeout=600, retry=3, cookies={}):
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['time', 'variable', 'forecast_type', 'run_type', 'grid'],
-           chunking={'lat': 121, 'lon': 240, 'lead_time': 46,
+           chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'model_run': 1,
                      'start_date': 969, 'model_issuance_date': 1},
-           auto_rechunk=False)
+           auto_rechunk=True)
 def single_iri_ecmwf(time, variable, forecast_type,
                      run_type="average", grid="global1_5",
                      verbose=True):
@@ -152,7 +152,7 @@ def single_iri_ecmwf(time, variable, forecast_type,
         return None
     else:
         print(f"Unknown error occurred when trying to download data for {day} {month} {year} for model ecmwf.\n")
-        return None
+        raise ValueError(f"Failed to download data for {day} {month} {year} for model ecmwf.")
 
     rename_dict = {
         "S": "start_date",
@@ -219,9 +219,9 @@ def single_iri_ecmwf(time, variable, forecast_type,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['time', 'variable', 'forecast_type', 'run_type', 'grid'],
-           chunking={'lat': 121, 'lon': 240, 'lead_time': 46,
+           chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'model_run': 1,
                      'start_year': 20, 'model_issuance_date': 1},
-           auto_rechunk=False)
+           auto_rechunk=True)
 def single_iri_ecmwf_dense(time, variable, forecast_type,
                            run_type="average", grid="global1_5",
                            verbose=True):
@@ -233,7 +233,7 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
 
     Interface is the same as single_iri_ecmwf.
     """
-    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose)
+    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose, retry_null_cache=True)
 
     if ds is None:
         return None
@@ -250,7 +250,8 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
            timeseries=['start_date', 'model_issuance_date'],
            cache_args=['variable', 'forecast_type', 'run_type', 'grid'],
            chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'start_date': 969,
-                     'start_year': 29, 'model_issuance_date': 1},
+                     'model_run': 1, 'start_year': 29, 'model_issuance_date': 1},
+           cache=False,
            auto_rechunk=False)
 def iri_ecmwf(start_time, end_time, variable, forecast_type,
               run_type="average", grid="global1_5", verbose=False):
@@ -279,7 +280,8 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
     datasets = []
     for date in target_dates:
         ds = dask.delayed(fn)(
-            date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
+            date, variable, forecast_type, run_type, grid, verbose,
+            filepath_only=True, retry_null_cache=True)
         datasets.append(ds)
     datasets = dask.compute(*datasets)
     data = [d for d in datasets if d is not None]
@@ -299,7 +301,7 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
                               concat_dim='model_issuance_date',
                               combine="nested",
                               parallel=True,
-                              chunks={'lat': 121, 'lon': 240, 'lead_time': 46,
+                              chunks={'lat': 121, 'lon': 240, 'lead_time': 46, 'model_run': 1,
                                       'start_year': 20, 'model_issuance_date': 1})
 
         return x
@@ -448,10 +450,9 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'forecast_type', 'grid', 'agg', 'mask'],
-           chunking={"lat": 141, "lon": 240, "lead_time": 1, 'time': 100},
+           chunking={"lat": 141, "lon": 240, "lead_time": 1, 'time': 1000},
            cache_disable_if={'forecast_type': 'forecast'},
-           cache=False,
-           auto_rechunk=False)
+           auto_rechunk=True)
 def ecmwf_agg_flat(start_time, end_time, variable, forecast_type,
                    grid="global1_5", agg=14, mask="lsm", verbose=True):
 
