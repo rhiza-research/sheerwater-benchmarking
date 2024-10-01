@@ -282,6 +282,9 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
         ds = dask.delayed(fn)(
             date, variable, forecast_type, run_type, grid, verbose,
             filepath_only=True, retry_null_cache=True)
+        # ds = fn(
+        #     date, variable, forecast_type, run_type, grid, verbose,
+        #     filepath_only=True, retry_null_cache=True)
         datasets.append(ds)
     datasets = dask.compute(*datasets)
     data = [d for d in datasets if d is not None]
@@ -453,8 +456,22 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
            chunking={"lat": 141, "lon": 240, "lead_time": 1, 'time': 1000},
            cache_disable_if={'forecast_type': 'forecast'},
            auto_rechunk=True)
-def ecmwf_agg_flat(start_time, end_time, variable, forecast_type,
+def ecmwf_agg_flat(start_time, end_time, variable, forecast_type,  # noqa ARG001
                    grid="global1_5", agg=14, mask="lsm", verbose=True):
+    """Forecast data from ECMWF, with reforecast data flattened to a single time dimension.
+
+    Takes the most recently issues reforecast for each duplicate reforecast date.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
+        grid (str): The grid resolution to fetch the data at. 
+        agg (str): The aggregation period to use, in days
+        mask (str): The mask to apply. 
+        verbose (bool): Whether to print verbose output. 
+    """
 
     # Get the full ECMWF set of model issuance dates
     ds = ecmwf_agg(None, None, variable=variable,
@@ -515,7 +532,7 @@ def forecast_ecmwf(start_time, end_time, variable, lead, dorp='d',
     if dorp == 'd':
         ds = ds.assign_coords(member=-1)
     else:
-        raise NotImplementedError(f"Only deterministic forecasts are available for ECMWF.")
+        raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
 
     return ds
 
@@ -554,6 +571,6 @@ def reforecast_ecmwf(start_time, end_time, variable, lead, dorp='d',
     if dorp == 'd':
         ds = ds.assign_coords(member=-1)
     else:
-        raise NotImplementedError(f"Only deterministic forecasts are available for ECMWF.")
+        raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
 
     return ds

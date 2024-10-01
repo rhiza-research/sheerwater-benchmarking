@@ -5,6 +5,7 @@ import os
 import xarray as xr
 import dateparser
 import numpy as np
+from datetime import datetime, timedelta
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            cdsapi_secret,
@@ -119,7 +120,7 @@ def era5_cds(start_time, end_time, variable, grid="global1_5"):
            cache_args=['variable', 'grid'],
            timeseries='time',
            cache_disable_if={'grid': 'global0_25'})
-def era5(start_time, end_time, variable, grid="global0_25"):  # noqa ARG001
+def era5_raw(start_time, end_time, variable, grid="global0_25"):  # noqa ARG001
     """ERA5 function that returns data from Google ARCO."""
     if "0_25" in grid:
         # Pull the google dataset
@@ -168,7 +169,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
             era5_daily.chunking = {"lat": 121, "lon": 240, "time": 1000}
     else:
         # Read and combine all the data into an array
-        ds = era5(start_time, end_time, variable, grid='global0_25')
+        ds = era5_raw(start_time, end_time, variable, grid='global0_25')
 
         # Convert hourly data to daily data and then aggregate
         if 'lat' not in ds.coords:
@@ -265,4 +266,43 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
     if '1_5' in grid:
         era5_agg.chunking = {"lat": 121, "lon": 240, "time": 1000}
 
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'grid', 'mask'])
+def era5(start_time, end_time, variable, lead, grid='africa0_25', mask='lsm'):
+    """Standard format task data for ERA5 Reanalysis.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        lead (str): The lead time of the forecast.
+        grid (str): The grid resolution to fetch the data at.
+        mask (str): The mask to apply to the data.
+    """
+    leads_param = {
+        "week1": (7, 0),
+        "week2": (7, 7),
+        "week3": (7, 14),
+        "week4": (7, 21),
+        "week5": (7, 28),
+        "week6": (7, 36),
+        "weeks12": (14, 0),
+        "weeks23": (14, 7),
+        "weeks34": (14, 14),
+        "weeks45": (14, 21),
+        "weeks56": (14, 28),
+    }
+
+    agg, time_shift = leads_param.get(lead)
+    # Get daily data
+    new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
+    new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
+    ds = era5_agg(new_start, new_end, variable, agg=agg, grid=grid, mask=mask)
+    ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
     return ds

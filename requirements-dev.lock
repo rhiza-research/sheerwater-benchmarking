@@ -112,7 +112,7 @@ click-plugins==1.1.1
     # via rasterio
 cligj==0.7.2
     # via rasterio
-cloudpickle==3.0.0
+cloudpickle==2.2.1
     # via dask
     # via distributed
 coiled==1.35.0
@@ -444,6 +444,7 @@ numpy==1.26.4
     # via shapely
     # via sheerwater-benchmarking
     # via snuggs
+    # via weatherbench2
     # via xarray
     # via xarray-regrid
     # via zarr
@@ -483,6 +484,7 @@ pandas==2.2.2
     # via geopandas
     # via pvlib
     # via salientsdk
+    # via weatherbench2
     # via xarray
 pandocfilters==1.5.1
     # via nbconvert
@@ -532,7 +534,7 @@ pure-eval==0.2.3
     # via stack-data
 pvlib==0.10.5
     # via salientsdk
-pyarrow==17.0.0
+pyarrow==16.1.0
     # via dask
     # via dask-expr
 pyarrow-hotfix==0.6
@@ -656,12 +658,14 @@ salientsdk==0.3.4
     # via sheerwater-benchmarking
 scikit-learn==1.5.2
     # via sheerwater-benchmarking
+    # via weatherbench2
 scipy==1.14.0
     # via flox
     # via pvlib
     # via salientsdk
     # via scikit-learn
     # via sheerwater-benchmarking
+    # via weatherbench2
     # via xarray-regrid
 send2trash==1.8.3
     # via jupyter-server
@@ -756,6 +760,8 @@ urllib3==2.2.2
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit
+weatherbench2 @ file:///Users/avocet/content/sheerwater-benchmarking/../weatherbench2-fork
+    # via sheerwater-benchmarking
 webcolors==24.6.0
     # via jsonschema
 webencodings==0.5.1
@@ -777,6 +783,7 @@ xarray==2024.6.0
     # via rioxarray
     # via salientsdk
     # via sheerwater-benchmarking
+    # via weatherbench2
     # via xarray-regrid
 xarray-regrid==0.4.0
     # via sheerwater-benchmarking
@@ -786,6 +793,7 @@ yarl==1.9.4
     # via aiohttp
 zarr==2.18.2
     # via sheerwater-benchmarking
+    # via weatherbench2
 zict==3.0.0
     # via distributed
 zipp==3.19.2
