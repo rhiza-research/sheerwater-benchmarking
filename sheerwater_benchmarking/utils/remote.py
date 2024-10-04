@@ -16,6 +16,7 @@ def get_config(config_str):
     """
     config_dict = {
         "genevieve": {
+            "n_workers": 10,
             "name": "sheerwater_shared",
             "idle_timeout": "240 minutes",
         },

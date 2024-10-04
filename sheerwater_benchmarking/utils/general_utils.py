@@ -220,13 +220,13 @@ def get_grid(region_id, base="base180", sorted=True):
         region = None
     elif region_id == "us1_5":
         grid_size = 1.5
-        lons = np.arange(-126.0, -67.0, 1.5)
-        lats = np.arange(24.0, 50.0, 1.5)
+        lons = np.arange(-123.0, -66.0, 1.5)
+        lats = np.arange(25.5, 49.5, 1.5)
         region = None
     elif region_id == "us0_25":
         grid_size = 0.25
-        lons = np.arange(-126.0, -67.0, 1.5)
-        lats = np.arange(24.0, 50.0, 1.5)
+        lons = np.arange(-123.0, -66.0, 0.25)
+        lats = np.arange(25.5, 49.5, 0.25)
         region = None
     else:
         raise NotImplementedError(
