@@ -9,5 +9,5 @@ def test_masks():
     grids = ["global0_25", "global1_5", "africa0_25", "africa1_5"]
 
     for base, grid in product(bases, grids):
-        lsm = land_sea_mask(grid=grid, base=base)
+        lsm = land_sea_mask(grid=grid)
         assert len(lsm.lat.values) > 0

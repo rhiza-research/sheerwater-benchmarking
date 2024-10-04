@@ -437,7 +437,7 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
 
     if mask == "lsm":
         # Select variables and apply mask
-        mask_ds = land_sea_mask(grid=grid, base="base180").compute()
+        mask_ds = land_sea_mask(grid=grid).compute()
     elif mask is None:
         mask_ds = None
     else:
@@ -504,8 +504,8 @@ def ecmwf_agg_flat(start_time, end_time, variable, forecast_type,  # noqa ARG001
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'dorp', 'grid', 'mask'])
-def forecast_ecmwf(start_time, end_time, variable, lead, dorp='d',
-                   grid='africa0_25', mask='lsm'):
+def ecmwf_er_forecast(start_time, end_time, variable, lead, dorp='d',
+                      grid='africa0_25', mask='lsm'):
     """Standard format forecast data for ECMWF forecasts."""
     lead_params = {
         "week1": (7, 0),
@@ -542,8 +542,8 @@ def forecast_ecmwf(start_time, end_time, variable, lead, dorp='d',
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'dorp', 'grid', 'mask'])
-def reforecast_ecmwf(start_time, end_time, variable, lead, dorp='d',
-                     grid='africa0_25', mask='lsm'):
+def ecmwf_er_reforecast(start_time, end_time, variable, lead, dorp='d',
+                        grid='africa0_25', mask='lsm'):
     """Standard format forecast data for ECMWF forecasts."""
     lead_params = {
         "week1": (7, 0),

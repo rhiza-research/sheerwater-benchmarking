@@ -123,28 +123,28 @@ def get_dates(start_time, end_time, stride="day", return_string=True):
 
 def get_variable(variable_name, variable_type='era5'):
     """Converts a variable in any other type to a variable name of the requested type."""
-    variable_ordering = ['sheerwater', 'era5', 'ecmwf_hres']
+    variable_ordering = ['sheerwater', 'era5', 'ecmwf_hres', 'salient']
 
     weather_variables = [
         # Static variables (2):
-        ('z', 'geopotential', 'geopotential'),
-        ('lsm', 'land_sea_mask', 'land_sea_mask'),
+        ('z', 'geopotential', 'geopotential', None),
+        ('lsm', 'land_sea_mask', 'land_sea_mask', None),
 
         # Surface variables (6):
-        ('tmp2m', '2m_temperature', '2m_temperature'),
-        ("precip", "total_precipitation", "total_precipitation_6hr"),
-        ("vwind10m", "10m_v_component_of_wind", "10m_v_component_of_wind"),
-        ("uwind10m", "10m_u_component_of_wind", "10m_u_component_of_wind"),
-        ("msl", "mean_sea_level_pressure", "mean_sea_level_pressure"),
-        ("tisr", "toa_incident_solar_radiation", "toa_incident_solar_radiation"),
+        ('tmp2m', '2m_temperature', '2m_temperature', 'temp'),
+        ('precip', 'total_precipitation', 'total_precipitation_6hr', 'precip'),
+        ("vwind10m", "10m_v_component_of_wind", "10m_v_component_of_wind", None),
+        ("uwind10m", "10m_u_component_of_wind", "10m_u_component_of_wind", None),
+        ("msl", "mean_sea_level_pressure", "mean_sea_level_pressure", None),
+        ("tisr", "toa_incident_solar_radiation", "toa_incident_solar_radiation", "tsi"),
 
         # Atmospheric variables (6):
-        ("tmp", "temperature", "temperature"),
-        ("uwind", "u_component_of_wind", "u_component_of_wind"),
-        ("vwind", "v_component_of_wind", "v_component_of_wind"),
-        ("hgt", "geopotential", "geopotential"),
-        ("q", "specific_humidity", "specific_humidity"),
-        ("w", "vertical_velocity", "vertical_velocity"),
+        ("tmp", "temperature", "temperature", None),
+        ("uwind", "u_component_of_wind", "u_component_of_wind", None),
+        ("vwind", "v_component_of_wind", "v_component_of_wind", None),
+        ("hgt", "geopotential", "geopotential", None),
+        ("q", "specific_humidity", "specific_humidity", None),
+        ("w", "vertical_velocity", "vertical_velocity", None),
     ]
 
     name_index = variable_ordering.index(variable_type)
@@ -176,7 +176,6 @@ def get_grid(region_id, base="base180", sorted=True):
             - global1_5: 1.5 degree global grid
             - global0_5: 0.5 degree global grid
             - global0_25: 0.25 degree global grid
-            - us1_0: 1.0 degree US grid
             - us1_5: 1.5 degree US grid
             - salient_africa0_25: Salient common grid in Africa
             - africa1_5: 1.5 degree African grid
@@ -199,13 +198,14 @@ def get_grid(region_id, base="base180", sorted=True):
         region = 'global'
     elif region_id == "africa1_5":
         grid_size = 1.5
-        lons = np.arange(-26.0, 73.0, 1.5)
-        lats = np.arange(-35.0, 38.0, 1.5)
+        # Get the subset of the grid that's aligned with the global grid
+        lons = np.arange(-24.0, 74.5, 1.5)
+        lats = np.arange(-33.0, 37.5, 1.5)
         region = 'africa'
     elif region_id == "africa0_25":
         grid_size = 0.25
-        lons = np.arange(-26.0, 73.0, 0.25)
-        lats = np.arange(-35.0, 38.0, 0.25)
+        lons = np.arange(-24.0, 73.25, 0.25)
+        lats = np.arange(-33.0, 36.25, 0.25)
         region = 'africa'
     elif region_id == "salient_africa0_25":
         grid_size = 0.25
@@ -217,6 +217,16 @@ def get_grid(region_id, base="base180", sorted=True):
         offset = 0.125
         lons = np.arange(-180.0+offset, 180.0, 0.25)
         lats = np.arange(-90.0+offset, 90.0, 0.25)
+        region = None
+    elif region_id == "us1_5":
+        grid_size = 1.5
+        lons = np.arange(-126.0, -67.0, 1.5)
+        lats = np.arange(24.0, 50.0, 1.5)
+        region = None
+    elif region_id == "us0_25":
+        grid_size = 0.25
+        lons = np.arange(-126.0, -67.0, 1.5)
+        lats = np.arange(24.0, 50.0, 1.5)
         region = None
     else:
         raise NotImplementedError(

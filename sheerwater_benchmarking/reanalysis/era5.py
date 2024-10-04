@@ -252,7 +252,7 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
 
     if mask == "lsm":
         # Select variables and apply mask
-        mask_ds = land_sea_mask(grid=grid, base="base180").compute()
+        mask_ds = land_sea_mask(grid=grid).compute()
     elif mask is None:
         mask_ds = None
     else:

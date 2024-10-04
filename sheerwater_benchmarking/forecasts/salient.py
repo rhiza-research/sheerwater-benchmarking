@@ -13,6 +13,7 @@ from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            salient_auth,
                                            get_grid, get_dates,
                                            roll_and_agg, apply_mask,
+                                           get_variable,
                                            regrid)
 
 
@@ -133,7 +134,7 @@ def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
         timescale (str): The timescale of the forecast. One of:
             - sub-seasonal
             - seasonal
-            - long-term
+            - long-range
         verbose (bool): Whether to print verbose output.
     """
     # Fetch data from Salient API
@@ -168,7 +169,7 @@ def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
     fcst_date, fcst_lead, \
         fcst_vals, _ = {"sub-seasonal": ("forecast_date_weekly", "lead_weekly", "vals_weekly", "week"),
                         "seasonal": ("forecast_date_monthly", "lead_monthly", "vals_monthly", "month"),
-                        "long-term": ("forecast_date_yearly", "lead_yearly", "vals_yearly", "year")
+                        "long-range": ("forecast_date_yearly", "lead_yearly", "vals_yearly", "year")
                         }[timescale]
 
     # Open locally downloaded netcdf files
@@ -195,8 +196,8 @@ def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
            timeseries='forecast_date',
            cache_args=['variable', 'grid', 'timescale'],
            cache=False)
-def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
-                      timescale="sub-seasonal", verbose=True):
+def salient_blend_raw_sdk(start_time, end_time, variable, grid="salient_africa0_25",
+                          timescale="sub-seasonal", verbose=True):
     """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
 
     Args:
@@ -208,7 +209,7 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
         timescale (str): The timescale of the forecast. One of:
             - sub-seasonal
             - seasonal
-            - long-term
+            - long-range
             - all
         verbose (bool): Whether to print verbose output.
     """
@@ -240,21 +241,63 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
 @dask_remote
 @cacheable(data_type='array',
            timeseries='forecast_date',
-           cache_args=['variable', 'grid', 'timescale', 'mask'])
+           cache_args=['variable', 'grid', 'timescale'],
+           cache=False)
+def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",  # noqa: F841
+                      timescale="sub-seasonal", verbose=True):
+    """Salient function that returns data from GCP mirror.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        grid (str): The grid resolution to fetch the data at. One of:
+            - salient_africa0_25: 0.25 degree African grid from Salient
+        timescale (str): The timescale of the forecast. One of:
+            - sub-seasonal
+            - seasonal
+            - long-range
+        verbose (bool): Whether to print verbose output
+
+    """
+    if grid != "salient_africa0_25":
+        raise NotImplementedError("Only Salient common 0.25 degree grid is implemented.")
+
+    # Pull the google dataset
+    var = get_variable(variable, 'salient')
+    filename = f'gs://sheerwater-datalake/salient-data/v9/africa/{var}_{timescale}/blend'
+    ds = xr.open_zarr(filename,
+                      chunks={'forecast_date': 3, 'lat': 300, 'lon': 316,
+                              'lead': 10, 'quantile': 23, 'model': 5})
+    ds = ds['vals'].to_dataset()
+    ds = ds.rename(vals=variable)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='forecast_date',
+           cache_args=['variable', 'grid', 'timescale', 'mask'],
+           chunking={"lat": 300, "lon": 400, "forecast_date": 300, 'lead': 1, 'quantiles': 1},
+           auto_rechunk=True)
 def salient_blend_proc(start_time, end_time, variable, grid="africa0_25",
                        timescale="sub-seasonal", mask='lsm'):
     """Processed Salient forecast files."""
     if grid == 'salient_africa0_25' and mask is not None:
         raise NotImplementedError('Masking not implemented for Salient native grid.')
 
+    if 'africa' not in grid:
+        raise NotImplementedError('Only Africa grids are implemented for Salient.')
+
     ds = salient_blend_raw(start_time, end_time, variable, 'salient_africa0_25', timescale)
+    ds = ds.dropna('forecast_date', how='all')
 
     if grid != "salient_africa0_25":
         ds = regrid(ds, grid)
 
     if mask == "lsm":
         # Select variables and apply mask
-        mask_ds = land_sea_mask(grid=grid, base="base180").compute()
+        mask_ds = land_sea_mask(grid=grid).compute()
     elif mask is None:
         mask_ds = None
     else:
@@ -270,7 +313,7 @@ def salient_blend_proc(start_time, end_time, variable, grid="africa0_25",
            cache=False,
            cache_args=['variable', 'lead', 'dorp', 'grid', 'mask'])
 def salient_blend(start_time, end_time, variable, lead, dorp='d',
-                  grid='africa0_25', mask='lsm'):
+                           grid='africa0_25', mask='lsm'):
     """Standard format forecast data for Salient."""
     lead_params = {
         "week1": ("sub-seasonal", 1),
@@ -281,10 +324,10 @@ def salient_blend(start_time, end_time, variable, lead, dorp='d',
         "month1": ("seasonal", 1),
         "month2": ("seasonal", 2),
         "month3": ("seasonal", 3),
-        "quarter1": ("sub-seasonal", 1),
-        "quarter2": ("sub-seasonal", 2),
-        "quarter3": ("sub-seasonal", 3),
-        "quarter4": ("sub-seasonal", 4),
+        "quarter1": ("long-range", 1),
+        "quarter2": ("long-range", 2),
+        "quarter3": ("long-range", 3),
+        "quarter4": ("long-range", 4),
     }
     timescale, lead_id = lead_params.get(lead, (None, None))
     if timescale is None:
