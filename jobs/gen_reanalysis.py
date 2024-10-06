@@ -6,12 +6,13 @@ from sheerwater_benchmarking.utils import get_config
 
 
 vars = ["tmp2m", "precip"]
-grids = ["global0_25", "global1_5", "africa0_25", "africa1_5"]
+grids = ["us1_5"]
+# grids = ["global0_25", "global1_5", "africa0_25", "africa1_5"]
 # grids = ["africa0_25", "africa1_5"]
 # grids = ["global0_25", "global1_5"]
 # grids = ["global1_5", "africa1_5"]
 # grids = ["global0_25", "africa0_25"]
-aggs = [1, 4, 17]
+aggs = [1, 7, 14]
 masks = ["lsm"]
 
 start_time = "1979-01-01"
