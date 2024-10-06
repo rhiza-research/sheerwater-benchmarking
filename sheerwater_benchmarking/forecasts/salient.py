@@ -39,7 +39,7 @@ def get_salient_loc(grid):
            timeseries='time',
            cache_args=['variable', 'grid'],
            chunking={"lat": 292, "lon": 396, "time": 300},
-           auto_rechunk=True)
+           auto_rechunk=False)
 def salient_era5_raw(start_time, end_time, variable, grid="salient_africa0_25", verbose=False):
     """Fetches ground truth data from Salient's SDK.
 
@@ -279,7 +279,7 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
            timeseries='forecast_date',
            cache_args=['variable', 'grid', 'timescale', 'mask'],
            chunking={"lat": 300, "lon": 400, "forecast_date": 300, 'lead': 1, 'quantiles': 1},
-           auto_rechunk=True)
+           auto_rechunk=False)
 def salient_blend_proc(start_time, end_time, variable, grid="africa0_25",
                        timescale="sub-seasonal", mask='lsm'):
     """Processed Salient forecast files."""
@@ -311,9 +311,9 @@ def salient_blend_proc(start_time, end_time, variable, grid="africa0_25",
 @cacheable(data_type='array',
            timeseries='time',
            cache=False,
-           cache_args=['variable', 'lead', 'dorp', 'grid', 'mask'])
-def salient_blend(start_time, end_time, variable, lead, dorp='d',
-                           grid='africa0_25', mask='lsm'):
+           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask'])
+def salient_blend(start_time, end_time, variable, lead, prob_type='deterministic',
+                  grid='africa0_25', mask='lsm'):
     """Standard format forecast data for Salient."""
     lead_params = {
         "week1": ("sub-seasonal", 1),
@@ -336,7 +336,7 @@ def salient_blend(start_time, end_time, variable, lead, dorp='d',
     ds = salient_blend_proc(start_time, end_time, variable, grid=grid,
                             timescale=timescale, mask=mask)
     ds = ds.sel(lead=lead_id)
-    if dorp == 'd':
+    if prob_type == 'd':
         # Get the median forecast
         ds = ds.sel(quantiles=0.5)
         ds['quantiles'] = -1

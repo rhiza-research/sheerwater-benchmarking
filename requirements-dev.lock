@@ -760,7 +760,7 @@ urllib3==2.2.2
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit
-weatherbench2 @ git+https://github.com/geflaspohler/weatherbench2@4c70622a66c97c8759ae67a7e003a017f600b3de
+weatherbench2 @ git+https://github.com/geflaspohler/weatherbench2@f76bee120fc2ecb2c92dbb4a367673c79a3ed5da
     # via sheerwater-benchmarking
 webcolors==24.6.0
     # via jsonschema
