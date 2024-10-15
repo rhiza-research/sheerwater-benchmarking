@@ -279,8 +279,8 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
            cache_args=['variable', 'grid', 'timescale', 'mask'],
            chunking={"lat": 300, "lon": 400, "forecast_date": 300, 'lead': 1, 'quantiles': 1},
            auto_rechunk=False)
-def salient_blend_proc(start_time, end_time, variable, grid="africa0_25",
-                       timescale="sub-seasonal", mask='lsm'):
+def salient_blend(start_time, end_time, variable, grid="africa0_25",
+                  timescale="sub-seasonal", mask='lsm'):
     """Processed Salient forecast files."""
     if grid == 'salient_africa0_25' and mask is not None:
         raise NotImplementedError('Masking not implemented for Salient native grid.')
@@ -311,8 +311,8 @@ def salient_blend_proc(start_time, end_time, variable, grid="africa0_25",
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask'])
-def salient_blend(start_time, end_time, variable, lead, prob_type='deterministic',
-                  grid='africa0_25', mask='lsm'):
+def salient_forecast(start_time, end_time, variable, lead, prob_type='deterministic',
+                     grid='africa0_25', mask='lsm'):
     """Standard format forecast data for Salient."""
     lead_params = {
         "week1": ("sub-seasonal", 1),
@@ -332,8 +332,8 @@ def salient_blend(start_time, end_time, variable, lead, prob_type='deterministic
     if timescale is None:
         raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
 
-    ds = salient_blend_proc(start_time, end_time, variable, grid=grid,
-                            timescale=timescale, mask=mask)
+    ds = salient_blend(start_time, end_time, variable, grid=grid,
+                       timescale=timescale, mask=mask)
     ds = ds.sel(lead=lead_id)
     if prob_type == 'd':
         # Get the median forecast
