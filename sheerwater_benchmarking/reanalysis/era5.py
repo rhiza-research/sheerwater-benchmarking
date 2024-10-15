@@ -270,6 +270,7 @@ def era5(start_time, end_time, variable, lead, grid='africa0_25', mask='lsm', re
         lead (str): The lead time of the forecast.
         grid (str): The grid resolution to fetch the data at.
         mask (str): The mask to apply to the data.
+        region (str): The region to clip the data to.
     """
     leads_param = {
         "week1": (7, 0),

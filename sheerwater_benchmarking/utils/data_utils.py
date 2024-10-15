@@ -3,7 +3,7 @@ import numpy as np
 import xarray as xr
 import xarray_regrid  # noqa: F401, import needed for regridding
 
-from .general_utils import (get_grid, get_grid_ds,
+from .general_utils import (get_grid_ds,
                             base360_to_base180, base180_to_base360,
                             is_wrapped, check_bases,
                             get_region)
@@ -86,7 +86,7 @@ def regrid(ds, output_grid, method='conservative', base="base180"):
     return ds
 
 
-def get_globe_slice(ds, lon_slice, lat_slice, lon_col='lon', lat_col='lat', base="base180"):
+def get_globe_slice(ds, lon_slice, lat_slice, lon_dim='lon', lat_dim='lat', base="base180"):
     """Get a slice of the globe from the dataset.
 
     Handle the wrapping of the globe when slicing.
@@ -95,8 +95,8 @@ def get_globe_slice(ds, lon_slice, lat_slice, lon_col='lon', lat_col='lat', base
         ds (xr.Dataset): Dataset to slice.
         lon_slice (np.ndarray): The longitude slice.
         lat_slice (np.ndarray): The latitude slice.
-        lon_col (str): The longitude column name.
-        lat_col (str): The latitude column name.
+        lon_dim (str): The longitude column name.
+        lat_dim (str): The latitude column name.
         base (str): The base of the longitudes. One of:
             - base180, base360
     """
@@ -106,12 +106,12 @@ def get_globe_slice(ds, lon_slice, lat_slice, lon_col='lon', lat_col='lat', base
         raise ValueError("Longitude slice not in base 180 format.")
 
     # Ensure that latitude is sorted before slicing
-    ds = ds.sortby(lat_col)
+    ds = ds.sortby(lat_dim)
 
     wrapped = is_wrapped(lon_slice)
     if not wrapped:
-        return ds.sel(**{lon_col: slice(lon_slice[0], lon_slice[-1]),
-                         lat_col: slice(lat_slice[0], lat_slice[-1])})
+        return ds.sel(**{lon_dim: slice(lon_slice[0], lon_slice[-1]),
+                         lat_dim: slice(lat_slice[0], lat_slice[-1])})
     # A single wrapping discontinuity
     if base == "base360":
         slices = [[lon_slice[0], 360.0], [0.0, lon_slice[-1]]]
@@ -120,13 +120,13 @@ def get_globe_slice(ds, lon_slice, lat_slice, lon_col='lon', lat_col='lat', base
     ds_subs = []
     for s in slices:
         ds_subs.append(ds.sel(**{
-            lon_col: slice(s[0], s[-1]),
-            lat_col: slice(lat_slice[0], lat_slice[-1])
+            lon_dim: slice(s[0], s[-1]),
+            lat_dim: slice(lat_slice[0], lat_slice[-1])
         }))
-    return xr.concat(ds_subs, dim=lon_col)
+    return xr.concat(ds_subs, dim=lon_dim)
 
 
-def lon_base_change(ds, to_base="base180", lon_col='lon'):
+def lon_base_change(ds, to_base="base180", lon_dim='lon'):
     """Change the base of the dataset from base 360 to base 180 or vice versa.
 
     Args:
@@ -134,22 +134,22 @@ def lon_base_change(ds, to_base="base180", lon_col='lon'):
         to_base (str): The base to change to. One of:
             - base180
             - base360
-        lon_col (str): The longitude column name.
+        lon_dim (str): The longitude column name.
     """
     if to_base == "base180":
-        if (ds[lon_col] < 0.0).any():
+        if (ds[lon_dim] < 0.0).any():
             raise ValueError("Longitude slice must be in base 360 format.")
-        lons = base360_to_base180(ds[lon_col].values)
+        lons = base360_to_base180(ds[lon_dim].values)
     elif to_base == "base360":
-        if (ds[lon_col] > 180.0).any():
+        if (ds[lon_dim] > 180.0).any():
             raise ValueError("Longitude slice must be in base 180 format.")
-        lons = base180_to_base360(ds[lon_col].values)
+        lons = base180_to_base360(ds[lon_dim].values)
     else:
         raise ValueError(f"Invalid base {to_base}.")
 
     # Check if original data is wrapped
     wrapped = is_wrapped(ds.lon.values)
-    ds = ds.assign_coords({lon_col: lons})
+    ds = ds.assign_coords({lon_dim: lons})
 
     # Sort the lons after conversion, unless the slice
     # you're considering wraps around the meridian
@@ -159,23 +159,23 @@ def lon_base_change(ds, to_base="base180", lon_col='lon'):
     return ds
 
 
-def plot_map(ds, var, lon_col='lon'):
+def plot_map(ds, var, lon_dim='lon'):
     """Plot a map of the dataset, handling longitude wrapping.
 
     Args:
         ds (xr.Dataset): Dataset to change.
         var (str): The variable in the dataset to plot.
-        lon_col (str): The longitude column name.
+        lon_dim (str): The longitude column name.
     """
-    if is_wrapped(ds[lon_col].values):
+    if is_wrapped(ds[lon_dim].values):
         print("Warning: Wrapped data cannot be plotted. Converting bases for visualization")
-        if ds[lon_col].max() > 180.0:
+        if ds[lon_dim].max() > 180.0:
             plot_ds = lon_base_change(ds, to_base="base180")
         else:
             plot_ds = lon_base_change(ds, to_base="base360")
     else:
         plot_ds = ds
-    plot_ds[var].plot(x=lon_col)
+    plot_ds[var].plot(x=lon_dim)
 
 
 def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
@@ -183,6 +183,8 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
 
     Args:
         ds (xr.Dataset): The dataset to clip to Africa.
+        region (str): The region to clip to. One of:
+            - africa, conus, global
         lon_dim (str): The name of the longitude dimension.
         lat_dim (str): The name of the latitude dimension.
     """
@@ -199,5 +201,5 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
         ds = ds.rio.clip(gdf.geometry, gdf.crs, drop=False)
 
     # Slice the globe
-    ds = get_globe_slice(ds, lon_slice, lat_slice, base='base180')
+    ds = get_globe_slice(ds, lon_slice, lat_slice, lon_dim=lon_dim, lat_dim=lat_dim, base='base180')
     return ds

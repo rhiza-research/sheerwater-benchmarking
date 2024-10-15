@@ -207,7 +207,7 @@ def get_grid(grid, base="base180"):
 
 
 def get_region(region):
-    """Get the longitudes, latitudes boundaries or shapefile for a given region. 
+    """Get the longitudes, latitudes boundaries or shapefile for a given region.
 
     Note: assumes longitude in base180 format.
 
@@ -218,7 +218,7 @@ def get_region(region):
             - global: the global region
 
     Returns:
-        data: The longitudes and latitudes of the region as a tuple, 
+        data: The longitudes and latitudes of the region as a tuple,
             or the shapefile defining the region.
     """
     if region == "africa":

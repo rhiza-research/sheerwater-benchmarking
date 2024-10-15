@@ -1,12 +1,7 @@
 """Pulls Salient Predictions S2S forecasts from the Salient API."""
-import dask
-import pandas as pd
-import dateparser
 
 
-import numpy as np
 import xarray as xr
-import salientsdk as sk
 
 from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,

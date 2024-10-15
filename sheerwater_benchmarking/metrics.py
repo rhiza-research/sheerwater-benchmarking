@@ -1,9 +1,6 @@
 """Verification metrics for forecasts."""
 from importlib import import_module
 
-import xarray as xr
-import dask
-
 
 from sheerwater_benchmarking.utils import cacheable, dask_remote
 
@@ -32,6 +29,7 @@ def get_forecast_and_truth_fn(forecast, truth):
 
 
 def get_metric_fn(prob_type, metric):
+    """Import the metric function."""
     wb_metrics = {
         'crps': ('CRPS', {'ensemble_dim': 'member'}),
         'crps-q': ('QuantileCRPS', {'quantile_dim': 'member'}),
@@ -43,7 +41,7 @@ def get_metric_fn(prob_type, metric):
     metric_mod, metric_kwargs = wb_metrics[metric + '-q' if prob_type == 'quantile' else metric]
     mod = import_module("weatherbench2.metrics")
     metric_fn = getattr(mod, metric_mod)
-    return metric_fn
+    return metric_fn, metric_kwargs
 
 
 @dask_remote
