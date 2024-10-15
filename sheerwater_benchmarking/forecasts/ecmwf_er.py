@@ -95,7 +95,7 @@ def single_iri_ecmwf(time, variable, forecast_type,
     average_model_runs_url = "[M]average/" if run_type == "average" else ""
     single_model_run_url = f"M/({run_type})VALUES/" if isinstance(run_type, int) else ""
 
-    lons, lats, grid_size, _ = get_grid(grid)
+    lons, lats, grid_size = get_grid(grid)
     restrict_lat_url = f"Y/{lats[0]}/{grid_size}/{lats[-1]}/GRID/"
     restrict_lon_url = f"X/{lons[0]}/{grid_size}/{lons[-1]}/GRID/"
 
