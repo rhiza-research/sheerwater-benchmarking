@@ -64,8 +64,7 @@ def download_url(url, timeout=600, retry=3, cookies={}):
 @cacheable(data_type='array',
            cache_args=['time', 'variable', 'forecast_type', 'run_type', 'grid'],
            chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'model_run': 1,
-                     'start_date': 969, 'model_issuance_date': 1},
-           auto_rechunk=True)
+                     'start_date': 969, 'model_issuance_date': 1})
 def single_iri_ecmwf(time, variable, forecast_type,
                      run_type="average", grid="global1_5",
                      verbose=True):
@@ -220,8 +219,7 @@ def single_iri_ecmwf(time, variable, forecast_type,
 @cacheable(data_type='array',
            cache_args=['time', 'variable', 'forecast_type', 'run_type', 'grid'],
            chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'model_run': 1,
-                     'start_year': 20, 'model_issuance_date': 1},
-           auto_rechunk=True)
+                     'start_year': 20, 'model_issuance_date': 1})
 def single_iri_ecmwf_dense(time, variable, forecast_type,
                            run_type="average", grid="global1_5",
                            verbose=True):

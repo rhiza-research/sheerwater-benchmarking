@@ -4,7 +4,7 @@ from .ecmwf_er import ecmwf_agg, ecmwf_er_forecast
 
 # Use __all__ to define what is part of the public API.
 __all__ = [
-    salient_forecast,
     ecmwf_agg,
     ecmwf_er_forecast,
+    salient_forecast,
 ]

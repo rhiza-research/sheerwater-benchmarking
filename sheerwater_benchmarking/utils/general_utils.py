@@ -157,9 +157,9 @@ def get_variable(variable_name, variable_type='era5'):
     raise ValueError(f"Variable {variable_name} not found")
 
 
-def get_grid_ds(region_id, base="base180"):
+def get_grid_ds(grid_id, base="base180"):
     """Get a dataset equal to ones for a given region."""
-    lons, lats, _, _ = get_grid(region_id, base=base)
+    lons, lats, _ = get_grid(grid_id, base=base)
     data = np.ones((len(lons), len(lats)))
     ds = xr.Dataset(
         {"mask": (['lon', 'lat'], data)},
@@ -168,84 +168,40 @@ def get_grid_ds(region_id, base="base180"):
     return ds
 
 
-def get_grid(region_id, base="base180", sorted=True):
-    """Get the longitudes, latitudes and grid size for a named region.
+def get_grid(grid_id, base="base180"):
+    """Get the longitudes, latitudes and grid size for a given global grid_id.
 
     Args:
-        region_id (str): The region to get the grid for. One of:
+        res (str): The resolution to get the grid for. One of:
             - global1_5: 1.5 degree global grid
+            - global1_0: 1.0 degree global grid
             - global0_5: 0.5 degree global grid
             - global0_25: 0.25 degree global grid
-            - us1_5: 1.5 degree US grid
-            - salient_africa0_25: Salient common grid in Africa
-            - africa1_5: 1.5 degree African grid
-            - africa0_25: 0.25 degree African grid
+            - salient0_25: 0.25 degree Salient global grid
         base (str): The base grid to use. One of:
             - base360: 360 degree base longitude grid
             - base180: 180 degree base longitude grid
-        sorted (bool): Whether to sort the longitudes before returning.
-            Invalid for wrapped longitudes.
     """
-    if region_id == "global1_5":
+    if grid_id == "global1_5":
         grid_size = 1.5
         lons = np.arange(-180, 180, 1.5)
         lats = np.arange(-90, 90+grid_size, 1.5)
-        region = 'global'
-    elif region_id == "global0_25":
+    elif grid_id == "global0_25":
         grid_size = 0.25
         lons = np.arange(-180, 180, 0.25)
         lats = np.arange(-90, 90+grid_size, 0.25)
-        region = 'global'
-    elif region_id == "africa1_5":
-        grid_size = 1.5
-        # Get the subset of the grid that's aligned with the global grid
-        lons = np.arange(-24.0, 74.5, 1.5)
-        lats = np.arange(-33.0, 37.5, 1.5)
-        region = 'africa'
-    elif region_id == "africa0_25":
-        grid_size = 0.25
-        lons = np.arange(-24.0, 73.25, 0.25)
-        lats = np.arange(-33.0, 36.25, 0.25)
-        region = 'africa'
-    elif region_id == "salient_africa0_25":
-        grid_size = 0.25
-        lons = np.arange(-25.875, 72.125, 0.25)
-        lats = np.arange(-34.875, 38.125, 0.25)
-        region = None
-    elif region_id == "salient_global0_25":
+    elif grid_id == "salient0_25":
         grid_size = 0.25
         offset = 0.125
         lons = np.arange(-180.0+offset, 180.0, 0.25)
         lats = np.arange(-90.0+offset, 90.0, 0.25)
-        region = None
-    elif region_id == "us1_5":
-        grid_size = 1.5
-        lons = np.arange(-123.0, -66.0, 1.5)
-        lats = np.arange(25.5, 49.5, 1.5)
-        region = None
-    elif region_id == "us0_25":
-        grid_size = 0.25
-        lons = np.arange(-123.0, -66.0, 0.25)
-        lats = np.arange(25.5, 49.5, 0.25)
-        region = None
     else:
         raise NotImplementedError(
-            f"Grid {region_id} has not been implemented.")
+            f"Grid {grid_id} has not been implemented.")
     if base == "base360":
         lons = base180_to_base360(lons)
-        if sorted:
-            lons = np.sort(lons)
-    return lons, lats, grid_size, region
-
-
-def get_global_grid(region_id):
-    """Get the corresponding global grid to a specified grid."""
-    if '0_25' in region_id and 'salient' not in region_id:
-        return 'global0_25'
-    elif '1_5' in region_id and 'salient' not in region_id:
-        return 'global1_5'
-    else:
-        raise NotImplementedError(f"Global grid {region_id} has not been implemented.")
+        lons = np.sort(lons)
+    return lons, lats, grid_size
 
 
 def base360_to_base180(lons):
