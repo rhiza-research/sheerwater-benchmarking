@@ -47,6 +47,10 @@ spec:
           env:
           - name: TC_DRIVER_PATH
             value: {{ .Values.terracotta.driver_path }}
+          - name: TC_RESAMPLING_METHOD
+            value: "nearest"
+          - name: TC_REPROJECTION_METHOD
+            value: "nearest"
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-secrets
