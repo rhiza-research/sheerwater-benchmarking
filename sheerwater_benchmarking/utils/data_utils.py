@@ -86,65 +86,6 @@ def regrid(ds, output_grid, method='conservative', base="base180"):
     return ds
 
 
-def regrid_xesmf(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon'):
-    """Regrid a dataset to a new grid.
-
-    Args:
-        ds (xr.Dataset): Dataset to regrid.
-        output_grid (str): The output grid resolution. One of valid named grids.
-        method (str): The regridding method. One of:
-            - bilinear
-            - conservative
-            - nearest_s2d
-            - nearest_d2s
-            - patch
-            - regrid
-        lat_col (str): The name of the latitude column.
-        lon_col (str): The name of the longitude column.
-    """
-    # Attempt to import xesmf and throw an error if it doesn't exist
-    try:
-        import xesmf as xe
-    except ImportError:
-        raise RuntimeError(
-            "Failed to import XESMF. Try running in coiled instead: 'rye run coiled-run ...")
-
-    # Interpret the grid
-    lons, lats, _ = get_grid(output_grid)
-
-    ds_out = xr.Dataset(
-        {
-            "lat": (["lat"], lats, {"units": "degrees_north"}),
-            "lon": (["lon"], lons, {"units": "degrees_east"}),
-        })
-
-    # Rename the columns if necessary
-    if lat_col != 'lat' or lon_col != 'lon':
-        ds = ds.rename({lat_col: 'lat', lon_col: 'lon'})
-
-    # Reorder the data columns data if necessary - extra dimensions must be on the left
-    # TODO: requires that all vars have the same dims; should be fixed
-    coords = None
-    for var in ds.data_vars:
-        coords = ds.data_vars[var].dims
-        break
-
-    if coords[-2] != 'lat' and coords[-1] != 'lon':
-        # Get coords that are not lat and lon
-        other_coords = [x for x in coords if x != 'lat' and x != 'lon']
-        ds = ds.transpose(*other_coords, 'lat', 'lon')
-
-    # Do the regridding
-    regridder = xe.Regridder(ds, ds_out, method)
-    ds = regridder(ds)
-
-    # Change the column names back
-    if lat_col != 'lat' or lon_col != 'lon':
-        ds = ds.rename({'lat': lat_col, 'lon': lon_col})
-
-    return ds
-
-
 def get_globe_slice(ds, lon_slice, lat_slice, lon_col='lon', lat_col='lat', base="base180"):
     """Get a slice of the globe from the dataset.
 
