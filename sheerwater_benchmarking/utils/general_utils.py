@@ -153,7 +153,10 @@ def get_variable(variable_name, variable_type='era5'):
     for tup in weather_variables:
         for name in tup:
             if name == variable_name:
-                return tup[name_index]
+                val = tup[name_index]
+                if val is None:
+                    raise ValueError(f"Variable {variable_name} not implemented.")
+                return val
 
     raise ValueError(f"Variable {variable_name} not found")
 
