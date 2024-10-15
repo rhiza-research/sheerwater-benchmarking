@@ -4,7 +4,6 @@ from importlib import import_module
 import xarray as xr
 import dask
 
-from weatherbench2 import metrics
 
 from sheerwater_benchmarking.utils import cacheable, dask_remote
 from sheerwater_benchmarking.reanalysis import era5
@@ -28,7 +27,7 @@ def verification(start_time, end_time, variable, lead, forecast, prob_type,
     fcst = fcst_fn(start_time, end_time, variable, lead=lead, prob_type=prob_type, grid=grid, mask=mask)
     obs = era5(start_time, end_time, variable, lead=lead)
 
-    if type(metric) is not list:
+    if not isinstance(metric, list):
         metric = [metric]
 
     datasets = []

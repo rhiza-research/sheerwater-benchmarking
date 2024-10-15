@@ -243,8 +243,8 @@ def salient_blend_raw_sdk(start_time, end_time, variable, grid="salient_africa0_
            timeseries='forecast_date',
            cache_args=['variable', 'grid', 'timescale'],
            cache=False)
-def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",  # noqa: F841
-                      timescale="sub-seasonal", verbose=True):
+def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",  # noqa: ARG001
+                      timescale="sub-seasonal"):
     """Salient function that returns data from GCP mirror.
 
     Args:
@@ -257,7 +257,6 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
             - sub-seasonal
             - seasonal
             - long-range
-        verbose (bool): Whether to print verbose output
 
     """
     if grid != "salient_africa0_25":

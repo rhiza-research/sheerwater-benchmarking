@@ -2,7 +2,6 @@
 from itertools import product
 from sheerwater_benchmarking.forecasts import ecmwf_agg
 from sheerwater_benchmarking.utils import get_config
-from sheerwater_benchmarking.forecasts.ecmwf_er import ecmwf_rolled
 
 
 if __name__ == "__main__":

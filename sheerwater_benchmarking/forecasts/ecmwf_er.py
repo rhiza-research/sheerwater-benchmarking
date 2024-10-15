@@ -467,12 +467,11 @@ def ecmwf_agg_flat(start_time, end_time, variable, forecast_type,  # noqa ARG001
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
         forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
-        grid (str): The grid resolution to fetch the data at. 
+        grid (str): The grid resolution to fetch the data at.
         agg (str): The aggregation period to use, in days
-        mask (str): The mask to apply. 
-        verbose (bool): Whether to print verbose output. 
+        mask (str): The mask to apply.
+        verbose (bool): Whether to print verbose output.
     """
-
     # Get the full ECMWF set of model issuance dates
     ds = ecmwf_agg(None, None, variable=variable,
                    forecast_type=forecast_type,
