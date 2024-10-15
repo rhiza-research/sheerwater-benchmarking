@@ -2,10 +2,11 @@
 import dask
 import sys
 import pandas as pd
+import numpy as np
 from datetime import datetime
+import dateparser
 import os
 import xarray as xr
-import dateparser
 import requests
 import ssl
 from urllib3 import poolmanager
@@ -13,10 +14,15 @@ import time
 
 from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
-                                           get_grid, get_dates, is_valid_forecast_date,
-                                           apply_mask, roll_and_agg)
+                                           get_grid, get_dates,
+                                           is_valid_forecast_date,
+                                           apply_mask, roll_and_agg,
+                                           lon_base_change, clip_region)
 
 
+########################################################################
+# IRI download utility functions
+########################################################################
 class TLSAdapter(requests.adapters.HTTPAdapter):
     """Transport adapter that allows us to use TLSv1.2."""
 
@@ -51,12 +57,14 @@ def download_url(url, timeout=600, retry=3, cookies={}):
     print(f"Failed to retrieve file after {retry} attempts. Stopping...")
 
 
+########################################################################
+#  IRI ECMWF download and process functions
+########################################################################
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['time', 'variable', 'forecast_type', 'run_type', 'grid'],
-           chunking={'lat': 121, 'lon': 240, 'lead_time': 46,
-                     'start_date': 969, 'model_issuance_date': 1},
-           auto_rechunk=False)
+           chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'model_run': 1,
+                     'start_date': 969, 'model_issuance_date': 1})
 def single_iri_ecmwf(time, variable, forecast_type,
                      run_type="average", grid="global1_5",
                      verbose=True):
@@ -65,7 +73,7 @@ def single_iri_ecmwf(time, variable, forecast_type,
     Args:
         time (str): The date to fetch data for (by day).
         variable (str): The weather variable to fetch.
-        forecast_type (str): The type of forecast to fetch. One of "forecast" or "hindcast".
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
         run_type (str): The type of run to fetch. One of:
             - average: to download the averaged of the perturbed runs
             - control: to download the control forecast
@@ -143,7 +151,7 @@ def single_iri_ecmwf(time, variable, forecast_type,
         return None
     else:
         print(f"Unknown error occurred when trying to download data for {day} {month} {year} for model ecmwf.\n")
-        return None
+        raise ValueError(f"Failed to download data for {day} {month} {year} for model ecmwf.")
 
     rename_dict = {
         "S": "start_date",
@@ -210,9 +218,8 @@ def single_iri_ecmwf(time, variable, forecast_type,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['time', 'variable', 'forecast_type', 'run_type', 'grid'],
-           chunking={'lat': 121, 'lon': 240, 'lead_time': 46,
-                     'start_year': 20, 'model_issuance_date': 1},
-           auto_rechunk=False)
+           chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'model_run': 1,
+                     'start_year': 20, 'model_issuance_date': 1})
 def single_iri_ecmwf_dense(time, variable, forecast_type,
                            run_type="average", grid="global1_5",
                            verbose=True):
@@ -241,7 +248,8 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
            timeseries=['start_date', 'model_issuance_date'],
            cache_args=['variable', 'forecast_type', 'run_type', 'grid'],
            chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'start_date': 969,
-                     'start_year': 29, 'model_issuance_date': 1},
+                     'model_run': 1, 'start_year': 29, 'model_issuance_date': 1},
+           cache=False,
            auto_rechunk=False)
 def iri_ecmwf(start_time, end_time, variable, forecast_type,
               run_type="average", grid="global1_5", verbose=False):
@@ -251,7 +259,7 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
-        forecast_type (str): The type of forecast to fetch. One of "forecast" or "hindcast".
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
         run_type (str): The type of run to fetch. One of:
             - average: to download the averaged of the perturbed runs
             - control: to download the control forecast
@@ -290,7 +298,7 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
                               concat_dim='model_issuance_date',
                               combine="nested",
                               parallel=True,
-                              chunks={'lat': 121, 'lon': 240, 'lead_time': 46,
+                              chunks={'lat': 121, 'lon': 240, 'lead_time': 46, 'model_run': 1,
                                       'start_year': 20, 'model_issuance_date': 1})
 
         return x
@@ -417,6 +425,9 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
                       forecast_type, grid=grid, agg=agg,
                       verbose=verbose)
 
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
+
     if mask == "lsm":
         # Select variables and apply mask
         mask_ds = land_sea_mask(grid=grid).compute()
@@ -426,4 +437,46 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
         raise NotImplementedError("Only land-sea or None mask is implemented.")
 
     ds = apply_mask(ds, mask_ds, variable)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'dorp', 'grid', 'mask', 'region'])
+def ecmwf_er(start_time, end_time, variable, lead, dorp='d',
+             grid='global1_5', mask='lsm', region="africa"):
+    """Standard format forecast data for ECMWF forecasts."""
+    lead_params = {
+        "week1": (7, 0),
+        "week2": (7, 7),
+        "week3": (7, 21),
+        "week4": (7, 28),
+        "week5": (7, 35),
+        "week6": (7, 42),
+        "weeks12": (14, 0),
+        "weeks23": (14, 7),
+        "weeks34": (14, 14),
+        "weeks45": (14, 21),
+        "weeks56": (14, 28),
+    }
+    agg, lead_id = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
+
+    ds = ecmwf_agg(start_time, end_time, variable, forecast_type="forecast",
+                   grid=grid, agg=agg, mask=mask)
+
+    # Leads are 12 hours offset from the forecast date
+    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
+    ds = ds.rename({'start_date': 'time'})
+    if dorp == 'd':
+        ds = ds.assign_coords(member=-1)
+    else:
+        raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
+
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
+
     return ds
