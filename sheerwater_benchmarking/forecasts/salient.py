@@ -80,8 +80,8 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal",
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def salient_forecast(start_time, end_time, variable, lead, prob_type='deterministic',
-                     grid='africa0_25', mask='lsm', region='africa'):
+def salient(start_time, end_time, variable, lead, prob_type='deterministic',
+            grid='africa0_25', mask='lsm', region='africa'):
     """Standard format forecast data for Salient."""
     lead_params = {
         "week1": ("sub-seasonal", 1),
