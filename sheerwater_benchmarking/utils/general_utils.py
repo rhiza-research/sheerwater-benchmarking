@@ -306,28 +306,3 @@ def check_bases(ds, dsp, lon_col='lon', lon_colp='lon'):
     if base != basep:
         return -1
     return 0
-
-
-def convert_lead_to_timedelta(lead):
-    """Converts a lead time to a timedelta object."""
-    lead_params = {
-        "week1": (0, 7, 'D'),
-        "week2": (7, 14, 'D'),
-        "week3": (14, 21, 'D'),
-        "week4": (21, 28, 'D'),
-        "week5": (28, 35, 'D'),
-        "weeks12": (0, 14, 'D'),
-        "weeks23": (7, 14, 'D'),
-        "weeks34": (14, 21, 'D'),
-        "weeks45": (21, 28, 'D'),
-        "weeks56": (28, 35, 'D'),
-        "month1": ("seasonal", 1),
-        "month2": ("seasonal", 2),
-        "month3": ("seasonal", 3),
-        "quarter1": ("sub-seasonal", 1),
-        "quarter2": ("sub-seasonal", 2),
-        "quarter3": ("sub-seasonal", 3),
-        "quarter4": ("sub-seasonal", 4),
-    }
-    lead = lead_params['lead']
-    return np.timedelta64(lead[0], lead[2]), np.timedelta64(lead[0], lead[2])
