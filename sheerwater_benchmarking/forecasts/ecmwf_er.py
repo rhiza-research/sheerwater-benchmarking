@@ -231,7 +231,7 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
 
     Interface is the same as single_iri_ecmwf.
     """
-    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose, retry_null_cache=True)
+    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose)
 
     if ds is None:
         return None
