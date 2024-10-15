@@ -48,7 +48,7 @@ def get_metric_fn(prob_type, metric):
 @cacheable(data_type='array',
            cache_args=['variable', 'lead', 'forecast', 'truth', 'prob_type', 'metric', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           cache=True)
+           cache=False)
 def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
                    prob_type, metric, grid="global1_5", mask='lsm', region='africa'):
     """Compute a metric for a forecast at a specific lead."""
@@ -69,7 +69,7 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
 @cacheable(data_type='array',
            cache_args=['variable', 'lead', 'forecast', 'truth', 'prob_type', 'metric', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           cache=True)
+           cache=False)
 def summary_metric(start_time, end_time, variable, lead, forecast, truth,
                    prob_type, metric, grid="global1_5", mask='lsm', region='africa'):
     """Compute a metric for a forecast at a specific lead."""

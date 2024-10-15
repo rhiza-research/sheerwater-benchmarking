@@ -300,7 +300,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                 if recompute:
                     print(f"Recompute for {cache_path} requested. Not checking for cached result.")
                 elif not cache:
-                    print(f"{func.__name__} not a cacheable function. Recomputing result.")
+                    pass
                 else:
                     print(f"Cache doesn't exist for {cache_path}. Running function")
 

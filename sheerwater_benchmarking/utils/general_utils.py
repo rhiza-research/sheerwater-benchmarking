@@ -223,18 +223,18 @@ def get_region(region):
     """
     if region == "africa":
         # Get the countries of Africa shapefile
-        lons = [-24.0, 74.5]
-        lats = [-33.0, 37.5]
+        lons = np.array([-23.0, 58.0])
+        lats = np.array([-35.0, 37.5])
         filepath = 'gs://sheerwater-datalake/africa.geojson'
         gdf = gpd.read_file(load_object(filepath))
         data = (lons, lats, gdf)
     elif region == "conus":
-        lons = [-125.0, -67.0]
-        lats = [25.0, 50.0]
+        lons = np.array([-125.0, -67.0])
+        lats = np.array([25.0, 50.0])
         data = (lons, lats)
     elif region == "global":
-        lons = [-180.0, 180.0]
-        lats = [-90.0, 90.0]
+        lons = np.array([-180.0, 180.0])
+        lats = np.array([-90.0, 90.0])
         data = (lons, lats)
     else:
         raise NotImplementedError(
