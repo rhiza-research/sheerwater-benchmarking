@@ -278,8 +278,7 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
     datasets = []
     for date in target_dates:
         ds = dask.delayed(fn)(
-            date, variable, forecast_type, run_type, grid, verbose,
-            filepath_only=True, retry_null_cache=True)
+            date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
         datasets.append(ds)
     datasets = dask.compute(*datasets)
     data = [d for d in datasets if d is not None]
