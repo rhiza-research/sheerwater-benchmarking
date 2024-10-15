@@ -3,6 +3,7 @@ import numpy as np
 import dateparser
 import gcsfs
 import xarray as xr
+import geopandas as gpd
 from datetime import datetime, timedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY, WEEKLY, YEARLY
 
@@ -168,40 +169,74 @@ def get_grid_ds(grid_id, base="base180"):
     return ds
 
 
-def get_grid(grid_id, base="base180"):
-    """Get the longitudes, latitudes and grid size for a given global grid_id.
+def get_grid(grid, base="base180"):
+    """Get the longitudes, latitudes and grid size for a given global grid.
 
     Args:
-        res (str): The resolution to get the grid for. One of:
+        grid (str): The resolution to get the grid for. One of:
             - global1_5: 1.5 degree global grid
-            - global1_0: 1.0 degree global grid
-            - global0_5: 0.5 degree global grid
             - global0_25: 0.25 degree global grid
             - salient0_25: 0.25 degree Salient global grid
         base (str): The base grid to use. One of:
             - base360: 360 degree base longitude grid
             - base180: 180 degree base longitude grid
     """
-    if grid_id == "global1_5":
+    if grid == "global1_5":
         grid_size = 1.5
         lons = np.arange(-180, 180, 1.5)
         lats = np.arange(-90, 90+grid_size, 1.5)
-    elif grid_id == "global0_25":
+    elif grid == "global0_25":
         grid_size = 0.25
         lons = np.arange(-180, 180, 0.25)
         lats = np.arange(-90, 90+grid_size, 0.25)
-    elif grid_id == "salient0_25":
+    elif grid == "salient0_25":
         grid_size = 0.25
         offset = 0.125
         lons = np.arange(-180.0+offset, 180.0, 0.25)
         lats = np.arange(-90.0+offset, 90.0, 0.25)
     else:
         raise NotImplementedError(
-            f"Grid {grid_id} has not been implemented.")
+            f"Grid {grid} has not been implemented.")
     if base == "base360":
         lons = base180_to_base360(lons)
         lons = np.sort(lons)
     return lons, lats, grid_size
+
+
+def get_region(region):
+    """Get the longitudes, latitudes boundaries or shapefile for a given region. 
+
+    Note: assumes longitude in base180 format.
+
+    Args:
+        region (str): The resolution to get the grid for. One of:
+            - africa: the African continent
+            - conus: the CONUS region
+            - global: the global region
+
+    Returns:
+        data: The longitudes and latitudes of the region as a tuple, 
+            or the shapefile defining the region.
+    """
+    if region == "africa":
+        # Get the countries of Africa shapefile
+        lons = [-24.0, 74.5]
+        lats = [-33.0, 37.5]
+        filepath = 'gs://sheerwater-datalake/africa.geojson'
+        gdf = gpd.read_file(load_object(filepath))
+        data = (lons, lats, gdf)
+    elif region == "conus":
+        lons = [-125.0, -67.0]
+        lats = [25.0, 50.0]
+        data = (lons, lats)
+    elif region == "global":
+        lons = [-180.0, 180.0]
+        lats = [-90.0, 90.0]
+        data = (lons, lats)
+    else:
+        raise NotImplementedError(
+            f"Region {region} has not been implemented.")
+    return data
 
 
 def base360_to_base180(lons):

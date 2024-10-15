@@ -1,10 +1,12 @@
 """Data utility functions for all parts of the data pipeline."""
 import numpy as np
 import xarray as xr
-import xarray_regrid  # noqa: F401
+import xarray_regrid  # noqa: F401, import needed for regridding
 
 from .general_utils import (get_grid, get_grid_ds,
-                            base360_to_base180, base180_to_base360, is_wrapped, check_bases)
+                            base360_to_base180, base180_to_base360,
+                            is_wrapped, check_bases,
+                            get_region)
 
 
 def apply_mask(ds, mask, var, val=0.0):
@@ -108,7 +110,7 @@ def regrid_xesmf(ds, output_grid, method='bilinear', lat_col='lat', lon_col='lon
             "Failed to import XESMF. Try running in coiled instead: 'rye run coiled-run ...")
 
     # Interpret the grid
-    lons, lats, _, _ = get_grid(output_grid)
+    lons, lats, _ = get_grid(output_grid)
 
     ds_out = xr.Dataset(
         {
@@ -233,3 +235,28 @@ def plot_map(ds, var, lon_col='lon'):
     else:
         plot_ds = ds
     plot_ds[var].plot(x=lon_col)
+
+
+def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
+    """Clip a dataset to a region.
+
+    Args:
+        ds (xr.Dataset): The dataset to clip to Africa.
+        lon_dim (str): The name of the longitude dimension.
+        lat_dim (str): The name of the latitude dimension.
+    """
+    region_data = get_region(region)
+    if len(region) == 2:
+        lon_slice, lat_slice = region_data
+    else:
+        # Set up dataframe for clipping
+        lon_slice, lat_slice, gdf = region_data
+        ds = ds.rio.write_crs("EPSG:4326")
+        ds = ds.rio.set_spatial_dims(lon_dim, lat_dim)
+
+        # Clip the grid to the boundary of Shapefile
+        ds = ds.rio.clip(gdf.geometry, gdf.crs, drop=False)
+
+    # Slice the globe
+    ds = get_globe_slice(ds, lon_slice, lat_slice, base='base180')
+    return ds

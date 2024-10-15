@@ -13,7 +13,7 @@ from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            salient_auth,
                                            get_grid, get_dates,
                                            roll_and_agg, apply_mask,
-                                           get_variable,
+                                           get_variable, clip_region,
                                            regrid)
 
 
@@ -24,7 +24,7 @@ def get_salient_loc(grid):
         raise NotImplementedError("Only the Salient African 0.25 grid is supported.")
 
     # Upload location shapefile to Salient backend
-    lons, lats, _, _ = get_grid(grid)
+    lons, lats, _ = get_grid(grid)
     coords = [(lons[0], lats[0]), (lons[-1], lats[0]), (lons[-1], lats[-1]), (lons[0], lats[-1])]
     loc = sk.Location(shapefile=sk.upload_shapefile(
         coords=coords,
@@ -194,9 +194,9 @@ def year_salient_blend_raw(year, variable, grid="salient_africa0_25",
 @dask_remote
 @cacheable(data_type='array',
            timeseries='forecast_date',
-           cache_args=['variable', 'grid', 'timescale'],
+           cache_args=['variable', 'timescale'],
            cache=False)
-def salient_blend_raw_sdk(start_time, end_time, variable, grid="salient_africa0_25",
+def salient_blend_raw_sdk(start_time, end_time, variable,
                           timescale="sub-seasonal", verbose=True):
     """Fetches ground truth data from Salient's SDK and applies aggregation and masking .
 
@@ -204,8 +204,6 @@ def salient_blend_raw_sdk(start_time, end_time, variable, grid="salient_africa0_
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
-        grid (str): The grid resolution to fetch the data at. One of:
-            - salient_africa0_25: 0.25 degree African grid from Salient
         timescale (str): The timescale of the forecast. One of:
             - sub-seasonal
             - seasonal
@@ -241,9 +239,9 @@ def salient_blend_raw_sdk(start_time, end_time, variable, grid="salient_africa0_
 @dask_remote
 @cacheable(data_type='array',
            timeseries='forecast_date',
-           cache_args=['variable', 'grid', 'timescale'],
+           cache_args=['variable', 'timescale'],
            cache=False)
-def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",  # noqa: ARG001
+def salient_blend_raw(start_time, end_time, variable,  # noqa: ARG001
                       timescale="sub-seasonal"):
     """Salient function that returns data from GCP mirror.
 
@@ -251,18 +249,13 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
-        grid (str): The grid resolution to fetch the data at. One of:
-            - salient_africa0_25: 0.25 degree African grid from Salient
         timescale (str): The timescale of the forecast. One of:
             - sub-seasonal
             - seasonal
             - long-range
 
     """
-    if grid != "salient_africa0_25":
-        raise NotImplementedError("Only Salient common 0.25 degree grid is implemented.")
-
-    # Pull the google dataset
+    # Pull the Salient dataset
     var = get_variable(variable, 'salient')
     filename = f'gs://sheerwater-datalake/salient-data/v9/africa/{var}_{timescale}/blend'
     ds = xr.open_zarr(filename,
@@ -279,20 +272,17 @@ def salient_blend_raw(start_time, end_time, variable, grid="salient_africa0_25",
            cache_args=['variable', 'grid', 'timescale', 'mask'],
            chunking={"lat": 300, "lon": 400, "forecast_date": 300, 'lead': 1, 'quantiles': 1},
            auto_rechunk=False)
-def salient_blend(start_time, end_time, variable, grid="africa0_25",
-                  timescale="sub-seasonal", mask='lsm'):
+def salient_blend(start_time, end_time, variable, timescale="sub-seasonal",
+                  grid="global0_25", mask='lsm'):
     """Processed Salient forecast files."""
     if grid == 'salient_africa0_25' and mask is not None:
         raise NotImplementedError('Masking not implemented for Salient native grid.')
 
-    if 'africa' not in grid:
-        raise NotImplementedError('Only Africa grids are implemented for Salient.')
-
-    ds = salient_blend_raw(start_time, end_time, variable, 'salient_africa0_25', timescale)
+    ds = salient_blend_raw(start_time, end_time, variable, timescale=timescale)
     ds = ds.dropna('forecast_date', how='all')
 
-    if grid != "salient_africa0_25":
-        ds = regrid(ds, grid)
+    # Regrid the data
+    ds = regrid(ds, grid)
 
     if mask == "lsm":
         # Select variables and apply mask
@@ -310,9 +300,9 @@ def salient_blend(start_time, end_time, variable, grid="africa0_25",
 @cacheable(data_type='array',
            timeseries='time',
            cache=False,
-           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask'])
+           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def salient_forecast(start_time, end_time, variable, lead, prob_type='deterministic',
-                     grid='africa0_25', mask='lsm'):
+                     grid='africa0_25', mask='lsm', region='africa'):
     """Standard format forecast data for Salient."""
     lead_params = {
         "week1": ("sub-seasonal", 1),
@@ -332,8 +322,8 @@ def salient_forecast(start_time, end_time, variable, lead, prob_type='determinis
     if timescale is None:
         raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
 
-    ds = salient_blend(start_time, end_time, variable, grid=grid,
-                       timescale=timescale, mask=mask)
+    ds = salient_blend(start_time, end_time, variable, timescale=timescale,
+                       grid=grid, mask=mask)
     ds = ds.sel(lead=lead_id)
     if prob_type == 'd':
         # Get the median forecast
@@ -342,4 +332,6 @@ def salient_forecast(start_time, end_time, variable, lead, prob_type='determinis
     ds = ds.rename({'quantiles': 'member'})
     ds = ds.rename({'forecast_date': 'time'})
 
+    # Clip to region
+    ds = clip_region(ds, region)
     return ds

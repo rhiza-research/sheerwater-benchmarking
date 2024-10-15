@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            cdsapi_secret,
-                                           get_grid, get_global_grid, get_variable,
-                                           apply_mask, roll_and_agg, lon_base_change, get_globe_slice,
+                                           get_grid, clip_region, get_variable,
+                                           apply_mask, roll_and_agg, lon_base_change,
                                            regrid)
 from sheerwater_benchmarking.masks import land_sea_mask
 
@@ -39,7 +39,7 @@ def single_era5(year, variable, grid="global1_5"):
     months = ["01", "02", "03", "04", "05", "06",
               "07", "08", "09", "10", "11", "12"]
 
-    _, _, grid_size, _ = get_grid(grid)
+    _, _, grid_size = get_grid(grid)
 
     url, key = cdsapi_secret()
     c = cdsapi.Client(url=url, key=key)
@@ -241,11 +241,10 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
             - lsm: Land-sea mask
             - None: No mask
     """
-    lons, lats, _, _ = get_grid(grid)
+    lons, lats, _ = get_grid(grid)
 
     # Get ERA5 on the corresponding global grid
-    global_grid = get_global_grid(grid)
-    ds = era5_rolled(start_time, end_time, variable, grid=global_grid, agg=agg)
+    ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg)
 
     # Convert to base180 longitude
     ds = lon_base_change(ds, to_base="base180")
@@ -259,7 +258,6 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
         raise NotImplementedError("Only land-sea or None mask is implemented.")
 
     ds = apply_mask(ds, mask_ds, variable)
-    ds = get_globe_slice(ds, lons, lats)
 
     # Manually reset the chunking for this smaller grid
     # TODO: implement this via a better API
@@ -273,8 +271,8 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
 @cacheable(data_type='array',
            timeseries='time',
            cache=False,
-           cache_args=['variable', 'lead', 'grid', 'mask'])
-def era5(start_time, end_time, variable, lead, grid='africa0_25', mask='lsm'):
+           cache_args=['variable', 'lead', 'grid', 'mask', 'region'])
+def era5_reanalysis(start_time, end_time, variable, lead, grid='africa0_25', mask='lsm', region='africa'):
     """Standard format task data for ERA5 Reanalysis.
 
     Args:
@@ -300,9 +298,13 @@ def era5(start_time, end_time, variable, lead, grid='africa0_25', mask='lsm'):
     }
 
     agg, time_shift = leads_param.get(lead)
+
     # Get daily data
     new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
     new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
     ds = era5_agg(new_start, new_end, variable, agg=agg, grid=grid, mask=mask)
     ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
+
+    # Clip to region
+    ds = clip_region(ds, region)
     return ds
