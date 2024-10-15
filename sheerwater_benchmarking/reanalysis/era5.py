@@ -161,12 +161,12 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
     ds = era5_raw(start_time, end_time, variable, grid='global0_25')
 
     if variable == 'tmp2m':
-        if ds[variable].units == 'K':
-            ds[variable] = ds[variable] - 273.15
+        ds[variable] = ds[variable] - 273.15
+        ds[variable].units = 'C'
         ds = ds.resample(time='D').mean(dim='time')
     elif variable == 'precip':
-        if ds[variable].units == 'm':
-            ds[variable] = ds[variable] * 1000.0
+        ds[variable] = ds[variable] * 1000.0
+        ds[variable].units = 'mm'
         ds = ds.resample(time='D').sum(dim='time')
         ds = np.maximum(ds, 0)
 
@@ -206,7 +206,7 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
 
     # Manually reset the chunking for this smaller grid
     # TODO: implement this via a better API
-    if '1_5' in grid:
+    if grid == 'global1_5':
         era5_rolled.chunking = {"lat": 121, "lon": 240, "time": 1000}
     return ds
 
@@ -231,8 +231,6 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
             - lsm: Land-sea mask
             - None: No mask
     """
-    lons, lats, _ = get_grid(grid)
-
     # Get ERA5 on the corresponding global grid
     ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg)
 
@@ -251,7 +249,7 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
 
     # Manually reset the chunking for this smaller grid
     # TODO: implement this via a better API
-    if '1_5' in grid:
+    if grid == 'global1_5':
         era5_agg.chunking = {"lat": 121, "lon": 240, "time": 1000}
 
     return ds
