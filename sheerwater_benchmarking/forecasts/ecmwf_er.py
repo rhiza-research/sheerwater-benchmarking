@@ -444,55 +444,6 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
     return ds
 
 
-# @dask_remote
-# @cacheable(data_type='array',
-#            timeseries='time',
-#            cache_args=['variable', 'forecast_type', 'grid', 'agg', 'mask'],
-#            chunking={"lat": 141, "lon": 240, "lead_time": 1, 'time': 1000},
-#            cache_disable_if={'forecast_type': 'forecast'},
-#            auto_rechunk=True)
-# def ecmwf_agg_flat(start_time, end_time, variable, forecast_type,  # noqa ARG001
-#                    grid="global1_5", agg=14, mask="lsm", verbose=True):
-#     """Forecast data from ECMWF, with reforecast data flattened to a single time dimension.
-
-#     Takes the most recently issues reforecast for each duplicate reforecast date.
-
-#     Args:
-#         start_time (str): The start date to fetch data for.
-#         end_time (str): The end date to fetch.
-#         variable (str): The weather variable to fetch.
-#         forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
-#         grid (str): The grid resolution to fetch the data at.
-#         agg (str): The aggregation period to use, in days
-#         mask (str): The mask to apply.
-#         verbose (bool): Whether to print verbose output.
-#     """
-#     # Get the full ECMWF set of model issuance dates
-#     ds = ecmwf_agg(None, None, variable=variable,
-#                    forecast_type=forecast_type,
-#                    grid=grid, agg=agg, mask=mask, verbose=verbose)
-
-#     if forecast_type == "forecast":
-#         return ds.rename({'start_date': 'time'})
-
-#     # Flatten the model_issuance_date and start_year dimensions
-#     ds = ds.stack(time=['model_issuance_date', 'start_year'])
-
-#     # Convert the MultiIndex into a single index
-#     parsed_vals = [dateparser.parse(f"{start_year}-{mid.month}-{mid.day}")
-#                    for mid, start_year in ds.time.values]
-#     ds = ds.drop_vars(['time', 'model_issuance_date', 'start_year'])
-#     ds = ds.assign_coords(time=parsed_vals)
-
-#     # Keep the most recent ECMWF reforecast
-#     ds = ds.drop_duplicates(dim="time", keep="last")
-#     ds = ds.sortby("time")
-
-#     ds = ds.dropna(dim="time", how="all")
-
-#     return ds
-
-
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
@@ -533,42 +484,3 @@ def ecmwf_er_forecast(start_time, end_time, variable, lead, dorp='d',
     ds = clip_region(ds, region=region)
 
     return ds
-
-
-# @dask_remote
-# @cacheable(data_type='array',
-#            timeseries='time',
-#            cache=False,
-#            cache_args=['variable', 'lead', 'dorp', 'grid', 'mask'])
-# def ecmwf_er_reforecast(start_time, end_time, variable, lead, dorp='d',
-#                         grid='africa0_25', mask='lsm'):
-#     """Standard format forecast data for ECMWF forecasts."""
-#     lead_params = {
-#         "week1": (7, 0),
-#         "week2": (7, 7),
-#         "week3": (7, 21),
-#         "week4": (7, 28),
-#         "week5": (7, 35),
-#         "week6": (7, 42),
-#         "weeks12": (14, 0),
-#         "weeks23": (14, 7),
-#         "weeks34": (14, 14),
-#         "weeks45": (14, 21),
-#         "weeks56": (14, 28),
-#     }
-#     agg, lead_id = lead_params.get(lead, (None, None))
-#     if agg is None:
-#         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
-
-#     ds = ecmwf_agg(start_time, end_time, variable, forecast_type="reforecast",
-#                    grid=grid, agg=agg, mask=mask)
-
-#     # Leads are 12 hours offset from the forecast date
-#     ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
-#     ds = ds.rename({'start_date': 'time'})
-#     if dorp == 'd':
-#         ds = ds.assign_coords(member=-1)
-#     else:
-#         raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
-
-#     return ds
