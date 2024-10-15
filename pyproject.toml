@@ -43,9 +43,9 @@ convention = "google"
 [project]
 name = "sheerwater-benchmarking"
 version = "0.1.0"
-description = "Add your description here"
+description = "Equitable weather and climate forecasting benchmarking package."
 authors = [
-    { name = "Joshua Adkins", email = "josh@nline.io" }
+    { name = "Joshua Adkins", email = "josh@rhizaresearch.org" }
 ]
 dependencies = [
     "dask",
