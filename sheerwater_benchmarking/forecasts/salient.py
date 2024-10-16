@@ -76,7 +76,7 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal",
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def salient(start_time, end_time, variable, lead, prob_type='deterministic',
-            grid='africa0_25', mask='lsm', region='africa'):
+            grid='global0_25', mask='lsm', region='africa'):
     """Standard format forecast data for Salient."""
     lead_params = {
         "week1": ("sub-seasonal", 1),
@@ -99,7 +99,7 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = salient_blend(start_time, end_time, variable, timescale=timescale,
                        grid=grid, mask=mask)
     ds = ds.sel(lead=lead_id)
-    if prob_type == 'd':
+    if prob_type == 'deterministic':
         # Get the median forecast
         ds = ds.sel(quantiles=0.5)
         ds['quantiles'] = -1

@@ -1,6 +1,14 @@
 """A climatology baseline for benchmarking."""
-from sheerwater_benchmarking.utils import dask_remote, cacheable
+import dateparser
+from datetime import datetime, timedelta
+import numpy as np
+import xarray as xr
+import dask
+
 from sheerwater_benchmarking.reanalysis import era5_agg
+from sheerwater_benchmarking.masks import land_sea_mask
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, roll_and_agg,
+                                           get_dates, apply_mask, clip_region)
 
 
 @dask_remote
@@ -39,33 +47,43 @@ def climatology_standard_30yr(variable, grid="global1_5", mask="lsm"):
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['first_year', 'last_year', 'variable', 'grid', 'mask', 'agg'],
+           cache=True,
+           cache_args=['variable', 'first_year', 'last_year', 'agg', 'grid', 'mask'],
            chunking={"lat": 721, "lon": 1441, "time": 30},
            auto_rechunk=False)
-def climatology_agg(start_time, end_time, first_year, last_year, variable,
-                    grid="global1_5", mask="lsm", agg=14):
-    """Fetches ground truth data from ERA5 and applies aggregation and masking .
+def climatology_agg(start_time, end_time, variable, first_year=1991, last_year=2020,
+                    agg=14, grid="global1_5", mask="lsm"):
+    """Generates a daily timeseries of climatology with rolling aggregation.
 
     Args:
-        start_time (str): The start date to fetch data for.
-        end_time (str): The end date to fetch.
+        start_time (str): The start time of the timeseries forecast.
+        end_time (str): The end time of the timeseries forecast.
         variable (str): The weather variable to fetch.
-        grid (str): The grid resolution to fetch the data at. One of:
-            - global1_5: 1.5 degree global grid
+        grid (str): The grid to produce the forecast on.
         agg (str): The aggregation period to use, in days
         mask (str): The mask to apply to the data. One of:
             - lsm: Land-sea mask
             - None: No mask
     """
-    lons, lats, _, _ = get_grid(grid)
+    # Get climatology on the corresponding global grid
+    clim = climatology(first_year=first_year, last_year=last_year, variable=variable,
+                       grid=grid, mask=mask)
 
-    # Get ERA5 on the corresponding global grid
-    global_grid = get_global_grid(grid)
-    ds = climatology(first_year=first_year, last_year=last_year, variable=variable,
-                     grid=global_grid, mask=mask)
-
+    # Create a target date dataset
     target_dates = get_dates(start_time, end_time, stride='day', return_string=False)
+    time_ds = xr.Dataset({'time': target_dates})
+    time_ds = time_ds.assign_coords(dayofyear=time_ds['time'].dt.dayofyear)
 
+    # Select the climatology data for the target dates, and split large chunks
+    with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+        ds = clim.sel(dayofyear=time_ds.dayofyear)
+        ds = ds.drop('dayofyear')
+
+    # Roll and aggregate the data
+    agg_fn = "sum" if variable == "precip" else "mean"
+    ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
+
+    # Mask the result
     if mask == "lsm":
         # Select variables and apply mask
         mask_ds = land_sea_mask(grid=grid).compute()
@@ -73,15 +91,7 @@ def climatology_agg(start_time, end_time, first_year, last_year, variable,
         mask_ds = None
     else:
         raise NotImplementedError("Only land-sea or None mask is implemented.")
-
     ds = apply_mask(ds, mask_ds, variable)
-    ds = get_globe_slice(ds, lons, lats)
-
-    # Manually reset the chunking for this smaller grid
-    # TODO: implement this via a better API
-    if '1_5' in grid:
-        era5_agg.chunking = {"lat": 121, "lon": 240, "time": 1000}
-
     return ds
 
 
@@ -89,38 +99,36 @@ def climatology_agg(start_time, end_time, first_year, last_year, variable,
 @cacheable(data_type='array',
            timeseries='time',
            cache=False,
-           cache_args=['variable', 'lead', 'dorp', 'grid', 'mask'])
-def climatology_forecast(start_time, end_time, variable, lead, dorp='d',
-                         grid='africa0_25', mask='lsm'):
+           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
+def climatology_forecast(start_time, end_time, variable, lead, prob_type='deterministic',
+                         grid='global0_25', mask='lsm', region='africa'):
     """Standard format forecast data for climatology forecast."""
-    lead_params = {
-        "week1": (1, 0, 'W'),
-        "week2": (1, 1, 'W'),
-        "week3": (1, 2, 'W'),
-        "week4": (1, 3, 'W'),
-        "week5": (1, 4, 'W'),
-        "week6": (1, 5, 'W'),
-        "weeks12": (2, 0, 'W'),
-        "weeks23": (2, 1, 'W'),
-        "weeks34": (2, 2, 'W'),
-        "weeks45": (2, 3, 'W'),
-        "weeks56": (2, 4, 'W'),
-        "month1": (1, 0, 'M'),
-        "month2": (1, 1, 'M'),
-        "month3": (1, 2, 'M'),
-        "quarter1": (3, 0, 'M'),
-        "quarter2": (3, 1, 'M'),
-        "quarter3": (3, 2, 'M'),
-        "quarter4": (3, 3, 'M')
+    leads_param = {
+        "week1": (7, 0),
+        "week2": (7, 7),
+        "week3": (7, 14),
+        "week4": (7, 21),
+        "week5": (7, 28),
+        "week6": (7, 36),
+        "weeks12": (14, 0),
+        "weeks23": (14, 7),
+        "weeks34": (14, 14),
+        "weeks45": (14, 21),
+        "weeks56": (14, 28),
     }
-    duration, offset, date_str = lead_params['lead']
 
-    ds = climatology_standard_30yr(grid=grid, mask=mask)
+    agg, time_shift = leads_param[lead]
 
-    if dorp != 'd':
-        raise NotImplementedError('Probabilistic climatology not available.')
+    # Get daily data
+    new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
+    new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
+    ds = climatology_agg(new_start, new_end, variable, agg=agg, grid=grid, mask=mask)
+    ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
-    ds = ds.rename({'quantiles': 'member'})
-    ds = ds.rename({'forecast_date': 'time'})
-
+    if prob_type == 'deterministic':
+        ds = ds.assign_coords(member=-1)
+    else:
+        raise NotImplementedError("Only deterministic forecasts are available for climatology.")
+    # Clip to region
+    ds = clip_region(ds, region)
     return ds
