@@ -6,6 +6,7 @@ import dateparser
 from functools import wraps
 import datetime
 from inspect import signature, Parameter
+from deltalake import DeltaTable, write_deltalake
 import logging
 from sheerwater_benchmarking.utils.secrets import postgres_write_password, postgres_read_password
 logger = logging.getLogger(__name__)
@@ -68,6 +69,12 @@ def drop_encoded_chunks(ds):
 
     return ds
 
+def read_from_delta(cache_path):
+    return DeltaTable(cache_path).to_pandas()
+
+def write_to_delta(cache_path, df):
+    write_deltalake(cache_path, df)
+
 def read_from_postgres(table_name):
     """Reas a pandas df from a table in the sheerwater postgres.
 
@@ -87,6 +94,28 @@ def read_from_postgres(table_name):
         engine = sqlalchemy.create_engine(f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
         df = pd.read_sql_query(f'select * from {table_name}',con=engine)
         return df
+    except sqlalchemy.exc.InterfaceError:
+        raise RuntimeError("Error connecting to database. Make sure you are on the tailnet and can see sheerwater-benchmarking-postgres.")
+
+def check_exists_postgres(table_name):
+    """Reas a pandas df from a table in the sheerwater postgres.
+
+    Backends should evenetually be flexibly specified, but for now
+    we'll just hard code a connection to the running sheerwater database.
+
+    Args:
+        table_name: The table name to read fromo
+    """
+
+    # Get the postgres write secret
+    import sqlalchemy
+
+    pgread_pass = postgres_read_password()
+
+    try:
+        engine = sqlalchemy.create_engine(f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+        insp = sqlalchemy.inspect(engine)
+        return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("Error connecting to database. Make sure you are on the tailnet and can see sheerwater-benchmarking-postgres.")
 
@@ -117,9 +146,17 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
         raise RuntimeError("Error connecting to database. Make sure you are on the tailnet and can see sheerwater-benchmarking-postgres.")
 
 
+def cache_exists(backend, cache_key, cache_path):
+    if backend == 'default' or backend == 'zarr' or backend == 'delta':
+        # Check to see if the cache exists for this key
+        fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+        return fs.exists(cache_path)
+    elif backend == 'postgres':
+        return check_exists_postgres(cache_key)
+
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None,
-              auto_rechunk=False, cache=True, cache_disable_if=None):
+              auto_rechunk=False, cache=True, cache_disable_if=None, backend='default'):
     """Decorator for caching function results.
 
     Args:
@@ -149,6 +186,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
         "validate_cache_timeseries": True,
         "force_overwrite": False,
         "retry_null_cache": False,
+        "backend": 'default',
     }
 
     def create_cacheable(func):
@@ -156,11 +194,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
             nonlocal data_type, cache_args, timeseries, chunking, auto_rechunk, \
-                cache, cache_disable_if
+                cache, cache_disable_if, backend
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, validate_cache_timeseries, \
-                force_overwrite, retry_null_cache = get_cache_args(
+                force_overwrite, retry_null_cache, backend = get_cache_args(
                     kwargs, cache_kwargs)
 
             if not cache or not passed_cache:
@@ -250,25 +288,35 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                 null_key = func.__name__ + '/' + '_'.join(sorted_values) + '.null'
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key
                 null_path = "gs://sheerwater-datalake/caches/" + null_key
+                supports_filepath = True
             elif data_type == 'tabular':
-                print("Cache recall currently not supported for tabular data. Forcing recompute.")
-                cache_key = func.__name__ + '_' + '_'.join(sorted_values)
-                recompute = True
+                if backend == 'default' or backend == 'delta':
+                    cache_key = func.__name__ + '_' + '_'.join(sorted_values)
+                    cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.delta'
+                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    supports_filepath = True
+                elif backend == 'postgres':
+                    cache_key = func.__name__ + '_' + '_'.join(sorted_values)
+                    cache_path = cache_key
+                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    supports_filepath = False
             else:
-                raise ValueError("Caching currently only supports the 'array' datatype")
+                raise ValueError("Caching currently only supports the 'array' and 'tabular' datatypes")
 
+            if filepath_only and not supports_filepath:
+                raise ValueError("{backend} backend does not support filepath_only flag")
 
             ds = None
             compute_result = True
             if not recompute and cache:
-                # Check to see if the cache exists for this key
                 fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-                cache_map = fs.get_mapper(cache_path)
-
-                if fs.exists(cache_path):
+                if cache_exists(backend, cache_key, cache_path):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
                     if data_type == 'array':
+                        fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+                        cache_map = fs.get_mapper(cache_path)
+
                         if filepath_only:
                             return cache_map
                         else:
@@ -347,8 +395,31 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                               "`validate_cache_timeseries=False`")
                             else:
                                 compute_result = False
+                    elif data_type == 'tabular':
+                        if backend == 'default' or backend == 'delta':
+                            if filepath_only:
+                                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+                                cache_map = fs.get_mapper(cache_path)
+
+                                return cache_map
+                            else:
+                                print(f"Opening cache {cache_path}")
+                                ds = read_from_delta(cache_path)
+
+                                if validate_cache_timeseries and timeseries is not None:
+                                    raise NotImplementedError("Timeseries validation is not currently implemented for tabular datasets")
+                                else:
+                                    compute_result = False
+                        elif backend == 'postgres':
+                            ds = read_from_postgres(cache_key)
+                            if validate_cache_timeseries and timeseries is not None:
+                                raise NotImplementedError("Timeseries validation is not currently implemented for tabular datasets")
+                            else:
+                                compute_result = False
+                        else:
+                            raise ValueError("Only default, delta, and postgres backends are supported for tabular data.")
                     else:
-                        print("Auto caching currently only supports array types")
+                        print("Auto caching currently only supports array and tabular types")
                 elif fs.exists(null_path) and not recompute and cache and not retry_null_cache:
                     print(f"Found null cache for {null_path}. Skipping computation.")
                     return None
@@ -370,12 +441,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
                 # Store the result
                 if cache:
-                    if ds is None:
-                        print(f"Autocaching null result for {null_path}.")
-                        with fs.open(null_path, 'wb') as f:
-                            f.write(b'')
-                            return None
-                    elif data_type == 'array':
+                    if data_type == 'array':
+                        if ds is None:
+                            print(f"Autocaching null result for {null_path}.")
+                            with fs.open(null_path, 'wb') as f:
+                                f.write(b'')
+                                return None
+
                         write = False
                         if fs.exists(cache_path) and not force_overwrite:
                             inp = input(f'A cache already exists at {
@@ -388,11 +460,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                         if write:
                             print(f"Caching result for {cache_path}.")
                             if isinstance(ds, xr.Dataset):
+                                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+                                cache_map = fs.get_mapper(cache_path)
+
                                 if chunking:
                                     # If we aren't doing auto chunking delete the encoding chunks
                                     ds = drop_encoded_chunks(ds)
 
                                     chunking = prune_chunking_dimensions(ds, chunking)
+
 
                                     ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')
 
@@ -408,19 +484,48 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                 raise RuntimeError(
                                     f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
                     elif data_type == 'tabular':
-                        print(f"Caching result for {cache_key} in postgres.")
-                        try:
-                            if force_overwrite:
-                                write_to_postgres(ds, cache_key, overwrite=True)
-                            else:
-                                write_to_postgres(ds, cache_key)
-                        except ValueError:
-                            inp = input(f'A cache already exists for table {cache_key}. Are you sure you want to overwrite it? (y/n)')
-                            if inp == 'y' or inp == 'Y':
-                                write_to_postgres(ds, cache_key, overwrite=True)
 
+                        if ds is None:
+                            print(f"Autocaching null result for {null_path}.")
+                            with fs.open(null_path, 'wb') as f:
+                                f.write(b'')
+                                return None
+
+                        if not isinstance(ds, pd.DataFrame):
+                            raise RuntimeError("Tabular datatypes must return pandas dataframe or none isntead of {type(ds)}")
+
+                        if backend == 'default' or backend == 'delta':
+                            write = False
+                            if fs.exists(cache_path) and not force_overwrite:
+                                inp = input(f'A cache already exists at {
+                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write = True
+                            else:
+                                write = True
+
+                            if write:
+                                print(f"Caching result for {cache_path}.")
+                                write_to_delta(cache_path, ds)
+
+                        elif backend == 'postgres':
+                            print(f"Caching result for {cache_key} in postgres.")
+                            try:
+                                if force_overwrite:
+                                    write_to_postgres(ds, cache_key, overwrite=True)
+                                else:
+                                    write_to_postgres(ds, cache_key)
+                            except ValueError:
+                                inp = input(f'A cache already exists for table {cache_key}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write_to_postgres(ds, cache_key, overwrite=True)
+                        else:
+                            raise ValueError("Only delta and postgres backends are implemented for tabular data")
 
             if filepath_only:
+                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+                cache_map = fs.get_mapper(cache_path)
+
                 return cache_map
             else:
                 # Do the time series filtering

@@ -166,6 +166,8 @@ decorator==5.1.1
     # via ipython
 defusedxml==0.7.1
     # via nbconvert
+deltalake==0.20.2
+    # via sheerwater-benchmarking
 deprecated==1.2.14
     # via fabric
 distributed==2024.9.1
@@ -575,6 +577,7 @@ pvlib==0.10.5
 pyarrow==17.0.0
     # via dask
     # via dask-expr
+    # via deltalake
 pyasn1==0.6.1
     # via pyasn1-modules
     # via rsa
