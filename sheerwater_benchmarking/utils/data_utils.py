@@ -1,12 +1,18 @@
-"""Data utility functions for all parts of the data pipeline."""
+"""Data utility functions for all parts of the data pipeline.
+
+These utility functions take as input an xarray dataset and return a modified
+dataset.
+"""
 import numpy as np
 import xarray as xr
+import dask
 import xarray_regrid  # noqa: F401, import needed for regridding
 
-from .general_utils import (get_grid_ds,
-                            base360_to_base180, base180_to_base360,
-                            is_wrapped, check_bases,
-                            get_region)
+
+from .space_utils import (get_grid_ds,
+                          base360_to_base180, base180_to_base360,
+                          is_wrapped, check_bases,
+                          get_region)
 
 
 def apply_mask(ds, mask, var, val=0.0):
@@ -138,17 +144,21 @@ def lon_base_change(ds, to_base="base180", lon_dim='lon'):
     """
     if to_base == "base180":
         if (ds[lon_dim] < 0.0).any():
-            raise ValueError("Longitude slice must be in base 360 format.")
+            print("Longitude already in base 180 format.")
+            return ds
         lons = base360_to_base180(ds[lon_dim].values)
     elif to_base == "base360":
         if (ds[lon_dim] > 180.0).any():
-            raise ValueError("Longitude slice must be in base 180 format.")
+            print("Longitude already in base 360 format.")
+            return ds
         lons = base180_to_base360(ds[lon_dim].values)
     else:
         raise ValueError(f"Invalid base {to_base}.")
 
     # Check if original data is wrapped
     wrapped = is_wrapped(ds.lon.values)
+
+    # Then assign new coordinates
     ds = ds.assign_coords({lon_dim: lons})
 
     # Sort the lons after conversion, unless the slice
@@ -159,35 +169,20 @@ def lon_base_change(ds, to_base="base180", lon_dim='lon'):
     return ds
 
 
-def plot_map(ds, var, lon_dim='lon'):
-    """Plot a map of the dataset, handling longitude wrapping.
-
-    Args:
-        ds (xr.Dataset): Dataset to change.
-        var (str): The variable in the dataset to plot.
-        lon_dim (str): The longitude column name.
-    """
-    if is_wrapped(ds[lon_dim].values):
-        print("Warning: Wrapped data cannot be plotted. Converting bases for visualization")
-        if ds[lon_dim].max() > 180.0:
-            plot_ds = lon_base_change(ds, to_base="base180")
-        else:
-            plot_ds = lon_base_change(ds, to_base="base360")
-    else:
-        plot_ds = ds
-    plot_ds[var].plot(x=lon_dim)
-
-
 def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
     """Clip a dataset to a region.
 
     Args:
-        ds (xr.Dataset): The dataset to clip to Africa.
+        ds (xr.Dataset): The dataset to clip to a specific region.
         region (str): The region to clip to. One of:
             - africa, conus, global
         lon_dim (str): The name of the longitude dimension.
         lat_dim (str): The name of the latitude dimension.
     """
+    # No clipping needed
+    if region == 'global':
+        return ds
+
     region_data = get_region(region)
     if len(region_data) == 2:
         lon_slice, lat_slice = region_data
@@ -203,3 +198,34 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
     # Slice the globe
     ds = get_globe_slice(ds, lon_slice, lat_slice, lon_dim=lon_dim, lat_dim=lat_dim, base='base180')
     return ds
+
+
+def get_anomalies(ds, clim, var, time_dim='time'):
+    """Calculate the anomalies of a dataset.
+
+    The input dataset should have a time dimension of the type datetime64[ns].
+    The climatology dataset should have a dayofyear dimension. The datasets
+    should have the same spatial dimensions and coordinates.
+
+    Args:
+        ds (xr.Dataset): Dataset to calculate anomalies for.
+        clim (xr.Dataset): Climatology dataset to calculate anomalies from.
+        var (str): Variable to calculate anomalies for.
+    """
+    # Create a day of year timeseries
+    ds = ds.assign_coords(dayofyear=ds[time_dim].dt.dayofyear)
+    with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+        clim_ds = clim.sel(dayofyear=ds.dayofyear)
+        clim_ds = clim_ds.drop('dayofyear')
+
+    # Drop day of year coordinates
+    ds = ds.drop('dayofyear')
+
+    # Ensure that the climatology and dataset have the same dimensions
+    if not all([dim in ds.dims for dim in clim_ds.dims]):
+        raise ValueError("Climatology and dataset must have the same dimensions.")
+
+    # Calculate the anomalies
+    anom = ds[var] - clim_ds[var]
+    anom = anom.to_dataset()
+    return anom
