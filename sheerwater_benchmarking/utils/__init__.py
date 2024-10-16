@@ -3,7 +3,7 @@ from .caching import cacheable
 from .remote import dask_remote, get_config
 from .secrets import cdsapi_secret, ecmwf_secret, salient_secret, salient_auth
 from .data_utils import (apply_mask, roll_and_agg, regrid, clip_region,
-                         lon_base_change, get_globe_slice, plot_map)
+                         lon_base_change, get_globe_slice, get_anomalies)
 from .general_utils import (load_netcdf, write_zarr, load_zarr, load_object)
 
 from .space_utils import (get_grid, get_grid_ds, is_wrapped,
@@ -11,7 +11,7 @@ from .space_utils import (get_grid, get_grid_ds, is_wrapped,
 
 from .time_utils import is_valid_forecast_date, generate_dates_in_between, get_dates
 
-from .variable_utils import get_variable
+from .variable_utils import get_variable, plot_map
 
 
 # Use __all__ to define what is part of the public API.
@@ -43,5 +43,6 @@ __all__ = [
     lon_base_change,
     get_globe_slice,
     plot_map,
-    check_bases
+    check_bases,
+    get_anomalies,
 ]

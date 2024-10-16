@@ -8,8 +8,8 @@ validity.
 """
 import itertools
 
-from sheerwater_benchmarking.reanalysis import iri_ecmwf
-from sheerwater_benchmarking.baselines import climatology
+from sheerwater_benchmarking.forecasts.ecmwf_er import iri_ecmwf
+from sheerwater_benchmarking.climatology import climatology
 
 
 def test_iri_ecmwf(start_iri_ecmwf, end_iri_ecmwf):

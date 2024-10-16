@@ -1,7 +1,12 @@
-"""Data utility functions for all parts of the data pipeline."""
+"""Data utility functions for all parts of the data pipeline.
+
+These utility functions take as input an xarray dataset and return a modified
+dataset.
+"""
 import numpy as np
 import xarray as xr
 import xarray_regrid  # noqa: F401, import needed for regridding
+
 
 from .space_utils import (get_grid_ds,
                           base360_to_base180, base180_to_base360,
@@ -159,30 +164,11 @@ def lon_base_change(ds, to_base="base180", lon_dim='lon'):
     return ds
 
 
-def plot_map(ds, var, lon_dim='lon'):
-    """Plot a map of the dataset, handling longitude wrapping.
-
-    Args:
-        ds (xr.Dataset): Dataset to change.
-        var (str): The variable in the dataset to plot.
-        lon_dim (str): The longitude column name.
-    """
-    if is_wrapped(ds[lon_dim].values):
-        print("Warning: Wrapped data cannot be plotted. Converting bases for visualization")
-        if ds[lon_dim].max() > 180.0:
-            plot_ds = lon_base_change(ds, to_base="base180")
-        else:
-            plot_ds = lon_base_change(ds, to_base="base360")
-    else:
-        plot_ds = ds
-    plot_ds[var].plot(x=lon_dim)
-
-
 def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
     """Clip a dataset to a region.
 
     Args:
-        ds (xr.Dataset): The dataset to clip to Africa.
+        ds (xr.Dataset): The dataset to clip to a specific region.
         region (str): The region to clip to. One of:
             - africa, conus, global
         lon_dim (str): The name of the longitude dimension.
@@ -203,3 +189,23 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
     # Slice the globe
     ds = get_globe_slice(ds, lon_slice, lat_slice, lon_dim=lon_dim, lat_dim=lat_dim, base='base180')
     return ds
+
+
+def get_anomalies(ds, clim, var):
+    """Calculate the anomalies of a dataset.
+
+    For the subtraction to succeed, the datasets must have the same
+    dimensions and coordinates. 
+
+    Args:
+        ds (xr.Dataset): Dataset to calculate anomalies for.
+        clim (xr.Dataset): Climatology dataset to calculate anomalies from.
+        var (str): Variable to calculate anomalies for.
+    """
+    # Ensure that the climatology and dataset have the same dimensions
+    if not all([dim in ds.dims for dim in clim.dims]):
+        raise ValueError("Climatology and dataset must have the same dimensions.")
+
+    # Calculate the anomalies
+    anom = ds[var] - clim[var]
+    return anom
