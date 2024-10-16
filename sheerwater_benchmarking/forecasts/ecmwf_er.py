@@ -400,7 +400,10 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
 
     if anom:
         # Get the climatology on the same grid
-        clim = climatology_raw(variable, **clim_params, grid=grid)
+        try:
+            clim = climatology_raw(variable, **clim_params, grid=grid)
+        except:
+            import pdb; pdb.set_trace()
         ds = get_anomalies(ds, clim, var=variable)
 
     # Roll and aggregate the data

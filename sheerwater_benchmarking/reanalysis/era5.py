@@ -13,7 +13,6 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, roll_and_agg, lon_base_change,
                                            regrid, get_anomalies)
 from sheerwater_benchmarking.masks import land_sea_mask
-from sheerwater_benchmarking.climatology import climatology_raw
 
 
 @cacheable(data_type='array', cache_args=['year', 'variable', 'grid'])
@@ -183,10 +182,11 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'grid', 'agg', 'anom', 'clim_params'],
+           cache_args=['variable', 'agg', 'anom', 'clim_params', 'grid'],
            chunking={"lat": 721, "lon": 1441, "time": 30})
-def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14, 
-                anom=False, clim_params={'first_year': 1991, 'last_year': 2020}):
+def era5_rolled(start_time, end_time, variable, agg=14,
+                anom=False, clim_params=None,
+                grid="global1_5"):
     """Aggregates the hourly ERA5 data into daily data and rolls.
 
     Args:
@@ -206,8 +206,15 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14,
     ds = era5_daily(start_time, end_time, variable, grid=grid)
 
     if anom:
+        # Import here to avoid circular dependency
+        from sheerwater_benchmarking.climatology import climatology_raw
         # Get the climatology on the same grid
-        clim = climatology_raw(variable, **clim_params, grid=grid)
+        clim_params = {} if clim_params is None else clim_params
+        try:
+            clim = climatology_raw(variable, **clim_params, grid=grid)
+        except:
+            import pdb
+            pdb.set_trace()
         ds = get_anomalies(ds, clim, var=variable)
 
     agg_fn = "sum" if variable == "precip" else "mean"
@@ -219,12 +226,12 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14,
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'grid', 'agg', 'mask', 'region'],
+           cache=False,
+           cache_args=['variable', 'agg', 'anom', 'clim_params', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            auto_rechunk=False)
-def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14,
-             anom=False, clim_params={'first_year': 1991, 'last_year': 2020},
-             mask="lsm", region='global'):
+def era5_agg(start_time, end_time, variable, agg=14, anom=False, clim_params=None,
+             grid="global1_5", mask="lsm", region='global'):
     """Fetches ground truth data from ERA5 and applies aggregation and masking.
 
     Specialized function for the ABC model.
@@ -241,7 +248,7 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14,
             - None: No mask
     """
     # Get ERA5 on the corresponding global grid
-    ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg, 
+    ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg,
                      anom=anom, clim_params=clim_params)
 
     # Apply mask
