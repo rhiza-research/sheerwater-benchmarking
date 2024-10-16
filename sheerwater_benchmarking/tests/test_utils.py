@@ -7,14 +7,11 @@ from sheerwater_benchmarking.utils.general_utils import base180_to_base360, base
 
 def test_get_grid():
     """Test the get_grid function."""
-    grids = ["global1_5", "global0_5", "global0_25", "us1_0", "us1_5", "salient_common", "africa1_5", "africa0_25"]
+    grids = ["global1_5", "global0_25"]
     for grid in grids:
-        lons, lats, size, _ = get_grid(grid)
+        lons, lats, size = get_grid(grid)
         diffs_lon = np.diff(lons)
         diffs_lat = np.diff(lats)
-        # We expect one jump -360 jump on the longitude at the boundary,
-        # so we correct that jump
-        diffs_lon = np.array([x + 360.0 if x < 0.0 else x for x in diffs_lon])
         assert (diffs_lon == size).all()
         assert (diffs_lat == size).all()
 

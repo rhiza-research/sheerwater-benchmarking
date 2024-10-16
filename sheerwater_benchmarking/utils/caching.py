@@ -300,9 +300,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                 if recompute:
                     print(f"Recompute for {cache_path} requested. Not checking for cached result.")
                 elif not cache:
-                    print(f"{func.__name__} not a cacheable function. Recomputing result.")
+                    pass
                 else:
                     print(f"Cache doesn't exist for {cache_path}. Running function")
+
+                if timeseries is not None and (start_time is None or end_time is None):
+                    raise ValueError('Need to pass start and end time arguments when recomputing function.')
 
                 ##### IF NOT EXISTS ######
                 ds = func(*args, **kwargs)

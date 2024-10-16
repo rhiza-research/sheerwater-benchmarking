@@ -94,10 +94,7 @@ requires-python = ">= 3.12"
 
 # This is a custom property to instantiate a coiled software environment
 [tool.sheerwater_benchmarking.coiled]
-conda-dependencies = [
-    "xesmf",
-    "esmpy",
-]
+conda-dependencies = []
 
 [build-system]
 requires = ["hatchling"]

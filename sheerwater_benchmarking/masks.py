@@ -1,22 +1,21 @@
 """Mask data objects."""
 import os
 import cdsapi
-import geopandas as gpd
 import xarray as xr
 
-from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid, get_global_grid,
-                                           lon_base_change, get_globe_slice, load_object)
+from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid,
+                                           lon_base_change)
 
 
 @cacheable(data_type='array', cache_args=['grid'])
-def land_sea_mask_global(grid="global1_5"):
+def land_sea_mask(grid="global1_5"):
     """Get the ECMWF global land sea mask for the given grid.
 
     Args:
         grid (str): The grid to fetch the data at.  Note that only
             the resolution of the specified grid is used.
     """
-    lons, lats, grid_size, _ = get_grid(grid, base="base360")
+    _, _, grid_size = get_grid(grid, base="base360")
 
     # Get data from the CDS API
     times = ['00:00']
@@ -68,47 +67,6 @@ def land_sea_mask_global(grid="global1_5"):
 
     ds = ds.compute()
     os.remove(path)
-    return ds
-
-
-@cacheable(data_type='array', cache_args=['grid'])
-def land_sea_mask(grid="global1_5"):
-    """Get the ECMWF land sea mask for the given grid.
-
-    Args:
-        grid (str): The grid to fetch the data at.
-    """
-    # Get global land sea mask
-    ds = land_sea_mask_global(grid=get_global_grid(grid))
-
-    # Select relevant subset
-    lons, lats, _, region = get_grid(grid)
-    ds = get_globe_slice(ds, lons, lats, base='base180')
-
-    if region == 'africa':
-        ds = clip_africa(ds)
-    return ds
-
-
-def clip_africa(ds, lon_dim='lon', lat_dim='lat'):
-    """Clip a dataset to the African continent.
-
-    Args:
-        ds (xr.Dataset): The dataset to clip to Africa.
-        lon_dim (str): The name of the longitude dimension.
-        lat_dim (str): The name of the latitude dimension.
-    """
-    # Get the rectangle boundary of Africa
-    ds = ds.rio.write_crs("EPSG:4326")
-    ds = ds.rio.set_spatial_dims(lon_dim, lat_dim)
-
-    # Get the countries of Africa shapefile
-    filepath = 'gs://sheerwater-datalake/africa.geojson'
-    gdf = gpd.read_file(load_object(filepath))
-
-    # Clip the grid to the boundary of Africa
-    ds = ds.rio.clip(gdf.geometry, gdf.crs, drop=False)
-
     return ds
 
 

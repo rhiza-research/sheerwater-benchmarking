@@ -3,6 +3,7 @@ import numpy as np
 import dateparser
 import gcsfs
 import xarray as xr
+import geopandas as gpd
 from datetime import datetime, timedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY, WEEKLY, YEARLY
 
@@ -152,14 +153,17 @@ def get_variable(variable_name, variable_type='era5'):
     for tup in weather_variables:
         for name in tup:
             if name == variable_name:
-                return tup[name_index]
+                val = tup[name_index]
+                if val is None:
+                    raise ValueError(f"Variable {variable_name} not implemented.")
+                return val
 
     raise ValueError(f"Variable {variable_name} not found")
 
 
-def get_grid_ds(region_id, base="base180"):
+def get_grid_ds(grid_id, base="base180"):
     """Get a dataset equal to ones for a given region."""
-    lons, lats, _, _ = get_grid(region_id, base=base)
+    lons, lats, _ = get_grid(grid_id, base=base)
     data = np.ones((len(lons), len(lats)))
     ds = xr.Dataset(
         {"mask": (['lon', 'lat'], data)},
@@ -168,84 +172,74 @@ def get_grid_ds(region_id, base="base180"):
     return ds
 
 
-def get_grid(region_id, base="base180", sorted=True):
-    """Get the longitudes, latitudes and grid size for a named region.
+def get_grid(grid, base="base180"):
+    """Get the longitudes, latitudes and grid size for a given global grid.
 
     Args:
-        region_id (str): The region to get the grid for. One of:
+        grid (str): The resolution to get the grid for. One of:
             - global1_5: 1.5 degree global grid
-            - global0_5: 0.5 degree global grid
             - global0_25: 0.25 degree global grid
-            - us1_5: 1.5 degree US grid
-            - salient_africa0_25: Salient common grid in Africa
-            - africa1_5: 1.5 degree African grid
-            - africa0_25: 0.25 degree African grid
+            - salient0_25: 0.25 degree Salient global grid
         base (str): The base grid to use. One of:
             - base360: 360 degree base longitude grid
             - base180: 180 degree base longitude grid
-        sorted (bool): Whether to sort the longitudes before returning.
-            Invalid for wrapped longitudes.
     """
-    if region_id == "global1_5":
+    if grid == "global1_5":
         grid_size = 1.5
         lons = np.arange(-180, 180, 1.5)
         lats = np.arange(-90, 90+grid_size, 1.5)
-        region = 'global'
-    elif region_id == "global0_25":
+    elif grid == "global0_25":
         grid_size = 0.25
         lons = np.arange(-180, 180, 0.25)
         lats = np.arange(-90, 90+grid_size, 0.25)
-        region = 'global'
-    elif region_id == "africa1_5":
-        grid_size = 1.5
-        # Get the subset of the grid that's aligned with the global grid
-        lons = np.arange(-24.0, 74.5, 1.5)
-        lats = np.arange(-33.0, 37.5, 1.5)
-        region = 'africa'
-    elif region_id == "africa0_25":
-        grid_size = 0.25
-        lons = np.arange(-24.0, 73.25, 0.25)
-        lats = np.arange(-33.0, 36.25, 0.25)
-        region = 'africa'
-    elif region_id == "salient_africa0_25":
-        grid_size = 0.25
-        lons = np.arange(-25.875, 72.125, 0.25)
-        lats = np.arange(-34.875, 38.125, 0.25)
-        region = None
-    elif region_id == "salient_global0_25":
+    elif grid == "salient0_25":
         grid_size = 0.25
         offset = 0.125
         lons = np.arange(-180.0+offset, 180.0, 0.25)
         lats = np.arange(-90.0+offset, 90.0, 0.25)
-        region = None
-    elif region_id == "us1_5":
-        grid_size = 1.5
-        lons = np.arange(-123.0, -66.0, 1.5)
-        lats = np.arange(25.5, 49.5, 1.5)
-        region = None
-    elif region_id == "us0_25":
-        grid_size = 0.25
-        lons = np.arange(-123.0, -66.0, 0.25)
-        lats = np.arange(25.5, 49.5, 0.25)
-        region = None
     else:
         raise NotImplementedError(
-            f"Grid {region_id} has not been implemented.")
+            f"Grid {grid} has not been implemented.")
     if base == "base360":
         lons = base180_to_base360(lons)
-        if sorted:
-            lons = np.sort(lons)
-    return lons, lats, grid_size, region
+        lons = np.sort(lons)
+    return lons, lats, grid_size
 
 
-def get_global_grid(region_id):
-    """Get the corresponding global grid to a specified grid."""
-    if '0_25' in region_id and 'salient' not in region_id:
-        return 'global0_25'
-    elif '1_5' in region_id and 'salient' not in region_id:
-        return 'global1_5'
+def get_region(region):
+    """Get the longitudes, latitudes boundaries or shapefile for a given region.
+
+    Note: assumes longitude in base180 format.
+
+    Args:
+        region (str): The resolution to get the grid for. One of:
+            - africa: the African continent
+            - conus: the CONUS region
+            - global: the global region
+
+    Returns:
+        data: The longitudes and latitudes of the region as a tuple,
+            or the shapefile defining the region.
+    """
+    if region == "africa":
+        # Get the countries of Africa shapefile
+        lons = np.array([-23.0, 58.0])
+        lats = np.array([-35.0, 37.5])
+        filepath = 'gs://sheerwater-datalake/africa.geojson'
+        gdf = gpd.read_file(load_object(filepath))
+        data = (lons, lats, gdf)
+    elif region == "conus":
+        lons = np.array([-125.0, -67.0])
+        lats = np.array([25.0, 50.0])
+        data = (lons, lats)
+    elif region == "global":
+        lons = np.array([-180.0, 180.0])
+        lats = np.array([-90.0, 90.0])
+        data = (lons, lats)
     else:
-        raise NotImplementedError(f"Global grid {region_id} has not been implemented.")
+        raise NotImplementedError(
+            f"Region {region} has not been implemented.")
+    return data
 
 
 def base360_to_base180(lons):
@@ -312,28 +306,3 @@ def check_bases(ds, dsp, lon_col='lon', lon_colp='lon'):
     if base != basep:
         return -1
     return 0
-
-
-def convert_lead_to_timedelta(lead):
-    """Converts a lead time to a timedelta object."""
-    lead_params = {
-        "week1": (0, 7, 'D'),
-        "week2": (7, 14, 'D'),
-        "week3": (14, 21, 'D'),
-        "week4": (21, 28, 'D'),
-        "week5": (28, 35, 'D'),
-        "weeks12": (0, 14, 'D'),
-        "weeks23": (7, 14, 'D'),
-        "weeks34": (14, 21, 'D'),
-        "weeks45": (21, 28, 'D'),
-        "weeks56": (28, 35, 'D'),
-        "month1": ("seasonal", 1),
-        "month2": ("seasonal", 2),
-        "month3": ("seasonal", 3),
-        "quarter1": ("sub-seasonal", 1),
-        "quarter2": ("sub-seasonal", 2),
-        "quarter3": ("sub-seasonal", 3),
-        "quarter4": ("sub-seasonal", 4),
-    }
-    lead = lead_params['lead']
-    return np.timedelta64(lead[0], lead[2]), np.timedelta64(lead[0], lead[2])

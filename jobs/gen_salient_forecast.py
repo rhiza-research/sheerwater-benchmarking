@@ -1,7 +1,6 @@
 """Generate Salient forecasts / reforecasts for all time."""
 from itertools import product
 from sheerwater_benchmarking.forecasts import salient_blend_proc
-from sheerwater_benchmarking.utils import get_config
 
 
 if __name__ == "__main__":
@@ -17,4 +16,4 @@ if __name__ == "__main__":
         ds = salient_blend_proc(start_time, end_time, var, timescale=timescale,
                                 grid=grid,
                                 recompute=True, force_overwrite=True,
-                                remote=True, remote_config=get_config('genevieve'))
+                                remote=True)

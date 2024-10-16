@@ -1,7 +1,6 @@
 """Re-run and re-cache the ECMWF aggregation and masking pipeline."""
 from itertools import product
 from sheerwater_benchmarking.forecasts import ecmwf_agg
-from sheerwater_benchmarking.utils import get_config
 
 
 if __name__ == "__main__":
@@ -23,14 +22,12 @@ if __name__ == "__main__":
         # ds = ecmwf_rolled(start_time, end_time, variable=var, forecast_type=ft,
         #                   grid=global_grid, agg=agg,
         #                   recompute=False, force_overwrite=False,
-        #                   remote=True,
-        #                   remote_config=get_config('genevieve')
+        #                   remote=True
         #                   )
 
         for rgrid, mask in product(regional_grids, masks):
             ds = ecmwf_agg(start_time, end_time, variable=var, forecast_type=ft,
                            grid=rgrid, agg=agg, mask=mask,
                            recompute=False, force_overwrite=False,
-                           remote=True,
-                           remote_config=get_config('genevieve')
+                           remote=True
                            )

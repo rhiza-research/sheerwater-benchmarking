@@ -2,7 +2,6 @@
 from itertools import product
 from sheerwater_benchmarking.reanalysis import era5_agg
 from sheerwater_benchmarking.reanalysis.era5 import era5_rolled
-from sheerwater_benchmarking.utils import get_config
 
 
 vars = ["tmp2m", "precip"]
@@ -26,11 +25,7 @@ for var, agg, grid in product(vars, aggs, grids):
     if UPDATE_ROLLED and 'global' in grid:
         # Update the rolled data for global grids
         ds = era5_rolled(start_time, end_time, variable=var, grid=grid, agg=agg,
-                         recompute=True, remote=True, force_overwrite=True,
-                         remote_config=get_config('genevieve')
-                         )
+                         recompute=True, remote=True, force_overwrite=True)
     for mask in masks:
         ds = era5_agg(start_time, end_time, variable=var, grid=grid, agg=agg, mask=mask,
-                      recompute=True, remote=True, force_overwrite=True,
-                      remote_config=get_config('genevieve')
-                      )
+                      recompute=True, remote=True, force_overwrite=True)
