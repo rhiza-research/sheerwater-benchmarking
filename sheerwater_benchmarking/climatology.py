@@ -1,8 +1,9 @@
 """Climatology models."""
+from sheerwater_benchmarking.masks import land_sea_mask
 import dask
 from sheerwater_benchmarking.reanalysis import era5_daily
-from sheerwater_benchmarking.utils import dask_remote, cacheable, clip_region, apply_mask
-from sheerwater_benchmarking.masks import land_sea_mask
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, clip_region,
+                                           apply_mask, lon_base_change)
 
 
 @dask_remote
@@ -17,6 +18,8 @@ def climatology_raw(variable, first_year, last_year, grid='global1_5'):
 
     # Get single day, masked data between start and end years
     ds = era5_daily(start_time, end_time, variable=variable, grid=grid)
+    # TODO: Remove once we update era5 caches
+    ds = lon_base_change(ds)
 
     # Add day of year as a coordinate
     ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)

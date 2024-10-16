@@ -369,14 +369,13 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'forecast_type', 'grid', 'agg', 'anom', 'clim_params'],
+           cache_args=['variable', 'forecast_type', 'agg', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
            chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
                      "start_year": 29, "model_issuance_date": 969},
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
-                 grid="global1_5", agg=14,
-                 anom=False, clim_params={'first_year': 1991, 'last_year': 2020},
+                 agg=14, grid="global1_5",
                  verbose=True):
     """Fetches forecast data from the ECMWF IRI dataset.
 
@@ -398,14 +397,6 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
     # Convert to base180 longitude
     ds = lon_base_change(ds, to_base="base180")
 
-    if anom:
-        # Get the climatology on the same grid
-        try:
-            clim = climatology_raw(variable, **clim_params, grid=grid)
-        except:
-            import pdb; pdb.set_trace()
-        ds = get_anomalies(ds, clim, var=variable)
-
     # Roll and aggregate the data
     agg_fn = "sum" if variable == "precip" else "mean"
     ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn=agg_fn)
@@ -415,14 +406,27 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['variable', 'agg', 'grid'],
+           timeseries=['start_date'],
+           chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969})
+def ecmwf_debiased(start_time, end_time, variable, agg=14,
+                   grid="global1_5"):
+    """Generates debiased ECMWF forecasts."""
+    # Fetch the raw data
+    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type='forecast', agg=agg, grid=grid)
+    ds_r = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache=False,
            timeseries=['start_date', 'model_issuance_date'],
-           cache_args=['variable', 'forecast_type', 'grid', 'agg', 'mask'],
+           cache_args=['variable', 'forecast_type', 'agg', 'anom', 'clim_params', 'grid', 'mask'],
            chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
                      "start_year": 29, "model_issuance_date": 969},
            auto_rechunk=False)
-def ecmwf_agg(start_time, end_time, variable, forecast_type, grid="global1_5", agg=14,
-              anom=False, clim_params={'first_year': 1991, 'last_year': 2020},
-              mask="lsm", region='global', verbose=True):
+def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, anom=False, clim_params=None,
+              grid="global1_5",  mask="lsm", region='global', verbose=True):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Specialized function for the ABC model
@@ -441,9 +445,7 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, grid="global1_5", a
         verbose (bool): Whether to print verbose output.
     """
     ds = ecmwf_rolled(start_time, end_time, variable,
-                      forecast_type, grid=grid, agg=agg,
-                      anom=anom, clim_params=clim_params,
-                      verbose=verbose)
+                      forecast_type, agg=agg,  grid=grid, verbose=verbose)
 
     # Apply mask
     if mask != 'lsm' and mask is not None:
@@ -481,7 +483,7 @@ def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
     if agg is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
 
-    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type="forecast", grid=grid, agg=agg)
+    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type="forecast", agg=agg, grid=grid)
 
     # Leads are 12 hours offset from the forecast date
     ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
