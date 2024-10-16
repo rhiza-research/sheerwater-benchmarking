@@ -11,8 +11,9 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            cdsapi_secret,
                                            get_grid, clip_region, get_variable,
                                            apply_mask, roll_and_agg, lon_base_change,
-                                           regrid)
+                                           regrid, get_anomalies)
 from sheerwater_benchmarking.masks import land_sea_mask
+from sheerwater_benchmarking.climatology import climatology_raw
 
 
 @cacheable(data_type='array', cache_args=['year', 'variable', 'grid'])
@@ -160,6 +161,9 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
     # Read and combine all the data into an array
     ds = era5_raw(start_time, end_time, variable, grid='global0_25')
 
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
+
     if variable == 'tmp2m':
         ds[variable] = ds[variable] - 273.15
         ds[variable].units = 'C'
@@ -172,22 +176,17 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 
     if grid != 'global0_25':
         # Regrid the data to the desired grid, on base360 longitudes
-        ds = regrid(ds, grid, base="base360")
-
-    # Manually reset the chunking for this smaller grid
-    # TODO: implement this via a better API
-    if grid == 'global1_5':
-        era5_daily.chunking = {"lat": 121, "lon": 240, "time": 1000}
+        ds = regrid(ds, grid, base="base180")
     return ds
 
 
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'grid', 'agg'],
-           chunking={"lat": 721, "lon": 1441, "time": 30},
-           auto_rechunk=False)
-def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
+           cache_args=['variable', 'grid', 'agg', 'anom', 'clim_params'],
+           chunking={"lat": 721, "lon": 1441, "time": 30})
+def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14, 
+                anom=False, clim_params={'first_year': 1991, 'last_year': 2020}):
     """Aggregates the hourly ERA5 data into daily data and rolls.
 
     Args:
@@ -198,27 +197,37 @@ def era5_rolled(start_time, end_time, variable, grid="global1_5", agg=14):
             - global1_5: 1.5 degree global grid
             - global0_25: 0.25 degree global grid
         agg (str): The aggregation period to use, in days
+        anom (bool): Whether to return the climatological anomaly
+        clim_params (dict): Parameters for the climatology anomaly calculation, 
+            passed directly to climatology function. If anom is False,
+            these parameters are ignored.
     """
     # Read and combine all the data into an array
     ds = era5_daily(start_time, end_time, variable, grid=grid)
+
+    if anom:
+        # Get the climatology on the same grid
+        clim = climatology_raw(variable, **clim_params, grid=grid)
+        ds = get_anomalies(ds, clim, var=variable)
+
     agg_fn = "sum" if variable == "precip" else "mean"
     ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
 
-    # Manually reset the chunking for this smaller grid
-    # TODO: implement this via a better API
-    if grid == 'global1_5':
-        era5_rolled.chunking = {"lat": 121, "lon": 240, "time": 1000}
     return ds
 
 
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'grid', 'agg', 'mask'],
-           chunking={"lat": 721, "lon": 1441, "time": 30},
+           cache_args=['variable', 'grid', 'agg', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": 1000},
            auto_rechunk=False)
-def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm"):
-    """Fetches ground truth data from ERA5 and applies aggregation and masking .
+def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14,
+             anom=False, clim_params={'first_year': 1991, 'last_year': 2020},
+             mask="lsm", region='global'):
+    """Fetches ground truth data from ERA5 and applies aggregation and masking.
+
+    Specialized function for the ABC model.
 
     Args:
         start_time (str): The start date to fetch data for.
@@ -232,26 +241,17 @@ def era5_agg(start_time, end_time, variable, grid="global1_5", agg=14, mask="lsm
             - None: No mask
     """
     # Get ERA5 on the corresponding global grid
-    ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg)
+    ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg, 
+                     anom=anom, clim_params=clim_params)
 
-    # Convert to base180 longitude
-    ds = lon_base_change(ds, to_base="base180")
-
-    if mask == "lsm":
-        # Select variables and apply mask
-        mask_ds = land_sea_mask(grid=grid).compute()
-    elif mask is None:
-        mask_ds = None
-    else:
-        raise NotImplementedError("Only land-sea or None mask is implemented.")
-
+    # Apply mask
+    if mask != 'lsm' and mask is not None:
+        raise NotImplementedError("Only land-sea or no mask is implemented.")
+    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
     ds = apply_mask(ds, mask_ds, variable)
 
-    # Manually reset the chunking for this smaller grid
-    # TODO: implement this via a better API
-    if grid == 'global1_5':
-        era5_agg.chunking = {"lat": 121, "lon": 240, "time": 1000}
-
+    # Clip to region
+    ds = clip_region(ds, region)
     return ds
 
 
@@ -291,8 +291,14 @@ def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', re
     # Get daily data
     new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
     new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    ds = era5_agg(new_start, new_end, variable, agg=agg, grid=grid, mask=mask)
+    ds = era5_rolled(new_start, new_end, variable, agg=agg, anom=False, grid=grid)
     ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
+
+    # Apply mask
+    if mask != 'lsm' and mask is not None:
+        raise NotImplementedError("Only land-sea or no mask is implemented.")
+    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
+    ds = apply_mask(ds, mask_ds, variable)
 
     # Clip to region
     ds = clip_region(ds, region)

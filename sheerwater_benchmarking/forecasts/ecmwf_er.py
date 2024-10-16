@@ -13,11 +13,13 @@ from urllib3 import poolmanager
 import time
 
 from sheerwater_benchmarking.masks import land_sea_mask
+from sheerwater_benchmarking.climatology import climatology_raw
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
                                            get_grid, get_dates,
                                            is_valid_forecast_date,
                                            apply_mask, roll_and_agg,
-                                           lon_base_change, clip_region)
+                                           lon_base_change, clip_region,
+                                           get_anomalies)
 
 
 ########################################################################
@@ -367,13 +369,15 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'forecast_type', 'grid', 'agg'],
+           cache_args=['variable', 'forecast_type', 'grid', 'agg', 'anom', 'clim_params'],
            timeseries=['start_date', 'model_issuance_date'],
            chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
                      "start_year": 29, "model_issuance_date": 969},
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
-                 grid="global1_5", agg=14, verbose=True):
+                 grid="global1_5", agg=14,
+                 anom=False, clim_params={'first_year': 1991, 'last_year': 2020},
+                 verbose=True):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Args:
@@ -391,9 +395,18 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                         forecast_type,
                         grid=grid, verbose=verbose)
 
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
+
+    if anom:
+        # Get the climatology on the same grid
+        clim = climatology_raw(variable, **clim_params, grid=grid)
+        ds = get_anomalies(ds, clim, var=variable)
+
     # Roll and aggregate the data
     agg_fn = "sum" if variable == "precip" else "mean"
     ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn=agg_fn)
+
     return ds
 
 
@@ -404,9 +417,12 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
            chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
                      "start_year": 29, "model_issuance_date": 969},
            auto_rechunk=False)
-def ecmwf_agg(start_time, end_time, variable, forecast_type,
-              grid="global1_5", agg=14, mask="lsm", verbose=True):
+def ecmwf_agg(start_time, end_time, variable, forecast_type, grid="global1_5", agg=14,
+              anom=False, clim_params={'first_year': 1991, 'last_year': 2020},
+              mask="lsm", region='global', verbose=True):
     """Fetches forecast data from the ECMWF IRI dataset.
+
+    Specialized function for the ABC model
 
     Args:
         start_time (str): The start date to fetch data for.
@@ -423,20 +439,17 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
     """
     ds = ecmwf_rolled(start_time, end_time, variable,
                       forecast_type, grid=grid, agg=agg,
+                      anom=anom, clim_params=clim_params,
                       verbose=verbose)
 
-    # Convert to base180 longitude
-    ds = lon_base_change(ds, to_base="base180")
-
-    if mask == "lsm":
-        # Select variables and apply mask
-        mask_ds = land_sea_mask(grid=grid).compute()
-    elif mask is None:
-        mask_ds = None
-    else:
-        raise NotImplementedError("Only land-sea or None mask is implemented.")
-
+    # Apply mask
+    if mask != 'lsm' and mask is not None:
+        raise NotImplementedError("Only land-sea or no mask is implemented.")
+    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
     ds = apply_mask(ds, mask_ds, variable)
+
+    # Clip to region
+    ds = clip_region(ds, region)
     return ds
 
 
@@ -465,8 +478,7 @@ def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
     if agg is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
 
-    ds = ecmwf_agg(start_time, end_time, variable, forecast_type="forecast",
-                   grid=grid, agg=agg, mask=mask)
+    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type="forecast", grid=grid, agg=agg)
 
     # Leads are 12 hours offset from the forecast date
     ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
@@ -475,6 +487,12 @@ def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
         ds = ds.assign_coords(member=-1)
     else:
         raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
+
+    # Apply mask
+    if mask != 'lsm' and mask is not None:
+        raise NotImplementedError("Only land-sea or no mask is implemented.")
+    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
+    ds = apply_mask(ds, mask_ds, variable)
 
     # Clip to specified region
     ds = clip_region(ds, region=region)

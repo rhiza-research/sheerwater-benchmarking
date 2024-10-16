@@ -1,21 +1,22 @@
 """Climatology models."""
-from sheerwater_benchmarking.reanalysis import era5_agg
-from sheerwater_benchmarking.utils import dask_remote, cacheable
+import dask
+from sheerwater_benchmarking.reanalysis import era5_daily
+from sheerwater_benchmarking.utils import dask_remote, cacheable, clip_region, apply_mask
+from sheerwater_benchmarking.masks import land_sea_mask
 
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['first_year', 'last_year', 'variable', 'grid', 'mask'],
-           chunking={"lat": 121, "lon": 240, "dayofyear": 366},
+           cache_args=['variable', 'first_year', 'last_year', 'grid'],
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
            auto_rechunk=False)
-def climatology(first_year, last_year, variable, grid="global1_5", mask="lsm"):
+def climatology_raw(variable, first_year, last_year, grid='global1_5'):
     """Compute the climatology of the ERA5 data. Years are inclusive."""
     start_time = f"{first_year}-01-01"
     end_time = f"{last_year}-12-31"
 
     # Get single day, masked data between start and end years
-    ds = era5_agg(start_time, end_time, variable=variable,
-                  grid=grid, agg=1, mask=mask)
+    ds = era5_daily(start_time, end_time, variable=variable, grid=grid)
 
     # Add day of year as a coordinate
     ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
@@ -26,11 +27,36 @@ def climatology(first_year, last_year, variable, grid="global1_5", mask="lsm"):
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'grid', 'mask'],
+           cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "dayofyear": 366},
+           cache=False)
+def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mask="lsm", region='africa'):
+    """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
+    # Get single day, masked data between start and end years
+    ds = climatology_raw(variable, first_year, last_year, grid=grid)
+
+    # Apply mask
+    if mask != 'lsm' and mask is not None:
+        raise NotImplementedError("Only land-sea or no mask is implemented.")
+    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
+    ds = apply_mask(ds, mask_ds, variable)
+
+    # Clip to region, suppressing large chunk splitting
+    with dask.config.set(**{'array.slicing.split_large_chunks': False}):
+        ds = clip_region(ds, region)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 366},
            cache=False,
            auto_rechunk=False)
-def climatology_standard_30yr(variable, grid="global1_5", mask="lsm"):
+def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='africa'):
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
     # Get single day, masked data between start and end years
-    return climatology(1991, 2020, variable, grid=grid, mask=mask)
+    return climatology(variable, 1991, 2020, grid=grid, mask=mask, region=region)
+
+
+__all__ = ['climatology', 'climatology_standard_30yr']

@@ -5,7 +5,7 @@ import numpy as np
 import xarray as xr
 import dask
 
-from sheerwater_benchmarking.climatology import climatology
+from sheerwater_benchmarking.climatology import climatology_raw
 from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, roll_and_agg,
                                            get_dates, apply_mask, clip_region)
@@ -19,7 +19,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, roll_and_agg,
            chunking={"lat": 721, "lon": 1441, "time": 30},
            auto_rechunk=False)
 def climatology_agg(start_time, end_time, variable, first_year=1991, last_year=2020,
-                    agg=14, grid="global1_5", mask="lsm"):
+                    agg=14, grid="global1_5"):
     """Generates a daily timeseries of climatology with rolling aggregation.
 
     Args:
@@ -33,8 +33,7 @@ def climatology_agg(start_time, end_time, variable, first_year=1991, last_year=2
             - None: No mask
     """
     # Get climatology on the corresponding global grid
-    clim = climatology(first_year=first_year, last_year=last_year, variable=variable,
-                       grid=grid, mask=mask)
+    clim = climatology_raw(variable=variable, first_year=first_year, last_year=last_year, grid=grid)
 
     # Create a target date dataset
     target_dates = get_dates(start_time, end_time, stride='day', return_string=False)
@@ -49,16 +48,6 @@ def climatology_agg(start_time, end_time, variable, first_year=1991, last_year=2
     # Roll and aggregate the data
     agg_fn = "sum" if variable == "precip" else "mean"
     ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
-
-    # Mask the result
-    if mask == "lsm":
-        # Select variables and apply mask
-        mask_ds = land_sea_mask(grid=grid).compute()
-    elif mask is None:
-        mask_ds = None
-    else:
-        raise NotImplementedError("Only land-sea or None mask is implemented.")
-    ds = apply_mask(ds, mask_ds, variable)
     return ds
 
 
@@ -96,6 +85,13 @@ def climatology_forecast(start_time, end_time, variable, lead, prob_type='determ
         ds = ds.assign_coords(member=-1)
     else:
         raise NotImplementedError("Only deterministic forecasts are available for climatology.")
+
+    # Mask the result
+    if mask != 'lsm' and mask is not None:
+        raise NotImplementedError("Only land-sea or no mask is implemented.")
+    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
+    ds = apply_mask(ds, mask_ds, variable)
+
     # Clip to region
     ds = clip_region(ds, region)
     return ds

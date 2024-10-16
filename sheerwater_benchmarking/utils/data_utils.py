@@ -5,6 +5,7 @@ dataset.
 """
 import numpy as np
 import xarray as xr
+import dask
 import xarray_regrid  # noqa: F401, import needed for regridding
 
 
@@ -174,6 +175,10 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
         lon_dim (str): The name of the longitude dimension.
         lat_dim (str): The name of the latitude dimension.
     """
+    # No clipping needed
+    if region == 'global':
+        return ds
+
     region_data = get_region(region)
     if len(region_data) == 2:
         lon_slice, lat_slice = region_data
@@ -191,21 +196,32 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
     return ds
 
 
-def get_anomalies(ds, clim, var):
+def get_anomalies(ds, clim, var, time_dim='time'):
     """Calculate the anomalies of a dataset.
 
-    For the subtraction to succeed, the datasets must have the same
-    dimensions and coordinates. 
+    The input dataset should have a time dimension of the type datetime64[ns].
+    The climatology dataset should have a dayofyear dimension. The datasets
+    should have the same spatial dimensions and coordinates.
 
     Args:
         ds (xr.Dataset): Dataset to calculate anomalies for.
         clim (xr.Dataset): Climatology dataset to calculate anomalies from.
         var (str): Variable to calculate anomalies for.
     """
+    # Create a day of year timeseries
+    ds = ds.assign_coords(dayofyear=ds[time_dim].dt.dayofyear)
+    with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+        clim_ds = clim.sel(dayofyear=ds.dayofyear)
+        clim_ds = clim_ds.drop('dayofyear')
+
+    # Drop day of year coordinates
+    ds = ds.drop('dayofyear')
+
     # Ensure that the climatology and dataset have the same dimensions
-    if not all([dim in ds.dims for dim in clim.dims]):
+    if not all([dim in ds.dims for dim in clim_ds.dims]):
         raise ValueError("Climatology and dataset must have the same dimensions.")
 
     # Calculate the anomalies
-    anom = ds[var] - clim[var]
+    anom = ds[var] - clim_ds[var]
+    anom = anom.to_dataset()
     return anom
