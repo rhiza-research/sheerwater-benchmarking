@@ -189,7 +189,7 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
         lat_dim (str): The name of the latitude dimension.
     """
     region_data = get_region(region)
-    if len(region) == 2:
+    if len(region_data) == 2:
         lon_slice, lat_slice = region_data
     else:
         # Set up dataframe for clipping
