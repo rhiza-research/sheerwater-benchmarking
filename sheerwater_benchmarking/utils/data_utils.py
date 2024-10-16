@@ -144,17 +144,21 @@ def lon_base_change(ds, to_base="base180", lon_dim='lon'):
     """
     if to_base == "base180":
         if (ds[lon_dim] < 0.0).any():
-            raise ValueError("Longitude slice must be in base 360 format.")
+            print("Longitude already in base 180 format.")
+            return ds
         lons = base360_to_base180(ds[lon_dim].values)
     elif to_base == "base360":
         if (ds[lon_dim] > 180.0).any():
-            raise ValueError("Longitude slice must be in base 180 format.")
+            print("Longitude already in base 360 format.")
+            return ds
         lons = base180_to_base360(ds[lon_dim].values)
     else:
         raise ValueError(f"Invalid base {to_base}.")
 
     # Check if original data is wrapped
     wrapped = is_wrapped(ds.lon.values)
+
+    # Then assign new coordinates
     ds = ds.assign_coords({lon_dim: lons})
 
     # Sort the lons after conversion, unless the slice

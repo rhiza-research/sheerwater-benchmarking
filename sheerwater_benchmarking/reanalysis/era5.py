@@ -165,16 +165,16 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 
     if variable == 'tmp2m':
         ds[variable] = ds[variable] - 273.15
-        ds[variable].units = 'C'
+        ds.attrs.update(units='C')
         ds = ds.resample(time='D').mean(dim='time')
     elif variable == 'precip':
         ds[variable] = ds[variable] * 1000.0
-        ds[variable].units = 'mm'
+        ds.attrs.update(units='mm')
         ds = ds.resample(time='D').sum(dim='time')
         ds = np.maximum(ds, 0)
 
     if grid != 'global0_25':
-        # Regrid the data to the desired grid, on base360 longitudes
+        # Regrid the data to the desired grid, on base180 longitudes
         ds = regrid(ds, grid, base="base180")
     return ds
 
@@ -204,6 +204,9 @@ def era5_rolled(start_time, end_time, variable, agg=14,
     """
     # Read and combine all the data into an array
     ds = era5_daily(start_time, end_time, variable, grid=grid)
+
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
 
     if anom:
         # Import here to avoid circular dependency
@@ -250,6 +253,9 @@ def era5_agg(start_time, end_time, variable, agg=14, anom=False, clim_params=Non
     # Get ERA5 on the corresponding global grid
     ds = era5_rolled(start_time, end_time, variable, grid=grid, agg=agg,
                      anom=anom, clim_params=clim_params)
+
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
 
     # Apply mask
     if mask != 'lsm' and mask is not None:
