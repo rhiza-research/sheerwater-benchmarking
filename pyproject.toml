@@ -43,12 +43,12 @@ convention = "google"
 [project]
 name = "sheerwater-benchmarking"
 version = "0.1.0"
-description = "Add your description here"
+description = "Equitable weather and climate forecasting benchmarking package."
 authors = [
-    { name = "Joshua Adkins", email = "josh@nline.io" }
+    { name = "Joshua Adkins", email = "josh@rhizaresearch.org" }
 ]
 dependencies = [
-    "dask==2024.7.0",
+    "dask",
     "dask[complete]",
     "click",
     "coiled",
@@ -77,27 +77,27 @@ dependencies = [
     "scipy",
     "requests",
     "ecmwf-api-client",
-    "cdsapi>=0.7.0", # Required for the CDS API beta
+    "cdsapi>=0.7.3",
+    # Required for the CDS API beta
     "dateparser",
     "bokeh",
     "flox",
     "ruff",
     "pytest",
-    "salientsdk",
+    "salientsdk>=0.3.4",
     "scikit-learn",
     "terracotta",
     "sqlalchemy",
-    "psycopg2"
+    "psycopg2",
+    "xarray-regrid",
+    "weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
 
 # This is a custom property to instantiate a coiled software environment
 [tool.sheerwater_benchmarking.coiled]
-conda-dependencies = [
-    "xesmf",
-    "esmpy",
-]
+conda-dependencies = []
 
 [build-system]
 requires = ["hatchling"]

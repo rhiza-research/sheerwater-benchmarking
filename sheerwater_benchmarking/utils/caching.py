@@ -1,7 +1,7 @@
 """Automated dataframe caching utilities."""
 import gcsfs
 import xarray as xr
-import pandas
+import pandas as pd
 import dateparser
 from functools import wraps
 import datetime
@@ -351,9 +351,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                 if recompute:
                     print(f"Recompute for {cache_key} requested. Not checking for cached result.")
                 elif not cache:
-                    print(f"{func.__name__} not a cacheable function. Recomputing result.")
+                    pass
                 else:
                     print(f"Cache doesn't exist for {cache_key}. Running function")
+
+                if timeseries is not None and (start_time is None or end_time is None):
+                    raise ValueError('Need to pass start and end time arguments when recomputing function.')
 
                 ##### IF NOT EXISTS ######
                 ds = func(*args, **kwargs)
@@ -421,6 +424,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                             "Timeseries array must return a 'time' dimension for slicing.")
 
                     time_col = match_time[0]
+                    # Assign start and end times if None are passed
+                    if start_time is None:
+                        start_time = ds[time_col].min().values
+                    if end_time is None:
+                        end_time = ds[time_col].max().values
                     ds = ds.sel({time_col: slice(start_time, end_time)})
 
                 return ds
