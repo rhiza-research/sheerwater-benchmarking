@@ -2,7 +2,7 @@
 from .caching import cacheable
 from .remote import dask_remote
 from .secrets import cdsapi_secret, ecmwf_secret, salient_secret, salient_auth
-from .data_utils import (apply_mask, roll_and_agg, regrid, clip_region,
+from .data_utils import (apply_mask, roll_and_agg, regrid, clip_region, mask_and_clip,
                          lon_base_change, get_globe_slice, get_anomalies)
 from .general_utils import (load_netcdf, write_zarr, load_zarr, load_object)
 
@@ -23,6 +23,7 @@ __all__ = [
     salient_secret,
     salient_auth,
     apply_mask,
+    mask_and_clip,
     roll_and_agg,
     regrid,
     load_netcdf,

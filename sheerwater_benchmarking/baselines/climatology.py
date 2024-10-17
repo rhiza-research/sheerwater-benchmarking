@@ -6,9 +6,8 @@ import xarray as xr
 import dask
 
 from sheerwater_benchmarking.climatology import climatology_raw
-from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, roll_and_agg,
-                                           get_dates, apply_mask, clip_region)
+                                           get_dates, mask_and_clip)
 
 
 @dask_remote
@@ -86,12 +85,5 @@ def climatology_forecast(start_time, end_time, variable, lead, prob_type='determ
     else:
         raise NotImplementedError("Only deterministic forecasts are available for climatology.")
 
-    # Mask the result
-    if mask != 'lsm' and mask is not None:
-        raise NotImplementedError("Only land-sea or no mask is implemented.")
-    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
-    ds = apply_mask(ds, mask_ds, variable)
-
-    # Clip to region
-    ds = clip_region(ds, region)
+    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
     return ds

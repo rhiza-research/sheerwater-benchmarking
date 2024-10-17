@@ -17,8 +17,9 @@ from sheerwater_benchmarking.climatology import climatology_raw
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
                                            get_grid, get_dates,
                                            is_valid_forecast_date,
-                                           apply_mask, roll_and_agg,
-                                           lon_base_change, clip_region,
+                                           roll_and_agg,
+                                           mask_and_clip,
+                                           lon_base_change,
                                            get_anomalies)
 
 
@@ -447,14 +448,8 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, anom=False,
     ds = ecmwf_rolled(start_time, end_time, variable,
                       forecast_type, agg=agg,  grid=grid, verbose=verbose)
 
-    # Apply mask
-    if mask != 'lsm' and mask is not None:
-        raise NotImplementedError("Only land-sea or no mask is implemented.")
-    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
-    ds = apply_mask(ds, mask_ds, variable)
-
-    # Clip to region
-    ds = clip_region(ds, region)
+    # Mask and clip to specified region
+    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
     return ds
 
 
@@ -493,13 +488,6 @@ def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
     else:
         raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
 
-    # Apply mask
-    if mask != 'lsm' and mask is not None:
-        raise NotImplementedError("Only land-sea or no mask is implemented.")
-    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
-    ds = apply_mask(ds, mask_ds, variable)
-
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-
+    # Mask and clip to specified region
+    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
     return ds

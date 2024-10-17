@@ -3,11 +3,8 @@
 
 import xarray as xr
 
-from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
-                                           apply_mask,
-                                           get_variable, clip_region,
-                                           regrid)
+                                           get_variable, mask_and_clip, regrid)
 
 
 @dask_remote
@@ -91,12 +88,7 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = ds.rename({'quantiles': 'member'})
     ds = ds.rename({'forecast_date': 'time'})
 
-    # Apply mask
-    if mask != 'lsm' and mask is not None:
-        raise NotImplementedError("Only land-sea or no mask is implemented.")
-    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
-    ds = apply_mask(ds, mask_ds, variable)
+    # Mask and clip the data
+    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
 
-    # Clip to region
-    ds = clip_region(ds, region)
     return ds

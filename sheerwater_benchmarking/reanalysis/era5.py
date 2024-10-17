@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            cdsapi_secret,
-                                           get_grid, clip_region, get_variable,
-                                           apply_mask, roll_and_agg, lon_base_change,
+                                           get_grid, get_variable,
+                                           mask_and_clip, roll_and_agg, lon_base_change,
                                            regrid, get_anomalies)
 from sheerwater_benchmarking.masks import land_sea_mask
 
@@ -248,14 +248,8 @@ def era5_agg(start_time, end_time, variable, agg=14,
         # Get the anomalies
         ds = get_anomalies(ds, clim, var=variable)
 
-    # Apply mask
-    if mask != 'lsm' and mask is not None:
-        raise NotImplementedError("Only land-sea or no mask is implemented.")
-    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
-    ds = apply_mask(ds, mask_ds, variable)
-
-    # Clip to region
-    ds = clip_region(ds, region)
+    # Mask and clip the data
+    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
     return ds
 
 
@@ -298,15 +292,6 @@ def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', re
     ds = era5_rolled(new_start, new_end, variable, agg=agg, anom=False, grid=grid)
     ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
-    # TODO: delete once we update caches
-    ds = lon_base_change(ds, to_base="base180")
-
-    # Apply mask
-    if mask != 'lsm' and mask is not None:
-        raise NotImplementedError("Only land-sea or no mask is implemented.")
-    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
-    ds = apply_mask(ds, mask_ds, variable)
-
-    # Clip to region
-    ds = clip_region(ds, region)
+    # Mask and clip the data
+    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
     return ds

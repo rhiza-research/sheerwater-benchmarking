@@ -2,8 +2,7 @@
 from sheerwater_benchmarking.masks import land_sea_mask
 import dask
 from sheerwater_benchmarking.reanalysis import era5_daily
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, clip_region,
-                                           apply_mask, lon_base_change)
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, mask_and_clip)
 
 
 @dask_remote
@@ -35,16 +34,7 @@ def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mas
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
     # Get single day, masked data between start and end years
     ds = climatology_raw(variable, first_year, last_year, grid=grid)
-
-    # Apply mask
-    if mask != 'lsm' and mask is not None:
-        raise NotImplementedError("Only land-sea or no mask is implemented.")
-    mask_ds = land_sea_mask(grid=grid).compute() if mask == "lsm" else None
-    ds = apply_mask(ds, mask_ds, variable)
-
-    # Clip to region, suppressing large chunk splitting
-    with dask.config.set(**{'array.slicing.split_large_chunks': False}):
-        ds = clip_region(ds, region)
+    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
     return ds
 
 

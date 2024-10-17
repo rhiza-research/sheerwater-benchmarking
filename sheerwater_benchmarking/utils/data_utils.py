@@ -15,26 +15,6 @@ from .space_utils import (get_grid_ds,
                           get_region)
 
 
-def apply_mask(ds, mask, var, val=0.0):
-    """Apply a mask to a dataset.
-
-    Args:
-        ds (xr.Dataset): Dataset to apply mask to.
-        mask (xr.Dataset): Mask to apply.
-        var (str): Variable to mask.
-        val (int): Value to mask above (any value that is
-            strictly greater than this value will be masked).
-    """
-    # Apply mask
-    if mask is not None:
-        if check_bases(ds, mask) == -1:
-            raise ValueError("Datasets have different bases. Cannot mask.")
-        # This will mask and include any location where there is any land
-        ds = ds[var].where(mask > val, drop=False)
-        ds = ds.rename({"mask": var})
-    return ds
-
-
 def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
     """Rolling aggregation of the dataset.
 
@@ -197,6 +177,49 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
 
     # Slice the globe
     ds = get_globe_slice(ds, lon_slice, lat_slice, lon_dim=lon_dim, lat_dim=lat_dim, base='base180')
+    return ds
+
+
+def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
+    """Apply a mask to a dataset.
+
+    Args:
+        ds (xr.Dataset): Dataset to apply mask to.
+        mask (str); The mask to apply. One of: "lsm", None
+        var (str): Variable to mask. If None, applies to apply to all variables.
+        val (int): Value to mask above (any value that is
+            strictly greater than this value will be masked).
+        grid (str): The grid resolution of the dataset. 
+    """
+    # No masking needed
+    if mask is None:
+        return ds
+
+    if mask == 'lsm':
+        # Import here to avoid circular imports
+        from sheerwater_benchmarking.masks import land_sea_mask
+        mask_ds = land_sea_mask(grid=grid).compute()
+    else:
+        raise NotImplementedError("Only land-sea mask is implemented.")
+
+    # Check that the mask and dataset have the same dimensions
+    if not all([dim in ds.dims for dim in mask_ds.dims]):
+        raise ValueError("Mask and dataset must have the same dimensions.")
+
+    if check_bases(ds, mask_ds) == -1:
+        raise ValueError("Datasets have different longitude bases. Cannot mask.")
+
+    ds = ds[var].where(mask_ds > val, drop=False)
+    ds = ds.rename({"mask": var})
+    return ds
+
+
+def mask_and_clip(ds, var, val=0.0, grid='global1_5', mask='lsm', region='global'):
+    """Apply a mask and clip to a dataset."""
+    # Apply masking above val
+    ds = apply_mask(ds, mask, var=var, val=val, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
     return ds
 
 
