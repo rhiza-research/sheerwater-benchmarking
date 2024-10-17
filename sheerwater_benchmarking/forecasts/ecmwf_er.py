@@ -464,7 +464,7 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, anom=False,
            cache=False,
            cache_args=['variable', 'lead', 'dorp', 'grid', 'mask', 'region'])
 def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
-             grid='global1_5', mask='lsm', region="africa"):
+             grid='global1_5', mask='lsm', region="global"):
     """Standard format forecast data for ECMWF forecasts."""
     lead_params = {
         "week1": (7, 0),

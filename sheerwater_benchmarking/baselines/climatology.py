@@ -57,7 +57,7 @@ def climatology_agg(start_time, end_time, variable, first_year=1991, last_year=2
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def climatology_forecast(start_time, end_time, variable, lead, prob_type='deterministic',
-                         grid='global0_25', mask='lsm', region='africa'):
+                         grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     leads_param = {
         "week1": (7, 0),

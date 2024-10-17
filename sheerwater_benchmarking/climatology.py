@@ -30,10 +30,9 @@ def climatology_raw(variable, first_year, last_year, grid='global1_5'):
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 366},
            cache=False)
-def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mask="lsm", region='africa'):
+def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mask='lsm', region='global'):
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
     # Get single day, masked data between start and end years
     ds = climatology_raw(variable, first_year, last_year, grid=grid)
@@ -52,11 +51,9 @@ def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mas
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 366},
-           cache=False,
-           auto_rechunk=False)
-def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='africa'):
+           cache=False)
+def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='global'):
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
     # Get single day, masked data between start and end years
     return climatology(variable, 1991, 2020, grid=grid, mask=mask, region=region)

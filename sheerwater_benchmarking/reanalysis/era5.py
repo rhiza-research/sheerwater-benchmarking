@@ -264,7 +264,7 @@ def era5_agg(start_time, end_time, variable, agg=14,
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'grid', 'mask', 'region'])
-def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', region='africa'):
+def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', region='global'):
     """Standard format task data for ERA5 Reanalysis.
 
     Args:
