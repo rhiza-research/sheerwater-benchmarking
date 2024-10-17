@@ -12,13 +12,12 @@ import ssl
 from urllib3 import poolmanager
 import time
 
-from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.climatology import climatology_raw
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
                                            get_grid, get_dates,
                                            is_valid_forecast_date,
                                            roll_and_agg,
-                                           mask_and_clip,
+                                           apply_mask, clip_region,
                                            lon_base_change,
                                            get_anomalies)
 
@@ -448,8 +447,10 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, anom=False,
     ds = ecmwf_rolled(start_time, end_time, variable,
                       forecast_type, agg=agg,  grid=grid, verbose=verbose)
 
-    # Mask and clip to specified region
-    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
     return ds
 
 
@@ -488,6 +489,8 @@ def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
     else:
         raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
 
-    # Mask and clip to specified region
-    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
     return ds

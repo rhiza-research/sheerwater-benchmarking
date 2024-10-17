@@ -7,7 +7,7 @@ import dask
 
 from sheerwater_benchmarking.climatology import climatology_raw
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, roll_and_agg,
-                                           get_dates, mask_and_clip)
+                                           get_dates, apply_mask, clip_region)
 
 
 @dask_remote
@@ -85,5 +85,8 @@ def climatology_forecast(start_time, end_time, variable, lead, prob_type='determ
     else:
         raise NotImplementedError("Only deterministic forecasts are available for climatology.")
 
-    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
     return ds

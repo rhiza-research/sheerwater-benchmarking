@@ -10,9 +10,8 @@ from datetime import datetime, timedelta
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            cdsapi_secret,
                                            get_grid, get_variable,
-                                           mask_and_clip, roll_and_agg, lon_base_change,
+                                           apply_mask, clip_region, roll_and_agg, lon_base_change,
                                            regrid, get_anomalies)
-from sheerwater_benchmarking.masks import land_sea_mask
 
 
 @cacheable(data_type='array', cache_args=['year', 'variable', 'grid'])
@@ -248,8 +247,10 @@ def era5_agg(start_time, end_time, variable, agg=14,
         # Get the anomalies
         ds = get_anomalies(ds, clim, var=variable)
 
-    # Mask and clip the data
-    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
     return ds
 
 
@@ -292,6 +293,8 @@ def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', re
     ds = era5_rolled(new_start, new_end, variable, agg=agg, anom=False, grid=grid)
     ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
-    # Mask and clip the data
-    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
     return ds

@@ -4,7 +4,7 @@
 import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
-                                           get_variable, mask_and_clip, regrid)
+                                           get_variable, apply_mask, clip_region, regrid)
 
 
 @dask_remote
@@ -88,7 +88,9 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = ds.rename({'quantiles': 'member'})
     ds = ds.rename({'forecast_date': 'time'})
 
-    # Mask and clip the data
-    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
 
     return ds

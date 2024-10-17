@@ -2,7 +2,7 @@
 from sheerwater_benchmarking.masks import land_sea_mask
 import dask
 from sheerwater_benchmarking.reanalysis import era5_daily
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, mask_and_clip)
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, clip_region)
 
 
 @dask_remote
@@ -34,7 +34,11 @@ def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mas
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
     # Get single day, masked data between start and end years
     ds = climatology_raw(variable, first_year, last_year, grid=grid)
-    ds = mask_and_clip(ds, variable, grid=grid, mask=mask, region=region)
+
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
     return ds
 
 

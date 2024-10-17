@@ -214,15 +214,6 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
     return ds
 
 
-def mask_and_clip(ds, var, val=0.0, grid='global1_5', mask='lsm', region='global'):
-    """Apply a mask and clip to a dataset."""
-    # Apply masking above val
-    ds = apply_mask(ds, mask, var=var, val=val, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-    return ds
-
-
 def get_anomalies(ds, clim, var, time_dim='time'):
     """Calculate the anomalies of a dataset.
 
