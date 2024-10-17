@@ -18,8 +18,6 @@ def climatology_raw(variable, first_year, last_year, grid='global1_5'):
 
     # Get single day, masked data between start and end years
     ds = era5_daily(start_time, end_time, variable=variable, grid=grid)
-    # TODO: Remove once we update era5 caches
-    ds = lon_base_change(ds)
 
     # Add day of year as a coordinate
     ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
@@ -30,6 +28,7 @@ def climatology_raw(variable, first_year, last_year, grid='global1_5'):
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 366},
            cache=False)
 def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mask='lsm', region='global'):
@@ -51,12 +50,40 @@ def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mas
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['variable', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 366},
-           cache=False)
+           cache=False,
+           auto_rechunk=False)
 def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='global'):
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
     # Get single day, masked data between start and end years
     return climatology(variable, 1991, 2020, grid=grid, mask=mask, region=region)
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'grid'],
+           chunking={"lat": 121, "lon": 240, "dayofyear": 366, "time": 30},
+           cache=True,
+           auto_rechunk=False)
+def climatology_rolling_raw(variable, grid="global1_5"):
+    """Compute ."""
+    # Get single day, masked data between start and end years
+    pass
+
+
+# @dask_remote
+# @cacheable(data_type='array',
+#            timeseries='time',
+#            cache=False,
+#            cache_args=['variable', 'grid', 'mask', 'region'],
+#            chunking={"lat": 121, "lon": 240, "dayofyear": 366, "time": 30},
+#            auto_rechunk=False)
+# def climatology_rolling(start_time, end_time, variable, grid="global1_5", mask="lsm", region='global'):
+#     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
+#     # Get single day, masked data between start and end years
+#     return climatology(variable, 1991, 2020, grid=grid, mask=mask, region=region)
 
 
 __all__ = ['climatology', 'climatology_standard_30yr']
