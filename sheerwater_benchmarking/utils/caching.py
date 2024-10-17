@@ -1,5 +1,10 @@
 """Automated dataframe caching utilities."""
 import gcsfs
+from google.cloud import storage
+from rasterio.io import MemoryFile
+import io
+import numpy as np
+from rasterio.enums import Resampling
 import xarray as xr
 import pandas as pd
 import dateparser
@@ -118,6 +123,67 @@ def check_exists_postgres(table_name):
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("Error connecting to database. Make sure you are on the tailnet and can see sheerwater-benchmarking-postgres.")
+
+def write_to_terracotta(cache_key, ds):
+    import terracotta as tc
+    from sheerwater_benchmarking.utils.data_utils import lon_base_change
+
+    # Check to make sure this is geospatial data
+    lats = ['lat', 'y', 'latitude']
+    lons = ['lon', 'x', 'longitude']
+    if len(ds.dims) != 2:
+        raise RuntimeError("Can only store two dimensional geospatial data to terracotta")
+
+    foundx = False
+    foundy = False
+    for y in lats:
+        if y in ds.dims:
+            ds = ds.rename({y:'y'})
+            foundy = True
+    for x in lons:
+        if x in ds.dims:
+            ds = ds.rename({x:'x'})
+            foundx = True
+
+    if not foundx or not foundy:
+        raise RuntimeError("Can only store two dimensional geospatial data to terracotta")
+
+
+    # Adjust coordinates
+    if (ds['x'] > 180.0).any():
+        lon_base_change(ds, lon_dim='x')
+        ds = ds.sortby(['x'])
+
+    # Adapt the CRS
+    ds.rio.write_crs("epsg:4326", inplace=True)
+    ds = ds.rio.reproject('EPSG:3857', resampling=Resampling.nearest, nodata=np.nan)
+    ds.rio.write_crs("epsg:3857", inplace=True)
+
+    # Write the raster
+    with MemoryFile() as mem_dst:
+        ds.rio.to_raster(mem_dst.name, driver="COG")
+
+        storage_client = storage.Client()
+        bucket = storage_client.bucket("sheerwater-datalake")
+        blob = bucket.blob(f'rasters/' + cache_key + '.tif')
+        blob.upload_from_file(mem_dst)
+
+        # Register with terracotta
+        tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
+        driver = tc.get_driver("postgresql://sheerwater-benchmarking-postgres:5432/terracotta")
+
+        try:
+            driver.get_keys()
+        except:
+            # Create a metastor
+            print("Creating new terracotta metastore")
+            driver.create(['key'])
+
+        # Insert the parameters.
+        with driver.connect():
+            driver.insert({'key': cache_key.replace('/','_')}, mem_dst, override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif')
+
+        print(f"Inswerted {cache_key.replace('/','_')} into the terracotta database")
 
 
 def write_to_postgres(pandas_df, table_name, overwrite=False):
@@ -284,10 +350,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
 
             if data_type == 'array':
-                cache_key = func.__name__ + '/' + '_'.join(sorted_values) + '.zarr'
-                null_key = func.__name__ + '/' + '_'.join(sorted_values) + '.null'
-                cache_path = "gs://sheerwater-datalake/caches/" + cache_key
-                null_path = "gs://sheerwater-datalake/caches/" + null_key
+                cache_key = func.__name__ + '/' + '_'.join(sorted_values)
+                cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
+                null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
                 if backend == 'default' or backend == 'delta':
@@ -343,7 +408,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                     # writing to temp cache is necessary because if you overwrite
                                     # the original cache map it will write it before reading the
                                     # data leading to corruption.
-                                    temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key
+                                    temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
                                     temp_cache_map = fs.get_mapper(temp_cache_path)
 
                                     ds = drop_encoded_chunks(ds)
@@ -483,6 +548,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                             else:
                                 raise RuntimeError(
                                     f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
+
+                        # Either way if terracotta is specified as a backend try to write the result array to terracotta
+                        if backend == 'terracotta':
+                            print(f"Also caching {cache_key} to terracotta.")
+                            write_to_terracotta(cache_key, ds)
+
                     elif data_type == 'tabular':
 
                         if ds is None:
