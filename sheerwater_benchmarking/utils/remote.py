@@ -7,28 +7,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def get_config(config_str):
-    """Get remote config user options.
-
-    Args:
-        config_str (str): The string to parse for user options.
-            - sheerwater_shared: Default configuration
-    """
-    config_dict = {
-        "genevieve": {
-            "n_workers": 10,
-            "name": "sheerwater_shared",
-            "idle_timeout": "240 minutes",
-        },
-        "genevieve-big": {
-            "n_workers": 25,
-            "name": "sheerwater_big",
-            "idle_timeout": "240 minutes",
-        },
-    }
-    return config_dict.get(config_str, {})
-
-
 def dask_remote(func):
     """Decorator to run a function on a remote dask cluster."""
     @wraps(func)
@@ -39,7 +17,7 @@ def dask_remote(func):
             coiled_default_options = {
                 'name': 'sheerwater_shared',
                 'n_workers': [3, 8],
-                'idle_timeout': "45 minutes",
+                'idle_timeout': "120 minutes",
                 'scheduler_cpu': 8,
                 'scheduler_memory': "32GiB",
                 'worker_vm_types': ['c2-standard-8', 'c3-standard-8'],

@@ -5,11 +5,12 @@ from sheerwater_benchmarking.reanalysis.era5 import era5_rolled, era5_daily
 
 
 vars = ["tmp2m", "precip"]
-grids = ['global1_5']
+grids = ['global0_25', 'global1_5']
 regions = ['global']
-aggs = [14]
+aggs = [14, 7]
 masks = ["lsm"]
-anoms = [True, False]
+# anoms = [True, False]
+anoms = [False]
 clim_params = {'first_year': 1991, 'last_year': 2020}
 
 start_time = "1979-01-01"
@@ -19,6 +20,7 @@ UPDATE_DAILY = False
 UPDATE_ROLLED = False
 UPDATE_AGG = True
 
+FLAG = False
 for var, grid in product(vars, grids):
     if UPDATE_DAILY:
         ds = era5_daily(start_time, end_time, variable=var, grid=grid,
@@ -28,7 +30,6 @@ for var, grid in product(vars, grids):
     for agg, anom in product(aggs, anoms):
         if UPDATE_ROLLED:
             # Update the rolled data for global grids
-            cp = clim_params if anom else None
             ds = era5_rolled(start_time, end_time, variable=var,
                              agg=agg, grid=grid,
                              recompute=True, remote=True, force_overwrite=True,
@@ -36,9 +37,8 @@ for var, grid in product(vars, grids):
 
         for mask, region in product(masks, regions):
             if UPDATE_AGG:
-                cp = clim_params if anom else None
                 ds = era5_agg(start_time, end_time, variable=var,
-                              agg=agg, anom=anom, clim_params=cp,
+                              agg=agg, anom=anom, clim_params=clim_params,
                               grid=grid, mask=mask, region=region,
                               recompute=True, remote=True, force_overwrite=True,
                               remote_config={'name': 'genevieve'})

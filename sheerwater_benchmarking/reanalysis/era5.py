@@ -206,10 +206,6 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
     # Read and combine all the data into an array
     ds = era5_daily(start_time, end_time, variable, grid=grid)
 
-    # Convert to base180 longitude
-    # TODO: delete once we update caches
-    ds = lon_base_change(ds, to_base="base180")
-
     agg_fn = "sum" if variable == "precip" else "mean"
     ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
 
@@ -223,7 +219,8 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
            cache_args=['variable', 'agg', 'anom', 'clim_params', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            auto_rechunk=False)
-def era5_agg(start_time, end_time, variable, agg=14, anom=False, clim_params=None,
+def era5_agg(start_time, end_time, variable, agg=14,
+             anom=False, clim_params={'first_year': 1991, 'last_year': 2020},
              grid="global1_5", mask="lsm", region='global'):
     """Fetches ground truth data from ERA5 and applies aggregation and masking.
 
@@ -243,19 +240,11 @@ def era5_agg(start_time, end_time, variable, agg=14, anom=False, clim_params=Non
     # Get ERA5 on the corresponding global grid
     ds = era5_rolled(start_time, end_time, variable, agg=agg, grid=grid)
 
-    # Convert to base180 longitude
-    # TODO: delete once we update caches
-    ds = lon_base_change(ds, to_base="base180")
-
     if anom:
         # Import here to avoid circular dependency
         from sheerwater_benchmarking.climatology import climatology_raw
         # Get the climatology on the same grid
-        clim_params = {} if clim_params is None else clim_params
         clim = climatology_raw(variable, **clim_params, grid=grid)
-        # TODO: delete once we update caches
-        clim = lon_base_change(clim, to_base="base180")
-
         # Get the anomalies
         ds = get_anomalies(ds, clim, var=variable)
 
