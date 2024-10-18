@@ -99,11 +99,21 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = salient_blend(start_time, end_time, variable, timescale=timescale,
                        grid=grid, mask=mask)
     ds = ds.sel(lead=lead_id)
-    if prob_type == 'd':
+
+    if prob_type == 'deterministic':
         # Get the median forecast
         ds = ds.sel(quantiles=0.5)
-        ds['quantiles'] = -1
-    ds = ds.rename({'quantiles': 'member'})
+
+        #drop the quantiles dimension
+        ds = ds.reset_coords("quantiles", drop=True)
+        ds = ds.assign_attrs(prob_type="deterministic")
+    elif prob_type == "probabalistic":
+        # Set an attribute to say this is a quantile forecast
+        ds = ds.rename({'quantiles': 'member'})
+        ds = ds.assign_attrs(prob_type="quantile")
+    else:
+        raise ValueError("Invalid probabilistic type")
+
     ds = ds.rename({'forecast_date': 'time'})
 
     # Clip to region

@@ -183,7 +183,7 @@ def write_to_terracotta(cache_key, ds):
         with driver.connect():
             driver.insert({'key': cache_key.replace('/','_')}, mem_dst, override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif')
 
-        print(f"Inswerted {cache_key.replace('/','_')} into the terracotta database")
+        print(f"Inserted {cache_key.replace('/','_')} into the terracotta database")
 
 
 def write_to_postgres(pandas_df, table_name, overwrite=False):
@@ -267,7 +267,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                 force_overwrite, retry_null_cache, backend = get_cache_args(
                     kwargs, cache_kwargs)
 
-            if not cache or not passed_cache:
+            if not cache and passed_cache:
+                cache = True
+
+            if cache and not passed_cache:
                 cache = False
 
             params = signature(func).parameters
