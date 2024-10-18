@@ -50,7 +50,7 @@ def get_metric_fn(prob_type, metric):
            chunking={"lat": 121, "lon": 240, "time": 1000},
            cache=False)
 def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
-                   prob_type, metric, grid="global1_5", mask='lsm', region='africa'):
+                   prob_type, metric, grid="global1_5", mask='lsm', region='global'):
     """Compute a metric for a forecast at a specific lead."""
     fcst_fn, truth_fn = get_forecast_and_truth_fn(forecast, truth)
     fcst = fcst_fn(start_time, end_time, variable, lead=lead, prob_type=prob_type, grid=grid, mask=mask, region=region)
@@ -59,7 +59,11 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
     metric_fn, metric_kwargs = get_metric_fn(prob_type, metric)
     m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, skipna=True)
     m_ds = m_ds.rename_vars({variable: f'{variable}_{metric}'})
-    m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+
+    try:
+        m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+    except: 
+        import pdb; pdb.set_trace()
 
     # Convert to standard naming
     return m_ds
@@ -71,7 +75,7 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
            chunking={"lat": 121, "lon": 240, "time": 1000},
            cache=False)
 def summary_metric(start_time, end_time, variable, lead, forecast, truth,
-                   prob_type, metric, grid="global1_5", mask='lsm', region='africa'):
+                   prob_type, metric, grid="global1_5", mask='lsm', region='global'):
     """Compute a metric for a forecast at a specific lead."""
     fcst_fn, truth_fn = get_forecast_and_truth_fn(forecast, truth)
     fcst = fcst_fn(start_time, end_time, variable, lead=lead, prob_type=prob_type, grid=grid, mask=mask, region=region)

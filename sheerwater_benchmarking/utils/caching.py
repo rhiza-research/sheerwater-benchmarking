@@ -161,7 +161,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                         break
 
                 if not found:
-                    raise RuntimeError(f"Specified cacheable argument {a}"
+                    raise RuntimeError(f"Specified cacheable argument {a} "
                                        "not discovered as passed argument or default argument.")
 
             # Now that we have all the cacheable args values we can calculate whether
@@ -192,11 +192,23 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
             imkeys = list(cache_arg_values.keys())
             imkeys.sort()
-            sorted_values = [str(cache_arg_values[i]) for i in imkeys]
+            sorted_values = [cache_arg_values[i] for i in imkeys]
+            flat_values = []
+            for val in sorted_values:
+                if isinstance(val, list):
+                    sub_vals = [str(v) for v in val]
+                    sub_vals.sort()
+                    flat_values += sub_vals
+                elif isinstance(val, dict):
+                    sub_vals = [f"{k}-{v}" for k, v in val.items()]
+                    sub_vals.sort()
+                    flat_values += sub_vals
+                else:
+                    flat_values.append(str(val))
 
             if data_type == 'array':
-                cache_key = func.__name__ + '/' + '_'.join(sorted_values) + '.zarr'
-                null_key = func.__name__ + '/' + '_'.join(sorted_values) + '.null'
+                cache_key = func.__name__ + '/' + '_'.join(flat_values) + '.zarr'
+                null_key = func.__name__ + '/' + '_'.join(flat_values) + '.null'
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key
                 null_path = "gs://sheerwater-datalake/caches/" + null_key
             else:

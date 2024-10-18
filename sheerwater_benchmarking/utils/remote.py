@@ -17,7 +17,7 @@ def dask_remote(func):
             coiled_default_options = {
                 'name': 'sheerwater_shared',
                 'n_workers': [3, 8],
-                'idle_timeout': "45 minutes",
+                'idle_timeout': "120 minutes",
                 'scheduler_cpu': 8,
                 'scheduler_memory': "32GiB",
                 'worker_vm_types': ['c2-standard-8', 'c3-standard-8'],

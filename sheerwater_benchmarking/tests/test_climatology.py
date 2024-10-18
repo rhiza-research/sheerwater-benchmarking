@@ -3,7 +3,7 @@
 
 """Test file for climatology data validation."""
 
-from sheerwater_benchmarking.baselines import climatology, climatology_standard_30yr
+from sheerwater_benchmarking.climatology import climatology, climatology_standard_30yr
 
 
 def test_climatology():
@@ -18,4 +18,3 @@ def test_climatology():
 
     assert ds.sizes["doy"] == 366
     assert dsp.sizes["doy"] == 366
-
