@@ -1,0 +1,69 @@
+# Default values for sheerwater-benchmarking.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+grafana:
+  image: 
+    repository: grafana/grafana
+    tag: 11.2.0
+
+  admin_password: pass
+
+  smtp:
+    user: apikey
+    password: key
+    host: smtp.sendgrid.net
+    port: 587
+    from_address: info@rhizaresearch.org
+    from_name: Sheerwater Benchmarking Project
+
+  pv:
+    name: name
+    size: 10GiB
+
+  domain_name: domain.com
+  ip_name: gcloud-ip
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+
+
+postgres:
+  image: 
+    repository: postgres
+    tag: "15.8"
+
+  pv:
+    name: name
+    size: 10GiB
+
+  tailscale: true
+
+  admin_password: pass
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+
+terracotta:
+  image: 
+    repository: dhigras/terracotta
+    tag: "v0.8.5"
+
+  tailscale: true
+
+  raster_bucket: sheerwater-datalake
+  driver_path: postgresql://postgres:5432/terracotta
+
+  sql_user: read
+  sql_password: read_password
+
+  domain_name: domain.com
+  ip_name: gcloud-ip
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 500Mi
+
