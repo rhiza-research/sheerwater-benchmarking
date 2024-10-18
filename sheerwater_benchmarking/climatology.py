@@ -72,7 +72,9 @@ def climatology_rolling_raw(start_time, end_time, variable, clim_years=30, grid=
         clim_years: Number of years to compute climatology over.
         grid: Grid resolution of the data.
     """
-    #  Get reanalysis data for the appropriate look back
+    #  Get reanalysis data for the appropriate look back period
+    # We need data from clim_years before the start_time until 1 year before the end_time
+    # as this climatology excludes the most recent year for use in operational forecasting
     new_start = (dateparser.parse(start_time) - relativedelta(years=clim_years)).strftime("%Y-%m-%d")
     new_end = (dateparser.parse(end_time) - relativedelta(years=1)).strftime("%Y-%m-%d")
 
