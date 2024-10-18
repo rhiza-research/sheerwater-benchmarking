@@ -1,6 +1,6 @@
 """Generate land-sea masks for all grids and bases."""
 from itertools import product
-from sheerwater_benchmarking.climatology import climatology_raw
+from sheerwater_benchmarking.climatology import climatology_raw, climatology_rolling_raw
 from sheerwater_benchmarking.baselines import climatology_agg
 
 
@@ -10,11 +10,15 @@ aggs = [1, 7, 14]
 
 start_time = "1979-01-01"
 end_time = "2025-01-01"
+# 30 years after the start time
+rolling_start_time = "2009-01-01"
+clim_years = 30
 
 first_year = 1986
 last_year = 2015
 
-UPDATE_CLIM = True
+UPDATE_CLIM = False
+UPDATE_CLIM_ROLLING = True
 UPDATE_CLIM_FCST = False
 
 for var, grid in product(vars, grids):
@@ -27,6 +31,15 @@ for var, grid in product(vars, grids):
                                  'name': 'genevieve'
                              },
                              recompute=True, force_overwrite=True)
+
+    if UPDATE_CLIM_ROLLING:
+        ds = climatology_rolling_raw(rolling_start_time, end_time, variable=var, clim_years=clim_years, grid=grid,
+                                     remote=True, remote_config={
+                                         'n_workers': 10,
+                                         'idle_timeout': '240 minutes',
+                                         'name': 'genevieve'
+                                     },
+                                     recompute=True, force_overwrite=True)
 
     for agg in aggs:
         if UPDATE_CLIM_FCST:

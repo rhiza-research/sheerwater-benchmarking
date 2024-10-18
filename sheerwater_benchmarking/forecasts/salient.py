@@ -40,7 +40,7 @@ def salient_blend_raw(start_time, end_time, variable,  # noqa: ARG001
 @dask_remote
 @cacheable(data_type='array',
            timeseries='forecast_date',
-           cache_args=['variable', 'grid', 'timescale', 'mask'],
+           cache_args=['variable', 'timescale', 'grid'],
            chunking={"lat": 300, "lon": 400, "forecast_date": 300, 'lead': 1, 'quantiles': 1},
            auto_rechunk=False)
 def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid="global0_25"):

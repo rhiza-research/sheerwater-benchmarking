@@ -4,9 +4,11 @@ These utility functions take as input an xarray dataset and return a modified
 dataset.
 """
 import numpy as np
+import pandas as pd
 import xarray as xr
 import dask
 import xarray_regrid  # noqa: F401, import needed for regridding
+from dateutil.relativedelta import relativedelta
 
 
 from .space_utils import (get_grid_ds,
@@ -15,18 +17,22 @@ from .space_utils import (get_grid_ds,
                           get_region)
 
 
-def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
+def roll_and_agg(ds, agg, agg_col, agg_fn="mean", agg_units='days'):
     """Rolling aggregation of the dataset.
+
+    Applies rolling and then corrects rolling window labels to be left aligned.
 
     Args:
         ds (xr.Dataset): Dataset to aggregate.
         variable (str): Variable to aggregate.
         agg (int): Aggregation period in days.
         agg_col (str): Column to aggregate over.
-        agg_fn (str): Aggregation function. One of:
-            - mean
-            - sum
+        agg_fn (str): Aggregation function. One of mean or sum.
+        agg_units (str): Units of the aggregation period. Should be
+            a valid unit for relativedelta. If None, no time alignment
+            is applied after rolling.
     """
+    print(ds)
     agg_kwargs = {
         f"{agg_col}": agg,
         "min_periods": agg,
@@ -45,7 +51,11 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
 
     # Correct coords to left-align the aggregated forecast window
     # (default is right aligned)
-    ds_agg = ds_agg.assign_coords(**{f"{agg_col}": ds_agg[agg_col]-np.timedelta64(agg-1, 'D')})
+    if agg_units is not None:
+        ds_agg = ds_agg.assign_coords(
+            **{f"{agg_col}": ds[agg_col].to_index() - pd.DateOffset(**{agg_units: agg-1})}
+        )
+
     return ds_agg
 
 
@@ -189,7 +199,7 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
         var (str): Variable to mask. If None, applies to apply to all variables.
         val (int): Value to mask above (any value that is
             strictly greater than this value will be masked).
-        grid (str): The grid resolution of the dataset. 
+        grid (str): The grid resolution of the dataset.
     """
     # No masking needed
     if mask is None:
