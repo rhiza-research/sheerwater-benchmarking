@@ -4,6 +4,7 @@ import sys
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 import dateparser
 import os
 import xarray as xr
@@ -13,13 +14,14 @@ from urllib3 import poolmanager
 import time
 
 from sheerwater_benchmarking.climatology import climatology_raw
+from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
                                            get_grid, get_dates,
                                            is_valid_forecast_date,
                                            roll_and_agg,
                                            apply_mask, clip_region,
                                            lon_base_change,
-                                           get_anomalies)
+                                           get_anomalies, regrid)
 
 
 ########################################################################
@@ -314,8 +316,7 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
                      "start_date": 969, "start_year": 29,
                      "model_issuance_date": 1},
            auto_rechunk=False)
-def ecmwf_averaged(start_time, end_time, variable, forecast_type,
-                   grid="global1_5", verbose=True):
+def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Args:
@@ -325,7 +326,6 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type,
         forecast_type (str): The type of forecast to fetch. One of "forecast" or "hindcast".
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
-        verbose (bool): Whether to print verbose output.
     """
     # Ensure appropriate chunking for merge
     chunk_dict = {'lat': 121, 'lon': 240, 'lead_time': 46}
@@ -338,14 +338,14 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type,
     # Read and combine all the data into an array
     df_control = iri_ecmwf(start_time, end_time, variable,
                            forecast_type, run_type="control",
-                           grid=grid, verbose=verbose) \
+                           grid=grid) \
         .rename({f"{variable}": f"{variable}_control"})
     # A note: this rechunking shouldn't be necessary, but it is
     df_control = df_control.chunk(chunk_dict)
 
     df_pert = iri_ecmwf(start_time, end_time, variable,
                         forecast_type, run_type="average",
-                        grid=grid, verbose=verbose) \
+                        grid=grid) \
         .rename({f"{variable}": f"{variable}_pert"})
     # A note: this rechunking shouldn't be necessary, but it is
     df_pert = df_pert.chunk(chunk_dict)
@@ -375,8 +375,7 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type,
                      "start_year": 29, "model_issuance_date": 969},
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
-                 agg=14, grid="global1_5",
-                 verbose=True):
+                 agg=14, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Args:
@@ -387,34 +386,139 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
         agg (str): The aggregation period to use, in days
-        verbose (bool): Whether to print verbose output.
     """
-    # Read and combine all the data into an array
-    ds = ecmwf_averaged(start_time, end_time, variable,
-                        forecast_type,
-                        grid=grid, verbose=verbose)
+    if grid != 'global1_5':
+        # Recursively call the function with the standard grid
+        # This will hit the cache if this grid already exists
+        ds = ecmwf_rolled(start_time, end_time, variable, forecast_type, grid='global1_5')
+        ds = regrid(ds, grid, base='base180')
+        return ds
+    else:
+        # Read and combine all the data into an array
+        ds = ecmwf_averaged(start_time, end_time, variable,
+                            forecast_type, grid=grid)
 
-    # Convert to base180 longitude
-    ds = lon_base_change(ds, to_base="base180")
+        # Convert to base180 longitude
+        ds = lon_base_change(ds, to_base="base180")
 
-    # Roll and aggregate the data
-    agg_fn = "sum" if variable == "precip" else "mean"
-    ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn=agg_fn)
+        # Roll and aggregate the data
+        agg_fn = "sum" if variable == "precip" else "mean"
+        ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn=agg_fn)
 
     return ds
 
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['variable', 'agg', 'grid', 'lead'],
+           timeseries=['model_issuance_date'],
+           cache=True,
+           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
+def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, grid="global1_5"):
+    """Computes the bias of ECMWF reforecasts for a specific lead."""
+    # Fetch the reforecast data; get's the past 20 years associated with each start date
+    ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
+    if lead >= len(ds_deb.lead_time):
+        # Lead does not exist
+        return None
+    ds_deb = ds_deb.isel(lead_time=lead)
+
+    # TODO: remove once ECMWF is fixed
+    ds_deb = lon_base_change(ds_deb)
+
+    # Get the pre-aggregated ERA5 data,
+    new_start = (dateparser.parse(start_time) - relativedelta(years=21)).strftime("%Y-%m-%d")
+    new_end = (dateparser.parse(end_time) + relativedelta(days=33)).strftime("%Y-%m-%d")
+    ds_truth = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid).chunk(time=1)
+
+    # Stack the index of the reforecast data into a multi-index
+    ds_stacked = ds_deb.stack(time=["start_year", "model_issuance_date"]).dropna(dim="time")
+    ds_stacked = ds_stacked.chunk(lat=121, lon=240, time=30)
+
+    # Get the dates associated with each combination of start year and model issuance date
+    dates = [np.datetime64(dateparser.parse(
+        f"{int(x['start_year'])}-{int(x['model_issuance_date'].dt.month)}-{int(x['model_issuance_date'].dt.day)}"))
+        for x in ds_stacked.time]
+    lead_td = ds_deb.lead_time.values - np.timedelta64(12, 'h')
+
+    # The lead time is offset by 12 hours; snap to the start of the day
+    # Adjust each forecast date by the lead time (0, 1, 2, ... days)
+    lead_dates = [x + lead_td for x in dates]
+
+    # Select the subset of the ground truth matching this lead
+    ds_truth_lead = ds_truth.sel(time=lead_dates)
+
+    # Assign the time coordinate to match the forecast dataframe for alignment and subtract
+    bias = ds_truth_lead.assign_coords(time=ds_stacked.time) - ds_stacked
+    bias = bias.unstack().chunk({"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 30})
+    return bias
+
+# @dask_remote
+# @cacheable(data_type='array',
+#            cache_args=['variable', 'agg', 'grid'],
+#            timeseries=['model_issuance_date'],
+#            cache=True,
+#            chunking={"lat": 721, "lon": 1440, "start_year": 30, 'lead_time': 1, "model_issuance_date": 1},)
+# def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_5"):
+#     """Computes the bias of ECMWF reforecasts for a specific lead."""
+#     # Fetch the reforecast data; get's the past 20 years associated with each start date
+#     ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
+#     # TODO: remove once ECMWF is fixed
+#     ds_deb = lon_base_change(ds_deb)
+
+#     # Get the pre-aggregated ERA5 data,
+#     new_start = (dateparser.parse(start_time) - relativedelta(years=21)).strftime("%Y-%m-%d")
+#     new_end = (dateparser.parse(end_time) + relativedelta(days=33)).strftime("%Y-%m-%d")
+#     ds_truth = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid).chunk(time=1)
+
+#     # Stack the index of the reforecast data into a multi-index
+#     ds_stacked = ds_deb.stack(time=["start_year", "model_issuance_date"]).dropna(dim="time")
+#     ds_stacked = ds_stacked.chunk(lat=121, lon=240, time=30, lead_time=1)
+
+#     # Get the dates associated with each combination of start year and model issuance date
+#     dates = [np.datetime64(dateparser.parse(
+#         f"{int(x['start_year'])}-{int(x['model_issuance_date'].dt.month)}-{int(x['model_issuance_date'].dt.day)}"))
+#         for x in ds_stacked.time]
+
+#     biases = []
+#     for i, lead in enumerate(ds_stacked.lead_time.values):
+#         def get_lead_bias(ld, index):
+#             lead_td = ld - np.timedelta64(12, 'h')
+#             # The lead time is offset by 12 hours; snap to the start of the day
+#             # Adjust each forecast date by the lead time (0, 1, 2, ... days)
+#             lead_dates = [x + lead_td for x in dates]
+
+#             # Select the subset of the ground truth matching this lead
+#             ds_truth_lead = ds_truth.sel(time=lead_dates)
+
+#             # Assign the time coordinate to match the forecast dataframe for alignment and subtract
+#             bias = ds_truth_lead.assign_coords(time=ds_stacked.time) - ds_stacked.isel(lead_time=index)
+#             bias = bias.unstack().chunk({"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 30})
+#             return bias
+
+#         bias = dask.delayed(get_lead_bias)(lead, i)
+#         biases.append(bias)
+
+#     # Delayed computation
+#     biases = dask.compute(*biases)
+
+#     # Concatenate leads and unstack
+#     ds_biases = xr.concat(biases, dim=ds_stacked.lead_time)
+#     return ds_biases
+
+
+@dask_remote
+@cacheable(data_type='array',
            cache_args=['variable', 'agg', 'grid'],
-           timeseries=['start_date'],
-           chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969})
-def ecmwf_debiased(start_time, end_time, variable, agg=14,
-                   grid="global1_5"):
-    """Generates debiased ECMWF forecasts."""
-    # Fetch the raw data
-    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type='forecast', agg=agg, grid=grid)
-    ds_r = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
+           timeseries=['model_issuance_date'],
+           cache=True,
+           chunking={"lat": 721, "lon": 1440, "start_year": 30, 'lead_time': 1, "model_issuance_date": 1},)
+def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_5"):
+    """Computes the bias of ECMWF reforecasts for a specific lead."""
+    biases = [ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=agg, lead=i, grid=grid) for i in range(33)]
+    # Concatenate leads and unstack
+    ds_biases = xr.concat(biases, dim='lead_time')
+    return ds_biases
 
 
 @dask_remote
@@ -426,7 +530,7 @@ def ecmwf_debiased(start_time, end_time, variable, agg=14,
                      "start_year": 29, "model_issuance_date": 969},
            auto_rechunk=False)
 def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, anom=False, clim_params=None,
-              grid="global1_5",  mask="lsm", region='global', verbose=True):
+              grid="global1_5",  mask="lsm", region='global'):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Specialized function for the ABC model
@@ -442,10 +546,9 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, anom=False,
         mask (str): The mask to apply. One of:
             - lsm: land-sea mask
             - None: no mask
-        verbose (bool): Whether to print verbose output.
     """
     ds = ecmwf_rolled(start_time, end_time, variable,
-                      forecast_type, agg=agg,  grid=grid, verbose=verbose)
+                      forecast_type, agg=agg,  grid=grid)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

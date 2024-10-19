@@ -1,33 +1,57 @@
 """Re-run and re-cache the ECMWF aggregation and masking pipeline."""
 from itertools import product
-from sheerwater_benchmarking.forecasts import ecmwf_agg
+from sheerwater_benchmarking.forecasts.ecmwf_er import ecmwf_agg, ecmwf_rolled, iri_ecmwf, ecmwf_reforecast_bias
 
 
 if __name__ == "__main__":
     vars = ["tmp2m", "precip"]
-    aggs = [14, 7, 1]
+    aggs = [14, 7]
+    grids = ["global1_5"]
+    # forecast_type = ["forecast", "reforecast"]
+    forecast_type = ["forecast"]
+    regions = ['global']
     masks = ["lsm"]
-    global_grids = ["global1_5"]
-    # global_grids = ["global1_5"]
-    # regional_grids = ["africa1_5"]
-    regional_grids = ["us1_5"]
-    forecast_type = ["forecast", "reforecast"]
-    # forecast_type = ["forecast"]
 
     start_time = "2015-05-14"
     end_time = "2023-06-30"
 
-    for var, agg, ft, global_grid in product(vars, aggs, forecast_type, global_grids):
-        # Go back and update the earlier parts of the pipeline
-        # ds = ecmwf_rolled(start_time, end_time, variable=var, forecast_type=ft,
-        #                   grid=global_grid, agg=agg,
-        #                   recompute=False, force_overwrite=False,
-        #                   remote=True
-        #                   )
+    UPDATE_IRI = True
+    UPDATE_ROLLED = False
+    UPDATE_AGG = False
+    UPDATE_BIAS = False
 
-        for rgrid, mask in product(regional_grids, masks):
-            ds = ecmwf_agg(start_time, end_time, variable=var, forecast_type=ft,
-                           grid=rgrid, agg=agg, mask=mask,
-                           recompute=False, force_overwrite=False,
-                           remote=True
+    for var, ft in product(vars, forecast_type):
+        if UPDATE_IRI:
+            ds = iri_ecmwf(start_time, end_time, variable=var, forecast_type=ft,
+                           run_type='perturbed',
+                           grid='global1_5', verbose=True,
+                           remote=True,
+                           remote_config={'name': 'update', 'n_workers': 10},
                            )
+
+        for agg, grid in product(aggs, grids):
+            # Go back and update the earlier parts of the pipeline
+            if UPDATE_ROLLED:
+                ds = ecmwf_rolled(start_time, end_time, variable=var, forecast_type=ft,
+                                  grid=grid, agg=agg,
+                                  recompute=True, force_overwrite=True,
+                                  remote=True,
+                                  remote_config={'name': 'update', 'n_workers': 10},
+                                  )
+
+            if UPDATE_BIAS:
+                ds = ecmwf_reforecast_bias(start_time, end_time, variable=var,
+                                           agg=agg, grid=grid,
+                                           recompute=False, force_overwrite=True,
+                                           remote=True, remote_config={'name': 'genevieve',
+                                                                       'n_workers': 25,
+                                                                       'idle_timeout': '240 minutes'})
+
+            for region, mask in product(regions, masks):
+                if UPDATE_AGG:
+                    ds = ecmwf_agg(start_time, end_time, variable=var, forecast_type=ft,
+                                   grid=grid, agg=agg, mask=mask, region=region,
+                                   recompute=True, force_overwrite=True,
+                                   remote=True,
+                                   remote_config={'name': 'update', 'n_workers': 10}
+                                   )
