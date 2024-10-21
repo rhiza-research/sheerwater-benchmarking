@@ -356,7 +356,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
             imkeys.sort()
             sorted_values = [str(cache_arg_values[i]) for i in imkeys]
 
-            cache_key = func.__name__ + '_' + '_'.join(sorted_values)
+            cache_key = func.__name__ + '/' + '_'.join(sorted_values)
 
             if data_type == 'array':
                 backend = "zarr" if backend is None else backend
@@ -373,6 +373,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'postgres':
+                    cache_key = cache_key.replace('/', '_')
                     cache_path = cache_key
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = False
