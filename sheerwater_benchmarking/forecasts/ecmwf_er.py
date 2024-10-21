@@ -234,12 +234,8 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
 
     Interface is the same as single_iri_ecmwf.
     """
-    if time == "2016-02-25":
-        recompute = False
-    else:
-        recompute = False
     ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid,
-                          verbose, retry_null_cache=True, recompute=recompute, force_overwrite=True)
+                          verbose, retry_null_cache=True)
 
     if ds is None:
         return None
@@ -287,13 +283,9 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
     for date in target_dates:
         # ds = dask.delayed(fn)(
         #     date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
-        if date == "2016-02-25":
-            recompute = False
-        else:
-            recompute = False
         ds = fn(
             date, variable, forecast_type, run_type, grid, verbose, retry_null_cache=True, filepath_only=True,
-            recompute=recompute, force_overwrite=True)
+            recompute=False, force_overwrite=True)
         datasets.append(ds)
     # datasets = dask.compute(*datasets)
     data = [d for d in datasets if d is not None]

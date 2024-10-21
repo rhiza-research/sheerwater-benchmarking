@@ -374,11 +374,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                 else:
                     flat_values.append(str(val))
 
-            cache_key = func.__name__ + '_' + '_'.join(flat_values)
-
+            cache_key = func.__name__ + '/' + '_'.join(flat_values)
             if data_type == 'array':
                 backend = "zarr" if backend is None else backend
-
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
@@ -391,7 +389,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'postgres':
-                    cache_path = cache_key
+                    cache_path = cache_key.replace('/', '_')
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = False
             else:

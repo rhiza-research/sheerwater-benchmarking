@@ -4,19 +4,20 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import ecmwf_agg, ecmwf_rolled, 
 
 
 if __name__ == "__main__":
-    vars = ["tmp2m", "precip"]
+    # vars = ["tmp2m", "precip"]
+    vars = ["tmp2m"]
     aggs = [14, 7]
     grids = ["global1_5"]
-    forecast_type = ["forecast", "reforecast"]
-    # forecast_type = ["reforecast"]
+    # forecast_type = ["forecast", "reforecast"]
+    forecast_type = ["reforecast"]
     regions = ['global']
     masks = ["lsm"]
 
     start_time = "2015-05-14"
     end_time = "2023-06-30"
 
-    UPDATE_IRI = False
-    UPDATE_ROLLED = True
+    UPDATE_IRI = True
+    UPDATE_ROLLED = False
     UPDATE_AGG = False
     UPDATE_BIAS = False
 
