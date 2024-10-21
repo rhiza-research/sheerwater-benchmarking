@@ -403,13 +403,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
             ds = None
             compute_result = True
 
-            # Delete the null cache if retry null cache is passed
-            if fs.exists(null_path) and retry_null_cache:
-                print(f"Removing and retrying null cache {null_path}.")
-                fs.rm(null_path, recursive=True)
-
             if not recompute and cache:
                 fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+
+                # Delete the null cache if retry null cache is passed
+                if fs.exists(null_path) and retry_null_cache:
+                    print(f"Removing and retrying null cache {null_path}.")
+                    fs.rm(null_path, recursive=True)
+
                 if cache_exists(backend, cache_path):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
