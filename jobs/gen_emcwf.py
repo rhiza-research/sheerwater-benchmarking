@@ -4,11 +4,11 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import ecmwf_agg, ecmwf_rolled, 
 
 
 if __name__ == "__main__":
-    vars = ["tmp2m", "precip"]
+    vars = ["tmp2m"]
     aggs = [14, 7]
     grids = ["global1_5"]
     # forecast_type = ["forecast", "reforecast"]
-    forecast_type = ["forecast"]
+    forecast_type = ["reforecast"]
     regions = ['global']
     masks = ["lsm"]
 
@@ -25,6 +25,7 @@ if __name__ == "__main__":
             ds = iri_ecmwf(start_time, end_time, variable=var, forecast_type=ft,
                            run_type='perturbed',
                            grid='global1_5', verbose=True,
+                           retry_null_cache=True,
                            remote=True,
                            remote_config={'name': 'update', 'n_workers': 10},
                            )
@@ -40,12 +41,13 @@ if __name__ == "__main__":
                                   )
 
             if UPDATE_BIAS:
-                ds = ecmwf_reforecast_bias(start_time, end_time, variable=var,
-                                           agg=agg, grid=grid,
-                                           recompute=False, force_overwrite=True,
-                                           remote=True, remote_config={'name': 'genevieve',
-                                                                       'n_workers': 25,
-                                                                       'idle_timeout': '240 minutes'})
+                if ft == "forecast":
+                    ds = ecmwf_reforecast_bias(start_time, end_time, variable=var,
+                                               agg=agg, grid=grid,
+                                               recompute=False, force_overwrite=True,
+                                               remote=True, remote_config={'name': 'genevieve',
+                                                                           'n_workers': 25,
+                                                                           'idle_timeout': '240 minutes'})
 
             for region, mask in product(regions, masks):
                 if UPDATE_AGG:

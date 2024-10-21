@@ -85,7 +85,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
             requested timeseries. If False, will not validate the cache timeseries.
         force_overwrite(bool): Whether to overwrite the cache if it
             already exists (if False, will prompt the user before overwriting).
-        retry_null_cache(bool): If True, ignore the null caches and attempts to recompute
+        retry_null_cache(bool): If True, ignore and delete the null caches and attempts to recompute
             result for null values. If False (default), will return None for null caches.
         cache_disable_if(dict, list): If the cache arguments match the dict or list of dicts
             then the cache will be disabled. This is useful for disabling caching based on
@@ -220,6 +220,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
             ds = None
             compute_result = True
+
+            if fs.exists(null_path) and retry_null_cache:
+                print(f"Removing and retrying null cache {null_path}.")
+                fs.rm(null_path, recursive=True)
+
             if fs.exists(cache_path) and not recompute and cache:
                 # Read the cache
                 print(f"Found cache for {cache_path}")
@@ -304,7 +309,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                             compute_result = False
                 else:
                     print("Auto caching currently only supports array types")
-            elif fs.exists(null_path) and not recompute and cache and not retry_null_cache:
+            elif fs.exists(null_path) and not recompute and cache:
                 print(f"Found null cache for {null_path}. Skipping computation.")
                 return None
 

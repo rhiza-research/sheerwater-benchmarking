@@ -155,7 +155,8 @@ def single_iri_ecmwf(time, variable, forecast_type,
         return None
     else:
         print(f"Unknown error occurred when trying to download data for {day} {month} {year} for model ecmwf.\n")
-        raise ValueError(f"Failed to download data for {day} {month} {year} for model ecmwf.")
+        # raise ValueError(f"Failed to download data for {day} {month} {year} for model ecmwf.")
+        return None
 
     rename_dict = {
         "S": "start_date",
@@ -235,7 +236,12 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
 
     Interface is the same as single_iri_ecmwf.
     """
-    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose)
+    if time == "2016-02-25":
+        recompute = False
+    else:
+        recompute = False
+    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid,
+                          verbose, retry_null_cache=True, recompute=recompute, force_overwrite=True)
 
     if ds is None:
         return None
@@ -247,14 +253,14 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
     return ds
 
 
-@dask_remote
-@cacheable(data_type='array',
-           timeseries=['start_date', 'model_issuance_date'],
-           cache_args=['variable', 'forecast_type', 'run_type', 'grid'],
-           chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'start_date': 969,
-                     'model_run': 1, 'start_year': 29, 'model_issuance_date': 1},
-           cache=False,
-           auto_rechunk=False)
+@ dask_remote
+@ cacheable(data_type='array',
+            timeseries=['start_date', 'model_issuance_date'],
+            cache_args=['variable', 'forecast_type', 'run_type', 'grid'],
+            chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'start_date': 969,
+                      'model_run': 1, 'start_year': 29, 'model_issuance_date': 1},
+            cache=False,
+            auto_rechunk=False)
 def iri_ecmwf(start_time, end_time, variable, forecast_type,
               run_type="average", grid="global1_5", verbose=False):
     """Fetches forecast data from the ECMWF IRI dataset.
@@ -281,10 +287,17 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
     fn = single_iri_ecmwf if forecast_type == "forecast" else single_iri_ecmwf_dense
     datasets = []
     for date in target_dates:
-        ds = dask.delayed(fn)(
-            date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
+        # ds = dask.delayed(fn)(
+        #     date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
+        if date == "2016-02-25":
+            recompute = False
+        else:
+            recompute = False
+        ds = fn(
+            date, variable, forecast_type, run_type, grid, verbose, retry_null_cache=True, filepath_only=True,
+            recompute=recompute, force_overwrite=True)
         datasets.append(ds)
-    datasets = dask.compute(*datasets)
+    # datasets = dask.compute(*datasets)
     data = [d for d in datasets if d is not None]
     if len(data) == 0:
         return None
@@ -308,14 +321,14 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
         return x
 
 
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'forecast_type', 'grid'],
-           timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 46,
-                     "start_date": 969, "start_year": 29,
-                     "model_issuance_date": 1},
-           auto_rechunk=False)
+@ dask_remote
+@ cacheable(data_type='array',
+            cache_args=['variable', 'forecast_type', 'grid'],
+            timeseries=['start_date', 'model_issuance_date'],
+            chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                      "start_date": 969, "start_year": 29,
+                      "model_issuance_date": 1},
+            auto_rechunk=False)
 def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
@@ -367,13 +380,13 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_
     return df
 
 
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'forecast_type', 'agg', 'grid'],
-           timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
-                     "start_year": 29, "model_issuance_date": 969},
-           auto_rechunk=False)
+@ dask_remote
+@ cacheable(data_type='array',
+            cache_args=['variable', 'forecast_type', 'agg', 'grid'],
+            timeseries=['start_date', 'model_issuance_date'],
+            chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
+                      "start_year": 29, "model_issuance_date": 969},
+            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                  agg=14, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
@@ -408,12 +421,12 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
     return ds
 
 
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'agg', 'grid', 'lead'],
-           timeseries=['model_issuance_date'],
-           cache=True,
-           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
+@ dask_remote
+@ cacheable(data_type='array',
+            cache_args=['variable', 'agg', 'grid', 'lead'],
+            timeseries=['model_issuance_date'],
+            cache=True,
+            chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
 def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead."""
     # Fetch the reforecast data; get's the past 20 years associated with each start date
@@ -451,7 +464,107 @@ def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, g
     # Assign the time coordinate to match the forecast dataframe for alignment and subtract
     bias = ds_truth_lead.assign_coords(time=ds_stacked.time) - ds_stacked
     bias = bias.unstack().chunk({"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 30})
+    bias = bias.sortby("model_issuance_date")
     return bias
+
+
+@ dask_remote
+@ cacheable(data_type='array',
+            cache_args=['variable', 'agg', 'grid'],
+            timeseries=['model_issuance_date'],
+            cache=True,
+            chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
+def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_5"):
+    """Computes the bias of ECMWF reforecasts for a specific lead."""
+    # Fetch the reforecast data; get's the past 20 years associated with each start date
+    ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
+    leads = len(ds_deb.lead_time)
+
+    # Accumulate all the per lead biases
+    biases = [ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=agg,
+                                         recompute=True, force_overwrite=True,
+                                         lead=i, grid=grid) for i in range(leads)]
+    # Concatenate leads and unstack
+    ds_biases = xr.concat(biases, dim='lead_time')
+    return ds_biases
+
+
+@ dask_remote
+@ cacheable(data_type='array',
+            cache=True,
+            timeseries=['start_date', 'model_issuance_date'],
+            cache_args=['variable', 'forecast_type', 'agg', 'grid', 'mask'],
+            chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
+                      "start_year": 29, "model_issuance_date": 969},
+            auto_rechunk=False)
+def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14,
+              grid="global1_5",  mask="lsm", region='global'):
+    """Fetches forecast data from the ECMWF IRI dataset.
+
+    Specialized function for the ABC model
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+        agg (str): The aggregation period to use, in days
+        mask (str): The mask to apply. One of:
+            - lsm: land-sea mask
+            - None: no mask
+    """
+    ds = ecmwf_rolled(start_time, end_time, variable,
+                      forecast_type, agg=agg,  grid=grid)
+
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
+    return ds
+
+
+@ dask_remote
+@ cacheable(data_type='array',
+            timeseries='time',
+            cache=False,
+            cache_args=['variable', 'lead', 'dorp', 'grid', 'mask', 'region'])
+def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
+             grid='global1_5', mask='lsm', region="global"):
+    """Standard format forecast data for ECMWF forecasts."""
+    lead_params = {
+        "week1": (7, 0),
+        "week2": (7, 7),
+        "week3": (7, 21),
+        "week4": (7, 28),
+        "week5": (7, 35),
+        "week6": (7, 42),
+        "weeks12": (14, 0),
+        "weeks23": (14, 7),
+        "weeks34": (14, 14),
+        "weeks45": (14, 21),
+        "weeks56": (14, 28),
+    }
+    agg, lead_id = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
+
+    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type="forecast", agg=agg, grid=grid)
+
+    # Leads are 12 hours offset from the forecast date
+    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
+    ds = ds.rename({'start_date': 'time'})
+    if prob_type == 'deterministic':
+        ds = ds.assign_coords(member=-1)
+    else:
+        raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
+
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
+    return ds
 
 # @dask_remote
 # @cacheable(data_type='array',
@@ -505,95 +618,3 @@ def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, g
 #     # Concatenate leads and unstack
 #     ds_biases = xr.concat(biases, dim=ds_stacked.lead_time)
 #     return ds_biases
-
-
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'agg', 'grid'],
-           timeseries=['model_issuance_date'],
-           cache=True,
-           chunking={"lat": 721, "lon": 1440, "start_year": 30, 'lead_time': 1, "model_issuance_date": 1},)
-def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_5"):
-    """Computes the bias of ECMWF reforecasts for a specific lead."""
-    biases = [ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=agg, lead=i, grid=grid) for i in range(33)]
-    # Concatenate leads and unstack
-    ds_biases = xr.concat(biases, dim='lead_time')
-    return ds_biases
-
-
-@dask_remote
-@cacheable(data_type='array',
-           cache=False,
-           timeseries=['start_date', 'model_issuance_date'],
-           cache_args=['variable', 'forecast_type', 'agg', 'anom', 'clim_params', 'grid', 'mask'],
-           chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
-                     "start_year": 29, "model_issuance_date": 969},
-           auto_rechunk=False)
-def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, anom=False, clim_params=None,
-              grid="global1_5",  mask="lsm", region='global'):
-    """Fetches forecast data from the ECMWF IRI dataset.
-
-    Specialized function for the ABC model
-
-    Args:
-        start_time (str): The start date to fetch data for.
-        end_time (str): The end date to fetch.
-        variable (str): The weather variable to fetch.
-        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
-        grid (str): The grid resolution to fetch the data at. One of:
-            - global1_5: 1.5 degree global grid
-        agg (str): The aggregation period to use, in days
-        mask (str): The mask to apply. One of:
-            - lsm: land-sea mask
-            - None: no mask
-    """
-    ds = ecmwf_rolled(start_time, end_time, variable,
-                      forecast_type, agg=agg,  grid=grid)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
-           timeseries='time',
-           cache=False,
-           cache_args=['variable', 'lead', 'dorp', 'grid', 'mask', 'region'])
-def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
-             grid='global1_5', mask='lsm', region="global"):
-    """Standard format forecast data for ECMWF forecasts."""
-    lead_params = {
-        "week1": (7, 0),
-        "week2": (7, 7),
-        "week3": (7, 21),
-        "week4": (7, 28),
-        "week5": (7, 35),
-        "week6": (7, 42),
-        "weeks12": (14, 0),
-        "weeks23": (14, 7),
-        "weeks34": (14, 14),
-        "weeks45": (14, 21),
-        "weeks56": (14, 28),
-    }
-    agg, lead_id = lead_params.get(lead, (None, None))
-    if agg is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
-
-    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type="forecast", agg=agg, grid=grid)
-
-    # Leads are 12 hours offset from the forecast date
-    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
-    ds = ds.rename({'start_date': 'time'})
-    if prob_type == 'deterministic':
-        ds = ds.assign_coords(member=-1)
-    else:
-        raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-    return ds

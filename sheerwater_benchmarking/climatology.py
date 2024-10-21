@@ -1,11 +1,9 @@
 """Climatology models."""
 import dateparser
-from datetime import timedelta
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 from sheerwater_benchmarking.reanalysis import era5_daily
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, clip_region)
-
 
 @dask_remote
 @cacheable(data_type='array',
