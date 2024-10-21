@@ -57,7 +57,7 @@ def get_metric_fn(prob_type, metric, spatial=True):
 
 
 @dask_remote
-def combined_metric(start_time, end_time, variable, lead, forecast, truth,
+def _metric(start_time, end_time, variable, lead, forecast, truth,
                     metric, baseline=None, grid="global1_5", mask='lsm', region='africa', spatial=True):
     """Compute a metric for a forecast at a specific lead."""
     if metric == "crps":
@@ -104,9 +104,9 @@ def combined_metric(start_time, end_time, variable, lead, forecast, truth,
            chunking={"lat": 121, "lon": 240, "time": 1000},
            cache=False)
 def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
-                   metric, baseline=None, grid="global1_5", mask='lsm', region='africa'):
+                   metric, baseline=None, grid="global1_5", mask='lsm', region='global'):
     """Runs and caches a geospatial metric."""
-    m_ds =  combined_metric(start_time, end_time, variable, lead, forecast, truth,
+    m_ds =  _metric(start_time, end_time, variable, lead, forecast, truth,
                             metric, baseline, grid, mask, region, spatial=True)
 
     # Convert to standard naming
@@ -120,9 +120,9 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
            cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
            cache=False)
 def summary_metric(start_time, end_time, variable, lead, forecast, truth,
-                   metric, baseline=None, grid="global1_5", mask='lsm', region='africa'):
+                   metric, baseline=None, grid="global1_5", mask='lsm', region='global'):
     """Runs and caches a summary metric."""
-    m_ds = combined_metric(start_time, end_time, variable, lead, forecast, truth,
+    m_ds = _metric(start_time, end_time, variable, lead, forecast, truth,
                            metric, baseline, grid, mask, region, spatial=False)
 
 
