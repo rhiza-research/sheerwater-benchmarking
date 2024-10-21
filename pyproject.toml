@@ -86,8 +86,12 @@ dependencies = [
     "pytest",
     "salientsdk>=0.3.4",
     "scikit-learn",
+    "terracotta",
+    "sqlalchemy",
+    "psycopg2",
     "xarray-regrid",
     "weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2",
+    "deltalake",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

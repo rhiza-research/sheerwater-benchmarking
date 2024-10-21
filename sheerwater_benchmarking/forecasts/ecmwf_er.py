@@ -319,14 +319,14 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
         return x
 
 
-@ dask_remote
-@ cacheable(data_type='array',
-            cache_args=['variable', 'forecast_type', 'grid'],
-            timeseries=['start_date', 'model_issuance_date'],
-            chunking={"lat": 121, "lon": 240, "lead_time": 46,
-                      "start_date": 969, "start_year": 29,
-                      "model_issuance_date": 1},
-            auto_rechunk=False)
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'forecast_type', 'grid'],
+           timeseries=['start_date', 'model_issuance_date'],
+           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                     "start_date": 969, "start_year": 29,
+                     "model_issuance_date": 1},
+           auto_rechunk=False)
 def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
@@ -378,13 +378,13 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_
     return df
 
 
-@ dask_remote
-@ cacheable(data_type='array',
-            cache_args=['variable', 'forecast_type', 'agg', 'grid'],
-            timeseries=['start_date', 'model_issuance_date'],
-            chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
-                      "start_year": 29, "model_issuance_date": 969},
-            auto_rechunk=False)
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'forecast_type', 'agg', 'grid'],
+           timeseries=['start_date', 'model_issuance_date'],
+           chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
+                     "start_year": 29, "model_issuance_date": 969},
+           auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                  agg=14, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
@@ -419,12 +419,12 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
     return ds
 
 
-@ dask_remote
-@ cacheable(data_type='array',
-            cache_args=['variable', 'agg', 'grid', 'lead'],
-            timeseries=['model_issuance_date'],
-            cache=True,
-            chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'agg', 'grid', 'lead'],
+           timeseries=['model_issuance_date'],
+           cache=True,
+           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
 def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead."""
     # Fetch the reforecast data; get's the past 20 years associated with each start date
@@ -466,12 +466,12 @@ def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, g
     return bias
 
 
-@ dask_remote
-@ cacheable(data_type='array',
-            cache_args=['variable', 'agg', 'grid'],
-            timeseries=['model_issuance_date'],
-            cache=True,
-            chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'agg', 'grid'],
+           timeseries=['model_issuance_date'],
+           cache=True,
+           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
 def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead."""
     # Fetch the reforecast data; get's the past 20 years associated with each start date
@@ -487,14 +487,14 @@ def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_
     return ds_biases
 
 
-@ dask_remote
-@ cacheable(data_type='array',
-            cache=True,
-            timeseries=['start_date', 'model_issuance_date'],
-            cache_args=['variable', 'forecast_type', 'agg', 'grid', 'mask'],
-            chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
-                      "start_year": 29, "model_issuance_date": 969},
-            auto_rechunk=False)
+@dask_remote
+@cacheable(data_type='array',
+           cache=True,
+           timeseries=['start_date', 'model_issuance_date'],
+           cache_args=['variable', 'forecast_type', 'agg', 'grid', 'mask'],
+           chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
+                     "start_year": 29, "model_issuance_date": 969},
+           auto_rechunk=False)
 def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14,
               grid="global1_5",  mask="lsm", region='global'):
     """Fetches forecast data from the ECMWF IRI dataset.
@@ -528,11 +528,11 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14,
     return ds
 
 
-@ dask_remote
-@ cacheable(data_type='array',
-            timeseries='time',
-            cache=False,
-            cache_args=['variable', 'lead', 'dorp', 'grid', 'mask', 'region'])
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'dorp', 'grid', 'mask', 'region'])
 def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
              grid='global1_5', mask='lsm', region="global"):
     """Standard format forecast data for ECMWF forecasts."""
@@ -557,10 +557,10 @@ def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
 
     # Leads are 12 hours offset from the forecast date
     ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
+
     ds = ds.rename({'start_date': 'time'})
-    if prob_type == 'deterministic':
-        ds = ds.assign_coords(member=-1)
-    else:
+    ds = ds.assign_attrs(prob_type="deterministic")
+    if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
 
     # Apply masking

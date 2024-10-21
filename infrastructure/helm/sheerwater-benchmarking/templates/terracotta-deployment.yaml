@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
+  labels:
+    app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
+    release: {{ .Release.Name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
+      release: {{ .Release.Name }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        timestamp: '{{ now | date "2006-01-02T15:04:05" }}'
+        gke-gcsfuse/volumes: "true"
+      labels:
+        app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
+        release: {{ .Release.Name }}
+    spec:
+      nodeSelector:
+        iam.gke.io/gke-metadata-server-enabled: "true"
+      containers:
+        - name: {{ .Chart.Name }}-terracotta
+          image: {{ .Values.terracotta.image.repository }}:{{ .Values.terracotta.image.tag }}
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: {{ .Values.terracotta.resources.requests.cpu }}
+              memory: {{ .Values.terracotta.resources.requests.memory }}
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: "/keys"
+              port: 5000
+              scheme: HTTP
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            successThreshold: 1
+            timeoutSeconds: 5
+          env:
+          - name: TC_DRIVER_PATH
+            value: {{ .Values.terracotta.driver_path }}
+          - name: TC_RESAMPLING_METHOD
+            value: "nearest"
+          - name: TC_REPROJECTION_METHOD
+            value: "nearest"
+          envFrom:
+            - secretRef:
+                name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-secrets
+          volumeMounts:
+            - mountPath: /mnt/sheerwater-datalake
+              name: terracotta-rasters
+              readOnly: true
+      serviceAccountName: sheerwater-sa
+      volumes:
+        - name: terracotta-rasters
+          persistentVolumeClaim:
+            claimName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta 
+            readOnly: true
