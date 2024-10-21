@@ -53,7 +53,7 @@ def get_metric_fn(prob_type, metric, spatial=True):
         metric_fn = getattr(mod, metric_mod)
         return metric_fn, metric_kwargs
     except (ImportError, AttributeError):
-        raise ImportError("Did not find implementation for metric {metric}")
+        raise ImportError(f"Did not find implementation for metric {metric}")
 
 
 @dask_remote
