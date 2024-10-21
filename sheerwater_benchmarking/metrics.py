@@ -5,22 +5,22 @@ from importlib import import_module
 from sheerwater_benchmarking.utils import cacheable, dask_remote
 
 
-def get_forecast_fn(forecast):
-    """Import the forecast and truth functions."""
+def get_datasource_fn(datasource):
+    """Import the datasource and truth functions."""
     # Import truth
     try:
         mod = import_module("sheerwater_benchmarking.reanalysis")
-        fn = getattr(mod, forecast)
+        fn = getattr(mod, datasource)
     except (ImportError, AttributeError):
         try:
             mod = import_module("sheerwater_benchmarking.forecasts")
-            fn = getattr(mod, forecast)
+            fn = getattr(mod, datasource)
         except (ImportError, AttributeError):
             try:
                 mod = import_module("sheerwater_benchmarking.baselines")
-                fn = getattr(mod, forecast)
+                fn = getattr(mod, datasource)
             except (ImportError, AttributeError):
-                raise ImportError(f"Could not find truth {forecast}.")
+                raise ImportError(f"Could not find truth {datasource}.")
 
     return fn
 
@@ -69,11 +69,11 @@ def combined_metric(start_time, end_time, variable, lead, forecast, truth,
         raise ValueError("Unsupported metric")
 
     # Get the forecast
-    fcst_fn = get_forecast_fn(forecast)
+    fcst_fn = get_datasource_fn(forecast)
     fcst = fcst_fn(start_time, end_time, variable, lead=lead, prob_type=prob_type, grid=grid, mask=mask, region=region)
 
     # Get the truth to compare against
-    truth_fn = get_forecast_fn(truth)
+    truth_fn = get_datasource_fn(truth)
     obs = truth_fn(start_time, end_time, variable, lead=lead, grid=grid, mask=mask, region=region)
 
     # Check to see the prob type attribute
@@ -84,7 +84,7 @@ def combined_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the baseline if it exists and run its metric
     if baseline:
-        baseline_fn = get_forecast_fn(baseline)
+        baseline_fn = get_datasource_fn(baseline)
         baseline_output = baseline_fn(start_time, end_time, variable, lead=lead, prob_type=prob_type,
                                       grid=grid, mask=mask, region=region)
 
