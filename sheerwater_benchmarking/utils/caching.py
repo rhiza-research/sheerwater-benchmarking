@@ -565,7 +565,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                             raise RuntimeError(f"""Tabular datatypes must return pandas dataframe
                                                or none instead of {type(ds)}""")
 
-                        if backend == 'default' or backend == 'delta':
+                        if backend == 'delta':
                             write = False
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
@@ -581,16 +581,19 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
                         elif backend == 'postgres':
                             print(f"Caching result for {cache_key} in postgres.")
-                            try:
-                                if force_overwrite:
-                                    write_to_postgres(ds, cache_key, overwrite=True)
-                                else:
-                                    write_to_postgres(ds, cache_key)
-                            except ValueError:
-                                inp = input(f"""A cache already exists for table {cache_key}.
-                                            Are you sure you want to overwrite it? (y/n)""")
+
+                            write = False
+                            if check_exists_postgres(cache_key) and not force_overwrite:
+                                inp = input(f'A cache already exists at {
+                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
-                                    write_to_postgres(ds, cache_key, overwrite=True)
+                                    write = True
+                            else:
+                                write = True
+
+                            if write:
+                                print(f"Caching result for {cache_path}.")
+                                write_to_postgres(ds, cache_key, overwrite=True)
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
 
