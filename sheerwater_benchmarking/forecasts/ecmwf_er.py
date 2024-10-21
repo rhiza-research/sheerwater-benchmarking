@@ -444,8 +444,8 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type,
 @cacheable(data_type='array',
            timeseries='time',
            cache=False,
-           cache_args=['variable', 'lead', 'dorp', 'grid', 'mask', 'region'])
-def ecmwf_er(start_time, end_time, variable, lead, dorp='d',
+           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
+def ecmwf_er(start_time, end_time, variable, lead, prob_type='deteriminstic',
              grid='global1_5', mask='lsm', region="africa"):
     """Standard format forecast data for ECMWF forecasts."""
     lead_params = {
@@ -470,10 +470,10 @@ def ecmwf_er(start_time, end_time, variable, lead, dorp='d',
 
     # Leads are 12 hours offset from the forecast date
     ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
+
     ds = ds.rename({'start_date': 'time'})
-    if dorp == 'd':
-        ds = ds.assign_coords(member=-1)
-    else:
+    ds = ds.assign_attrs(prob_type="deterministic")
+    if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
 
     # Clip to specified region

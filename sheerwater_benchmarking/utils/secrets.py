@@ -5,6 +5,25 @@ from pathlib import Path
 from google.cloud import secretmanager
 import salientsdk as sk
 
+def postgres_write_password():
+    """Get a postgres write password."""
+    client = secretmanager.SecretManagerServiceClient()
+
+    response = client.access_secret_version(
+        request={"name": "projects/750045969992/secrets/sheerwater-postgres-write-password/versions/latest"})
+    key = response.payload.data.decode("UTF-8")
+
+    return key
+
+def postgres_read_password():
+    """Get a postgres read password."""
+    client = secretmanager.SecretManagerServiceClient()
+
+    response = client.access_secret_version(
+        request={"name": "projects/750045969992/secrets/sheerwater-postgres-read-password/versions/latest"})
+    key = response.payload.data.decode("UTF-8")
+
+    return key
 
 def cdsapi_secret():
     """Fetches the CDS API secret from the secret manager."""
