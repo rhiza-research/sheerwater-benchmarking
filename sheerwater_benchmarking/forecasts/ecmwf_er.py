@@ -507,7 +507,7 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14,
         variable (str): The weather variable to fetch.
         forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
         agg (str): The aggregation period to use, in days
-        grid (str): The grid resolution to fetch the data at. 
+        grid (str): The grid resolution to fetch the data at.
         mask (str): The mask to apply. One of:
             - lsm: land-sea mask
             - None: no mask
