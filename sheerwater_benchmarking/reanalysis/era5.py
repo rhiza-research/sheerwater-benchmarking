@@ -198,7 +198,7 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
             - global0_25: 0.25 degree global grid
         agg (str): The aggregation period to use, in days
         anom (bool): Whether to return the climatological anomaly
-        clim_params (dict): Parameters for the climatology anomaly calculation, 
+        clim_params (dict): Parameters for the climatology anomaly calculation,
             passed directly to climatology function. If anom is False,
             these parameters are ignored.
     """
@@ -229,12 +229,19 @@ def era5_agg(start_time, end_time, variable, agg=14,
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
+        agg (str): The aggregation period to use, in days
+        anom (bool): Whether to return the climatological anomaly
+        clim_params (dict): Parameters for the climatology anomaly calculation,
+            passed directly to climatology function. If anom is False,
+            these parameters are ignored.
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
-        agg (str): The aggregation period to use, in days
         mask (str): The mask to apply to the data. One of:
             - lsm: Land-sea mask
             - None: No mask
+        region (str): The region to clip the data to. One of:
+            - global: Global region
+            - africa: Africa region
     """
     # Get ERA5 on the corresponding global grid
     ds = era5_rolled(start_time, end_time, variable, agg=agg, grid=grid)

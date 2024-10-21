@@ -1,5 +1,4 @@
 """Functions to fetch and process data from the ECMWF IRI dataset."""
-import dask
 import sys
 import pandas as pd
 import numpy as np
@@ -13,7 +12,6 @@ import ssl
 from urllib3 import poolmanager
 import time
 
-from sheerwater_benchmarking.climatology import climatology_raw
 from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
                                            get_grid, get_dates,
@@ -21,7 +19,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
                                            roll_and_agg,
                                            apply_mask, clip_region,
                                            lon_base_change,
-                                           get_anomalies, regrid)
+                                           regrid)
 
 
 ########################################################################
@@ -508,12 +506,14 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14,
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
         forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
-        grid (str): The grid resolution to fetch the data at. One of:
-            - global1_5: 1.5 degree global grid
         agg (str): The aggregation period to use, in days
+        grid (str): The grid resolution to fetch the data at. 
         mask (str): The mask to apply. One of:
             - lsm: land-sea mask
             - None: no mask
+        region (str): The region to clip the data to. One of:
+            - global: global region
+            - africa: the African continent
     """
     ds = ecmwf_rolled(start_time, end_time, variable,
                       forecast_type, agg=agg,  grid=grid)

@@ -60,10 +60,7 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
     m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, skipna=True)
     m_ds = m_ds.rename_vars({variable: f'{variable}_{metric}'})
 
-    try:
-        m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
-    except: 
-        import pdb; pdb.set_trace()
+    m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
     # Convert to standard naming
     return m_ds

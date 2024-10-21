@@ -4,11 +4,9 @@ These utility functions take as input an xarray dataset and return a modified
 dataset.
 """
 import numpy as np
-import pandas as pd
 import xarray as xr
 import dask
 import xarray_regrid  # noqa: F401, import needed for regridding
-from dateutil.relativedelta import relativedelta
 
 
 from .space_utils import (get_grid_ds,
@@ -188,7 +186,7 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
 
     Args:
         ds (xr.Dataset): Dataset to apply mask to.
-        mask (str); The mask to apply. One of: "lsm", None
+        mask (str): The mask to apply. One of: 'lsm', None
         var (str): Variable to mask. If None, applies to apply to all variables.
         val (int): Value to mask above (any value that is
             strictly greater than this value will be masked).
@@ -228,6 +226,7 @@ def get_anomalies(ds, clim, var, time_dim='time'):
         ds (xr.Dataset): Dataset to calculate anomalies for.
         clim (xr.Dataset): Climatology dataset to calculate anomalies from.
         var (str): Variable to calculate anomalies for.
+        time_dim (str): The name of the time dimension.
     """
     # Create a day of year timeseries
     ds = ds.assign_coords(dayofyear=ds[time_dim].dt.dayofyear)

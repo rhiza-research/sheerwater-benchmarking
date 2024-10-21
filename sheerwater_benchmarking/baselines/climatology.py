@@ -14,7 +14,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, roll_and_agg,
 @cacheable(data_type='array',
            timeseries='time',
            cache=True,
-           cache_args=['variable', 'first_year', 'last_year', 'agg', 'grid', 'mask'],
+           cache_args=['variable', 'first_year', 'last_year', 'agg', 'grid'],
            chunking={"lat": 721, "lon": 1441, "time": 30},
            auto_rechunk=False)
 def climatology_agg(start_time, end_time, variable, first_year=1991, last_year=2020,
@@ -25,11 +25,10 @@ def climatology_agg(start_time, end_time, variable, first_year=1991, last_year=2
         start_time (str): The start time of the timeseries forecast.
         end_time (str): The end time of the timeseries forecast.
         variable (str): The weather variable to fetch.
-        grid (str): The grid to produce the forecast on.
+        first_year (int): The first year to use for the climatology.
+        last_year (int): The last year to use for the climatology.
         agg (str): The aggregation period to use, in days
-        mask (str): The mask to apply to the data. One of:
-            - lsm: Land-sea mask
-            - None: No mask
+        grid (str): The grid to produce the forecast on.
     """
     # Get climatology on the corresponding global grid
     clim = climatology_raw(variable=variable, first_year=first_year, last_year=last_year, grid=grid)

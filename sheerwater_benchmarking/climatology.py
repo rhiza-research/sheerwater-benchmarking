@@ -5,6 +5,7 @@ from dateutil.relativedelta import relativedelta
 from sheerwater_benchmarking.reanalysis import era5_daily
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, clip_region)
 
+
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'first_year', 'last_year', 'grid'],
@@ -103,7 +104,8 @@ def climatology_rolling_raw(start_time, end_time, variable, clim_years=30, grid=
            cache_args=['variable', 'clim_years', 'grid', 'mask', 'region'],
            chunking={"lat": 721, "lon": 1440, "time": 30},
            cache=False)
-def climatology_rolling(start_time, end_time, variable, clim_years=30, grid="global1_5", mask='lsm', region='global'):
+def climatology_rolling(start_time, end_time, variable, clim_years=30,
+                        grid="global1_5", mask='lsm', region='global'):
     """Compute a rolling {clim_years}-yr climatology of the ERA5 data.
 
     Args:
@@ -112,6 +114,8 @@ def climatology_rolling(start_time, end_time, variable, clim_years=30, grid="glo
         variable: Variable to compute climatology for.
         clim_years: Number of years to compute climatology over.
         grid: Grid resolution of the data.
+        mask: Mask to apply to the data.
+        region: Region to clip the data to.
     """
     ds = climatology_rolling_raw(start_time, end_time, variable, clim_years=clim_years, grid=grid)
 
