@@ -6,6 +6,7 @@ from google.cloud import secretmanager
 import salientsdk as sk
 
 def postgres_write_password():
+    """Get a postgres write password."""
     client = secretmanager.SecretManagerServiceClient()
 
     response = client.access_secret_version(
@@ -15,6 +16,7 @@ def postgres_write_password():
     return key
 
 def postgres_read_password():
+    """Get a postgres read password."""
     client = secretmanager.SecretManagerServiceClient()
 
     response = client.access_secret_version(

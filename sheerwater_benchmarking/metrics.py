@@ -20,22 +20,19 @@ def get_forecast_fn(forecast):
                 mod = import_module("sheerwater_benchmarking.baselines")
                 fn = getattr(mod, forecast)
             except (ImportError, AttributeError):
-                raise ImportError(f"Could not find truth {truth}.")
+                raise ImportError(f"Could not find truth {forecast}.")
 
     return fn
 
 
 def get_metric_fn(prob_type, metric, spatial=True):
-
+    """Import the correct metrics function from weatherbench."""
     # Make sure things are conssitent
     if prob_type == 'deterministic' and metric == 'crps':
         raise ValueError("Cannot run CRPS on deterministic forecasts.")
     elif (prob_type == 'ensemble' or prob_type == 'quantile') and metric == 'mae':
         raise ValueError("Cannot run MAE on probababilistic forecasts.")
 
-
-
-    """Import the metric function."""
     wb_metrics = {
         'crps': ('CRPS', {'ensemble_dim': 'member'}),
         'crps-q': ('QuantileCRPS', {'quantile_dim': 'member'}),
@@ -56,7 +53,7 @@ def get_metric_fn(prob_type, metric, spatial=True):
         mod = import_module("weatherbench2.metrics")
         metric_fn = getattr(mod, metric_mod)
         return metric_fn, metric_kwargs
-    except:
+    except (ImportError, AttributeError):
         raise ImportError("Did not find implementation for metric {metric}")
 
 
@@ -64,7 +61,6 @@ def get_metric_fn(prob_type, metric, spatial=True):
 def combined_metric(start_time, end_time, variable, lead, forecast, truth,
                     metric, baseline=None, grid="global1_5", mask='lsm', region='africa', spatial=True):
     """Compute a metric for a forecast at a specific lead."""
-
     if metric == "crps":
         prob_type = "probabalistic"
     elif metric == "mae":
@@ -89,7 +85,8 @@ def combined_metric(start_time, end_time, variable, lead, forecast, truth,
     # Get the baseline if it exists and run its metric
     if baseline:
         baseline_fn = get_forecast_fn(baseline)
-        baseline_output = baseline_fn(start_time, end_time, variable, lead=lead, prob_type=prob_type, grid=grid, mask=mask, region=region)
+        baseline_output = baseline_fn(start_time, end_time, variable, lead=lead, prob_type=prob_type,
+                                      grid=grid, mask=mask, region=region)
 
         # Check to see the prob type attribute
         enhanced_prob_type = baseline_output.attrs['prob_type']
@@ -109,7 +106,7 @@ def combined_metric(start_time, end_time, variable, lead, forecast, truth,
            cache=False)
 def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, baseline=None, grid="global1_5", mask='lsm', region='africa'):
-
+    """Runs and caches a geospatial metric."""
     m_ds =  combined_metric(start_time, end_time, variable, lead, forecast, truth,
                             metric, baseline, grid, mask, region, spatial=True)
 
@@ -125,7 +122,7 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
            cache=False)
 def summary_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, baseline=None, grid="global1_5", mask='lsm', region='africa'):
-
+    """Runs and caches a summary metric."""
     m_ds = combined_metric(start_time, end_time, variable, lead, forecast, truth,
                            metric, baseline, grid, mask, region, spatial=False)
 

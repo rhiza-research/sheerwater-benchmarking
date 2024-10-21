@@ -1,3 +1,4 @@
+"""Runs metrics and updates the caches."""
 from sheerwater_benchmarking.metrics import spatial_metric
 import itertools
 
@@ -43,11 +44,12 @@ for run in combos:
         continue
 
     # Make sure the forecast and baseline support the metric
-    if not metric in supported_metrics[forecast] or (baseline and not metric in supported_metrics[baseline]):
+    if metric not in supported_metrics[forecast] or (baseline and metric not in supported_metrics[baseline]):
         print("Skipping run for unsupported metric")
         continue
 
     # Call the spatial metric with the terracotta backend
     print(f"Running metric {run}")
-    spatial_metric(start_year, end_year, variable, lead, forecast, truth, metric, baseline, grid=grid, cache=True, backend='terracotta', force_overwrite=True, remote=True)
+    spatial_metric(start_year, end_year, variable, lead, forecast, truth, metric, baseline, grid=grid,
+                   cache=True, backend='terracotta', force_overwrite=True, remote=True)
 

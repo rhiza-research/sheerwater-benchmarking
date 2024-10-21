@@ -2,7 +2,6 @@
 import gcsfs
 from google.cloud import storage
 from rasterio.io import MemoryFile
-import io
 import numpy as np
 from rasterio.enums import Resampling
 import xarray as xr
@@ -75,13 +74,15 @@ def drop_encoded_chunks(ds):
     return ds
 
 def read_from_delta(cache_path):
+    """Read from a deltatable into a pandas dataframe."""
     return DeltaTable(cache_path).to_pandas()
 
 def write_to_delta(cache_path, df):
+    """Write a pandas dataframe to a delta table."""
     write_deltalake(cache_path, df)
 
 def read_from_postgres(table_name):
-    """Reas a pandas df from a table in the sheerwater postgres.
+    """Read a pandas df from a table in the sheerwater postgres.
 
     Backends should evenetually be flexibly specified, but for now
     we'll just hard code a connection to the running sheerwater database.
@@ -89,7 +90,6 @@ def read_from_postgres(table_name):
     Args:
         table_name: The table name to read fromo
     """
-
     # Get the postgres write secret
     import sqlalchemy
 
@@ -100,18 +100,15 @@ def read_from_postgres(table_name):
         df = pd.read_sql_query(f'select * from {table_name}',con=engine)
         return df
     except sqlalchemy.exc.InterfaceError:
-        raise RuntimeError("Error connecting to database. Make sure you are on the tailnet and can see sheerwater-benchmarking-postgres.")
+        raise RuntimeError("""Error connecting to database. Make sure you are on the
+                           tailnet and can see sheerwater-benchmarking-postgres.""")
 
 def check_exists_postgres(table_name):
-    """Reas a pandas df from a table in the sheerwater postgres.
-
-    Backends should evenetually be flexibly specified, but for now
-    we'll just hard code a connection to the running sheerwater database.
+    """Check if table exists in postgres.
 
     Args:
         table_name: The table name to read fromo
     """
-
     # Get the postgres write secret
     import sqlalchemy
 
@@ -122,11 +119,14 @@ def check_exists_postgres(table_name):
         insp = sqlalchemy.inspect(engine)
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
-        raise RuntimeError("Error connecting to database. Make sure you are on the tailnet and can see sheerwater-benchmarking-postgres.")
+        raise RuntimeError("""Error connecting to database. Make sure you are on
+                           the tailnet and can see sheerwater-benchmarking-postgres.""")
 
 def write_to_terracotta(cache_key, ds):
+    """Write geospatial array to terracotta."""
     import terracotta as tc
     from sheerwater_benchmarking.utils.data_utils import lon_base_change
+    import sqlalchemy
 
     # Check to make sure this is geospatial data
     lats = ['lat', 'y', 'latitude']
@@ -165,7 +165,7 @@ def write_to_terracotta(cache_key, ds):
 
         storage_client = storage.Client()
         bucket = storage_client.bucket("sheerwater-datalake")
-        blob = bucket.blob(f'rasters/' + cache_key + '.tif')
+        blob = bucket.blob(f'rasters/{cache_key}.tif')
         blob.upload_from_file(mem_dst)
 
         # Register with terracotta
@@ -174,14 +174,15 @@ def write_to_terracotta(cache_key, ds):
 
         try:
             driver.get_keys()
-        except:
+        except sqlalchemy.exc.DatabaseError:
             # Create a metastor
             print("Creating new terracotta metastore")
             driver.create(['key'])
 
         # Insert the parameters.
         with driver.connect():
-            driver.insert({'key': cache_key.replace('/','_')}, mem_dst, override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif')
+            driver.insert({'key': cache_key.replace('/','_')}, mem_dst,
+                          override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif')
 
         print(f"Inserted {cache_key.replace('/','_')} into the terracotta database")
 
@@ -195,8 +196,8 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
     Args:
         pandas_df: A pandas dataframe
         table_name: The table name to write to
+        overwrite (bool): whether to overwrite an existing table
     """
-
     # Get the postgres write secret
     import sqlalchemy
 
@@ -209,10 +210,12 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
         else:
             pandas_df.to_sql(table_name, engine)
     except sqlalchemy.exc.InterfaceError:
-        raise RuntimeError("Error connecting to database. Make sure you are on the tailnet and can see sheerwater-benchmarking-postgres.")
+        raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
+                           and can see sheerwater-benchmarking-postgres.""")
 
 
 def cache_exists(backend, cache_key, cache_path):
+    """Check if a cache exists generically."""
     if backend == 'default' or backend == 'zarr' or backend == 'delta':
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
@@ -243,6 +246,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
         cache_disable_if(dict, list): If the cache arguments match the dict or list of dicts
             then the cache will be disabled. This is useful for disabling caching based on
             certain arguments. Defaults to None.
+        backend(str): The name of the backend to use.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -443,12 +447,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                 else:
                                     time_col = match_time[0]
 
-                                    # Assign start and end times if None are passed
-                                    st = dateparser.parse(start_time) if start_time is not None \
-                                        else pd.Timestamp(ds[time_col].min().values)
-                                    et = dateparser.parse(end_time) if end_time is not None \
-                                        else pd.Timestamp(ds[time_col].max().values)
-
                                     # Check if within 1 year at least
                                     if (pd.Timestamp(ds[time_col].min().values) <
                                         dateparser.parse(start_time) + datetime.timedelta(days=365) and
@@ -475,17 +473,20 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                 ds = read_from_delta(cache_path)
 
                                 if validate_cache_timeseries and timeseries is not None:
-                                    raise NotImplementedError("Timeseries validation is not currently implemented for tabular datasets")
+                                    raise NotImplementedError("""Timeseries validation is not currently implemented
+                                                              for tabular datasets""")
                                 else:
                                     compute_result = False
                         elif backend == 'postgres':
                             ds = read_from_postgres(cache_key)
                             if validate_cache_timeseries and timeseries is not None:
-                                raise NotImplementedError("Timeseries validation is not currently implemented for tabular datasets")
+                                raise NotImplementedError("""Timeseries validation is not currently implemented
+                                                          for tabular datasets""")
                             else:
                                 compute_result = False
                         else:
-                            raise ValueError("Only default, delta, and postgres backends are supported for tabular data.")
+                            raise ValueError("""Only default, delta, and postgres backends are
+                                             supported for tabular data.""")
                     else:
                         print("Auto caching currently only supports array and tabular types")
                 elif fs.exists(null_path) and not recompute and cache and not retry_null_cache:
@@ -566,7 +567,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                 return None
 
                         if not isinstance(ds, pd.DataFrame):
-                            raise RuntimeError("Tabular datatypes must return pandas dataframe or none isntead of {type(ds)}")
+                            raise RuntimeError(f"""Tabular datatypes must return pandas dataframe
+                                               or none instead of {type(ds)}""")
 
                         if backend == 'default' or backend == 'delta':
                             write = False
@@ -590,7 +592,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                 else:
                                     write_to_postgres(ds, cache_key)
                             except ValueError:
-                                inp = input(f'A cache already exists for table {cache_key}. Are you sure you want to overwrite it? (y/n)')
+                                inp = input(f"""A cache already exists for table {cache_key}.
+                                            Are you sure you want to overwrite it? (y/n)""")
                                 if inp == 'y' or inp == 'Y':
                                     write_to_postgres(ds, cache_key, overwrite=True)
                         else:
