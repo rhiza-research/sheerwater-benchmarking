@@ -6,8 +6,7 @@ from sheerwater_benchmarking.utils import cacheable, dask_remote
 
 
 def get_datasource_fn(datasource):
-    """Import the datasource and truth functions."""
-    # Import truth
+    """Import the datasource function from any available source."""
     try:
         mod = import_module("sheerwater_benchmarking.reanalysis")
         fn = getattr(mod, datasource)
