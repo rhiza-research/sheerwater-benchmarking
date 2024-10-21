@@ -17,7 +17,7 @@ from .space_utils import (get_grid_ds,
                           get_region)
 
 
-def roll_and_agg(ds, agg, agg_col, agg_fn="mean", agg_units='days'):
+def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
     """Rolling aggregation of the dataset.
 
     Applies rolling and then corrects rolling window labels to be left aligned.
@@ -28,11 +28,7 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean", agg_units='days'):
         agg (int): Aggregation period in days.
         agg_col (str): Column to aggregate over.
         agg_fn (str): Aggregation function. One of mean or sum.
-        agg_units (str): Units of the aggregation period. Should be
-            a valid unit for relativedelta. If None, no time alignment
-            is applied after rolling.
     """
-    print(ds)
     agg_kwargs = {
         f"{agg_col}": agg,
         "min_periods": agg,
@@ -51,10 +47,7 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean", agg_units='days'):
 
     # Correct coords to left-align the aggregated forecast window
     # (default is right aligned)
-    if agg_units is not None:
-        ds_agg = ds_agg.assign_coords(
-            **{f"{agg_col}": ds[agg_col].to_index() - pd.DateOffset(**{agg_units: agg-1})}
-        )
+    ds_agg = ds_agg.assign_coords(**{f"{agg_col}": ds_agg[agg_col]-np.timedelta64(agg-1, 'D')})
 
     return ds_agg
 

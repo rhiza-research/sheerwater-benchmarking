@@ -16,8 +16,8 @@ if __name__ == "__main__":
     end_time = "2023-06-30"
 
     UPDATE_IRI = False
-    UPDATE_ROLLED = False
-    UPDATE_AGG = True
+    UPDATE_ROLLED = True
+    UPDATE_AGG = False
     UPDATE_BIAS = False
 
     for var, ft in product(vars, forecast_type):
