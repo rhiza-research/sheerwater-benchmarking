@@ -129,9 +129,8 @@ def summary_metric(start_time, end_time, variable, lead, forecast, truth,
     m_ds = combined_metric(start_time, end_time, variable, lead, forecast, truth,
                            metric, baseline, grid, mask, region, spatial=False)
 
-    m_ds = m_ds.rename_vars({variable: f'{variable}_{metric}'})
 
-    return m_ds
+    return m_ds[variable].values
 
 #@dask_remote
 #@cacheable(data_type='tabular',
