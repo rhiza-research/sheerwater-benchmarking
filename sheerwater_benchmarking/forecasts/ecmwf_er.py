@@ -518,6 +518,9 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14,
     ds = ecmwf_rolled(start_time, end_time, variable,
                       forecast_type, agg=agg,  grid=grid)
 
+    # TODO: remove once ECMWF is fixed
+    ds = lon_base_change(ds, to_base="base180")
+
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
     # Clip to specified region
