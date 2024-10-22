@@ -507,7 +507,7 @@ def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
 def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead.
 
-    TODO: This should be implemented on non-aggregated data. 
+    TODO: This should be implemented on non-aggregated data.
     """
     # Fetch the reforecast data; get's the past 20 years associated with each start date
     ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
