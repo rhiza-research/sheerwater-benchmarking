@@ -482,8 +482,7 @@ def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_
            chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
                      "start_year": 29, "model_issuance_date": 969},
            auto_rechunk=False)
-def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14,
-              grid="global1_5",  mask="lsm", region='global'):
+def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Specialized function for the ABC model
@@ -510,8 +509,6 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14,
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
     return ds
 
 
