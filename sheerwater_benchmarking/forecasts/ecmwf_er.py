@@ -567,24 +567,3 @@ def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_
     # Concatenate leads and unstack
     ds_biases = xr.concat(biases, dim='lead_time')
     return ds_biases
-
-
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'agg', 'grid'],
-           timeseries=['model_issuance_date'],
-           cache=True,
-           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
-def ecmwf_debiased(start_time, end_time, variable, agg=14, grid="global1_5"):
-    """Debiased ECMWF forecast data.
-
-    TODO: this should be implemented on non-aggregated data.
-    """
-    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type='forecast', agg=agg, grid=grid)
-    biases = ecmwf_reforecast_bias(start_time, end_time, variable, agg=agg, grid=grid)
-
-    # Get average bias over 20 year period
-    biases = biases.groupby('model_issuance_date').mean('start_year')
-
-    # Subtract the bias from the forecast
-    ds = ds.merge(biases)

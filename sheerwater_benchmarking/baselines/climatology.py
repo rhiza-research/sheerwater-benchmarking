@@ -89,7 +89,7 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30,
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def climatology_2015(start_time, end_time, variable, lead, prob_type='deterministic',
-                              grid='global0_25', mask='lsm', region='global'):
+                     grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     leads_param = {
         "week1": (7, 0),
@@ -114,10 +114,9 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
                          agg=agg, grid=grid)
     ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
-    if prob_type == 'deterministic':
-        ds = ds.assign_coords(member=-1)
-    else:
+    if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecasts are available for climatology.")
+    ds = ds.assign_attrs(prob_type="deterministic")
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
@@ -132,7 +131,7 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def climatology_rolling(start_time, end_time, variable, lead, prob_type='deterministic',
-                                 grid='global0_25', mask='lsm', region='global'):
+                        grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     leads_param = {
         "week1": (7, 0),
@@ -157,10 +156,9 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
     ds = climatology_rolling_agg(new_start, new_end, variable, clim_years=30, agg=agg, grid=grid)
     ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
-    if prob_type == 'deterministic':
-        ds = ds.assign_coords(member=-1)
-    else:
+    if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecasts are available for climatology.")
+    ds = ds.assign_attrs(prob_type="deterministic")
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
