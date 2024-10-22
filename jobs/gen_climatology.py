@@ -61,7 +61,7 @@ for var, grid in product(vars, grids):
                                          recompute=True, force_overwrite=True,
                                          remote=True,
                                          remote_config={
-                                             'name': 'genevieve',
+                                             'name': 'genevieve2',
                                              'n_workers': 10,
                                              'idle_timeout': '240 minutes'
                                          })
