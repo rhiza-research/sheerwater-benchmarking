@@ -30,7 +30,7 @@ def climatology_raw(variable, first_year, last_year, grid='global1_5'):
 @cacheable(data_type='array',
            cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 366},
-           cache=False)
+           cache=True)
 def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mask='lsm', region='global'):
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
     # Get single day, masked data between start and end years
