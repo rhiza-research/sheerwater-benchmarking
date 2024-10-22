@@ -13,6 +13,7 @@ if __name__ == "__main__":
     # grids = ["global0_25", "global1_5"]
     forecast_type = ["forecast", "reforecast"]
     # forecast_type = ["reforecast"]
+    # forecast_type = ["forecast"]
     regions = ['global']
     masks = ["lsm"]
 
@@ -20,8 +21,8 @@ if __name__ == "__main__":
     end_time = "2023-06-30"
 
     UPDATE_IRI = False
-    UPDATE_IRI_AVERAGED = True
-    UPDATE_ROLLED = False
+    UPDATE_IRI_AVERAGED = False
+    UPDATE_ROLLED = True
     UPDATE_AGG = False
     UPDATE_BIAS = False
 

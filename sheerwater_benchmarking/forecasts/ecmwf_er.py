@@ -313,7 +313,7 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
            chunking={"lat": 121, "lon": 240, "lead_time": 46,
                      "start_date": 29, "start_year": 29,
                      "model_issuance_date": 1},
-           auto_rechunk=True)
+           auto_rechunk=False)
 def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
@@ -386,8 +386,7 @@ def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='g
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
-    ds = ds.chunk({"lead_time": 1})
-    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 32, "lon": 30})
+    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 120, "lon": 120})
     return ds
 
 
@@ -395,7 +394,7 @@ def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='g
 @cacheable(data_type='array',
            cache_args=['variable', 'forecast_type', 'agg', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
+           chunking={"lat": 721, "lon": 1440, "lead_time": 1, "start_date": 969,
                      "start_year": 29, "model_issuance_date": 969},
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
