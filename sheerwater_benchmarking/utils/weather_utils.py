@@ -1,6 +1,4 @@
 """Variable-related utility functions for all parts of the data pipeline."""
-from .space_utils import is_wrapped
-from .data_utils import lon_base_change
 
 
 def get_variable(variable_name, variable_type='era5'):
@@ -40,22 +38,3 @@ def get_variable(variable_name, variable_type='era5'):
                 return val
 
     raise ValueError(f"Variable {variable_name} not found")
-
-
-def plot_map(ds, var, lon_dim='lon'):
-    """Plot a map of a dataset variable, handling longitude wrapping.
-
-    Args:
-        ds (xr.Dataset): Dataset to change.
-        var (str): The variable in the dataset to plot.
-        lon_dim (str): The longitude column name.
-    """
-    if is_wrapped(ds[lon_dim].values):
-        print("Warning: Wrapped data cannot be plotted. Converting bases for visualization")
-        if ds[lon_dim].max() > 180.0:
-            plot_ds = lon_base_change(ds, to_base="base180")
-        else:
-            plot_ds = lon_base_change(ds, to_base="base360")
-    else:
-        plot_ds = ds
-    plot_ds[var].plot(x=lon_dim)
