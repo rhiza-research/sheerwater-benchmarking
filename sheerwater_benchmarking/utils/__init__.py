@@ -11,7 +11,7 @@ from .space_utils import (get_grid, get_grid_ds, is_wrapped,
 
 from .time_utils import is_valid_forecast_date, generate_dates_in_between, get_dates
 
-from .variable_utils import get_variable, plot_map
+from .weather_utils import get_variable
 
 
 # Use __all__ to define what is part of the public API.
@@ -41,7 +41,6 @@ __all__ = [
     base180_to_base360,
     lon_base_change,
     get_globe_slice,
-    plot_map,
     check_bases,
     get_anomalies,
 ]
