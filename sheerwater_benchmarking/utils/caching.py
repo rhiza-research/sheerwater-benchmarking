@@ -473,12 +473,17 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                 else:
                                     time_col = match_time[0]
 
+                                    # Assign start and end times if None are passed
+                                    st = dateparser.parse(start_time) if start_time is not None \
+                                        else pd.Timestamp(ds[time_col].min().values)
+                                    et = dateparser.parse(end_time) if end_time is not None \
+                                        else pd.Timestamp(ds[time_col].max().values)
+
                                     # Check if within 1 year at least
                                     if (pd.Timestamp(ds[time_col].min().values) <
-                                        dateparser.parse(start_time) + datetime.timedelta(days=365) and
+                                        st + datetime.timedelta(days=365) and
                                             pd.Timestamp(ds[time_col].max().values) >
-                                            dateparser.parse(end_time) - datetime.timedelta(days=365)):
-
+                                            et - datetime.timedelta(days=365)):
                                         compute_result = False
                                     else:
                                         print("WARNING: The cached array does not have data within "
