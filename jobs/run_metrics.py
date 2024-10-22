@@ -2,7 +2,6 @@
 from sheerwater_benchmarking.metrics import spatial_metric
 import itertools
 
-from sheerwater_benchmarking.baselines import
 supported_metrics = {
     "climatology_rolling_forecast": ["mae"],
     "climatology_forecast_2015": ["mae"],
