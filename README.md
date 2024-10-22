@@ -1,7 +1,8 @@
 # Sheerwater Benchmarking
 
 This repository holds all the analysis and visualization infrastructure for Sheerwater's benchmarking
-project. The goal of the project is to benchmark global subseasonal forecasts.
+project. The goal of the project is to benchmark ML- and physics-based weather and climate forecast regionally
+around the globe, with a specific focus on model performance on the African continent.
 
 
 ## Benchmarking
