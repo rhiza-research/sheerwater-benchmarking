@@ -1,8 +1,7 @@
 """Generate land-sea masks for all grids and bases."""
 from itertools import product
 from sheerwater_benchmarking.climatology import climatology_raw, climatology_rolling_raw
-from sheerwater_benchmarking.baselines import climatology_agg
-from sheerwater_benchmarking.baselines.climatology import climatology_rolling_agg
+from sheerwater_benchmarking.baselines.climatology import climatology_rolling_agg, climatology_agg
 
 
 vars = ["tmp2m", "precip"]

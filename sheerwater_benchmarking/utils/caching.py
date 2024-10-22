@@ -374,7 +374,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                 else:
                     flat_values.append(str(val))
 
-            cache_key = func.__name__ + '/' + '_'.join(sorted_values)
+            cache_key = func.__name__ + '/' + '_'.join(flat_values)
             if data_type == 'array':
                 backend = "zarr" if backend is None else backend
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
@@ -401,20 +401,18 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
             ds = None
             compute_result = True
+            fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+
+            # Delete the null cache if retry null cache is passed
+            if fs.exists(null_path) and retry_null_cache:
+                print(f"Removing and retrying null cache {null_path}.")
+                fs.rm(null_path, recursive=True)
 
             if not recompute and cache:
-                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-
-                # Delete the null cache if retry null cache is passed
-                if fs.exists(null_path) and retry_null_cache:
-                    print(f"Removing and retrying null cache {null_path}.")
-                    fs.rm(null_path, recursive=True)
-
                 if cache_exists(backend, cache_path):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
                     if data_type == 'array':
-                        fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
                         cache_map = fs.get_mapper(cache_path)
 
                         if filepath_only:
@@ -492,7 +490,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                     elif data_type == 'tabular':
                         if backend == 'delta':
                             if filepath_only:
-                                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
                                 cache_map = fs.get_mapper(cache_path)
 
                                 return cache_map
@@ -557,7 +554,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                         if write:
                             print(f"Caching result for {cache_path}.")
                             if isinstance(ds, xr.Dataset):
-                                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
                                 cache_map = fs.get_mapper(cache_path)
 
                                 if chunking:
@@ -622,9 +618,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
 
             if filepath_only:
-                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
                 cache_map = fs.get_mapper(cache_path)
-
                 return cache_map
             else:
                 # Do the time series filtering
