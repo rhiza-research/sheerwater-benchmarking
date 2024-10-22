@@ -157,28 +157,41 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
             - global0_25: 0.25 degree global grid
     """
     if grid != 'global0_25':
-        # Recursively call the function with the standard grid
-        # This will hit the cache if this grid already exists
-        ds = era5_daily(start_time, end_time, variable, grid='global0_25')
-        ds = regrid(ds, grid, base='base180')
-        return ds
-    else:
-        # Read and combine all the data into an array
-        ds = era5_raw(start_time, end_time, variable, grid='global0_25')
+        raise ValueError("Only ERA5 native 0.25 degree grid is implemented.")
 
-        # Convert to base180 longitude
-        ds = lon_base_change(ds, to_base="base180")
+    # Read and combine all the data into an array
+    ds = era5_raw(start_time, end_time, variable, grid='global0_25')
 
-        if variable == 'tmp2m':
-            ds[variable] = ds[variable] - 273.15
-            ds.attrs.update(units='C')
-            ds = ds.resample(time='D').mean(dim='time')
-        elif variable == 'precip':
-            ds[variable] = ds[variable] * 1000.0
-            ds.attrs.update(units='mm')
-            ds = ds.resample(time='D').sum(dim='time')
-            ds = np.maximum(ds, 0)
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
+
+    if variable == 'tmp2m':
+        ds[variable] = ds[variable] - 273.15
+        ds.attrs.update(units='C')
+        ds = ds.resample(time='D').mean(dim='time')
+    elif variable == 'precip':
+        ds[variable] = ds[variable] * 1000.0
+        ds.attrs.update(units='mm')
+        ds = ds.resample(time='D').sum(dim='time')
+        ds = np.maximum(ds, 0)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'grid'],
+           cache_disable_if={'grid': 'global1_5'},
+           chunking={"lat": 721, "lon": 1440, "time": 30},
+           auto_rechunk=False)
+def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
+    """ERA5 daily reanalysis with regridding"""
+    ds = era5_daily(start_time, end_time, variable, grid='global0_25')
+    if grid == 'global0_25':
         return ds
+    # Regrid onto appropriate grid
+    ds = regrid(ds, grid, base='base180')
+    return ds
 
 
 @dask_remote
@@ -199,7 +212,7 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
             - global0_25: 0.25 degree global grid
     """
     # Read and combine all the data into an array
-    ds = era5_daily(start_time, end_time, variable, grid=grid)
+    ds = era5_daily_regrid(start_time, end_time, variable, grid=grid)
     agg_fn = "sum" if variable == "precip" else "mean"
     ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
 

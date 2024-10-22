@@ -50,7 +50,7 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
     return ds_agg
 
 
-def regrid(ds, output_grid, method='conservative', base="base180"):
+def regrid(ds, output_grid, method='conservative', base="base180", grid_chunks=None):
     """Regrid a dataset to a new grid.
 
     Args:
@@ -65,9 +65,13 @@ def regrid(ds, output_grid, method='conservative', base="base180"):
         base (str): The base of the longitudes. One of:
             - base180
             - base360
+        grid_chunks (dict): The chunking of the output grid.
+            If None, no chunking is applied.
     """
     # Interpret the grid
     ds_out = get_grid_ds(output_grid, base=base)
+    if grid_chunks is not None:
+        ds_out = ds_out.chunk(grid_chunks)
     regridder = getattr(ds.regrid, method)
     ds = regridder(ds_out)
     return ds

@@ -311,9 +311,9 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
            cache_args=['variable', 'forecast_type', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
            chunking={"lat": 121, "lon": 240, "lead_time": 46,
-                     "start_date": 969, "start_year": 29,
+                     "start_date": 29, "start_year": 29,
                      "model_issuance_date": 1},
-           auto_rechunk=False)
+           auto_rechunk=True)
 def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
@@ -325,6 +325,9 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
     """
+    if grid != 'global1_5':
+        raise ValueError("Only the global1_5 grid is supported for ecmwf averaged.")
+
     # Ensure appropriate chunking for merge
     chunk_dict = {'lat': 121, 'lon': 240, 'lead_time': 46}
     if forecast_type == "reforecast":
@@ -367,6 +370,29 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['variable', 'forecast_type', 'grid'],
+           timeseries=['start_date', 'model_issuance_date'],
+           cache_disable_if={'grid': 'global1_5'},
+           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                     "start_date": 29, "start_year": 29,
+                     "model_issuance_date": 1},
+           auto_rechunk=False)
+def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='global1_5'):
+    """IRI ECMWF average forecast with regridding"""
+    ds = ecmwf_averaged(start_time, end_time, variable, forecast_type, grid='global1_5')
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
+
+    if grid == 'global1_5':
+        return ds
+    # Regrid onto appropriate grid
+    ds = ds.chunk({"lead_time": 1})
+    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 32, "lon": 30})
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
            cache_args=['variable', 'forecast_type', 'agg', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
            chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
@@ -385,23 +411,13 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
             - global1_5: 1.5 degree global grid
         agg (str): The aggregation period to use, in days
     """
-    if grid != 'global1_5':
-        # Recursively call the function with the standard grid
-        # This will hit the cache if this grid already exists
-        ds = ecmwf_rolled(start_time, end_time, variable, forecast_type, grid='global1_5')
-        ds = regrid(ds, grid, base='base180')
-        return ds
-    else:
-        # Read and combine all the data into an array
-        ds = ecmwf_averaged(start_time, end_time, variable,
-                            forecast_type, grid=grid)
+    # Read and combine all the data into an array
+    ds = ecmwf_averaged_regrid(start_time, end_time, variable,
+                               forecast_type, grid=grid)
 
-        # Convert to base180 longitude
-        ds = lon_base_change(ds, to_base="base180")
-
-        # Roll and aggregate the data
-        agg_fn = "sum" if variable == "precip" else "mean"
-        ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn=agg_fn)
+    # Roll and aggregate the data
+    agg_fn = "sum" if variable == "precip" else "mean"
+    ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn=agg_fn)
 
     return ds
 
