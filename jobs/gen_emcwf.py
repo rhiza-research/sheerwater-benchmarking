@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     UPDATE_IRI = False
     UPDATE_IRI_AVERAGED = True
-    UPDATE_ROLLED = True
+    UPDATE_ROLLED = False
     UPDATE_AGG = False
     UPDATE_BIAS = False
 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
                                            recompute=True, force_overwrite=True,
                                            remote=True,
                                            remote_config={'name': 'genevieve',
-                                                          'n_workers': 15, 'idle_timeout': '240 minutes'},
+                                                          'n_workers': 25, 'idle_timeout': '240 minutes'},
                                            )
 
             for agg in aggs:

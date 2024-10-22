@@ -88,7 +88,7 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30,
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def climatology_forecast_2015(start_time, end_time, variable, lead, prob_type='deterministic',
+def climatology_2015(start_time, end_time, variable, lead, prob_type='deterministic',
                               grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     leads_param = {
@@ -131,7 +131,7 @@ def climatology_forecast_2015(start_time, end_time, variable, lead, prob_type='d
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def climatology_rolling_forecast(start_time, end_time, variable, lead, prob_type='deterministic',
+def climatology_rolling(start_time, end_time, variable, lead, prob_type='deterministic',
                                  grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     leads_param = {

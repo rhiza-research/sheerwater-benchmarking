@@ -3,15 +3,15 @@ from sheerwater_benchmarking.metrics import spatial_metric
 import itertools
 
 supported_metrics = {
-    "climatology_rolling_forecast": ["mae"],
-    "climatology_forecast_2015": ["mae"],
+    "climatology_rolling": ["mae"],
+    "climatology_2015": ["mae"],
     "salient": ["mae", "crps"],
     "ecmwf_er": ["mae"],
 }
 
 supported_grids = {
-    "climatology_rolling_forecast": ["global1_5", "global0_25"],
-    "climatology_forecast_2015": ["global1_5", "global0_25"],
+    "climatology_rolling": ["global1_5", "global0_25"],
+    "climatology_2015": ["global1_5", "global0_25"],
     "salient": ["global1_5", "global0_25"],
     "ecmwf_er": ["global1_5"],
 }
@@ -23,7 +23,7 @@ end_year = "2022"
 # define all the variables to run over
 forecasts = ["salient", "ecmwf_er"]
 truths = ["era5"]
-baselines = [None, "ecmwf_er", "climatology_rolling_forecast", "climatology_forecast_2015"]
+baselines = [None, "ecmwf_er", "climatology_rolling", "climatology_2015"]
 leads = ["week1", "week2", "week3", "week4", "week5"]
 metrics = ["mae", "crps"]
 variables = ["precip", "tmp2m"]

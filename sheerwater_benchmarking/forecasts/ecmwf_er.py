@@ -424,74 +424,6 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'agg', 'grid', 'lead'],
-           timeseries=['model_issuance_date'],
-           cache=True,
-           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
-def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, grid="global1_5"):
-    """Computes the bias of ECMWF reforecasts for a specific lead."""
-    # Fetch the reforecast data; get's the past 20 years associated with each start date
-    ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
-    if lead >= len(ds_deb.lead_time):
-        # Lead does not exist
-        return None
-    ds_deb = ds_deb.isel(lead_time=lead)
-
-    # TODO: remove once ECMWF is fixed
-    ds_deb = lon_base_change(ds_deb)
-
-    # Get the pre-aggregated ERA5 data,
-    new_start = (dateparser.parse(start_time) - relativedelta(years=21)).strftime("%Y-%m-%d")
-    new_end = (dateparser.parse(end_time) + relativedelta(days=33)).strftime("%Y-%m-%d")
-    ds_truth = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid).chunk(time=1)
-
-    # Stack the index of the reforecast data into a multi-index
-    ds_stacked = ds_deb.stack(time=["start_year", "model_issuance_date"]).dropna(dim="time")
-    ds_stacked = ds_stacked.chunk(lat=121, lon=240, time=30)
-
-    # Get the dates associated with each combination of start year and model issuance date
-    dates = [np.datetime64(dateparser.parse(
-        f"{int(x['start_year'])}-{int(x['model_issuance_date'].dt.month)}-{int(x['model_issuance_date'].dt.day)}"))
-        for x in ds_stacked.time]
-    lead_td = ds_deb.lead_time.values - np.timedelta64(12, 'h')
-
-    # The lead time is offset by 12 hours; snap to the start of the day
-    # Adjust each forecast date by the lead time (0, 1, 2, ... days)
-    lead_dates = [x + lead_td for x in dates]
-
-    # Select the subset of the ground truth matching this lead
-    ds_truth_lead = ds_truth.sel(time=lead_dates)
-
-    # Assign the time coordinate to match the forecast dataframe for alignment and subtract
-    bias = ds_truth_lead.assign_coords(time=ds_stacked.time) - ds_stacked
-    bias = bias.unstack().chunk({"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 30})
-    bias = bias.sortby("model_issuance_date")
-    return bias
-
-
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'agg', 'grid'],
-           timeseries=['model_issuance_date'],
-           cache=True,
-           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
-def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_5"):
-    """Computes the bias of ECMWF reforecasts for a specific lead."""
-    # Fetch the reforecast data; get's the past 20 years associated with each start date
-    ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
-    leads = len(ds_deb.lead_time)
-
-    # Accumulate all the per lead biases
-    biases = [ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=agg,
-                                         recompute=True, force_overwrite=True,
-                                         lead=i, grid=grid) for i in range(leads)]
-    # Concatenate leads and unstack
-    ds_biases = xr.concat(biases, dim='lead_time')
-    return ds_biases
-
-
-@dask_remote
-@cacheable(data_type='array',
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            cache_args=['variable', 'forecast_type', 'agg', 'grid', 'mask'],
@@ -519,10 +451,6 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="globa
     """
     ds = ecmwf_rolled(start_time, end_time, variable,
                       forecast_type, agg=agg,  grid=grid)
-
-    # TODO: remove once ECMWF is fixed
-    ds = lon_base_change(ds, to_base="base180")
-
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
     return ds
@@ -568,3 +496,95 @@ def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
     # Clip to specified region
     ds = clip_region(ds, region=region)
     return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'agg', 'grid', 'lead'],
+           timeseries=['model_issuance_date'],
+           cache=True,
+           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
+def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, grid="global1_5"):
+    """Computes the bias of ECMWF reforecasts for a specific lead.
+
+    TODO: This should be implemented on non-aggregated data. 
+    """
+    # Fetch the reforecast data; get's the past 20 years associated with each start date
+    ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
+    if lead >= len(ds_deb.lead_time):
+        # Lead does not exist
+        return None
+    ds_deb = ds_deb.isel(lead_time=lead)
+
+    # Get the pre-aggregated ERA5 data,
+    new_start = (dateparser.parse(start_time) - relativedelta(years=21)).strftime("%Y-%m-%d")
+    new_end = (dateparser.parse(end_time) + relativedelta(days=33)).strftime("%Y-%m-%d")
+    ds_truth = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid).chunk(time=1)
+
+    # Stack the index of the reforecast data into a multi-index
+    ds_stacked = ds_deb.stack(time=["start_year", "model_issuance_date"]).dropna(dim="time")
+    ds_stacked = ds_stacked.chunk(lat=121, lon=240, time=30)
+
+    # Get the dates associated with each combination of start year and model issuance date
+    dates = [np.datetime64(dateparser.parse(
+        f"{int(x['start_year'])}-{int(x['model_issuance_date'].dt.month)}-{int(x['model_issuance_date'].dt.day)}"))
+        for x in ds_stacked.time]
+    lead_td = ds_deb.lead_time.values - np.timedelta64(12, 'h')
+
+    # The lead time is offset by 12 hours; snap to the start of the day
+    # Adjust each forecast date by the lead time (0, 1, 2, ... days)
+    lead_dates = [x + lead_td for x in dates]
+
+    # Select the subset of the ground truth matching this lead
+    ds_truth_lead = ds_truth.sel(time=lead_dates)
+
+    # Assign the time coordinate to match the forecast dataframe for alignment and subtract
+    bias = ds_truth_lead.assign_coords(time=ds_stacked.time) - ds_stacked
+    bias = bias.unstack().chunk({"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 30})
+    bias = bias.sortby("model_issuance_date")
+    return bias
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'agg', 'grid'],
+           timeseries=['model_issuance_date'],
+           cache=True,
+           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
+def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_5"):
+    """Computes the bias of ECMWF reforecasts for a specific lead.
+
+    TODO: this should be implemented on non-aggregated data.
+    """
+    # Fetch the reforecast data; get's the past 20 years associated with each start date
+    ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
+    leads = len(ds_deb.lead_time)
+
+    # Accumulate all the per lead biases
+    biases = [ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=agg,
+                                         recompute=True, force_overwrite=True,
+                                         lead=i, grid=grid) for i in range(leads)]
+    # Concatenate leads and unstack
+    ds_biases = xr.concat(biases, dim='lead_time')
+    return ds_biases
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'agg', 'grid'],
+           timeseries=['model_issuance_date'],
+           cache=True,
+           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
+def ecmwf_debiased(start_time, end_time, variable, agg=14, grid="global1_5"):
+    """Debiased ECMWF forecast data.
+
+    TODO: this should be implemented on non-aggregated data.
+    """
+    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type='forecast', agg=agg, grid=grid)
+    biases = ecmwf_reforecast_bias(start_time, end_time, variable, agg=agg, grid=grid)
+
+    # Get average bias over 20 year period
+    biases = biases.groupby('model_issuance_date').mean('start_year')
+
+    # Subtract the bias from the forecast
+    ds = ds.merge(biases)

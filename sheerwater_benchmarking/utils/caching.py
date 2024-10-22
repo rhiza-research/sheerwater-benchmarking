@@ -537,6 +537,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
                 ##### IF NOT EXISTS ######
                 ds = func(*args, **kwargs)
+                ##########################
 
                 # Store the result
                 if cache:
@@ -559,6 +560,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                         if write:
                             print(f"Caching result for {cache_path}.")
                             if isinstance(ds, xr.Dataset):
+                                import pdb; pdb.set_trace()
                                 cache_map = fs.get_mapper(cache_path)
 
                                 if chunking:
