@@ -80,18 +80,21 @@ def drop_encoded_chunks(ds):
 
     return ds
 
+
 def read_from_delta(cache_path):
     """Read from a deltatable into a pandas dataframe."""
     return DeltaTable(cache_path).to_pandas()
+
 
 def write_to_delta(cache_path, df):
     """Write a pandas dataframe to a delta table."""
     write_deltalake(cache_path, df)
 
+
 def read_from_postgres(table_name):
     """Read a pandas df from a table in the sheerwater postgres.
 
-    Backends should evenetually be flexibly specified, but for now
+    Backends should eventually be flexibly specified, but for now
     we'll just hard code a connection to the running sheerwater database.
 
     Args:
@@ -101,12 +104,14 @@ def read_from_postgres(table_name):
     pgread_pass = postgres_read_password()
 
     try:
-        engine = sqlalchemy.create_engine(f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+        engine = sqlalchemy.create_engine(
+            f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
         df = pd.read_sql_query(f'select * from {table_name}', con=engine)
         return df
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on the
                            tailnet and can see sheerwater-benchmarking-postgres.""")
+
 
 def check_exists_postgres(table_name):
     """Check if table exists in postgres.
@@ -118,7 +123,8 @@ def check_exists_postgres(table_name):
     pgread_pass = postgres_read_password()
 
     try:
-        engine = sqlalchemy.create_engine(f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+        engine = sqlalchemy.create_engine(
+            f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
         insp = sqlalchemy.inspect(engine)
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
@@ -129,7 +135,7 @@ def check_exists_postgres(table_name):
 def write_to_postgres(pandas_df, table_name, overwrite=False):
     """Writes a pandas df as a table in the sheerwater postgres.
 
-    Backends should evenetually be flexibly specified, but for now
+    Backends should eventually be flexibly specified, but for now
     we'll just hard code a connection to the running sheerwater database.
 
     Args:
@@ -141,7 +147,8 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
     pgwrite_pass = postgres_write_password()
 
     try:
-        engine = sqlalchemy.create_engine(f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+        engine = sqlalchemy.create_engine(
+            f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
         if overwrite:
             pandas_df.to_sql(table_name, engine, if_exists='replace')
         else:
@@ -168,16 +175,15 @@ def write_to_terracotta(cache_key, ds):
     foundy = False
     for y in lats:
         if y in ds.dims:
-            ds = ds.rename({y:'y'})
+            ds = ds.rename({y: 'y'})
             foundy = True
     for x in lons:
         if x in ds.dims:
-            ds = ds.rename({x:'x'})
+            ds = ds.rename({x: 'x'})
             foundx = True
 
     if not foundx or not foundy:
         raise RuntimeError("Can only store two dimensional geospatial data to terracotta")
-
 
     # Adjust coordinates
     if (ds['x'] > 180.0).any():
@@ -205,16 +211,16 @@ def write_to_terracotta(cache_key, ds):
         try:
             driver.get_keys()
         except sqlalchemy.exc.DatabaseError:
-            # Create a metastor
+            # Create a metastore
             print("Creating new terracotta metastore")
             driver.create(['key'])
 
         # Insert the parameters.
         with driver.connect():
-            driver.insert({'key': cache_key.replace('/','_')}, mem_dst,
+            driver.insert({'key': cache_key.replace('/', '_')}, mem_dst,
                           override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif')
 
-        print(f"Inserted {cache_key.replace('/','_')} into the terracotta database.")
+        print(f"Inserted {cache_key.replace('/', '_')} into the terracotta database.")
 
 
 def cache_exists(backend, cache_path):
@@ -244,7 +250,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
             requested timeseries. If False, will not validate the cache timeseries.
         force_overwrite(bool): Whether to overwrite the cache if it
             already exists (if False, will prompt the user before overwriting).
-        retry_null_cache(bool): If True, ignore the null caches and attempts to recompute
+        retry_null_cache(bool): If True, ignore and delete the null caches and attempts to recompute
             result for null values. If False (default), will return None for null caches.
         cache_disable_if(dict, list): If the cache arguments match the dict or list of dicts
             then the cache will be disabled. This is useful for disabling caching based on
@@ -323,7 +329,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                         break
 
                 if not found:
-                    raise RuntimeError(f"Specified cacheable argument {a}"
+                    raise RuntimeError(f"Specified cacheable argument {a} "
                                        "not discovered as passed argument or default argument.")
 
             # Now that we have all the cacheable args values we can calculate whether
@@ -354,13 +360,23 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
             imkeys = list(cache_arg_values.keys())
             imkeys.sort()
-            sorted_values = [str(cache_arg_values[i]) for i in imkeys]
+            sorted_values = [cache_arg_values[i] for i in imkeys]
+            flat_values = []
+            for val in sorted_values:
+                if isinstance(val, list):
+                    sub_vals = [str(v) for v in val]
+                    sub_vals.sort()
+                    flat_values += sub_vals
+                elif isinstance(val, dict):
+                    sub_vals = [f"{k}-{v}" for k, v in val.items()]
+                    sub_vals.sort()
+                    flat_values += sub_vals
+                else:
+                    flat_values.append(str(val))
 
-            cache_key = func.__name__ + '/' + '_'.join(sorted_values)
-
+            cache_key = func.__name__ + '/' + '_'.join(flat_values)
             if data_type == 'array':
                 backend = "zarr" if backend is None else backend
-
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
@@ -385,13 +401,18 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
             ds = None
             compute_result = True
+            fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+
+            # Delete the null cache if retry null cache is passed
+            if fs.exists(null_path) and retry_null_cache:
+                print(f"Removing and retrying null cache {null_path}.")
+                fs.rm(null_path, recursive=True)
+
             if not recompute and cache:
-                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
                 if cache_exists(backend, cache_path):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
                     if data_type == 'array':
-                        fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
                         cache_map = fs.get_mapper(cache_path)
 
                         if filepath_only:
@@ -452,12 +473,17 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                 else:
                                     time_col = match_time[0]
 
+                                    # Assign start and end times if None are passed
+                                    st = dateparser.parse(start_time) if start_time is not None \
+                                        else pd.Timestamp(ds[time_col].min().values)
+                                    et = dateparser.parse(end_time) if end_time is not None \
+                                        else pd.Timestamp(ds[time_col].max().values)
+
                                     # Check if within 1 year at least
                                     if (pd.Timestamp(ds[time_col].min().values) <
-                                        dateparser.parse(start_time) + datetime.timedelta(days=365) and
+                                        st + datetime.timedelta(days=365) and
                                             pd.Timestamp(ds[time_col].max().values) >
-                                            dateparser.parse(end_time) - datetime.timedelta(days=365)):
-
+                                            et - datetime.timedelta(days=365)):
                                         compute_result = False
                                     else:
                                         print("WARNING: The cached array does not have data within "
@@ -469,7 +495,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                     elif data_type == 'tabular':
                         if backend == 'delta':
                             if filepath_only:
-                                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
                                 cache_map = fs.get_mapper(cache_path)
 
                                 return cache_map
@@ -512,6 +537,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
                 ##### IF NOT EXISTS ######
                 ds = func(*args, **kwargs)
+                ##########################
 
                 # Store the result
                 if cache:
@@ -534,7 +560,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                         if write:
                             print(f"Caching result for {cache_path}.")
                             if isinstance(ds, xr.Dataset):
-                                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
                                 cache_map = fs.get_mapper(cache_path)
 
                                 if chunking:
@@ -599,9 +624,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
 
             if filepath_only:
-                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
                 cache_map = fs.get_mapper(cache_path)
-
                 return cache_map
             else:
                 # Do the time series filtering

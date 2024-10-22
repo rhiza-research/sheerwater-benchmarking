@@ -3,11 +3,8 @@
 
 import xarray as xr
 
-from sheerwater_benchmarking.masks import land_sea_mask
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
-                                           apply_mask,
-                                           get_variable, clip_region,
-                                           regrid)
+                                           get_variable, apply_mask, clip_region, regrid)
 
 
 @dask_remote
@@ -43,30 +40,16 @@ def salient_blend_raw(start_time, end_time, variable,  # noqa: ARG001
 @dask_remote
 @cacheable(data_type='array',
            timeseries='forecast_date',
-           cache_args=['variable', 'grid', 'timescale', 'mask'],
+           cache_args=['variable', 'timescale', 'grid'],
            chunking={"lat": 300, "lon": 400, "forecast_date": 300, 'lead': 1, 'quantiles': 1},
            auto_rechunk=False)
-def salient_blend(start_time, end_time, variable, timescale="sub-seasonal",
-                  grid="global0_25", mask='lsm'):
+def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid="global0_25"):
     """Processed Salient forecast files."""
-    if grid == 'salient_africa0_25' and mask is not None:
-        raise NotImplementedError('Masking not implemented for Salient native grid.')
-
     ds = salient_blend_raw(start_time, end_time, variable, timescale=timescale)
     ds = ds.dropna('forecast_date', how='all')
 
     # Regrid the data
     ds = regrid(ds, grid)
-
-    if mask == "lsm":
-        # Select variables and apply mask
-        mask_ds = land_sea_mask(grid=grid).compute()
-    elif mask is None:
-        mask_ds = None
-    else:
-        raise NotImplementedError("Only land-sea or None mask is implemented.")
-
-    ds = apply_mask(ds, mask_ds, variable)
     return ds
 
 
@@ -76,7 +59,7 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal",
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def salient(start_time, end_time, variable, lead, prob_type='deterministic',
-            grid='africa0_25', mask='lsm', region='africa'):
+            grid='global0_25', mask='lsm', region='africa'):
     """Standard format forecast data for Salient."""
     lead_params = {
         "week1": ("sub-seasonal", 1),
@@ -96,18 +79,16 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     if timescale is None:
         raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
 
-    ds = salient_blend(start_time, end_time, variable, timescale=timescale,
-                       grid=grid, mask=mask)
+    ds = salient_blend(start_time, end_time, variable, timescale=timescale, grid=grid)
     ds = ds.sel(lead=lead_id)
-
     if prob_type == 'deterministic':
         # Get the median forecast
         ds = ds.sel(quantiles=0.5)
 
-        #drop the quantiles dimension
+        # drop the quantiles dimension
         ds = ds.reset_coords("quantiles", drop=True)
         ds = ds.assign_attrs(prob_type="deterministic")
-    elif prob_type == "probabalistic":
+    elif prob_type == "probabilistic":
         # Set an attribute to say this is a quantile forecast
         ds = ds.rename({'quantiles': 'member'})
         ds = ds.assign_attrs(prob_type="quantile")
@@ -116,6 +97,9 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
 
     ds = ds.rename({'forecast_date': 'time'})
 
-    # Clip to region
-    ds = clip_region(ds, region)
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
+
     return ds

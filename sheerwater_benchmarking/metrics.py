@@ -26,11 +26,11 @@ def get_datasource_fn(datasource):
 
 def get_metric_fn(prob_type, metric, spatial=True):
     """Import the correct metrics function from weatherbench."""
-    # Make sure things are conssitent
+    # Make sure things are consistent
     if prob_type == 'deterministic' and metric == 'crps':
         raise ValueError("Cannot run CRPS on deterministic forecasts.")
     elif (prob_type == 'ensemble' or prob_type == 'quantile') and metric == 'mae':
-        raise ValueError("Cannot run MAE on probababilistic forecasts.")
+        raise ValueError("Cannot run MAE on probabilistic forecasts.")
 
     wb_metrics = {
         'crps': ('CRPS', {'ensemble_dim': 'member'}),
@@ -58,10 +58,10 @@ def get_metric_fn(prob_type, metric, spatial=True):
 
 @dask_remote
 def _metric(start_time, end_time, variable, lead, forecast, truth,
-                    metric, baseline=None, grid="global1_5", mask='lsm', region='africa', spatial=True):
+            metric, baseline=None, grid="global1_5", mask='lsm', region='africa', spatial=True):
     """Compute a metric for a forecast at a specific lead."""
     if metric == "crps":
-        prob_type = "probabalistic"
+        prob_type = "probabilistic"
     elif metric == "mae":
         prob_type = "deterministic"
     else:
@@ -69,7 +69,8 @@ def _metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the forecast
     fcst_fn = get_datasource_fn(forecast)
-    fcst = fcst_fn(start_time, end_time, variable, lead=lead, prob_type=prob_type, grid=grid, mask=mask, region=region)
+    fcst = fcst_fn(start_time, end_time, variable, lead=lead,
+                   prob_type=prob_type, grid=grid, mask=mask, region=region)
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
@@ -98,6 +99,7 @@ def _metric(start_time, end_time, variable, lead, forecast, truth,
 
     return m_ds
 
+
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
@@ -106,14 +108,15 @@ def _metric(start_time, end_time, variable, lead, forecast, truth,
 def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, baseline=None, grid="global1_5", mask='lsm', region='global'):
     """Runs and caches a geospatial metric."""
-    m_ds =  _metric(start_time, end_time, variable, lead, forecast, truth,
-                            metric, baseline, grid, mask, region, spatial=True)
+    m_ds = _metric(start_time, end_time, variable, lead, forecast, truth,
+                   metric, baseline, grid, mask, region, spatial=True)
 
     # Convert to standard naming
     m_ds = m_ds.rename_vars({variable: f'{variable}_{metric}'})
     m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
     return m_ds
+
 
 @dask_remote
 @cacheable(data_type='tabular',
@@ -123,14 +126,6 @@ def summary_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, baseline=None, grid="global1_5", mask='lsm', region='global'):
     """Runs and caches a summary metric."""
     m_ds = _metric(start_time, end_time, variable, lead, forecast, truth,
-                           metric, baseline, grid, mask, region, spatial=False)
-
+                   metric, baseline, grid, mask, region, spatial=False)
 
     return m_ds[variable].values
-
-#@dask_remote
-#@cacheable(data_type='tabular',
-#           cache_args=['variable', 'lead', 'forecast', 'truth', 'prob_type', 'metric', 'grid', 'mask', 'region'],
-#           cache=True)
-#def summary_metrics_combined(start_time, end_time, variable, lead, forecast, truth,
-#                   prob_type, metric, grid="global1_5", mask='lsm', region='africa'):
