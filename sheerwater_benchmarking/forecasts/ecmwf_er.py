@@ -378,7 +378,7 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_
                      "model_issuance_date": 1},
            auto_rechunk=False)
 def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='global1_5'):
-    """IRI ECMWF average forecast with regridding"""
+    """IRI ECMWF average forecast with regridding."""
     ds = ecmwf_averaged(start_time, end_time, variable, forecast_type, grid='global1_5')
     # Convert to base180 longitude
     ds = lon_base_change(ds, to_base="base180")

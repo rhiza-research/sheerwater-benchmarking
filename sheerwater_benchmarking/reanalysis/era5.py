@@ -185,7 +185,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
            chunking={"lat": 721, "lon": 1440, "time": 30},
            auto_rechunk=False)
 def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
-    """ERA5 daily reanalysis with regridding"""
+    """ERA5 daily reanalysis with regridding."""
     ds = era5_daily(start_time, end_time, variable, grid='global0_25')
     if grid == 'global0_25':
         return ds

@@ -9,6 +9,7 @@ from sheerwater_benchmarking.utils import cacheable, get_dates
            timeseries='time',
            cache_args=['name', 'species'])
 def simple_timeseries(start_time, end_time, name, species='coraciidae'):
+    """Generate a simple timeseries dataset for testing."""
     obs = np.random.randint(0, 10, size=(10,))
     times = get_dates(start_time, end_time, stride='day', return_string=False)
     ds = xr.Dataset({'obs': ('time', obs)}, coords={'time': times})
@@ -18,6 +19,7 @@ def simple_timeseries(start_time, end_time, name, species='coraciidae'):
 
 
 def test_null_time_caching():
+    """Cache a simple timeseries dataset with a null time."""
     start_time = '2020-01-01'
     end_time = '2020-01-10'
     name = 'lilac-breasted roller'
