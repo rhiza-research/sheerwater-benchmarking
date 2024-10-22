@@ -113,7 +113,6 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Convert to standard naming
     m_ds = m_ds.rename_vars({variable: f'{variable}_{metric}'})
-
     m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
     return m_ds
@@ -130,10 +129,3 @@ def summary_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, baseline, grid, mask, region, spatial=False)
 
     return m_ds[variable].values
-
-# @dask_remote
-# @cacheable(data_type='tabular',
-#           cache_args=['variable', 'lead', 'forecast', 'truth', 'prob_type', 'metric', 'grid', 'mask', 'region'],
-#           cache=True)
-# def summary_metrics_combined(start_time, end_time, variable, lead, forecast, truth,
-#                   prob_type, metric, grid="global1_5", mask='lsm', region='africa'):

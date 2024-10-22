@@ -193,18 +193,13 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
+        agg (str): The aggregation period to use, in days
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
             - global0_25: 0.25 degree global grid
-        agg (str): The aggregation period to use, in days
-        anom (bool): Whether to return the climatological anomaly
-        clim_params (dict): Parameters for the climatology anomaly calculation,
-            passed directly to climatology function. If anom is False,
-            these parameters are ignored.
     """
     # Read and combine all the data into an array
     ds = era5_daily(start_time, end_time, variable, grid=grid)
-
     agg_fn = "sum" if variable == "precip" else "mean"
     ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
 
@@ -297,7 +292,7 @@ def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', re
     # Get daily data
     new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
     new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    ds = era5_rolled(new_start, new_end, variable, agg=agg, anom=False, grid=grid)
+    ds = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid)
     ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
     # Apply masking
