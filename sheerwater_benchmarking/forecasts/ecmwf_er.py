@@ -11,6 +11,7 @@ import requests
 import ssl
 from urllib3 import poolmanager
 import time
+import dask
 
 from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
@@ -152,9 +153,7 @@ def single_iri_ecmwf(time, variable, forecast_type,
         print(f"Data for {day} {month} {year} is not available for model ecmwf.\n")
         return None
     else:
-        print(f"Unknown error occurred when trying to download data for {day} {month} {year} for model ecmwf.\n")
-        # raise ValueError(f"Failed to download data for {day} {month} {year} for model ecmwf.")
-        return None
+        raise ValueError(f"Failed to download data for {day} {month} {year} for model ecmwf.")
 
     rename_dict = {
         "S": "start_date",
@@ -234,8 +233,7 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
 
     Interface is the same as single_iri_ecmwf.
     """
-    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid,
-                          verbose, retry_null_cache=True)
+    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose)
 
     if ds is None:
         return None
@@ -247,14 +245,14 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
     return ds
 
 
-@ dask_remote
-@ cacheable(data_type='array',
-            timeseries=['start_date', 'model_issuance_date'],
-            cache_args=['variable', 'forecast_type', 'run_type', 'grid'],
-            chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'start_date': 969,
-                      'model_run': 1, 'start_year': 29, 'model_issuance_date': 1},
-            cache=False,
-            auto_rechunk=False)
+@dask_remote
+@cacheable(data_type='array',
+           timeseries=['start_date', 'model_issuance_date'],
+           cache_args=['variable', 'forecast_type', 'run_type', 'grid'],
+           chunking={'lat': 121, 'lon': 240, 'lead_time': 46, 'start_date': 969,
+                     'model_run': 1, 'start_year': 29, 'model_issuance_date': 1},
+           cache=False,
+           auto_rechunk=False)
 def iri_ecmwf(start_time, end_time, variable, forecast_type,
               run_type="average", grid="global1_5", verbose=False):
     """Fetches forecast data from the ECMWF IRI dataset.
@@ -281,13 +279,10 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
     fn = single_iri_ecmwf if forecast_type == "forecast" else single_iri_ecmwf_dense
     datasets = []
     for date in target_dates:
-        # ds = dask.delayed(fn)(
-        #     date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
-        ds = fn(
-            date, variable, forecast_type, run_type, grid, verbose, retry_null_cache=True, filepath_only=True,
-            recompute=False, force_overwrite=True)
+        ds = dask.delayed(fn)(
+            date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
         datasets.append(ds)
-    # datasets = dask.compute(*datasets)
+    datasets = dask.compute(*datasets)
     data = [d for d in datasets if d is not None]
     if len(data) == 0:
         return None
