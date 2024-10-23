@@ -565,7 +565,7 @@ protobuf==4.25.5
 psutil==6.0.0
     # via distributed
     # via ipykernel
-psycopg2==2.9.10
+psycopg2-binary==2.9.10
     # via sheerwater-benchmarking
 ptyprocess==0.7.0
     # via pexpect

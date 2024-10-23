@@ -747,7 +747,7 @@ def ecmwf_debiased(start_time, end_time, variable, margin_in_days=6, agg=14, gri
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def ecmwf_ifs_er_debaised(start_time, end_time, variable, lead, prob_type='deterministic',
+def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deterministic',
                           grid='global1_5', mask='lsm', region="global"):
     """Standard format forecast data for ECMWF forecasts."""
     lead_params = {
