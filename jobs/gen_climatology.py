@@ -1,7 +1,7 @@
 """Generate land-sea masks for all grids and bases."""
 from itertools import product
 from sheerwater_benchmarking.climatology import (climatology_raw, climatology_rolling_raw)
-from sheerwater_benchmarking.baselines.climatology import (climatology_rolling_agg, climatology_forecast)
+from sheerwater_benchmarking.baselines.climatology import (climatology_rolling_agg, climatology_timeseries)
 
 
 vars = ["tmp2m", "precip"]
@@ -48,7 +48,7 @@ for var, grid in product(vars, grids):
     for agg in aggs:
         if UPDATE_CLIM_FCST:
             for prob_type in prob_types:
-                ds = climatology_forecast(forecast_start_time, forecast_end_time, variable=var,
+                ds = climatology_timeseries(forecast_start_time, forecast_end_time, variable=var,
                                           first_year=first_year, last_year=last_year,
                                           prob_type=prob_type,
                                           grid=grid, agg=agg,

@@ -5,7 +5,8 @@ import numpy as np
 import xarray as xr
 import dask
 
-from sheerwater_benchmarking.climatology import (climatology_rolling_raw, climatology_agg)
+from sheerwater_benchmarking.climatology import (climatology_rolling_raw,
+                                                 climatology_agg)
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, roll_and_agg,
                                            get_dates, apply_mask, clip_region)
 
@@ -48,8 +49,8 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30,
            cache=False,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
            chunking={"lat": 721, "lon": 1441, "time": 30})
-def climatology_forecast(start_time, end_time, variable, first_year=1986, last_year=2015,
-                         prob_type='deterministic', agg=14, grid="global1_5"):
+def climatology_timeseries(start_time, end_time, variable, first_year=1986, last_year=2015,
+                           prob_type='deterministic', agg=14, grid="global1_5"):
     """Generates a forecast timeseries of climatology.
 
     Args:
@@ -105,8 +106,8 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
     # Get daily data
     new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
     new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    ds = climatology_forecast(new_start, new_end, variable, first_year=1986, last_year=2015,
-                              prob_type=prob_type, agg=agg, grid=grid)
+    ds = climatology_timeseries(new_start, new_end, variable, first_year=1986, last_year=2015,
+                                prob_type=prob_type, agg=agg, grid=grid)
     ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
     if prob_type == 'deterministic':
