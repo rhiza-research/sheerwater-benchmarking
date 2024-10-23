@@ -182,7 +182,12 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
            timeseries='time',
            cache_args=['variable', 'grid'],
            cache_disable_if={'grid': 'global1_5'},
-           chunking={"lat": 721, "lon": 1440, "time": 30},
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               }
+           },
            auto_rechunk=False)
 def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
     """ERA5 daily reanalysis with regridding."""
@@ -198,7 +203,12 @@ def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'agg', 'grid'],
-           chunking={"lat": 721, "lon": 1441, "time": 30})
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               }
+           })
 def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
     """Aggregates the hourly ERA5 data into daily data and rolls.
 
@@ -225,6 +235,11 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
            cache=True,
            cache_args=['variable', 'agg', 'anom', 'clim_params', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               }
+           },
            auto_rechunk=False)
 def era5_agg(start_time, end_time, variable, agg=14,
              anom=False, clim_params={'first_year': 1991, 'last_year': 2020},
