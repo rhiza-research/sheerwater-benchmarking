@@ -373,9 +373,14 @@ def ecmwf_averaged_iri(start_time, end_time, variable, forecast_type, grid="glob
            cache_args=['variable', 'forecast_type', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
            cache_disable_if={'grid': 'global1_5'},
-           chunking={"lat": 721, "lon": 1440, "lead_time": 46,
-                     "start_date": 29, "start_year": 29,
-                     "model_issuance_date": 1},
+           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                     "start_date": 30,
+                     "model_issuance_date": 30, "start_year": 1},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
+               },
+           },
            auto_rechunk=False)
 def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='global1_5'):
     """IRI ECMWF average forecast with regridding."""
@@ -394,8 +399,14 @@ def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='g
 @cacheable(data_type='array',
            cache_args=['variable', 'forecast_type', 'agg', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 721, "lon": 1440, "lead_time": 40, "start_date": 29,
-                     "start_year": 29, "model_issuance_date": 1},
+           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                     "start_date": 30,
+                     "model_issuance_date": 30, "start_year": 1},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
+               },
+           },
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                  agg=14, grid="global1_5"):
@@ -430,8 +441,9 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            cache_args=['variable', 'forecast_type', 'agg', 'grid', 'mask'],
-           chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
-                     "start_year": 29, "model_issuance_date": 969},
+           chunking={"lat": 32, "lon": 30, "lead_time": 1,
+                     "start_date": 1000,
+                     "model_issuance_date": 1000, "start_year": 29},
            auto_rechunk=False)
 def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
     """Fetches forecast data from the ECMWF IRI dataset.
