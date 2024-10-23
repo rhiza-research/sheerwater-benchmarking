@@ -520,22 +520,13 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
     # If a specific run, select
     if isinstance(run_type, int):
         ds = ds.sel(member=run_type)
-
-    # Re-chunk the data
-    chunks_dict = {"lat": 121, "lon": 240, "lead_time": 46}
-    if forecast_type == "reforecast":
-        chunks_dict["start_year"] = 29
-        chunks_dict["model_issuance_date"] = 1
-    else:
-        chunks_dict["start_date"] = 29
-
     return ds
 
 
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
-           cache=False,
+           cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            cache_disable_if={'grid': 'global1_5'},
            chunking={"lat": 721, "lon": 1440, "lead_time": 46,
@@ -572,10 +563,21 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
         ds.attrs.update(units='mm')
         ds = np.maximum(ds, 0)
 
+    ds = ds.drop('valid_time')
+
+    # Re-chunk the data
+    chunks_dict = {"lat": 121, "lon": 240, "lead_time": 10}
+    if forecast_type == "reforecast":
+        chunks_dict["start_year"] = 29
+        chunks_dict["model_issuance_date"] = 1
+    else:
+        chunks_dict["start_date"] = 29
+    ds = ds.chunk(chunks_dict)
+
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
-    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 120, "lon": 120})
+    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 100, "lon": 100})
     return ds
 
 
