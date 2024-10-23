@@ -529,9 +529,9 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            cache_disable_if={'grid': 'global1_5'},
-           chunking={"lat": 721, "lon": 1440, "lead_time": 46,
-                     "start_date": 29, "start_year": 29,
-                     "model_issuance_date": 1})
+           chunking={"lat": 721, "lon": 1440, "lead_time": 1,
+                     "start_date": 29, "start_year": 1,
+                     "model_issuance_date": 29})
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
@@ -566,10 +566,10 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     ds = ds.drop('valid_time')
 
     # Re-chunk the data
-    chunks_dict = {"lat": 121, "lon": 240, "lead_time": 10}
+    chunks_dict = {"lat": 120, "lon": 240, "lead_time": 1}
     if forecast_type == "reforecast":
-        chunks_dict["start_year"] = 29
-        chunks_dict["model_issuance_date"] = 1
+        chunks_dict["start_year"] = 1
+        chunks_dict["model_issuance_date"] = 29
     else:
         chunks_dict["start_date"] = 29
     ds = ds.chunk(chunks_dict)
@@ -577,7 +577,7 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
-    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 100, "lon": 100})
+    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 120, "lon": 240}, method='conservative')
     return ds
 
 
