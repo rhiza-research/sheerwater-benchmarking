@@ -32,7 +32,7 @@ def climatology_raw(variable, first_year, last_year, grid='global1_5'):
 @cacheable(data_type='array',
            cache=True,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
-           chunking={"lat": 121, "lon": 240, "doy": 366, "member": 30},
+           chunking={"lat": 121, "lon": 240, "doy": 30, "member": 30},
            chunk_modifiers={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'doy': 1}
