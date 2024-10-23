@@ -538,7 +538,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            chunking={"lat": 121, "lon": 240, "lead_time": 40,
                      "start_date": 30,
                      "model_issuance_date": 30, "start_year": 1,
-                     "member": 1},
+                     "member": 3},
            chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
@@ -577,6 +577,18 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
 
     ds = ds.drop('valid_time')
 
+<<<<<<< HEAD
+=======
+    # Re-chunk the data
+    #chunks_dict = {"lat": 120, "lon": 240, "lead_time": 1}
+    #if forecast_type == "reforecast":
+    #    chunks_dict["start_year"] = 1
+    #    chunks_dict["model_issuance_date"] = 29
+    #else:
+    #    chunks_dict["start_date"] = 29
+    #ds = ds.chunk(chunks_dict)
+
+>>>>>>> 258d1dc (add ecmwf_er and debiased and change metrics to delayed)
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid

@@ -3,6 +3,7 @@ from importlib import import_module
 import itertools
 
 import pandas as pd
+import dask
 
 from sheerwater_benchmarking.utils import cacheable, dask_remote
 
@@ -21,7 +22,7 @@ def get_datasource_fn(datasource):
                 mod = import_module("sheerwater_benchmarking.baselines")
                 fn = getattr(mod, datasource)
             except (ImportError, AttributeError):
-                raise ImportError(f"Could not find truth {datasource}.")
+                raise ImportError(f"Could not find datasource {datasource}.")
 
     return fn
 
@@ -138,8 +139,11 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
 def summary_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, baseline=None, grid="global1_5", mask='lsm', region='global'):
     """Runs and caches a summary metric."""
-    m_ds = _metric(start_time, end_time, variable, lead, forecast, truth,
-                   metric, baseline, grid, mask, region, spatial=False)
+    try:
+        m_ds = _metric(start_time, end_time, variable, lead, forecast, truth,
+                       metric, baseline, grid, mask, region, spatial=False)
+    except NotImplementedError:
+        return None
 
     return m_ds[variable].values.max()
 
@@ -159,25 +163,18 @@ def summary_metrics_table(start_time, end_time, variable, truth, metric, baselin
 
     combos = itertools.product(forecasts, leads)
     for forecast, lead in combos:
+        # Try running as dask delayed
         print(f"Running for {forecast} and {lead} with variable {variable}, metric {metric}, grid {grid}, and region {region}")
         # First get the value without the baseline
-        try:
-            val = summary_metric(start_time, end_time, variable, lead, forecast, truth, metric, None, grid, mask, region)
-        except NotImplementedError:
-            val = None
-
+        val = dask.delayed(summary_metric)(start_time, end_time, variable, lead, forecast, truth, metric, None, grid, mask, region)
         results[forecast].append(val)
 
         # IF there is a baseline get the skill
         if baseline:
-            print(f"Running for {forecast}, {lead} and baseline {baseline} with variable {variable}, metric {metric}, grid {grid}, and region {region}")
-
-            try:
-                val = summary_metric(start_time, end_time, variable, lead, forecast, truth, metric, baseline, grid, mask, region)
-            except NotImplementedError:
-                val = None
-
+            val = dask.delayed(summary_metric)(start_time, end_time, variable, lead, forecast, truth, metric, baseline, grid, mask, region)
             results[forecast].append(val)
+
+    results = dask.compute(results)[0]
 
     # Turn the dict into a pandas dataframe with appropriate columns
     leads_skill = [lead + '_skill' for lead in leads]
