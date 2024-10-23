@@ -6,6 +6,22 @@ from functools import wraps
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+config_options = {
+    'big_scheduler': {
+        'scheduler_cpu': 16,
+        'scheduler_memory': "64GiB"
+    },
+    'large_cluster': {
+        'n_workers': 10
+    },
+    'xlarge_cluster': {
+        'n_workers': 15
+    },
+    'xxlarge_cluster': {
+        'n_workers': 25
+    },
+}
+
 
 def dask_remote(func):
     """Decorator to run a function on a remote dask cluster."""
@@ -24,10 +40,25 @@ def dask_remote(func):
                 'spot_policy': 'spot_with_fallback',
             }
 
-            if 'remote_config' in kwargs:
+            if 'remote_config' in kwargs and isinstance(kwargs['remote_config'], dict):
                 # setup coiled cluster with remote config
                 logger.info("Attaching to coiled cluster with custom configuration")
                 coiled_default_options.update(kwargs['remote_config'])
+                cluster = coiled.Cluster(**coiled_default_options)
+                cluster.get_client()
+            elif 'remote_config' in kwargs and (isinstance(kwargs['remote_config'], str) or isinstance(kwargs['remote_config'], list)):
+                if isinstance(kwargs['remote_config'], list):
+                    for conf in kwargs['remote_config']:
+                        if conf in config_options:
+                            coiled_default_options.update(config_options[conf])
+                        else:
+                            print(f"Unknown preset remote config option {conf}. Skipping.")
+                else:
+                    conf = kwargs['remote_config']
+                    if conf in config_options:
+                        coiled_default_options.update(config_options[conf])
+                    else:
+                        print(f"Unknown preset remote config option {conf}. Skipping.")
                 cluster = coiled.Cluster(**coiled_default_options)
                 cluster.get_client()
             else:
