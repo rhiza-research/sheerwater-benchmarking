@@ -88,7 +88,7 @@ dependencies = [
     "scikit-learn",
     "terracotta",
     "sqlalchemy",
-    "psycopg2",
+    "psycopg2-binary",
     "xarray-regrid",
     "weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2",
     "deltalake",
