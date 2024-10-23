@@ -6,14 +6,16 @@ supported_metrics = {
     "climatology_rolling": ["mae"],
     "climatology_2015": ["mae"],
     "salient": ["mae", "crps"],
-    "ecmwf_er": ["mae"],
+    "ecmwf_ifs_er": ["mae"],
+    "ecmwf_er_deb": ["mae"],
 }
 
 supported_grids = {
     "climatology_rolling": ["global1_5", "global0_25"],
     "climatology_2015": ["global1_5", "global0_25"],
     "salient": ["global1_5", "global0_25"],
-    "ecmwf_er": ["global1_5"],
+    "ecmwf_ifs_er": ["global1_5"],
+    "ecmwf_er_deb": ["global1_5"],
 }
 
 
@@ -21,9 +23,9 @@ start_year = "2016"
 end_year = "2022"
 
 # define all the variables to run over
-forecasts = ["salient", "ecmwf_er"]
+forecasts = ["salient", "ecmwf_ifs_er"]
 truths = ["era5"]
-baselines = [None, "ecmwf_er", "climatology_rolling", "climatology_2015"]
+baselines = [None, "ecmwf_ifs_er", "climatology_rolling", "climatology_2015"]
 leads = ["week1", "week2", "week3", "week4", "week5"]
 metrics = ["mae", "crps"]
 variables = ["precip", "tmp2m"]

@@ -1,7 +1,7 @@
 """Generate land-sea masks for all grids and bases."""
 from itertools import product
-from sheerwater_benchmarking.climatology import climatology_raw, climatology_rolling_raw
-from sheerwater_benchmarking.baselines.climatology import climatology_rolling_agg, climatology_agg
+from sheerwater_benchmarking.climatology import (climatology_raw, climatology_rolling_raw)
+from sheerwater_benchmarking.baselines.climatology import (climatology_rolling_agg, climatology_timeseries)
 
 
 vars = ["tmp2m", "precip"]
@@ -10,6 +10,9 @@ aggs = [7, 14]
 
 start_time = "1979-01-01"
 end_time = "2025-01-01"
+forecast_start_time = "2015-05-14"
+forecast_end_time = "2023-06-30"
+prob_types = ["deterministic", "probabilistic"]
 # 30 years after the start time
 rolling_start_time = "2009-01-01"
 clim_years = 30
@@ -19,8 +22,8 @@ last_year = 2015
 
 UPDATE_CLIM = False
 UPDATE_CLIM_ROLLING = False
-UPDATE_CLIM_FCST = False
-UPDATE_CLIM_FCST_ROLLING = True
+UPDATE_CLIM_FCST = True
+UPDATE_CLIM_FCST_ROLLING = False
 
 for var, grid in product(vars, grids):
     # Update standard 30-year climatology
@@ -44,16 +47,18 @@ for var, grid in product(vars, grids):
 
     for agg in aggs:
         if UPDATE_CLIM_FCST:
-            ds = climatology_agg(rolling_start_time, end_time, variable=var,
-                                 first_year=first_year, last_year=last_year,
-                                 grid=grid, agg=agg,
-                                 recompute=True, force_overwrite=True,
-                                 remote=True, remote_config={
-                                     'n_workers': 10,
-                                     'idle_timeout': '240 minutes',
-                                     'name': 'genevieve'
-                                 },
-                                 )
+            for prob_type in prob_types:
+                ds = climatology_timeseries(forecast_start_time, forecast_end_time, variable=var,
+                                          first_year=first_year, last_year=last_year,
+                                          prob_type=prob_type,
+                                          grid=grid, agg=agg,
+                                          recompute=True, force_overwrite=True,
+                                          remote=True, remote_config={
+                                              'n_workers': 10,
+                                              'idle_timeout': '240 minutes',
+                                              'name': 'genevieve'
+                                          },
+                                          )
         if UPDATE_CLIM_FCST_ROLLING:
             ds = climatology_rolling_agg(rolling_start_time, end_time, variable=var,
                                          clim_years=clim_years,

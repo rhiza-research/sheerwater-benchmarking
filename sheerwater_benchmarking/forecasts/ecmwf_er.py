@@ -20,7 +20,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
                                            roll_and_agg,
                                            apply_mask, clip_region,
                                            lon_base_change,
-                                           regrid)
+                                           regrid, get_variable)
 
 
 ########################################################################
@@ -314,7 +314,7 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
                      "start_date": 29, "start_year": 29,
                      "model_issuance_date": 1},
            auto_rechunk=False)
-def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_5"):
+def ecmwf_averaged_iri(start_time, end_time, variable, forecast_type, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Args:
@@ -373,13 +373,13 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_
            cache_args=['variable', 'forecast_type', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
            cache_disable_if={'grid': 'global1_5'},
-           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+           chunking={"lat": 721, "lon": 1440, "lead_time": 46,
                      "start_date": 29, "start_year": 29,
                      "model_issuance_date": 1},
            auto_rechunk=False)
 def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='global1_5'):
     """IRI ECMWF average forecast with regridding."""
-    ds = ecmwf_averaged(start_time, end_time, variable, forecast_type, grid='global1_5')
+    ds = ecmwf_averaged_iri(start_time, end_time, variable, forecast_type, grid='global1_5')
     # Convert to base180 longitude
     ds = lon_base_change(ds, to_base="base180")
 
@@ -394,8 +394,8 @@ def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='g
 @cacheable(data_type='array',
            cache_args=['variable', 'forecast_type', 'agg', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 721, "lon": 1440, "lead_time": 1, "start_date": 969,
-                     "start_year": 29, "model_issuance_date": 969},
+           chunking={"lat": 721, "lon": 1440, "lead_time": 40, "start_date": 29,
+                     "start_year": 29, "model_issuance_date": 1},
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                  agg=14, grid="global1_5"):
@@ -411,8 +411,12 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
         agg (str): The aggregation period to use, in days
     """
     # Read and combine all the data into an array
-    ds = ecmwf_averaged_regrid(start_time, end_time, variable,
-                               forecast_type, grid=grid)
+    ds = ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid=grid)
+    ds = ds.chunk({'lat': 721, 'lon': 1440})
+    if forecast_type == "reforecast":
+        ds = ds.chunk({'start_year': 29, 'model_issuance_date': 1})
+    else:
+        ds = ds.chunk({'start_date': 29})
 
     # Roll and aggregate the data
     agg_fn = "sum" if variable == "precip" else "mean"
@@ -457,38 +461,158 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="globa
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
+           cache=False,
+           timeseries=['start_date', 'model_issuance_date'],
+           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                     "start_date": 29, "start_year": 29,
+                     "model_issuance_date": 1})
+def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noqa ARG001
+                           run_type='average', time_group='weekly', grid="global1_5"):
+    """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
+        run_type (str): The type of run to fetch. One of:
+            - average: to download the averaged of the perturbed runs
+            - perturbed: to download all perturbed runs
+            - [int 0-50]: to download a specific  perturbed run
+        time_group (str): The time grouping to use. One of: "daily", "weekly", "biweekly"
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+    """
+    if grid != 'global1_5':
+        raise NotImplementedError("Only global 1.5 degree grid is implemented.")
+
+    forecast_str = "-reforecast" if forecast_type == "reforecast" else ""
+    run_str = "_ens_mean" if run_type == "average" else ""
+    avg_str = "-avg" if time_group == "daily" else "_avg"  # different naming for daily
+    time_str = "" if time_group == "daily" else "-weekly" if time_group == "weekly" else "-biweekly"
+    file_str = f'ifs-ext{forecast_str}-full-single-level{time_str}{avg_str}{run_str}.zarr'
+    filepath = f'gs://weatherbench2/datasets/ifs_extended_range/{time_group}/{file_str}'
+
+    # Pull the google dataset
+    ds = xr.open_zarr(filepath)
+
+    # Select the right variable
+    var = get_variable(variable, 'ecmwf_ifs_er')
+    ds = ds[var].to_dataset()
+    ds = ds.rename_vars(name_dict={var: variable})
+
+    # Convert local dataset naming and units
+    ds = ds.rename({'latitude': 'lat', 'longitude': 'lon', 'prediction_timedelta': 'lead_time'})
+    if run_type != 'average':
+        ds = ds.rename({'number': 'member'})
+    if forecast_type == 'reforecast':
+        ds = ds.rename({'hindcast_year': 'start_year'})
+        ds = ds.rename({'forecast_time': 'model_issuance_date'})
+    else:
+        ds = ds.rename({'time': 'start_date'})
+
+    # If a specific run, select
+    if isinstance(run_type, int):
+        ds = ds.sel(member=run_type)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
+           cache=True,
+           timeseries=['start_date', 'model_issuance_date'],
+           cache_disable_if={'grid': 'global1_5'},
+           chunking={"lat": 721, "lon": 1440, "lead_time": 1,
+                     "start_date": 29, "start_year": 1,
+                     "model_issuance_date": 29})
+def ifs_extended_range(start_time, end_time, variable, forecast_type,
+                       run_type='average', time_group='weekly', grid="global1_5"):
+    """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
+        run_type (str): The type of run to fetch. One of:
+            - average: to download the averaged of the perturbed runs
+            - perturbed: to download all perturbed runs
+            - [int 0-50]: to download a specific  perturbed run
+        time_group (str): The time grouping to use. One of: "daily", "weekly", "biweekly"
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+    """
+    """IRI ECMWF average forecast with regridding."""
+    ds = ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
+                                run_type, time_group, grid='global1_5')
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
+
+    if variable == 'tmp2m':
+        ds[variable] = ds[variable] - 273.15
+        ds.attrs.update(units='C')
+    elif variable == 'precip':
+        ds[variable] = ds[variable] * 1000.0
+        ds.attrs.update(units='mm')
+        ds = np.maximum(ds, 0)
+
+    ds = ds.drop('valid_time')
+
+    # Re-chunk the data
+    chunks_dict = {"lat": 120, "lon": 240, "lead_time": 1}
+    if forecast_type == "reforecast":
+        chunks_dict["start_year"] = 1
+        chunks_dict["model_issuance_date"] = 29
+    else:
+        chunks_dict["start_date"] = 29
+    ds = ds.chunk(chunks_dict)
+
+    if grid == 'global1_5':
+        return ds
+    # Regrid onto appropriate grid
+    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 120, "lon": 240}, method='conservative')
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
-             grid='global1_5', mask='lsm', region="global"):
+def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic',
+                 grid='global1_5', mask='lsm', region="global"):
     """Standard format forecast data for ECMWF forecasts."""
     lead_params = {
-        "week1": (7, 0),
-        "week2": (7, 7),
-        "week3": (7, 21),
-        "week4": (7, 28),
-        "week5": (7, 35),
-        "week6": (7, 42),
-        "weeks12": (14, 0),
-        "weeks23": (14, 7),
-        "weeks34": (14, 14),
-        "weeks45": (14, 21),
-        "weeks56": (14, 28),
+        "week1": ('weekly', 0),
+        "week2": ('weekly', 7),
+        "week3": ('weekly', 14),
+        "week4": ('weekly', 21),
+        "week5": ('weekly', 28),
+        "week6": ('weekly', 35),
+        "weeks12": ('biweekly', 0),
+        "weeks23": ('biweekly', 7),
+        "weeks34": ('biweekly', 14),
+        "weeks45": ('biweekly', 21),
+        "weeks56": ('biweekly', 28),
     }
-    agg, lead_id = lead_params.get(lead, (None, None))
-    if agg is None:
+    time_group, lead_id = lead_params.get(lead, (None, None))
+    if time_group is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
 
-    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type="forecast", agg=agg, grid=grid)
+    if prob_type == 'deterministic':
+        ds = ifs_extended_range(start_time, end_time, variable, forecast_type="forecast",
+                                run_type='average', time_group=time_group, grid=grid)
+        ds = ds.assign_attrs(prob_type="deterministic")
+    else:  # probabilistic
+        ds = ifs_extended_range(start_time, end_time, variable, forecast_type="forecast",
+                                run_type='perturbed', time_group=time_group, grid=grid)
+        ds = ds.assign_attrs(prob_type="ensemble")
 
-    # Leads are 12 hours offset from the forecast date
-    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
-
+    # Get specific lead
+    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D'))
     ds = ds.rename({'start_date': 'time'})
-    ds = ds.assign_attrs(prob_type="deterministic")
-    if prob_type != 'deterministic':
-        raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
@@ -510,14 +634,18 @@ def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, g
     """
     # Fetch the reforecast data; get's the past 20 years associated with each start date
     ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
-    if lead >= len(ds_deb.lead_time):
+    n_leads = len(ds_deb.lead_time)
+    if lead >= n_leads:
         # Lead does not exist
         return None
     ds_deb = ds_deb.isel(lead_time=lead)
 
-    # Get the pre-aggregated ERA5 data,
+    # We need ERA5 data from the start_time to 20 years before the start_time
     new_start = (dateparser.parse(start_time) - relativedelta(years=21)).strftime("%Y-%m-%d")
-    new_end = (dateparser.parse(end_time) + relativedelta(days=33)).strftime("%Y-%m-%d")
+    # We need ERA5 data from the end time to the end time plus last lead in days
+    new_end = (dateparser.parse(end_time) + relativedelta(days=n_leads)).strftime("%Y-%m-%d")
+
+    # Get the pre-aggregated ERA5 data
     ds_truth = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid).chunk(time=1)
 
     # Stack the index of the reforecast data into a multi-index
@@ -539,7 +667,7 @@ def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, g
 
     # Assign the time coordinate to match the forecast dataframe for alignment and subtract
     bias = ds_truth_lead.assign_coords(time=ds_stacked.time) - ds_stacked
-    bias = bias.unstack().chunk({"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 30})
+    bias = bias.unstack().chunk({"lat": 121, "lon": 240, "start_year": 30, "model_issuance_date": 30})
     bias = bias.sortby("model_issuance_date")
     return bias
 
@@ -560,9 +688,94 @@ def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_
     leads = len(ds_deb.lead_time)
 
     # Accumulate all the per lead biases
-    biases = [ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=agg,
-                                         recompute=True, force_overwrite=True,
-                                         lead=i, grid=grid) for i in range(leads)]
+    biases = [ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=agg, lead=i, grid=grid)
+              for i in range(leads)]
     # Concatenate leads and unstack
     ds_biases = xr.concat(biases, dim='lead_time')
     return ds_biases
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'margin_in_days', 'agg', 'grid'],
+           timeseries=['start_date'],
+           cache=True,
+           chunking={"lat": 121, "lon": 240, "start_date": 30, "lead_time": 33})
+def ecmwf_debiased(start_time, end_time, variable, margin_in_days=6, agg=14, grid="global1_5"):
+    """Computes the debiased ECMWF forecasts.
+
+    TODO: this should be implemented on non-aggregated data.
+    """
+    # Get bias data from reforecast
+    ds_b = ecmwf_reforecast_bias(start_time, end_time, variable, agg=agg, grid=grid)
+
+    # Get forecast data
+    ds_f = ecmwf_rolled(start_time, end_time, variable, forecast_type='forecast', agg=agg, grid=grid)
+
+    # Get bias grouped by model issuance data
+    ds_biases = ds_b.groupby('model_issuance_date').mean(dim='start_year')
+
+    # Chunk forecast data and mapblocks bias removal
+    ds_f = ds_f.chunk({'lat': 121, 'lon': 240, 'lead_time': 33})
+
+    def bias_correct(ds, margin_in_days=6):
+        date = ds.start_date.values
+        dt = np.timedelta64(margin_in_days, 'D')
+        nbhd = (ds_biases.model_issuance_date.values >= date - dt) & \
+            (ds_biases.model_issuance_date.values <= date)
+        if nbhd.sum() == 0:  # No data to debias
+            return ds
+        nbhd_df = ds_biases.isel(model_issuance_date=nbhd).mean(dim='model_issuance_date')
+        dsp = ds - nbhd_df
+        return dsp
+
+    # ds_fp = ds_f.groupby('start_date').map(bias_correct, margin_in_days=margin_in_days)
+    # ds_fp = ds_f.map_blocks(bias_correct, margin_in_days=margin_in_days)
+
+    biases = []
+    for date in ds_f.start_date.values:
+        biases.append(bias_correct(ds_f.sel(start_date=date), margin_in_days=margin_in_days))
+    ds_fp = xr.concat(biases, dim='start_date')
+    return ds_fp
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
+def ecmwf_ifs_er_debaised(start_time, end_time, variable, lead, prob_type='deterministic',
+                          grid='global1_5', mask='lsm', region="global"):
+    """Standard format forecast data for ECMWF forecasts."""
+    lead_params = {
+        "week1": (7, 0),
+        "week2": (7, 7),
+        "week3": (7, 14),
+        "week4": (7, 21),
+        "week5": (7, 28),
+        "week6": (7, 35),
+        "weeks12": (14, 0),
+        "weeks23": (14, 7),
+        "weeks34": (14, 14),
+        "weeks45": (14, 21),
+        "weeks56": (14, 28),
+    }
+    agg, lead_id = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
+
+    ds = ecmwf_debiased(start_time, end_time, variable, margin_in_days=6, agg=agg, grid=grid)
+
+    # Leads are 12 hours offset from the forecast date
+    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
+
+    ds = ds.rename({'start_date': 'time'})
+    ds = ds.assign_attrs(prob_type="deterministic")
+    if prob_type != 'deterministic':
+        raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
+
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
+    return ds

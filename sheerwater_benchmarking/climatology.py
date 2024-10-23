@@ -1,8 +1,10 @@
 """Climatology models."""
 import dateparser
-import pandas as pd
 from dateutil.relativedelta import relativedelta
-from sheerwater_benchmarking.reanalysis import era5_daily
+import numpy as np
+import pandas as pd
+import xarray as xr
+from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, clip_region)
 
 
@@ -14,7 +16,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, c
 def climatology_raw(variable, first_year, last_year, grid='global1_5'):
     """Compute the climatology of the ERA5 data. Years are inclusive."""
     start_time = f"{first_year}-01-01"
-    end_time = f"{last_year}-12-31"
+    end_time = f"{last_year+1}-01-01"
 
     # Get single day, masked data between start and end years
     ds = era5_daily(start_time, end_time, variable=variable, grid=grid)
@@ -24,6 +26,46 @@ def climatology_raw(variable, first_year, last_year, grid='global1_5'):
 
     # Take average over the period to produce climatology
     return ds.groupby('dayofyear').mean(dim='time')
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache=True,
+           cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
+           chunking={"lat": 721, "lon": 1441, "doy": 1, "member": 30},
+           auto_rechunk=False)
+def climatology_agg(variable, first_year=1986, last_year=2015,
+                    prob_type='deterministic', agg=14, grid="global1_5"):
+    """Generates aggregated climatology."""
+    start_time = f"{first_year}-01-01"
+    end_time = f"{last_year+1}-01-01"
+    ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
+
+    # Add day of year as a coordinate
+    ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
+
+    # Take average over the period to produce climatology
+    if prob_type == 'deterministic':
+        return ds.groupby('dayofyear').mean(dim='time')
+    elif prob_type != 'probabilistic':
+        raise ValueError(f"Unsupported prob_type: {prob_type}")
+    # Otherwise, get ensemble members sampled from climatology
+
+    def sample_members(sub_ds, members=100):
+        doy = sub_ds.dayofyear.values[0]
+        ind = np.random.randint(0, len(sub_ds.time.values), size=(members,))
+        sub = sub_ds.isel(time=ind)
+        sub = sub.assign_coords(time=np.arange(members)).rename({'time': 'member'})
+        sub = sub.assign_coords(dayofyear=doy)
+        return sub
+
+    doys = []
+    for doy in range(1, 367):
+        doys.append(
+            sample_members(ds.isel(time=(ds.dayofyear.values == doy))))
+    ds = xr.concat(doys, dim='dayofyear')
+    ds = ds.chunk({'dayofyear': 1, 'member': 30})
+    return ds
 
 
 @dask_remote
@@ -126,4 +168,4 @@ def climatology_rolling(start_time, end_time, variable, clim_years=30,
     return ds
 
 
-__all__ = ['climatology', 'climatology_standard_30yr', 'climatology_rolling']
+__all__ = ['climatology', 'climatology_standard_30yr', 'climatology_rolling', 'climatology_agg']
