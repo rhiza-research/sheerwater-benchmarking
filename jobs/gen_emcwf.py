@@ -6,26 +6,27 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import (ecmwf_agg, ecmwf_rolled,
 
 
 if __name__ == "__main__":
-    vars = ["tmp2m", "precip"]
+    # vars = ["tmp2m", "precip"]
+    vars = ["precip"]
     # vars = ["tmp2m"]
     aggs = [14, 7]
-    # grids = ["global1_5"]
-    grids = ["global0_25"]
+    grids = ["global1_5"]
+    # grids = ["global0_25"]
     # grids = ["global0_25", "global1_5"]
-    forecast_type = ["forecast", "reforecast"]
-    # forecast_type = ["reforecast"]
+    # forecast_type = ["forecast", "reforecast"]
+    forecast_type = ["reforecast"]
     # forecast_type = ["forecast"]
     regions = ['global']
     masks = ["lsm"]
 
-    start_time = "2015-05-14"
+    start_time = "2019-07-01"
     end_time = "2023-06-30"
 
-    UPDATE_IRI = False
+    UPDATE_IRI = True
     UPDATE_IRI_AVERAGED = False
-    UPDATE_ROLLED = True
-    UPDATE_BIAS = False 
-    UPDATE_DEB = False 
+    UPDATE_ROLLED = False
+    UPDATE_BIAS = False
+    UPDATE_DEB = False
     UPDATE_AGG = False
 
     for var, ft in product(vars, forecast_type):
@@ -34,7 +35,7 @@ if __name__ == "__main__":
                            run_type='perturbed',
                            grid='global1_5', verbose=True,
                            retry_null_cache=True,
-                           remote=True,
+                           remote=False,
                            remote_config={'name': 'update', 'n_workers': 10},
                            )
 

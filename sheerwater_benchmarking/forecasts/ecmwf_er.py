@@ -21,7 +21,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
                                            roll_and_agg,
                                            apply_mask, clip_region,
                                            lon_base_change,
-                                           regrid)
+                                           regrid, get_variable)
 
 
 ########################################################################
@@ -234,7 +234,8 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
 
     Interface is the same as single_iri_ecmwf.
     """
-    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose)
+    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose,
+                          retry_null_cache=True)
 
     if ds is None:
         return None
@@ -280,10 +281,13 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
     fn = single_iri_ecmwf if forecast_type == "forecast" else single_iri_ecmwf_dense
     datasets = []
     for date in target_dates:
-        ds = dask.delayed(fn)(
-            date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
+        # ds = dask.delayed(fn)(
+        #     date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
+        ds = fn(
+            date, variable, forecast_type, run_type, grid, verbose,
+            filepath_only=True, retry_null_cache=True)
         datasets.append(ds)
-    datasets = dask.compute(*datasets)
+    # datasets = dask.compute(*datasets)
     data = [d for d in datasets if d is not None]
     if len(data) == 0:
         return None
@@ -315,7 +319,7 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
                      "start_date": 29, "start_year": 29,
                      "model_issuance_date": 1},
            auto_rechunk=False)
-def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_5"):
+def ecmwf_averaged_iri(start_time, end_time, variable, forecast_type, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Args:
@@ -380,7 +384,7 @@ def ecmwf_averaged(start_time, end_time, variable, forecast_type, grid="global1_
            auto_rechunk=False)
 def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='global1_5'):
     """IRI ECMWF average forecast with regridding."""
-    ds = ecmwf_averaged(start_time, end_time, variable, forecast_type, grid='global1_5')
+    ds = ecmwf_averaged_iri(start_time, end_time, variable, forecast_type, grid='global1_5')
     # Convert to base180 longitude
     ds = lon_base_change(ds, to_base="base180")
 
@@ -462,38 +466,156 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="globa
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
+           cache=False,
+           timeseries=['start_date', 'model_issuance_date'],
+           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                     "start_date": 29, "start_year": 29,
+                     "model_issuance_date": 1})
+def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
+                           run_type='average', time_group='weekly', grid="global1_5"):
+    """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
+        run_type (str): The type of run to fetch. One of:
+            - average: to download the averaged of the perturbed runs
+            - perturbed: to download all perturbed runs
+            - [int 0-50]: to download a specific  perturbed run
+        time_group (str): The time grouping to use. One of: "daily", "weekly", "biweekly"
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+    """
+    if grid != 'global1_5':
+        raise NotImplementedError("Only global 1.5 degree grid is implemented.")
+
+    forecast_str = "-reforecast" if forecast_type == "reforecast" else ""
+    run_str = "_ens_mean" if run_type == "average" else ""
+    avg_str = "-avg" if time_group == "daily" else "_avg"  # different naming for daily
+    time_str = "" if time_group == "daily" else "-weekly" if time_group == "weekly" else "-biweekly"
+    file_str = f'ifs-ext{forecast_str}-full-single-level{time_str}{avg_str}{run_str}.zarr'
+    filepath = f'gs://weatherbench2/datasets/ifs_extended_range/{time_group}/{file_str}'
+
+    # Pull the google dataset
+    ds = xr.open_zarr(filepath)
+
+    # Select the right variable
+    var = get_variable(variable, 'ecmwf_ifs_er')
+    ds = ds[var].to_dataset()
+    ds = ds.rename_vars(name_dict={var: variable})
+
+    # Convert local dataset naming and units
+    ds = ds.rename({'latitude': 'lat', 'longitude': 'lon', 'prediction_timedelta': 'lead_time'})
+    if run_type != 'average':
+        ds = ds.rename({'number': 'member'})
+    if forecast_type == 'reforecast':
+        ds = ds.rename({'hindcast_year': 'start_year'})
+        ds = ds.rename({'forecast_time': 'model_issuance_date'})
+    else:
+        ds = ds.rename({'time': 'start_date'})
+
+    # If a specific run, select
+    if isinstance(run_type, int):
+        ds = ds.sel(member=run_type)
+
+    # Re-chunk the data
+    chunks_dict = {"lat": 121, "lon": 240, "lead_time": 46}
+    if forecast_type == "reforecast":
+        chunks_dict["start_year"] = 29
+        chunks_dict["model_issuance_date"] = 1
+    else:
+        chunks_dict["start_date"] = 29
+
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
+           cache=False,
+           timeseries=['start_date', 'model_issuance_date'],
+           cache_disable_if={'grid': 'global1_5'},
+           chunking={"lat": 721, "lon": 1440, "lead_time": 46,
+                     "start_date": 29, "start_year": 29,
+                     "model_issuance_date": 1})
+def ifs_extended_range(start_time, end_time, variable, forecast_type,
+                       run_type='average', time_group='weekly', grid="global1_5"):
+    """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
+        run_type (str): The type of run to fetch. One of:
+            - average: to download the averaged of the perturbed runs
+            - perturbed: to download all perturbed runs
+            - [int 0-50]: to download a specific  perturbed run
+        time_group (str): The time grouping to use. One of: "daily", "weekly", "biweekly"
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+    """
+    """IRI ECMWF average forecast with regridding."""
+    ds = ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
+                                run_type, time_group, grid='global1_5')
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
+
+    if variable == 'tmp2m':
+        ds[variable] = ds[variable] - 273.15
+        ds.attrs.update(units='C')
+    elif variable == 'precip':
+        ds[variable] = ds[variable] * 1000.0
+        ds.attrs.update(units='mm')
+        ds = np.maximum(ds, 0)
+
+    if grid == 'global1_5':
+        return ds
+    # Regrid onto appropriate grid
+    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 120, "lon": 120})
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def ecmwf_er(start_time, end_time, variable, lead, prob_type='deterministic',
-             grid='global1_5', mask='lsm', region="global"):
+def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic',
+                 grid='global1_5', mask='lsm', region="global"):
     """Standard format forecast data for ECMWF forecasts."""
     lead_params = {
-        "week1": (7, 0),
-        "week2": (7, 7),
-        "week3": (7, 21),
-        "week4": (7, 28),
-        "week5": (7, 35),
-        "week6": (7, 42),
-        "weeks12": (14, 0),
-        "weeks23": (14, 7),
-        "weeks34": (14, 14),
-        "weeks45": (14, 21),
-        "weeks56": (14, 28),
+        "week1": ('weekly', 0),
+        "week2": ('weekly', 7),
+        "week3": ('weekly', 14),
+        "week4": ('weekly', 21),
+        "week5": ('weekly', 28),
+        "week6": ('weekly', 35),
+        "weeks12": ('biweekly', 0),
+        "weeks23": ('biweekly', 7),
+        "weeks34": ('biweekly', 14),
+        "weeks45": ('biweekly', 21),
+        "weeks56": ('biweekly', 28),
     }
-    agg, lead_id = lead_params.get(lead, (None, None))
-    if agg is None:
+    time_group, lead_id = lead_params.get(lead, (None, None))
+    if time_group is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
 
-    ds = ecmwf_rolled(start_time, end_time, variable, forecast_type="forecast", agg=agg, grid=grid)
+    if prob_type == 'deterministic':
+        ds = ifs_extended_range(start_time, end_time, variable, forecast_type="forecast",
+                                run_type='average', time_group=time_group, grid=grid)
+        ds = ds.assign_attrs(prob_type="deterministic")
+    else:  # probabilistic
+        ds = ifs_extended_range(start_time, end_time, variable, forecast_type="forecast",
+                                run_type='perturbed', time_group=time_group, grid=grid)
+        ds = ds.assign_attrs(prob_type="ensemble")
 
-    # Leads are 12 hours offset from the forecast date
-    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
-
+    # Get specific lead
+    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D'))
     ds = ds.rename({'start_date': 'time'})
-    ds = ds.assign_attrs(prob_type="deterministic")
-    if prob_type != 'deterministic':
-        raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
