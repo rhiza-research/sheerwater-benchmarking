@@ -214,8 +214,13 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
     if check_bases(ds, mask_ds) == -1:
         raise ValueError("Datasets have different longitude bases. Cannot mask.")
 
+    att = ds.attrs
     ds = ds[var].where(mask_ds > val, drop=False)
+
+    # Preserve name and attributes
     ds = ds.rename({"mask": var})
+    ds.attrs = att
+
     return ds
 
 
