@@ -203,4 +203,4 @@ def climatology_rolling(start_time, end_time, variable, clim_years=30,
 #     return ds
 
 
-__all__ = ['climatology', 'climatology_standard_30yr', 'climatology_rolling']
+__all__ = ['climatology', 'climatology_standard_30yr', 'climatology_rolling', 'climatology_agg']

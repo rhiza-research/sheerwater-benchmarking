@@ -472,7 +472,7 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="globa
            chunking={"lat": 121, "lon": 240, "lead_time": 46,
                      "start_date": 29, "start_year": 29,
                      "model_issuance_date": 1})
-def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
+def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noqa ARG001
                            run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
 
@@ -529,9 +529,9 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            cache_disable_if={'grid': 'global1_5'},
-           chunking={"lat": 721, "lon": 1440, "lead_time": 46,
-                     "start_date": 29, "start_year": 29,
-                     "model_issuance_date": 1})
+           chunking={"lat": 721, "lon": 1440, "lead_time": 1,
+                     "start_date": 29, "start_year": 1,
+                     "model_issuance_date": 29})
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
@@ -566,10 +566,10 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     ds = ds.drop('valid_time')
 
     # Re-chunk the data
-    chunks_dict = {"lat": 121, "lon": 240, "lead_time": 10}
+    chunks_dict = {"lat": 120, "lon": 240, "lead_time": 1}
     if forecast_type == "reforecast":
-        chunks_dict["start_year"] = 29
-        chunks_dict["model_issuance_date"] = 1
+        chunks_dict["start_year"] = 1
+        chunks_dict["model_issuance_date"] = 29
     else:
         chunks_dict["start_date"] = 29
     ds = ds.chunk(chunks_dict)
@@ -577,7 +577,7 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
-    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 100, "lon": 100})
+    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 120, "lon": 240}, method='conservative')
     return ds
 
 
@@ -749,16 +749,16 @@ def ecmwf_debiased(start_time, end_time, variable, margin_in_days=6, agg=14, gri
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def ecmwf_er_deb(start_time, end_time, variable, lead, prob_type='deterministic',
-                 grid='global1_5', mask='lsm', region="global"):
+def ecmwf_ifs_er_debaised(start_time, end_time, variable, lead, prob_type='deterministic',
+                          grid='global1_5', mask='lsm', region="global"):
     """Standard format forecast data for ECMWF forecasts."""
     lead_params = {
         "week1": (7, 0),
         "week2": (7, 7),
-        "week3": (7, 21),
-        "week4": (7, 28),
-        "week5": (7, 35),
-        "week6": (7, 42),
+        "week3": (7, 14),
+        "week4": (7, 21),
+        "week5": (7, 28),
+        "week6": (7, 35),
         "weeks12": (14, 0),
         "weeks23": (14, 7),
         "weeks34": (14, 14),
