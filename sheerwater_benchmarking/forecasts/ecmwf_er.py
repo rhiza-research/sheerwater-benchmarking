@@ -376,9 +376,14 @@ def ecmwf_averaged_iri(start_time, end_time, variable, forecast_type, grid="glob
            cache_args=['variable', 'forecast_type', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
            cache_disable_if={'grid': 'global1_5'},
-           chunking={"lat": 721, "lon": 1440, "lead_time": 46,
-                     "start_date": 29, "start_year": 29,
-                     "model_issuance_date": 1},
+           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                     "start_date": 30,
+                     "model_issuance_date": 30, "start_year": 1},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
+               },
+           },
            auto_rechunk=False)
 def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='global1_5'):
     """IRI ECMWF average forecast with regridding."""
@@ -397,8 +402,14 @@ def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='g
 @cacheable(data_type='array',
            cache_args=['variable', 'forecast_type', 'agg', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 721, "lon": 1440, "lead_time": 40, "start_date": 29,
-                     "start_year": 29, "model_issuance_date": 1},
+           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                     "start_date": 30,
+                     "model_issuance_date": 30, "start_year": 1},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
+               },
+           },
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                  agg=14, grid="global1_5"):
@@ -433,8 +444,9 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            cache_args=['variable', 'forecast_type', 'agg', 'grid', 'mask'],
-           chunking={"lat": 32, "lon": 30, "lead_time": 1, "start_date": 969,
-                     "start_year": 29, "model_issuance_date": 969},
+           chunking={"lat": 32, "lon": 30, "lead_time": 1,
+                     "start_date": 1000,
+                     "model_issuance_date": 1000, "start_year": 29},
            auto_rechunk=False)
 def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
     """Fetches forecast data from the ECMWF IRI dataset.
@@ -527,9 +539,14 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            chunking={"lat": 121, "lon": 240, "lead_time": 40,
-                     "start_date": 29, "start_year": 1,
-                     "model_issuance_date": 29,
-                     "member": 2})
+                     "start_date": 30,
+                     "model_issuance_date": 30, "start_year": 1,
+                     "member": 1},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
+               },
+           })
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
@@ -566,10 +583,6 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
-    # ds = ds.chunk({'lat': 121, 'lon': 240})
-    # ds = ds.unify_chunks()
-    # print(ds.chunksizes)
-    # ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 40, "lon": 40}, method='conservative')
     ds = regrid(ds, grid, base='base180')
     return ds
 
@@ -624,7 +637,12 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
            cache_args=['variable', 'agg', 'grid', 'lead'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 30, "model_issuance_date": 30},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
+               },
+           })
 def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead.
 
@@ -675,7 +693,12 @@ def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, g
            cache_args=['variable', 'agg', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 721, "lon": 1440, "start_year": 30, "model_issuance_date": 1},)
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 30, "model_issuance_date": 30},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
+               },
+           })
 def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead.
 
@@ -698,7 +721,12 @@ def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_
            cache_args=['variable', 'margin_in_days', 'agg', 'grid'],
            timeseries=['start_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "start_date": 30, "lead_time": 33})
+           chunking={"lat": 121, "lon": 240, "lead_time": 40, "start_date": 30},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'start_date': 1}
+               },
+           })
 def ecmwf_debiased(start_time, end_time, variable, margin_in_days=6, agg=14, grid="global1_5"):
     """Computes the debiased ECMWF forecasts.
 
@@ -727,8 +755,6 @@ def ecmwf_debiased(start_time, end_time, variable, margin_in_days=6, agg=14, gri
         dsp = ds - nbhd_df
         return dsp
 
-    # ds_fp = ds_f.groupby('start_date').map(bias_correct, margin_in_days=margin_in_days)
-    # ds_fp = ds_f.map_blocks(bias_correct, margin_in_days=margin_in_days)
     biases = []
     for date in ds_f.start_date.values:
         biases.append(bias_correct(ds_f.sel(start_date=date), margin_in_days=margin_in_days))
