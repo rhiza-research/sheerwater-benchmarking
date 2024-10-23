@@ -1,6 +1,8 @@
 """Verification metrics for forecasts."""
 from importlib import import_module
+import itertools
 
+import pandas as pd
 
 from sheerwater_benchmarking.utils import cacheable, dask_remote
 
@@ -131,7 +133,7 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='tabular',
-           cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
            cache=False)
 def summary_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, baseline=None, grid="global1_5", mask='lsm', region='global'):
@@ -139,4 +141,60 @@ def summary_metric(start_time, end_time, variable, lead, forecast, truth,
     m_ds = _metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, baseline, grid, mask, region, spatial=False)
 
-    return m_ds[variable].values
+    return m_ds[variable].values.max()
+
+
+@dask_remote
+@cacheable(data_type='tabular',
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
+           cache=True)
+def summary_metrics_table(start_time, end_time, variable, truth, metric, baseline=None, grid='global1_5', mask='lsm', region='global'):
+    """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
+
+    forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015']
+    leads = ["week1", "week2", "week3", "week4", "week5"]
+
+    # Create a dict to insert our data
+    results = {forecast:[] for forecast in forecasts}
+
+    combos = itertools.product(forecasts, leads)
+    for forecast, lead in combos:
+        print(f"Running for {forecast} and {lead} with variable {variable}, metric {metric}, grid {grid}, and region {region}")
+        # First get the value without the baseline
+        try:
+            val = summary_metric(start_time, end_time, variable, lead, forecast, truth, metric, None, grid, mask, region)
+        except NotImplementedError:
+            val = None
+
+        results[forecast].append(val)
+
+        # IF there is a baseline get the skill
+        if baseline:
+            print(f"Running for {forecast}, {lead} and baseline {baseline} with variable {variable}, metric {metric}, grid {grid}, and region {region}")
+
+            try:
+                val = summary_metric(start_time, end_time, variable, lead, forecast, truth, metric, baseline, grid, mask, region)
+            except NotImplementedError:
+                val = None
+
+            results[forecast].append(val)
+
+    # Turn the dict into a pandas dataframe with appropriate columns
+    leads_skill = [lead + '_skill' for lead in leads]
+
+    # interleave
+    cols = leads + leads_skill
+    cols[::2] = leads
+    cols[1::2] = leads_skill
+
+    print(results)
+
+    # create the dataframe
+    df = pd.DataFrame.from_dict(results, orient='index', columns=cols)
+
+    # Rename the index
+    df = df.reset_index().rename(columns={'index':'forecast'})
+
+    print(df)
+    return df
+

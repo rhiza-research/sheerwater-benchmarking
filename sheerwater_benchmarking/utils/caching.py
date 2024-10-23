@@ -4,6 +4,7 @@ import dateparser
 from functools import wraps
 from inspect import signature, Parameter
 import logging
+import hashlib
 
 import gcsfs
 from google.cloud import storage
@@ -113,6 +114,9 @@ def write_to_delta(cache_path, df):
     """Write a pandas dataframe to a delta table."""
     write_deltalake(cache_path, df)
 
+def postgres_table_name(table_name):
+    """Return a qualified postgres table name"""
+    return hashlib.md5(table_name.encode()).hexdigest()
 
 def read_from_postgres(table_name):
     """Read a pandas df from a table in the sheerwater postgres.
@@ -126,10 +130,12 @@ def read_from_postgres(table_name):
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
+    table_name = postgres_table_name(table_name)
+
     try:
         engine = sqlalchemy.create_engine(
             f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
-        df = pd.read_sql_query(f'select * from {table_name}', con=engine)
+        df = pd.read_sql_query(f'select * from "{table_name}"', con=engine)
         return df
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on the
@@ -144,6 +150,8 @@ def check_exists_postgres(table_name):
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
+
+    table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
@@ -168,6 +176,8 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
     """
     # Get the postgres write secret
     pgwrite_pass = postgres_write_password()
+
+    table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
