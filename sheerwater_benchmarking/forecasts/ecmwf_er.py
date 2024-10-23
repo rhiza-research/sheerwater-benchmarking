@@ -11,8 +11,6 @@ import requests
 import ssl
 from urllib3 import poolmanager
 import time
-import dask
-import gcsfs
 
 from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
