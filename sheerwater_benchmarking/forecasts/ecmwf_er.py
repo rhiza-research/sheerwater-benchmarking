@@ -526,10 +526,10 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
-           cache_disable_if={'grid': 'global1_5'},
-           chunking={"lat": 721, "lon": 1440, "lead_time": 1,
+           chunking={"lat": 121, "lon": 240, "lead_time": 40,
                      "start_date": 29, "start_year": 1,
-                     "model_issuance_date": 29})
+                     "model_issuance_date": 29,
+                     "member": 2})
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
@@ -563,19 +563,14 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
 
     ds = ds.drop('valid_time')
 
-    # Re-chunk the data
-    chunks_dict = {"lat": 120, "lon": 240, "lead_time": 1}
-    if forecast_type == "reforecast":
-        chunks_dict["start_year"] = 1
-        chunks_dict["model_issuance_date"] = 29
-    else:
-        chunks_dict["start_date"] = 29
-    ds = ds.chunk(chunks_dict)
-
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
-    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 120, "lon": 240}, method='conservative')
+    # ds = ds.chunk({'lat': 121, 'lon': 240})
+    # ds = ds.unify_chunks()
+    # print(ds.chunksizes)
+    # ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 40, "lon": 40}, method='conservative')
+    ds = regrid(ds, grid, base='base180')
     return ds
 
 
@@ -734,11 +729,14 @@ def ecmwf_debiased(start_time, end_time, variable, margin_in_days=6, agg=14, gri
 
     # ds_fp = ds_f.groupby('start_date').map(bias_correct, margin_in_days=margin_in_days)
     # ds_fp = ds_f.map_blocks(bias_correct, margin_in_days=margin_in_days)
-
     biases = []
     for date in ds_f.start_date.values:
         biases.append(bias_correct(ds_f.sel(start_date=date), margin_in_days=margin_in_days))
     ds_fp = xr.concat(biases, dim='start_date')
+
+    # Should not be below zero after bias correction
+    if variable == 'precip':
+        ds_fp = np.maximum(ds_fp, 0)
     return ds_fp
 
 

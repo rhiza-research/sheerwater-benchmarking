@@ -73,7 +73,8 @@ def regrid(ds, output_grid, method='conservative', base="base180", grid_chunks=N
     if grid_chunks is not None:
         ds_out = ds_out.chunk(grid_chunks)
     regridder = getattr(ds.regrid, method)
-    ds = regridder(ds_out)
+    ds = regridder(ds_out, time_dim='start_date',
+                   output_chunks={'lat': 721, 'lon': 1440, 'start_date': 29})
     return ds
 
 
