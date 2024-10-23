@@ -444,7 +444,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                     temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
                                     temp_cache_map = fs.get_mapper(temp_cache_path)
 
-                                    ds = drop_encoded_chunks(ds)
+                                    # ds = drop_encoded_chunks(ds)
 
                                     ds.chunk(chunks=chunking).to_zarr(store=temp_cache_map, mode='w')
 
@@ -564,7 +564,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
 
                                 if chunking:
                                     # If we aren't doing auto chunking delete the encoding chunks
-                                    ds = drop_encoded_chunks(ds)
+                                    # ds = drop_encoded_chunks(ds)
 
                                     chunking = prune_chunking_dimensions(ds, chunking)
 
