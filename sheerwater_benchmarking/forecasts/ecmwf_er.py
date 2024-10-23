@@ -11,8 +11,6 @@ import requests
 import ssl
 from urllib3 import poolmanager
 import time
-import dask
-import gcsfs
 
 from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
@@ -472,7 +470,7 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="globa
            chunking={"lat": 121, "lon": 240, "lead_time": 46,
                      "start_date": 29, "start_year": 29,
                      "model_issuance_date": 1})
-def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
+def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noqa ARG001
                            run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
 
