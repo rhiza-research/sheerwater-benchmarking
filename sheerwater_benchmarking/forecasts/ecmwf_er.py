@@ -395,8 +395,8 @@ def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='g
 @cacheable(data_type='array',
            cache_args=['variable', 'forecast_type', 'agg', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 721, "lon": 1440, "lead_time": 40, "start_date": 1,
-                     "start_year": 1, "model_issuance_date": 1},
+           chunking={"lat": 721, "lon": 1440, "lead_time": 40, "start_date": 29,
+                     "start_year": 29, "model_issuance_date": 1},
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                  agg=14, grid="global1_5"):
@@ -414,6 +414,10 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
     # Read and combine all the data into an array
     ds = ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid=grid)
     ds = ds.chunk({'lat': 721, 'lon': 1440})
+    if forecast_type == "reforecast":
+        ds = ds.chunk({'start_year': 29, 'model_issuance_date': 1})
+    else:
+        ds = ds.chunk({'start_date': 29})
 
     # Roll and aggregate the data
     agg_fn = "sum" if variable == "precip" else "mean"

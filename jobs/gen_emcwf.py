@@ -55,8 +55,8 @@ if __name__ == "__main__":
                                       grid=grid, agg=agg,
                                       #   recompute=True, force_overwrite=True,
                                       remote=True,
-                                      remote_config={'name': 'genevieve',
-                                                     'n_workers': 15, 'idle_timeout': '240 minutes'},
+                                      remote_config={'name': 'genevieve2',
+                                                     'n_workers': 25, 'idle_timeout': '240 minutes'},
                                       )
 
                 if UPDATE_BIAS:

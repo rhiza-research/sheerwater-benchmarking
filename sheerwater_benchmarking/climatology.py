@@ -32,7 +32,7 @@ def climatology_raw(variable, first_year, last_year, grid='global1_5'):
 @cacheable(data_type='array',
            cache=True,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
-           chunking={"lat": 721, "lon": 1441, "doy": 10, "member": 100},
+           chunking={"lat": 721, "lon": 1441, "doy": 1, "member": 30},
            auto_rechunk=False)
 def climatology_agg(variable, first_year=1986, last_year=2015,
                     prob_type='deterministic', agg=14, grid="global1_5"):
@@ -64,7 +64,7 @@ def climatology_agg(variable, first_year=1986, last_year=2015,
         doys.append(
             sample_members(ds.isel(time=(ds.dayofyear.values == doy))))
     ds = xr.concat(doys, dim='dayofyear')
-    ds = ds.chunk({'dayofyear': 30, 'member': 100})
+    ds = ds.chunk({'dayofyear': 1, 'member': 30})
     return ds
 
 
