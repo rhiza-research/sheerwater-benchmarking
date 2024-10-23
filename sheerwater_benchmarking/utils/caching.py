@@ -567,6 +567,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                     ds = drop_encoded_chunks(ds)
 
                                     chunking = prune_chunking_dimensions(ds, chunking)
+
                                     ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')
 
                                     # Reopen the dataset to truncate the computational path
