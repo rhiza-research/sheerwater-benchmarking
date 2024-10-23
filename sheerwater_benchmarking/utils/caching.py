@@ -35,6 +35,28 @@ def get_cache_args(kwargs, cache_kwargs):
     return cache_args
 
 
+def merge_chunking_modifiers(chunking, chunk_modifiers, kwargs):
+    """Merge chunking and chunking modifiers into a single chunking dict.
+
+    Args:
+        chunking (dict): The chunking to merge.
+        chunk_modifiers (dict): The chunking modifiers to merge.
+        kwargs (dict): The kwargs to check for chunking modifiers.
+    """
+    if chunk_modifiers is None:
+        return chunking
+
+    for k in chunk_modifiers:
+        if k not in kwargs:
+            raise ValueError(f"Chunking modifier {k} not found in kwargs.")
+
+        chunk_dict = chunk_modifiers[k][kwargs[k]]
+        for dim in chunk_dict:
+            chunking[dim] = chunk_dict[dim]
+
+    return chunking
+
+
 def prune_chunking_dimensions(ds, chunking):
     """Prune the chunking dimensions to only those that exist in the dataset.
 
@@ -233,7 +255,7 @@ def cache_exists(backend, cache_path):
         return check_exists_postgres(cache_path)
 
 
-def cacheable(data_type, cache_args, timeseries=None, chunking=None,
+def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_modifiers=None,
               auto_rechunk=False, cache=True, cache_disable_if=None, backend=None):
     """Decorator for caching function results.
 
@@ -273,8 +295,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
-            nonlocal data_type, cache_args, timeseries, chunking, auto_rechunk, \
-                cache, cache_disable_if, backend
+            nonlocal data_type, cache_args, timeseries, chunking, chunk_modifiers, \
+                auto_rechunk, cache, cache_disable_if, backend
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, validate_cache_timeseries, \
@@ -566,6 +588,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                     # If we aren't doing auto chunking delete the encoding chunks
                                     ds = drop_encoded_chunks(ds)
 
+                                    chunking = merge_chunking_modifiers(chunking, chunk_modifiers, cache_arg_values)
                                     chunking = prune_chunking_dimensions(ds, chunking)
 
                                     ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')

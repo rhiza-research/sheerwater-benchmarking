@@ -11,7 +11,6 @@ import requests
 import ssl
 from urllib3 import poolmanager
 import time
-import dask
 
 from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
@@ -233,7 +232,8 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
 
     Interface is the same as single_iri_ecmwf.
     """
-    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose)
+    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose,
+                          retry_null_cache=True)
 
     if ds is None:
         return None
@@ -279,10 +279,13 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
     fn = single_iri_ecmwf if forecast_type == "forecast" else single_iri_ecmwf_dense
     datasets = []
     for date in target_dates:
-        ds = dask.delayed(fn)(
-            date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
+        # ds = dask.delayed(fn)(
+        #     date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
+        ds = fn(
+            date, variable, forecast_type, run_type, grid, verbose,
+            filepath_only=True, retry_null_cache=True)
         datasets.append(ds)
-    datasets = dask.compute(*datasets)
+    # datasets = dask.compute(*datasets)
     data = [d for d in datasets if d is not None]
     if len(data) == 0:
         return None
@@ -523,10 +526,15 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
-           cache_disable_if={'grid': 'global1_5'},
-           chunking={"lat": 721, "lon": 1440, "lead_time": 1,
-                     "start_date": 29, "start_year": 1,
-                     "model_issuance_date": 29})
+           chunking={"lat": 121, "lon": 240, "lead_time": 40,
+                     "start_date": 29,
+                     "model_issuance_date": 29, "start_year": 1,
+                     "member": 1},
+           chunk_modifiers={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
+               },
+           })
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
@@ -560,19 +568,10 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
 
     ds = ds.drop('valid_time')
 
-    # Re-chunk the data
-    chunks_dict = {"lat": 120, "lon": 240, "lead_time": 1}
-    if forecast_type == "reforecast":
-        chunks_dict["start_year"] = 1
-        chunks_dict["model_issuance_date"] = 29
-    else:
-        chunks_dict["start_date"] = 29
-    ds = ds.chunk(chunks_dict)
-
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
-    ds = regrid(ds, grid, base='base180', grid_chunks={"lat": 120, "lon": 240}, method='conservative')
+    ds = regrid(ds, grid, base='base180')
     return ds
 
 
@@ -731,11 +730,14 @@ def ecmwf_debiased(start_time, end_time, variable, margin_in_days=6, agg=14, gri
 
     # ds_fp = ds_f.groupby('start_date').map(bias_correct, margin_in_days=margin_in_days)
     # ds_fp = ds_f.map_blocks(bias_correct, margin_in_days=margin_in_days)
-
     biases = []
     for date in ds_f.start_date.values:
         biases.append(bias_correct(ds_f.sel(start_date=date), margin_in_days=margin_in_days))
     ds_fp = xr.concat(biases, dim='start_date')
+
+    # Should not be below zero after bias correction
+    if variable == 'precip':
+        ds_fp = np.maximum(ds_fp, 0)
     return ds_fp
 
 
