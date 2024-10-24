@@ -33,7 +33,7 @@ def climatology_raw(variable, first_year, last_year, grid='global1_5'):
            cache=True,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
            chunking={"lat": 121, "lon": 240, "doy": 30, "member": 30},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'doy': 1}
                }
@@ -107,7 +107,7 @@ def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='gl
            timeseries='forecast_date',
            cache_args=['variable', 'clim_years', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }
@@ -155,7 +155,7 @@ def climatology_rolling_raw(start_time, end_time, variable, clim_years=30, grid=
            timeseries='forecast_date',
            cache_args=['variable', 'clim_years', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }

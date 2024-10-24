@@ -17,7 +17,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, roll_and_agg,
            cache=True,
            cache_args=['variable', 'clim_years', 'agg', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }
@@ -54,7 +54,7 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30,
            cache=False,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }

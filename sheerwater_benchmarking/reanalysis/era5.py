@@ -183,7 +183,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
            cache_args=['variable', 'grid'],
            cache_disable_if={'grid': 'global1_5'},
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }
@@ -204,7 +204,7 @@ def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
            timeseries='time',
            cache_args=['variable', 'agg', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }
@@ -235,7 +235,7 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
            cache=True,
            cache_args=['variable', 'agg', 'anom', 'clim_params', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }
