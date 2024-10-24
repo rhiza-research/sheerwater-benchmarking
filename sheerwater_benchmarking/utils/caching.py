@@ -35,22 +35,22 @@ def get_cache_args(kwargs, cache_kwargs):
     return cache_args
 
 
-def merge_chunk_by_arg(chunking, chunk_modifiers, kwargs):
+def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
     """Merge chunking and chunking modifiers into a single chunking dict.
 
     Args:
         chunking (dict): The chunking to merge.
-        chunk_modifiers (dict): The chunking modifiers to merge.
+        chunk_by_arg (dict): The chunking modifiers to merge.
         kwargs (dict): The kwargs to check for chunking modifiers.
     """
-    if chunk_modifiers is None:
+    if chunk_by_arg is None:
         return chunking
 
-    for k in chunk_modifiers:
+    for k in chunk_by_arg:
         if k not in kwargs:
             raise ValueError(f"Chunking modifier {k} not found in kwargs.")
 
-        chunk_dict = chunk_modifiers[k][kwargs[k]]
+        chunk_dict = chunk_by_arg[k][kwargs[k]]
         for dim in chunk_dict:
             chunking[dim] = chunk_dict[dim]
 
@@ -255,7 +255,7 @@ def cache_exists(backend, cache_path):
         return check_exists_postgres(cache_path)
 
 
-def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_modifiers=None,
+def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, cache_disable_if=None, backend=None):
     """Decorator for caching function results.
 
@@ -266,9 +266,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_modif
             time series, set to None (default). If a list, will use the first matching coordinate in the list.
         chunking(dict): Specifies chunking if that coordinate exists. If coordinate does not exist
             the chunking specified will be dropped.
-        chunk_modifiers(dict): Specifies chunking modifiers based on the passed cached arguments,
+        chunk_by_arg(dict): Specifies chunking modifiers based on the passed cached arguments,
             e.g. grid resolution.  For example:
-            chunk_modifiers={
+            chunk_by_arg={
                 'grid': {
                     'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                     'global1_5': {"lat": 121, "lon": 240, 'time': 1000}
@@ -306,7 +306,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_modif
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
-            nonlocal data_type, cache_args, timeseries, chunking, chunk_modifiers, \
+            nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
                 auto_rechunk, cache, cache_disable_if, backend
 
             # Calculate the appropriate cache key
@@ -599,7 +599,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_modif
                                     # If we aren't doing auto chunking delete the encoding chunks
                                     ds = drop_encoded_chunks(ds)
 
-                                    chunking = merge_chunk_by_arg(chunking, chunk_modifiers, cache_arg_values)
+                                    chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
                                     chunking = prune_chunking_dimensions(ds, chunking)
 
                                     ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')
