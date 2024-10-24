@@ -25,9 +25,9 @@ end_year = "2022"
 # define all the variables to run over
 forecasts = ["salient", "ecmwf_ifs_er"]
 truths = ["era5"]
-baselines = [None, "ecmwf_ifs_er", "climatology_rolling", "climatology_2015"]
+#baselines = [None, "ecmwf_ifs_er", "climatology_rolling", "climatology_2015"]
 #baselines = [None, "ecmwf_er", "climatology_rolling", "climatology_2015"]
-#baselines = ["ecmwf_er", "climatology_2015"]
+baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015"]
 leads = ["week1", "week2", "week3", "week4", "week5"]
 metrics = ["mae", "crps"]
 variables = ["precip", "tmp2m"]
@@ -55,4 +55,5 @@ grids = ["global1_5"]
 
 combos = itertools.product(metrics, variables, grids, baselines)
 for metric, variable, grid, baseline in combos:
-    summary_metrics_table("2016-01-01", "2023-01-01", variable, "era5", metric, baseline=baseline, grid=grid, region="africa", remote=True, force_overwrite=True, backend='postgres', recompute=True)
+    summary_metrics_table("2016-01-01", "2023-01-01", variable, "era5", metric, baseline=baseline, grid=grid, region="africa",
+                          remote=True, force_overwrite=True, backend='postgres', remote_config=['big_scheduler','large_cluster'])

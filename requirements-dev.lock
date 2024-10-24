@@ -131,7 +131,7 @@ cligj==0.7.2
 cloudpickle==3.1.0
     # via dask
     # via distributed
-coiled==1.55.0
+coiled==1.57.0
     # via sheerwater-benchmarking
 comm==0.2.2
     # via ipykernel
