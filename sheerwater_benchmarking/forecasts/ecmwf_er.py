@@ -376,7 +376,7 @@ def ecmwf_averaged_iri(start_time, end_time, variable, forecast_type, grid="glob
            chunking={"lat": 121, "lon": 240, "lead_time": 46,
                      "start_date": 30,
                      "model_issuance_date": 30, "start_year": 1},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
                },
@@ -402,7 +402,7 @@ def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='g
            chunking={"lat": 121, "lon": 240, "lead_time": 46,
                      "start_date": 30,
                      "model_issuance_date": 30, "start_year": 1},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
                },
@@ -539,7 +539,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
                      "start_date": 30,
                      "model_issuance_date": 30, "start_year": 1,
                      "member": 1},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
                },
@@ -635,7 +635,7 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
            timeseries=['model_issuance_date'],
            cache=True,
            chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 30, "model_issuance_date": 30},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
                },
@@ -691,7 +691,7 @@ def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, g
            timeseries=['model_issuance_date'],
            cache=True,
            chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 30, "model_issuance_date": 30},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
                },
@@ -719,7 +719,7 @@ def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_
            timeseries=['start_date'],
            cache=True,
            chunking={"lat": 121, "lon": 240, "lead_time": 40, "start_date": 30},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'start_date': 1}
                },

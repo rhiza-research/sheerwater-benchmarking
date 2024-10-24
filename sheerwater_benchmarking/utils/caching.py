@@ -35,7 +35,7 @@ def get_cache_args(kwargs, cache_kwargs):
     return cache_args
 
 
-def merge_chunking_modifiers(chunking, chunk_modifiers, kwargs):
+def merge_chunk_by_arg(chunking, chunk_modifiers, kwargs):
     """Merge chunking and chunking modifiers into a single chunking dict.
 
     Args:
@@ -599,7 +599,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_modif
                                     # If we aren't doing auto chunking delete the encoding chunks
                                     ds = drop_encoded_chunks(ds)
 
-                                    chunking = merge_chunking_modifiers(chunking, chunk_modifiers, cache_arg_values)
+                                    chunking = merge_chunk_by_arg(chunking, chunk_modifiers, cache_arg_values)
                                     chunking = prune_chunking_dimensions(ds, chunking)
 
                                     ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')

@@ -104,7 +104,7 @@ def _metric(start_time, end_time, variable, lead, forecast, truth,
 @cacheable(data_type='array',
            cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_modifiers={
+           chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }
