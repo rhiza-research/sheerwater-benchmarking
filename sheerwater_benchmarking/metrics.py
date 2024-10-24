@@ -37,8 +37,8 @@ def get_metric_fn(prob_type, metric, spatial=True):
         'crps-q': ('weatherbench2.metrics', 'QuantileCRPS', {'quantile_dim': 'member'}),
         'spatial-crps': ('xskillscore', 'crps_ensemble', {'dim': 'time'}),
         'spatial-crps-q': ('weatherbench2.metrics', 'SpatialQuantileCRPS', {'quantile_dim': 'member'}),
-        'mae': ('xskillscore', 'mae', {}),
-        'spatial-mae': ('xskillscore', 'mae', {'dim': 'time'}),
+        'mae': ('weatherbench2.metrics', 'MAE', {}),
+        'spatial-mae': ('weatherbench2.metrics', 'MAE', {}),
     }
 
     if spatial:
