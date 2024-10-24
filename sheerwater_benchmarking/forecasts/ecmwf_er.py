@@ -11,6 +11,7 @@ import requests
 import ssl
 from urllib3 import poolmanager
 import time
+import dask
 
 from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, ecmwf_secret,
@@ -232,8 +233,7 @@ def single_iri_ecmwf_dense(time, variable, forecast_type,
 
     Interface is the same as single_iri_ecmwf.
     """
-    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose,
-                          retry_null_cache=True)
+    ds = single_iri_ecmwf(time, variable, forecast_type, run_type, grid, verbose)
 
     if ds is None:
         return None
@@ -279,13 +279,10 @@ def iri_ecmwf(start_time, end_time, variable, forecast_type,
     fn = single_iri_ecmwf if forecast_type == "forecast" else single_iri_ecmwf_dense
     datasets = []
     for date in target_dates:
-        # ds = dask.delayed(fn)(
-        #     date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
-        ds = fn(
-            date, variable, forecast_type, run_type, grid, verbose,
-            filepath_only=True, retry_null_cache=True)
+        ds = dask.delayed(fn)(
+            date, variable, forecast_type, run_type, grid, verbose, filepath_only=True)
         datasets.append(ds)
-    # datasets = dask.compute(*datasets)
+    datasets = dask.compute(*datasets)
     data = [d for d in datasets if d is not None]
     if len(data) == 0:
         return None
