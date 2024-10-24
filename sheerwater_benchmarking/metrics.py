@@ -81,12 +81,9 @@ def _metric(start_time, end_time, variable, lead, forecast, truth,
 
     metric_fn, metric_kwargs, metric_lib = get_metric_fn(enhanced_prob_type, metric, spatial=spatial)
     if metric_lib == 'xskillscore':
-        if prob_type == 'probabilistic':
-            fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
-            m_ds = metric_fn(observations=obs, forecasts=fcst, **metric_kwargs)
-        else:
-            fcst = fcst.chunk(time=-1, lat=100, lon=100)
-            m_ds = metric_fn(a=obs, b=fcst, **metric_kwargs)
+        assert prob_type == 'probabilistic'
+        fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
+        m_ds = metric_fn(observations=obs, forecasts=fcst, **metric_kwargs)
     else:
         m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, skipna=True)
 
