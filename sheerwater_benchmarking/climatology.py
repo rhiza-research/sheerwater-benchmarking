@@ -183,39 +183,4 @@ def climatology_rolling(start_time, end_time, variable, clim_years=30,
     return ds
 
 
-# @dask_remote
-# @cacheable(data_type='array',
-#            timeseries='forecast_date',
-#            cache_args=['variable', 'first_year', 'last_year', 'grid'],
-#            chunking={"lat": 721, "lon": 1440, "time": 30},
-#            cache=True)
-# def climatology_trend(variable, first_year, last_year, grid='global1_5'):
-#     """Compute the trend of the climatology of the ERA5 data. Years are inclusive."""
-#     #  Get reanalysis data for the appropriate look back period
-#     # We need data from clim_years before the start_time until 1 year before the end_time
-#     # as this climatology excludes the most recent year for use in operational forecasting
-#     new_start = (dateparser.parse(start_time) - relativedelta(years=clim_years)).strftime("%Y-%m-%d")
-#     new_end = (dateparser.parse(end_time) - relativedelta(years=1)).strftime("%Y-%m-%d")
-
-#     # Get ERA5 data, and ignore cache validation if start_time is earlier than the cache
-#     ds = era5_daily(new_start, new_end, variable=variable, grid=grid)
-#     ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
-
-#     def doy_rolling(sub_ds, years):
-#         return sub_ds.rolling(time=years, min_periods=years, center=False).mean()
-
-#     # Rechunk the data to have a single time chunk for efficient rolling
-#     ds = ds.chunk(time=1)
-#     ds = ds.groupby('dayofyear').map(doy_rolling, years=clim_years)
-#     ds = ds.dropna('time', how='all')
-
-#     # Ground truth for the current time is not available at forecast time,
-#     # so we must shift the time index forward one year to provide climatology that
-#     # goes up until the year ~before~ the forecast date value, e.g,.
-#     # the climatology for forecast date 2016-01-01 is computed up until 2015-01-01.
-#     ds = ds.assign_coords(time=ds['time'].to_index() + pd.DateOffset(years=1))
-#     ds = ds.rename({'time': 'forecast_date'})
-#     return ds
-
-
 __all__ = ['climatology', 'climatology_standard_30yr', 'climatology_rolling', 'climatology_agg']
