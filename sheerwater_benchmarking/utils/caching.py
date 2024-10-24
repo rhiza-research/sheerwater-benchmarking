@@ -56,7 +56,6 @@ def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
             for dim in chunk_dict:
                 chunking[dim] = chunk_dict[dim]
 
-    import pdb; pdb.set_trace()
     return chunking
 
 
