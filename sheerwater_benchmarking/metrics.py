@@ -58,10 +58,12 @@ def get_metric_fn(prob_type, metric, spatial=True):
     except (ImportError, AttributeError):
         raise ImportError(f"Did not find implementation for metric {metric}")
 
-
 @dask_remote
-def _metric(start_time, end_time, variable, lead, forecast, truth,
-            metric, baseline=None, grid="global1_5", mask='lsm', region='africa', spatial=True):
+@cacheable(data_type='basic',
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth', 'metric', 'grid', 'mask', 'region'],
+           cache=True)
+def single_metric(start_time, end_time, variable, lead, forecast, truth,
+                  metric, grid="global1_5", mask='lsm', region='africa'):
     """Compute a metric for a forecast at a specific lead."""
     if metric == "crps":
         prob_type = "probabilistic"
@@ -82,7 +84,7 @@ def _metric(start_time, end_time, variable, lead, forecast, truth,
     # Check to see the prob type attribute
     enhanced_prob_type = fcst.attrs['prob_type']
 
-    metric_fn, metric_kwargs, metric_lib = get_metric_fn(enhanced_prob_type, metric, spatial=spatial)
+    metric_fn, metric_kwargs, metric_lib = get_metric_fn(enhanced_prob_type, metric, spatial=False)
     if metric_lib == 'xskillscore':
         assert prob_type == 'probabilistic'
         fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
@@ -90,18 +92,65 @@ def _metric(start_time, end_time, variable, lead, forecast, truth,
     else:
         m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, skipna=True)
 
+    return m_ds[variable].values.max()
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth', 'metric', 'grid', 'mask', 'region'],
+           cache=True)
+def single_spatial_metric(start_time, end_time, variable, lead, forecast, truth,
+                  metric, grid="global1_5", mask='lsm', region='africa'):
+    """Compute a metric for a forecast at a specific lead."""
+    if metric == "crps":
+        prob_type = "probabilistic"
+    elif metric == "mae":
+        prob_type = "deterministic"
+    else:
+        raise ValueError("Unsupported metric")
+
+    # Get the forecast
+    fcst_fn = get_datasource_fn(forecast)
+    fcst = fcst_fn(start_time, end_time, variable, lead=lead,
+                   prob_type=prob_type, grid=grid, mask=mask, region=region)
+
+    # Get the truth to compare against
+    truth_fn = get_datasource_fn(truth)
+    obs = truth_fn(start_time, end_time, variable, lead=lead, grid=grid, mask=mask, region=region)
+
+    # Check to see the prob type attribute
+    enhanced_prob_type = fcst.attrs['prob_type']
+
+    metric_fn, metric_kwargs, metric_lib = get_metric_fn(enhanced_prob_type, metric, spatial=True)
+    if metric_lib == 'xskillscore':
+        assert prob_type == 'probabilistic'
+        fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
+        m_ds = metric_fn(observations=obs, forecasts=fcst, **metric_kwargs)
+    else:
+        m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, skipna=True)
+
+    return m_ds
+
+
+@dask_remote
+def _metric(start_time, end_time, variable, lead, forecast, truth,
+            metric, baseline=None, grid="global1_5", mask='lsm', region='africa', spatial=True):
+    """Compute a metric for a forecast at a specific lead."""
+
+    if spatial:
+        m_ds = single_spatial_metric(start_time, end_time, variable, lead, forecast, truth, metric, grid=grid, mask=mask, region=region)
+    else:
+        print("Calling metric!")
+        m_ds = single_metric(start_time, end_time, variable, lead, forecast, truth, metric, grid=grid, mask=mask, region=region)
+        print("Returned metric!")
+
     # Get the baseline if it exists and run its metric
     if baseline:
-        baseline_fn = get_datasource_fn(baseline)
-        baseline_output = baseline_fn(start_time, end_time, variable, lead=lead, prob_type=prob_type,
-                                      grid=grid, mask=mask, region=region)
+        if spatial:
+            base_ds = single_spatial_metric(start_time, end_time, variable, lead, baseline, truth, metric, grid=grid, mask=mask, region=region)
+        else:
+            base_ds = single_metric(start_time, end_time, variable, lead, baseline, truth, metric, grid=grid, mask=mask, region=region)
 
-        # Check to see the prob type attribute
-        enhanced_prob_type = baseline_output.attrs['prob_type']
-
-        metric_fn, metric_kwargs = get_metric_fn(enhanced_prob_type, metric, spatial=spatial)
-        base_ds = metric_fn(**metric_kwargs).compute(forecast=baseline_output, truth=obs, skipna=True)
-
+        print("Got metrics. Computing skill")
         # Compute the skill
         m_ds = (1 - (m_ds/base_ds))
 
@@ -133,7 +182,7 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
 
 
 @dask_remote
-@cacheable(data_type='tabular',
+@cacheable(data_type='basic',
            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
            cache=False)
 def summary_metric(start_time, end_time, variable, lead, forecast, truth,
@@ -145,7 +194,7 @@ def summary_metric(start_time, end_time, variable, lead, forecast, truth,
     except NotImplementedError:
         return None
 
-    return m_ds[variable].values.max()
+    return m_ds
 
 
 @dask_remote
@@ -162,19 +211,23 @@ def summary_metrics_table(start_time, end_time, variable, truth, metric, baselin
     results = {forecast:[] for forecast in forecasts}
 
     combos = itertools.product(forecasts, leads)
-    for forecast, lead in combos:
-        # Try running as dask delayed
-        print(f"Running for {forecast} and {lead} with variable {variable}, metric {metric}, grid {grid}, and region {region}")
-        # First get the value without the baseline
-        val = dask.delayed(summary_metric)(start_time, end_time, variable, lead, forecast, truth, metric, None, grid, mask, region)
-        results[forecast].append(val)
+    for forecast in forecasts:
+        lead_vals = []
+        for lead in leads:
+            # Try running as dask delayed
+            print(f"Running for {forecast} and {lead} with variable {variable}, metric {metric}, grid {grid}, and region {region}")
+            # First get the value without the baseline
+            val = dask.delayed(summary_metric)(start_time, end_time, variable, lead, forecast, truth, metric, None, grid, mask, region)
+            lead_vals.append(val)
 
-        # IF there is a baseline get the skill
-        if baseline:
-            val = dask.delayed(summary_metric)(start_time, end_time, variable, lead, forecast, truth, metric, baseline, grid, mask, region)
-            results[forecast].append(val)
+            # IF there is a baseline get the skill
+            if baseline:
+                val = dask.delayed(summary_metric)(start_time, end_time, variable, lead, forecast, truth, metric, baseline, grid, mask, region)
+                lead_vals.append(val)
 
-    results = dask.compute(results)[0]
+        l = dask.compute(*lead_vals)
+        print(l)
+        results[forecast] = l
 
     # Turn the dict into a pandas dataframe with appropriate columns
     leads_skill = [lead + '_skill' for lead in leads]
