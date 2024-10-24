@@ -41,10 +41,10 @@ def salient_blend_raw(start_time, end_time, variable,  # noqa: ARG001
 @cacheable(data_type='array',
            timeseries='forecast_date',
            cache_args=['variable', 'timescale', 'grid'],
-           chunking={"lat": 300, "lon": 400, "forecast_date": 300, 'lead': 1, 'quantiles': 1},
+           chunking={"lat": 121, "lon": 240, "forecast_date": 10, 'lead': 1, 'quantiles': 100},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'start_date': 1}
+                   'global0_25': {"lat": 721, "lon": 1440, 'quantiles': 3}
                },
            },
            auto_rechunk=False)
@@ -64,7 +64,7 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def salient(start_time, end_time, variable, lead, prob_type='deterministic',
-            grid='global0_25', mask='lsm', region='africa'):
+            grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for Salient."""
     lead_params = {
         "week1": ("sub-seasonal", 1),
