@@ -68,11 +68,15 @@ def perpp(start_time, end_time, variable, lead, prob_type='deterministic',
     lead_params = {
         "weeks56": "weeks56",
     }
-    lead = lead_params.get(lead, None)
+    lead_id = lead_params.get(lead, None)
     if lead is None:
         raise NotImplementedError(f"Lead {lead} not implemented for perpp.")
+    
+    # Temp: change when we have all variables
+    if variable != 'tmp2m':
+        raise NotImplementedError(f"Variable {variable} not implemented for perpp.")
 
-    ds = perpp_ecmwf(start_time, end_time, variable, lead=lead, grid=grid)
+    ds = perpp_ecmwf(start_time, end_time, variable, lead=lead_id, grid=grid)
     if prob_type != 'deterministic':
         raise NotImplementedError(f"Probabilistic forecast not implemented for perpp.")
     ds = ds.assign_attrs(prob_type="deterministic")
