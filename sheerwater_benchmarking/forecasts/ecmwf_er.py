@@ -577,18 +577,6 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
 
     ds = ds.drop('valid_time')
 
-<<<<<<< HEAD
-=======
-    # Re-chunk the data
-    #chunks_dict = {"lat": 120, "lon": 240, "lead_time": 1}
-    #if forecast_type == "reforecast":
-    #    chunks_dict["start_year"] = 1
-    #    chunks_dict["model_issuance_date"] = 29
-    #else:
-    #    chunks_dict["start_date"] = 29
-    #ds = ds.chunk(chunks_dict)
-
->>>>>>> 258d1dc (add ecmwf_er and debiased and change metrics to delayed)
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
