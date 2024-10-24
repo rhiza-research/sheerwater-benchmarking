@@ -50,10 +50,13 @@ def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
         if k not in kwargs:
             raise ValueError(f"Chunking modifier {k} not found in kwargs.")
 
-        chunk_dict = chunk_by_arg[k][kwargs[k]]
-        for dim in chunk_dict:
-            chunking[dim] = chunk_dict[dim]
+        if kwargs[k] in chunk_by_arg[k]:
+            # If argument value in chunk_by_arg then merge the chunking
+            chunk_dict = chunk_by_arg[k][kwargs[k]]
+            for dim in chunk_dict:
+                chunking[dim] = chunk_dict[dim]
 
+    import pdb; pdb.set_trace()
     return chunking
 
 

@@ -42,7 +42,6 @@ def salient_blend_raw(start_time, end_time, variable,  # noqa: ARG001
            timeseries='forecast_date',
            cache_args=['variable', 'timescale', 'grid'],
            chunking={"lat": 300, "lon": 400, "forecast_date": 300, 'lead': 1, 'quantiles': 1},
-           chunking={"lat": 121, "lon": 240, "lead": 40, "start_date": 30},
            chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'start_date': 1}
