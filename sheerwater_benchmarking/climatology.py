@@ -32,7 +32,12 @@ def climatology_raw(variable, first_year, last_year, grid='global1_5'):
 @cacheable(data_type='array',
            cache=True,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
-           chunking={"lat": 721, "lon": 1441, "doy": 1, "member": 30},
+           chunking={"lat": 121, "lon": 240, "doy": 30, "member": 30},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'doy': 1}
+               }
+           },
            auto_rechunk=False)
 def climatology_agg(variable, first_year=1986, last_year=2015,
                     prob_type='deterministic', agg=14, grid="global1_5"):
@@ -71,7 +76,7 @@ def climatology_agg(variable, first_year=1986, last_year=2015,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
-           chunking={"lat": 121, "lon": 240, "dayofyear": 366},
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
            cache=True)
 def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mask='lsm', region='global'):
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
@@ -88,7 +93,7 @@ def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mas
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'grid', 'mask', 'region'],
-           chunking={"lat": 121, "lon": 240, "dayofyear": 366},
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
            cache=False,
            auto_rechunk=False)
 def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='global'):
@@ -101,7 +106,12 @@ def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='gl
 @cacheable(data_type='array',
            timeseries='forecast_date',
            cache_args=['variable', 'clim_years', 'grid'],
-           chunking={"lat": 721, "lon": 1440, "time": 30},
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               }
+           },
            cache=True)
 def climatology_rolling_raw(start_time, end_time, variable, clim_years=30, grid="global1_5"):
     """Compute a rolling {clim_years}-yr climatology of the ERA5 data.
@@ -144,7 +154,12 @@ def climatology_rolling_raw(start_time, end_time, variable, clim_years=30, grid=
 @cacheable(data_type='array',
            timeseries='forecast_date',
            cache_args=['variable', 'clim_years', 'grid', 'mask', 'region'],
-           chunking={"lat": 721, "lon": 1440, "time": 30},
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               }
+           },
            cache=False)
 def climatology_rolling(start_time, end_time, variable, clim_years=30,
                         grid="global1_5", mask='lsm', region='global'):

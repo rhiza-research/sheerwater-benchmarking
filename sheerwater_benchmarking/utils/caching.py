@@ -35,6 +35,29 @@ def get_cache_args(kwargs, cache_kwargs):
     return cache_args
 
 
+def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
+    """Merge chunking and chunking modifiers into a single chunking dict.
+
+    Args:
+        chunking (dict): The chunking to merge.
+        chunk_by_arg (dict): The chunking modifiers to merge.
+        kwargs (dict): The kwargs to check for chunking modifiers.
+    """
+    if chunk_by_arg is None:
+        return chunking
+
+    for k in chunk_by_arg:
+        if k not in kwargs:
+            raise ValueError(f"Chunking modifier {k} not found in kwargs.")
+
+        if kwargs[k] in chunk_by_arg[k]:
+            # If argument value in chunk_by_arg then merge the chunking
+            chunk_dict = chunk_by_arg[k][kwargs[k]]
+            chunking.update(chunk_dict)
+
+    return chunking
+
+
 def prune_chunking_dimensions(ds, chunking):
     """Prune the chunking dimensions to only those that exist in the dataset.
 
@@ -233,7 +256,7 @@ def cache_exists(backend, cache_path):
         return check_exists_postgres(cache_path)
 
 
-def cacheable(data_type, cache_args, timeseries=None, chunking=None,
+def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, cache_disable_if=None, backend=None):
     """Decorator for caching function results.
 
@@ -244,6 +267,17 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
             time series, set to None (default). If a list, will use the first matching coordinate in the list.
         chunking(dict): Specifies chunking if that coordinate exists. If coordinate does not exist
             the chunking specified will be dropped.
+        chunk_by_arg(dict): Specifies chunking modifiers based on the passed cached arguments,
+            e.g. grid resolution.  For example:
+            chunk_by_arg={
+                'grid': {
+                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+                    'global1_5': {"lat": 121, "lon": 240, 'time': 1000}
+                }
+            }
+            will modify the chunking dict values for lat, lon, and time, depending
+            on the value of the 'grid' argument. If multiple cache arguments specify
+            modifiers for the same chunking dimension, the last one specified will prevail.
         auto_rechunk(bool): If True will aggressively rechunk a cache on load.
         cache(bool): Whether to cache the result.
         validate_cache_timeseries(bool): Whether to validate the cache timeseries against the
@@ -273,8 +307,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
-            nonlocal data_type, cache_args, timeseries, chunking, auto_rechunk, \
-                cache, cache_disable_if, backend
+            nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
+                auto_rechunk, cache, cache_disable_if, backend
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, validate_cache_timeseries, \
@@ -566,6 +600,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None,
                                     # If we aren't doing auto chunking delete the encoding chunks
                                     ds = drop_encoded_chunks(ds)
 
+                                    chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
                                     chunking = prune_chunking_dimensions(ds, chunking)
 
                                     ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')

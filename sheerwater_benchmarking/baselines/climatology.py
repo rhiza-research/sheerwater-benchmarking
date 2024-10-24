@@ -16,7 +16,12 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, roll_and_agg,
            timeseries='time',
            cache=True,
            cache_args=['variable', 'clim_years', 'agg', 'grid'],
-           chunking={"lat": 721, "lon": 1441, "time": 30},
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               }
+           },
            auto_rechunk=False)
 def climatology_rolling_agg(start_time, end_time, variable, clim_years=30,
                             agg=14, grid="global1_5"):
@@ -48,7 +53,12 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30,
            timeseries='time',
            cache=False,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
-           chunking={"lat": 721, "lon": 1441, "time": 30})
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               }
+           })
 def climatology_timeseries(start_time, end_time, variable, first_year=1986, last_year=2015,
                            prob_type='deterministic', agg=14, grid="global1_5"):
     """Generates a forecast timeseries of climatology.
