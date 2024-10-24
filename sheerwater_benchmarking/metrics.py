@@ -33,12 +33,12 @@ def get_metric_fn(prob_type, metric, spatial=True):
         raise ValueError("Cannot run MAE on probabilistic forecasts.")
 
     wb_metrics = {
-        'crps': ('CRPS', {'ensemble_dim': 'member'}),
-        'crps-q': ('QuantileCRPS', {'quantile_dim': 'member'}),
-        'spatial-crps': ('SpatialCRPS', {'ensemble_dim': 'member'}),
-        'spatial-crps-q': ('SpatialQuantileCRPS', {'quantile_dim': 'member'}),
-        'mae': ('MAE', {}),
-        'spatial-mae': ('SpatialMAE', {})
+        'crps': ('xskillscore', 'crps_ensemble', {}),
+        'crps-q': ('weatherbench2.metrics', 'QuantileCRPS', {'quantile_dim': 'member'}),
+        'spatial-crps': ('xskillscore', 'crps_ensemble', {'dim': 'time'}),
+        'spatial-crps-q': ('weatherbench2.metrics', 'SpatialQuantileCRPS', {'quantile_dim': 'member'}),
+        'mae': ('weatherbench2.metrics', 'MAE', {}),
+        'spatial-mae': ('weatherbench2.metrics', 'SpatialMAE', {}),
     }
 
     if spatial:
@@ -48,10 +48,10 @@ def get_metric_fn(prob_type, metric, spatial=True):
         metric = metric + '-q'
 
     try:
-        metric_mod, metric_kwargs = wb_metrics[metric]
-        mod = import_module("weatherbench2.metrics")
+        metric_lib, metric_mod, metric_kwargs = wb_metrics[metric]
+        mod = import_module(metric_lib)
         metric_fn = getattr(mod, metric_mod)
-        return metric_fn, metric_kwargs
+        return metric_fn, metric_kwargs, metric_lib
     except (ImportError, AttributeError):
         raise ImportError(f"Did not find implementation for metric {metric}")
 
@@ -79,8 +79,13 @@ def _metric(start_time, end_time, variable, lead, forecast, truth,
     # Check to see the prob type attribute
     enhanced_prob_type = fcst.attrs['prob_type']
 
-    metric_fn, metric_kwargs = get_metric_fn(enhanced_prob_type, metric, spatial=spatial)
-    m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, skipna=True)
+    metric_fn, metric_kwargs, metric_lib = get_metric_fn(enhanced_prob_type, metric, spatial=spatial)
+    if metric_lib == 'xskillscore':
+        assert prob_type == 'probabilistic'
+        fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
+        m_ds = metric_fn(observations=obs, forecasts=fcst, **metric_kwargs)
+    else:
+        m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, skipna=True)
 
     # Get the baseline if it exists and run its metric
     if baseline:
@@ -118,7 +123,8 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Convert to standard naming
     m_ds = m_ds.rename_vars({variable: f'{variable}_{metric}'})
-    m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+    if 'latitude' in m_ds.dims:
+        m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
     return m_ds
 

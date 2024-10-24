@@ -21,8 +21,9 @@ if __name__ == "__main__":
     regions = ['global']
     masks = ["lsm"]
 
-    start_time = "2015-05-14"
+    start_time = "2016-05-14"
     end_time = "2023-06-30"
+    # end_time = "2016-05-19"
 
     UPDATE_IRI = False
     UPDATE_IRI_AVERAGED = False
