@@ -549,7 +549,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
                                   'model_issuance_date': 1}
                },
            },
-           auto_rechunk=True)
+           auto_rechunk=False)
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast and reforecast data from the WeatherBench2 dataset.
@@ -638,12 +638,12 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'run_type', 'time_group', 'lead', 'grid'],
+           cache_args=['variable', 'lead', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
            chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 20, "model_issuance_date": 50})
-def ifs_er_reforecast_lead_bias(start_time, end_time, variable, run_type='average',
-                                time_group='weekly', lead=0, grid="global1_5"):
+def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type='average',
+                                time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead."""
     # Fetch the reforecast data; get's the past 20 years associated with each start date
     ds_deb = ifs_extended_range(start_time, end_time, variable, forecast_type="reforecast",
@@ -705,9 +705,9 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', t
     n_leads = len(ds_deb.lead_time)
 
     # Accumulate all the per lead biases
-    biases = [ifs_er_reforecast_lead_bias(start_time, end_time, variable,
+    biases = [ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=i,
                                           run_type=run_type, time_group=time_group,
-                                          lead=i, grid=grid)
+                                          grid=grid)
               for i in range(n_leads)]
     # Concatenate leads and unstack
     ds_biases = xr.concat(biases, dim='lead_time')
@@ -728,9 +728,9 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', t
 def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6,
                                 run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts."""
-    # Get bias data from reforecast
+    # Get bias data from reforecast; for now, debias with deterministic bias
     ds_b = ifs_er_reforecast_bias(start_time, end_time, variable,
-                                  run_type=run_type, time_group=time_group, grid=grid)
+                                  run_type='average', time_group=time_group, grid=grid)
 
     # Get forecast data
     ds_f = ifs_extended_range(start_time, end_time, variable, forecast_type='forecast',
@@ -745,15 +745,10 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
             raise ValueError('No debiasing data found.')
 
         nbhd_df = ds_b.isel(model_issuance_date=nbhd).mean(dim='model_issuance_date')
-        dsp = ds_sub - nbhd_df
+        dsp = ds_sub + nbhd_df
         return dsp
 
-    # biases = []
-    # for date in ds_f.start_date.values:
-        # biases.append(bias_correct(ds_f.sel(start_date=date), margin_in_days=margin_in_days))
-    # ds_fp = xr.concat(biases, dim='start_date')
     ds = ds_f.groupby('start_date').map(bias_correct, margin_in_days=margin_in_days)
-
     # Should not be below zero after bias correction
     if variable == 'precip':
         ds = np.maximum(ds, 0)
