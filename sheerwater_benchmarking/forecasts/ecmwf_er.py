@@ -636,7 +636,8 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
            timeseries=['model_issuance_date'],
            cache=True,
            chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 20, "model_issuance_date": 50})
-def ifs_er_reforecast_lead_bias(start_time, end_time, variable, run_type='average', time_group='weekly', lead=0, grid="global1_5"):
+def ifs_er_reforecast_lead_bias(start_time, end_time, variable, run_type='average',
+                                time_group='weekly', lead=0, grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead."""
     # Fetch the reforecast data; get's the past 20 years associated with each start date
     ds_deb = ifs_extended_range(start_time, end_time, variable, forecast_type="reforecast",
@@ -662,7 +663,7 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, run_type='averag
     ds_truth = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid)
 
     def get_bias(ds_sub):
-        """Get the 20-year estimated bias of the reforecast data"""
+        """Get the 20-year estimated bias of the reforecast data."""
         # The the corresponding forecast dates for the reforecast data
         dates = [np.datetime64((ds_sub['model_issuance_date'].values[0].astype('M8[D]').astype('O')
                                 + relativedelta(years=x)))
@@ -720,9 +721,7 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', t
            })
 def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6,
                                 run_type='average', time_group='weekly', grid="global1_5"):
-    """Computes the debiased ECMWF forecasts.
-
-    """
+    """Computes the debiased ECMWF forecasts."""
     # Get bias data from reforecast
     ds_b = ifs_er_reforecast_bias(start_time, end_time, variable,
                                   run_type=run_type, time_group=time_group, grid=grid)
