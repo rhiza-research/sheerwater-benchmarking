@@ -521,8 +521,11 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
     if forecast_type == 'reforecast':
         ds = ds.rename({'hindcast_year': 'start_year'})
         ds = ds.rename({'forecast_time': 'model_issuance_date'})
+        ds = ds.drop('time')
     else:
         ds = ds.rename({'time': 'start_date'})
+
+    ds = ds.drop('valid_time')
 
     # If a specific run, select
     if isinstance(run_type, int):
@@ -541,12 +544,12 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
                      "member": 1},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
+                   'global0_25': {"lat": 721, "lon": 1440, 'start_date': 1}
                },
            })
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
-    """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
+    """Fetches IFS extended range forecast and reforecast data from the WeatherBench2 dataset.
 
     Args:
         start_time (str): The start date to fetch data for.
@@ -574,8 +577,6 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
         ds = np.maximum(ds, 0)
-
-    ds = ds.drop('valid_time')
 
     if grid == 'global1_5':
         return ds
@@ -631,83 +632,76 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'agg', 'grid', 'lead'],
+           cache_args=['variable', 'run_type', 'time_group', 'lead', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 30, "model_issuance_date": 30},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
-               },
-           })
-def ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=14, lead=0, grid="global1_5"):
-    """Computes the bias of ECMWF reforecasts for a specific lead.
-
-    TODO: This should be implemented on non-aggregated data.
-    """
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 20, "model_issuance_date": 50})
+def ifs_er_reforecast_lead_bias(start_time, end_time, variable, run_type='average', time_group='weekly', lead=0, grid="global1_5"):
+    """Computes the bias of ECMWF reforecasts for a specific lead."""
     # Fetch the reforecast data; get's the past 20 years associated with each start date
-    ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
+    ds_deb = ifs_extended_range(start_time, end_time, variable, forecast_type="reforecast",
+                                run_type=run_type, time_group=time_group, grid=grid)
+
+    # Get the appropriate lead
     n_leads = len(ds_deb.lead_time)
     if lead >= n_leads:
         # Lead does not exist
         return None
     ds_deb = ds_deb.isel(lead_time=lead)
 
-    # We need ERA5 data from the start_time to 20 years before the start_time
-    new_start = (dateparser.parse(start_time) - relativedelta(years=21)).strftime("%Y-%m-%d")
+    # We need ERA5 data from the start_time to 20 years before the first date
+    first_date = ds_deb.model_issuance_date.min().values
+    last_date = ds_deb.model_issuance_date.max().values
+    new_start = (first_date.astype('M8[D]').astype('O') - relativedelta(years=20)).strftime("%Y-%m-%d")
     # We need ERA5 data from the end time to the end time plus last lead in days
-    new_end = (dateparser.parse(end_time) + relativedelta(days=n_leads)).strftime("%Y-%m-%d")
+    new_end = (
+        (last_date + ds_deb.lead_time.values).astype('M8[D]').astype('O') - relativedelta(years=1)).strftime("%Y-%m-%d")
 
     # Get the pre-aggregated ERA5 data
-    ds_truth = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid).chunk(time=1)
+    agg = {'daily': 1, 'weekly': 7, 'biweekly': 14}[time_group]
+    ds_truth = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid)
 
-    # Stack the index of the reforecast data into a multi-index
-    ds_stacked = ds_deb.stack(time=["start_year", "model_issuance_date"]).dropna(dim="time")
-    ds_stacked = ds_stacked.chunk(lat=121, lon=240, time=30)
+    def get_bias(ds_sub):
+        """Get the 20-year estimated bias of the reforecast data"""
+        # The the corresponding forecast dates for the reforecast data
+        dates = [np.datetime64((ds_sub['model_issuance_date'].values[0].astype('M8[D]').astype('O')
+                                + relativedelta(years=x)))
+                 for x in ds_sub.start_year]
 
-    # Get the dates associated with each combination of start year and model issuance date
-    dates = [np.datetime64(dateparser.parse(
-        f"{int(x['start_year'])}-{int(x['model_issuance_date'].dt.month)}-{int(x['model_issuance_date'].dt.day)}"))
-        for x in ds_stacked.time]
-    lead_td = ds_deb.lead_time.values - np.timedelta64(12, 'h')
+        # Adjust each forecast date by the lead time (0, 1, 2, ... days)
+        lead_td = ds_deb.lead_time.values
+        lead_dates = [x + lead_td for x in dates]
 
-    # The lead time is offset by 12 hours; snap to the start of the day
-    # Adjust each forecast date by the lead time (0, 1, 2, ... days)
-    lead_dates = [x + lead_td for x in dates]
+        # Select the subset of the ground truth matching this lead
+        ds_truth_lead = ds_truth.sel(time=lead_dates)
 
-    # Select the subset of the ground truth matching this lead
-    ds_truth_lead = ds_truth.sel(time=lead_dates)
+        # # Assign the time coordinate to match the forecast dataframe for alignment and subtract
+        ds_truth_lead = ds_truth_lead.assign_coords(time=ds_sub.start_year.values).rename(time='start_year')
+        bias = (ds_truth_lead - ds_sub).mean(dim='start_year')
+        return bias
 
-    # Assign the time coordinate to match the forecast dataframe for alignment and subtract
-    bias = ds_truth_lead.assign_coords(time=ds_stacked.time) - ds_stacked
-    bias = bias.unstack().chunk({"lat": 121, "lon": 240, "start_year": 30, "model_issuance_date": 30})
-    bias = bias.sortby("model_issuance_date")
+    bias = ds_deb.groupby('model_issuance_date').map(get_bias)
     return bias
 
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'agg', 'grid'],
+           cache_args=['variable', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 30, "model_issuance_date": 30},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
-               },
-           })
-def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_5"):
-    """Computes the bias of ECMWF reforecasts for a specific lead.
-
-    TODO: this should be implemented on non-aggregated data.
-    """
-    # Fetch the reforecast data; get's the past 20 years associated with each start date
-    ds_deb = ecmwf_rolled(start_time, end_time, variable, forecast_type='reforecast', agg=agg, grid=grid)
-    leads = len(ds_deb.lead_time)
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 20, "model_issuance_date": 50})
+def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', time_group='weekly', grid="global1_5"):
+    """Computes the bias of ECMWF reforecasts for all leads."""
+    # Fetch the reforecast data to calculate how many leads we need
+    ds_deb = ifs_extended_range(start_time, end_time, variable, forecast_type="reforecast",
+                                run_type=run_type, time_group=time_group, grid=grid)
+    n_leads = len(ds_deb.lead_time)
 
     # Accumulate all the per lead biases
-    biases = [ecmwf_reforecast_lead_bias(start_time, end_time, variable, agg=agg, lead=i, grid=grid)
-              for i in range(leads)]
+    biases = [ifs_er_reforecast_lead_bias(start_time, end_time, variable,
+                                          run_type=run_type, time_group=time_group,
+                                          lead=i, grid=grid)
+              for i in range(n_leads)]
     # Concatenate leads and unstack
     ds_biases = xr.concat(biases, dim='lead_time')
     return ds_biases
@@ -715,52 +709,50 @@ def ecmwf_reforecast_bias(start_time, end_time, variable, agg=14, grid="global1_
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'margin_in_days', 'agg', 'grid'],
-           timeseries=['start_date'],
+           cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 40, "start_date": 30},
+           timeseries=['start_date'],
+           chunking={"lat": 121, "lon": 240, "lead_time": 40, 'start_date': 30, "member": 1},
            chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'start_date': 1}
                },
            })
-def ecmwf_debiased(start_time, end_time, variable, margin_in_days=6, agg=14, grid="global1_5"):
+def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6,
+                                run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts.
 
-    TODO: this should be implemented on non-aggregated data.
     """
     # Get bias data from reforecast
-    ds_b = ecmwf_reforecast_bias(start_time, end_time, variable, agg=agg, grid=grid)
+    ds_b = ifs_er_reforecast_bias(start_time, end_time, variable,
+                                  run_type=run_type, time_group=time_group, grid=grid)
 
     # Get forecast data
-    ds_f = ecmwf_rolled(start_time, end_time, variable, forecast_type='forecast', agg=agg, grid=grid)
+    ds_f = ifs_extended_range(start_time, end_time, variable, forecast_type='forecast',
+                              run_type=run_type, time_group=time_group, grid=grid)
 
-    # Get bias grouped by model issuance data
-    ds_biases = ds_b.groupby('model_issuance_date').mean(dim='start_year')
-
-    # Chunk forecast data and mapblocks bias removal
-    ds_f = ds_f.chunk({'lat': 121, 'lon': 240, 'lead_time': 33})
-
-    def bias_correct(ds, margin_in_days=6):
-        date = ds.start_date.values
+    def bias_correct(ds_sub, margin_in_days=6):
+        date = ds_sub.start_date.values
         dt = np.timedelta64(margin_in_days, 'D')
-        nbhd = (ds_biases.model_issuance_date.values >= date - dt) & \
-            (ds_biases.model_issuance_date.values <= date)
+        nbhd = (ds_b.model_issuance_date.values >= date - dt) & \
+            (ds_b.model_issuance_date.values <= date + dt)
         if nbhd.sum() == 0:  # No data to debias
-            return ds
-        nbhd_df = ds_biases.isel(model_issuance_date=nbhd).mean(dim='model_issuance_date')
-        dsp = ds - nbhd_df
+            raise ValueError('No debiasing data found.')
+
+        nbhd_df = ds_b.isel(model_issuance_date=nbhd).mean(dim='model_issuance_date')
+        dsp = ds_sub - nbhd_df
         return dsp
 
-    biases = []
-    for date in ds_f.start_date.values:
-        biases.append(bias_correct(ds_f.sel(start_date=date), margin_in_days=margin_in_days))
-    ds_fp = xr.concat(biases, dim='start_date')
+    # biases = []
+    # for date in ds_f.start_date.values:
+        # biases.append(bias_correct(ds_f.sel(start_date=date), margin_in_days=margin_in_days))
+    # ds_fp = xr.concat(biases, dim='start_date')
+    ds = ds_f.groupby('start_date').map(bias_correct, margin_in_days=margin_in_days)
 
     # Should not be below zero after bias correction
     if variable == 'precip':
-        ds_fp = np.maximum(ds_fp, 0)
-    return ds_fp
+        ds = np.maximum(ds, 0)
+    return ds
 
 
 @dask_remote
@@ -772,31 +764,34 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
                           grid='global1_5', mask='lsm', region="global"):
     """Standard format forecast data for ECMWF forecasts."""
     lead_params = {
-        "week1": (7, 0),
-        "week2": (7, 7),
-        "week3": (7, 14),
-        "week4": (7, 21),
-        "week5": (7, 28),
-        "week6": (7, 35),
-        "weeks12": (14, 0),
-        "weeks23": (14, 7),
-        "weeks34": (14, 14),
-        "weeks45": (14, 21),
-        "weeks56": (14, 28),
+        "week1": ('weekly', 0),
+        "week2": ('weekly', 7),
+        "week3": ('weekly', 14),
+        "week4": ('weekly', 21),
+        "week5": ('weekly', 28),
+        "week6": ('weekly', 35),
+        "weeks12": ('biweekly', 0),
+        "weeks23": ('biweekly', 7),
+        "weeks34": ('biweekly', 14),
+        "weeks45": ('biweekly', 21),
+        "weeks56": ('biweekly', 28),
     }
-    agg, lead_id = lead_params.get(lead, (None, None))
-    if agg is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
+    time_group, lead_id = lead_params.get(lead, (None, None))
+    if time_group is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF debiased forecasts.")
 
-    ds = ecmwf_debiased(start_time, end_time, variable, margin_in_days=6, agg=agg, grid=grid)
+    if prob_type == 'deterministic':
+        ds = ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6,
+                                         run_type='average', time_group=time_group, grid=grid)
+        ds = ds.assign_attrs(prob_type="deterministic")
+    else:  # probabilistic
+        ds = ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6,
+                                         run_type='perturbed', time_group=time_group, grid=grid)
+        ds = ds.assign_attrs(prob_type="ensemble")
 
-    # Leads are 12 hours offset from the forecast date
-    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D')+np.timedelta64(12, 'h'))
-
+    # Get specific lead
+    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D'))
     ds = ds.rename({'start_date': 'time'})
-    ds = ds.assign_attrs(prob_type="deterministic")
-    if prob_type != 'deterministic':
-        raise NotImplementedError("Only deterministic forecasts are available for ECMWF.")
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

@@ -11,19 +11,20 @@ if __name__ == "__main__":
     # vars = ["tmp2m"]
     aggs = [14, 7]
     time_groups = ['weekly', 'biweekly']
-    # grids = ["global1_5"]
-    grids = ["global0_25"]
+    # grids = ["global1_5", "global0_25"]
+    # grids = ["global0_25"]
+    grids = ["global1_5"]
     # grids = ["global0_25", "global1_5"]
-    forecast_type = ["forecast", "reforecast"]
-    # forecast_type = ["reforecast"]
+    # forecast_type = ["forecast", "reforecast"]
+    forecast_type = ["reforecast"]
     # forecast_type = ["forecast"]
     run_types = ["average", "perturbed"]
+    # run_types = ["perturbed"]
     regions = ['global']
     masks = ["lsm"]
 
-    start_time = "2016-05-14"
+    start_time = "2015-05-14"
     end_time = "2023-06-30"
-    # end_time = "2016-05-19"
 
     UPDATE_IRI = False
     UPDATE_IRI_AVERAGED = False
@@ -47,21 +48,31 @@ if __name__ == "__main__":
             if UPDATE_IRI_AVERAGED:
                 ds = ecmwf_averaged_regrid(start_time, end_time, variable=var, forecast_type=ft,
                                            grid=grid,
-                                           #    recompute=True, force_overwrite=True,
+                                           recompute=True, force_overwrite=True,
                                            remote=True,
                                            remote_config={'name': 'genevieve',
                                                           'n_workers': 25, 'idle_timeout': '240 minutes'},
                                            )
             if UPDATE_IFS_ER_GRID:
                 for time, rt in product(time_groups, run_types):
-                    ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
-                                            run_type=rt, time_group=time,
-                                            grid=grid,
-                                            remote=True,
-                                            recompute=True, force_overwrite=True,
-                                            remote_config={'name': 'genevieve2',
-                                                           'n_workers': 20, 'idle_timeout': '240 minutes'},
-                                            )
+                    try:
+                        ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
+                                                run_type=rt, time_group=time,
+                                                grid=grid,
+                                                remote=True,
+                                                recompute=True, force_overwrite=True,
+                                                remote_config={'name': 'genevieve-run',
+                                                               'n_workers': 20, 'idle_timeout': '240 minutes'},
+                                                )
+                    except KeyError:
+                        ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
+                                                run_type=rt, time_group=time,
+                                                grid=grid,
+                                                remote=True,
+                                                recompute=True, force_overwrite=True,
+                                                remote_config={'name': 'genevieve-run',
+                                                               'n_workers': 20, 'idle_timeout': '240 minutes'},
+                                                )
 
             for agg in aggs:
                 # Go back and update the earlier parts of the pipeline
