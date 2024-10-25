@@ -544,9 +544,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
                      "member": 50},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440,
-                                  'start_date': 1,
-                                  'model_issuance_date': 1}
+                   'global0_25': {"lat": 300, "lon": 300, 'start_date': 5}
                },
            },
            auto_rechunk=False)
@@ -719,10 +717,10 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', t
            cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 40, 'start_date': 30, "member": 1},
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, 'start_date': 1000, "member": 1},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'start_date': 1}
+                   'global0_25': {"lat": 721, "lon": 1440, 'start_date': 30}
                },
            })
 def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6,

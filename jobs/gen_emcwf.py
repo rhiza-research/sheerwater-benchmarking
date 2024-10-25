@@ -7,22 +7,23 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import (ecmwf_agg, ecmwf_rolled,
 
 
 if __name__ == "__main__":
-    # vars = ["tmp2m", "precip"]
-    vars = ["precip", "tmp2m"]
+    vars = ["tmp2m", "precip"]
+    # vars = ["precip", "tmp2m"]
     # vars = ["precip"]
     # vars = ["tmp2m"]
     aggs = [14, 7]
-    time_groups = ['weekly', 'biweekly']
+    # time_groups = ['weekly', 'biweekly']
+    time_groups = ['weekly']
     # grids = ["global1_5", "global0_25"]
-    grids = ["global0_25"]
-    # grids = ["global1_5"]
+    # grids = ["global0_25"]
+    grids = ["global1_5"]
     # grids = ["global0_25", "global1_5"]
     # forecast_type = ["forecast", "reforecast"]
     # forecast_type = ["reforecast"]
     forecast_type = ["forecast"]
-    run_types = ["average", "perturbed"]
+    # run_types = ["average", "perturbed"]
     # run_types = ["average"]
-    # run_types = ["perturbed"]
+    run_types = ["perturbed"]
     regions = ['global']
     masks = ["lsm"]
 
@@ -32,8 +33,10 @@ if __name__ == "__main__":
     UPDATE_IRI = False
     UPDATE_IRI_AVERAGED = False
     UPDATE_ROLLED = False
-    UPDATE_IFS_ER_GRID = True
-    UPDATE_BIAS = False
+    # UPDATE_IFS_ER_GRID = True
+    UPDATE_IFS_ER_GRID = False
+    UPDATE_BIAS = True
+    # UPDATE_BIAS = False
     UPDATE_DEB = False
     UPDATE_AGG = False
 
@@ -64,8 +67,14 @@ if __name__ == "__main__":
                                                 grid=grid,
                                                 remote=True,
                                                 recompute=True, force_overwrite=True,
-                                                remote_config={'name': 'genevieve-run3',
-                                                               'n_workers': 25, 'idle_timeout': '240 minutes'},
+                                                # remote_config={'name': 'genevieve-run3',
+                                                #                'worker_vm_types': 'c2-standard-16',
+                                                #                'n_workers': 35,
+                                                #                'idle_timeout': '240 minutes'},
+                                                # )
+                                                remote_config={'name': 'genevieve-run2',
+                                                               'n_workers': 18,
+                                                               'idle_timeout': '120 minutes'}
                                                 )
                     except KeyError:
                         ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
@@ -88,15 +97,30 @@ if __name__ == "__main__":
                                                                    'n_workers': 15,
                                                                    'idle_timeout': '240 minutes'}
                                                     )
-                    ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
-                                                     run_type=rt, time_group=time,
-                                                     grid=grid,
-                                                     # recompute=True, force_overwrite=True,
-                                                     remote=True,
-                                                     remote_config={'name': 'genevieve-run2',
-                                                                    'n_workers': 18,
-                                                                    'idle_timeout': '120 minutes'}
-                                                     )
+                    try:
+                        if rt == 'perturbed':
+                            recompute = True
+                        else:
+                            recompute = False
+                        ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
+                                                         run_type=rt, time_group=time,
+                                                         grid=grid,
+                                                         recompute=recompute, force_overwrite=True,
+                                                         remote=True,
+                                                         remote_config={'name': 'genevieve-run2',
+                                                                        'n_workers': 18,
+                                                                        'idle_timeout': '120 minutes'}
+                                                         )
+                    except:
+                        ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
+                                                         run_type=rt, time_group=time,
+                                                         grid=grid,
+                                                         recompute=True, force_overwrite=True,
+                                                         remote=True,
+                                                         remote_config={'name': 'genevieve-run2',
+                                                                        'n_workers': 18,
+                                                                        'idle_timeout': '120 minutes'}
+                                                         )
 
             for agg in aggs:
                 # Go back and update the earlier parts of the pipeline
