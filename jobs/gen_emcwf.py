@@ -3,7 +3,6 @@ from itertools import product
 from sheerwater_benchmarking.forecasts.ecmwf_er import (ecmwf_agg, ecmwf_rolled, iri_ecmwf,
                                                         ecmwf_averaged_regrid,
                                                         ifs_er_reforecast_bias, ifs_extended_range_debiased,
-                                                        ifs_extended_range_debiased_regrid,
                                                         ifs_extended_range)
 
 
@@ -89,30 +88,15 @@ if __name__ == "__main__":
                                                                    'n_workers': 15,
                                                                    'idle_timeout': '240 minutes'}
                                                     )
-                    try:
-                        if rt == 'perturbed':
-                            recompute = True
-                        else:
-                            recompute = False
-                        ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
-                                                         run_type=rt, time_group=time,
-                                                         grid=grid,
-                                                         recompute=recompute, force_overwrite=True,
-                                                         remote=True,
-                                                         remote_config={'name': 'genevieve-run2',
-                                                                        'n_workers': 18,
-                                                                        'idle_timeout': '120 minutes'}
-                                                         )
-                    except:
-                        ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
-                                                         run_type=rt, time_group=time,
-                                                         grid=grid,
-                                                         recompute=True, force_overwrite=True,
-                                                         remote=True,
-                                                         remote_config={'name': 'genevieve-run2',
-                                                                        'n_workers': 18,
-                                                                        'idle_timeout': '120 minutes'}
-                                                         )
+                    ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
+                                                        run_type=rt, time_group=time,
+                                                        grid=grid,
+                                                        recompute=True, force_overwrite=True,
+                                                        remote=True,
+                                                        remote_config={'name': 'genevieve-run2',
+                                                                    'n_workers': 18,
+                                                                    'idle_timeout': '120 minutes'}
+                                                        )
 
             for agg in aggs:
                 # Go back and update the earlier parts of the pipeline
