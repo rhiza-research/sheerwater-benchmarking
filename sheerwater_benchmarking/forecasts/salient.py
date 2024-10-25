@@ -102,6 +102,9 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
 
     ds = ds.rename({'forecast_date': 'time'})
 
+    if region != 'africa':
+        raise NotImplementedError("Salient forecasts only work for Africa.")
+
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
     # Clip to specified region
