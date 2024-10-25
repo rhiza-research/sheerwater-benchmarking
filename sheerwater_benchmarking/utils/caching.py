@@ -100,6 +100,7 @@ def drop_encoded_chunks(ds):
     for var in ds.data_vars:
         if 'chunks' in ds[var].encoding:
             del ds[var].encoding['chunks']
+
     return ds
 
 
@@ -478,6 +479,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     temp_cache_map = fs.get_mapper(temp_cache_path)
 
                                     ds = drop_encoded_chunks(ds)
+
                                     ds.chunk(chunks=chunking).to_zarr(store=temp_cache_map, mode='w')
 
                                     # move to a permanent cache map
@@ -593,6 +595,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             print(f"Caching result for {cache_path}.")
                             if isinstance(ds, xr.Dataset):
                                 cache_map = fs.get_mapper(cache_path)
+
                                 if chunking:
                                     # If we aren't doing auto chunking delete the encoding chunks
                                     ds = drop_encoded_chunks(ds)
@@ -600,7 +603,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
                                     chunking = prune_chunking_dimensions(ds, chunking)
 
-                                    ds.chunk(chunks=chunking).to_zarr(store=temp_cache_map, mode='w')
+                                    ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')
 
                                     # Reopen the dataset to truncate the computational path
                                     ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
