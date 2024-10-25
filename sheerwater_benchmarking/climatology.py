@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, clip_region)
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, clip_region, roll_and_agg)
 
 
 @dask_remote
@@ -13,7 +13,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, c
            cache_args=['variable', 'first_year', 'last_year', 'grid'],
            chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
            auto_rechunk=False)
-def climatology_raw(variable, first_year, last_year, grid='global1_5'):
+def climatology_raw(variable, first_year=1986, last_year=2015, grid='global1_5'):
     """Compute the climatology of the ERA5 data. Years are inclusive."""
     start_time = f"{first_year}-01-01"
     end_time = f"{last_year+1}-01-01"
@@ -147,6 +147,43 @@ def climatology_rolling_raw(start_time, end_time, variable, clim_years=30, grid=
     # the climatology for forecast date 2016-01-01 is computed up until 2015-01-01.
     ds = ds.assign_coords(time=ds['time'].to_index() + pd.DateOffset(years=1))
     ds = ds.rename({'time': 'forecast_date'})
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=True,
+           cache_args=['variable', 'clim_years', 'agg', 'grid'],
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               }
+           },
+           auto_rechunk=False)
+def climatology_rolling_agg(start_time, end_time, variable, clim_years=30,
+                            agg=14, grid="global1_5"):
+    """Generates a daily timeseries of climatology with rolling aggregation.
+
+    This climatology is valid as a baseline for all times.
+
+    Args:
+        start_time (str): The start time of the timeseries forecast.
+        end_time (str): The end time of the timeseries forecast.
+        variable (str): The weather variable to fetch.
+        clim_years (int): The number of years to use for the climatology.
+        agg (str): The aggregation period to use, in days
+        grid (str): The grid to produce the forecast on.
+    """
+    # Get climatology on the corresponding grid
+    ds = climatology_rolling_raw(start_time, end_time, variable=variable, clim_years=clim_years, grid=grid)
+    ds = ds.rename({'forecast_date': 'time'})
+    ds = ds.drop('dayofyear')
+
+    # Roll and aggregate the data
+    agg_fn = "sum" if variable == "precip" else "mean"
+    ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
     return ds
 
 
