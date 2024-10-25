@@ -23,7 +23,7 @@ start_year = "2016"
 end_year = "2022"
 
 # define all the variables to run over
-forecasts = ["salient", "ecmwf_ifs_er"]
+forecasts = ["salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased"]
 truths = ["era5"]
 #baselines = [None, "ecmwf_ifs_er", "climatology_rolling", "climatology_2015"]
 #baselines = [None, "ecmwf_er", "climatology_rolling", "climatology_2015"]
@@ -31,12 +31,12 @@ truths = ["era5"]
 baselines = ["ecmwf_ifs_er", "climatology_2015"]
 leads = ["week1", "week2", "week3", "week4", "week5"]
 #metrics = ["mae", "crps"]
-metrics = ["mae"]
+metrics = ["mae", "crps"]
 variables = ["precip", "tmp2m"]
 #grids = ["global1_5", "global0_25"]
 #grids = ["global1_5"]
-grids = ["global0_25"]
-region = "east_africa"
+grids = ["global1_5"]
+regions = ["africa", "east_africa", "global"]
 
 # Make a loop that iterates these combinations
 #combos = itertools.product(forecasts, truths, baselines, leads, metrics, variables, grids)
@@ -62,5 +62,5 @@ for metric, variable, grid, baseline in combos:
     print(metric, baseline)
     summary_metrics_table("2016-01-01", "2023-01-01", variable, "era5", metric,
                           baseline=baseline, grid=grid, region=region,
-                          remote=True, force_overwrite=True, backend='postgres',
+                          remote=True, force_overwrite=True, backend='postgres', recompute=True
                           remote_config=['big_scheduler','xxlarge_cluster','big_node'])
