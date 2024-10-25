@@ -226,7 +226,6 @@ def summary_metrics_table(start_time, end_time, variable, truth, metric, baselin
                 lead_vals.append(val)
 
         l = dask.compute(*lead_vals)
-        print(l)
         results[forecast] = l
 
     # Turn the dict into a pandas dataframe with appropriate columns
