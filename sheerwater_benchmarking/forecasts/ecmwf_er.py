@@ -696,7 +696,7 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
            cache_args=['variable', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 20, "model_issuance_date": 50})
+           chunking={"lat": 121, "lon": 240, "lead_time": 20, "model_issuance_date": 50})
 def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for all leads."""
     # Fetch the reforecast data to calculate how many leads we need

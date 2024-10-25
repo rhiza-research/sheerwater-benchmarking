@@ -14,8 +14,8 @@ if __name__ == "__main__":
     aggs = [14, 7]
     time_groups = ['weekly', 'biweekly']
     # grids = ["global1_5", "global0_25"]
-    # grids = ["global0_25"]
-    grids = ["global1_5"]
+    grids = ["global0_25"]
+    # grids = ["global1_5"]
     # grids = ["global0_25", "global1_5"]
     # forecast_type = ["forecast", "reforecast"]
     # forecast_type = ["reforecast"]
@@ -32,8 +32,8 @@ if __name__ == "__main__":
     UPDATE_IRI = False
     UPDATE_IRI_AVERAGED = False
     UPDATE_ROLLED = False
-    UPDATE_IFS_ER_GRID = False
-    UPDATE_BIAS = True
+    UPDATE_IFS_ER_GRID = True
+    UPDATE_BIAS = False
     UPDATE_DEB = False
     UPDATE_AGG = False
 
@@ -63,10 +63,9 @@ if __name__ == "__main__":
                                                 run_type=rt, time_group=time,
                                                 grid=grid,
                                                 remote=True,
-                                                # recompute=True,
-                                                force_overwrite=True,
-                                                remote_config={'name': 'genevieve-run',
-                                                               'n_workers': 20, 'idle_timeout': '240 minutes'},
+                                                recompute=True, force_overwrite=True,
+                                                remote_config={'name': 'genevieve-run3',
+                                                               'n_workers': 25, 'idle_timeout': '240 minutes'},
                                                 )
                     except KeyError:
                         ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
@@ -95,7 +94,7 @@ if __name__ == "__main__":
                                                      # recompute=True, force_overwrite=True,
                                                      remote=True,
                                                      remote_config={'name': 'genevieve-run2',
-                                                                    'n_workers': 25,
+                                                                    'n_workers': 18,
                                                                     'idle_timeout': '120 minutes'}
                                                      )
 
