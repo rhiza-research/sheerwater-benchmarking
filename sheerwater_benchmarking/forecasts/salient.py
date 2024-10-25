@@ -42,11 +42,6 @@ def salient_blend_raw(start_time, end_time, variable,  # noqa: ARG001
            timeseries='forecast_date',
            cache_args=['variable', 'timescale', 'grid'],
            chunking={"lat": 300, "lon": 400, "forecast_date": 300, 'lead': 1, 'quantiles': 1},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'start_date': 1}
-               },
-           },
            auto_rechunk=False)
 def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid="global0_25"):
     """Processed Salient forecast files."""
@@ -66,6 +61,10 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
 def salient(start_time, end_time, variable, lead, prob_type='deterministic',
             grid='global0_25', mask='lsm', region='africa'):
     """Standard format forecast data for Salient."""
+
+    if region != 'africa' and region != 'east_africa':
+        raise NotImplementedError("Salient forecasts only work for Africa.")
+
     lead_params = {
         "week1": ("sub-seasonal", 1),
         "week2": ("sub-seasonal", 2),
@@ -101,9 +100,6 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
         raise ValueError("Invalid probabilistic type")
 
     ds = ds.rename({'forecast_date': 'time'})
-
-    if region != 'africa':
-        raise NotImplementedError("Salient forecasts only work for Africa.")
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
