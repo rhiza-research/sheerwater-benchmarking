@@ -538,17 +538,18 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 40,
-                     "start_date": 30,
-                     "model_issuance_date": 30, "start_year": 1,
-                     "member": 1},
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
+                     "start_date": 20,
+                     "model_issuance_date": 20, "start_year": 1,
+                     "member": 50},
            chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440,
                                   'start_date': 1,
                                   'model_issuance_date': 1}
                },
-           })
+           },
+           auto_rechunk=True)
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast and reforecast data from the WeatherBench2 dataset.
@@ -583,6 +584,9 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
+
+    if forecast_type == 'reforecast':
+        raise NotImplementedError("Regridding reforecast data should be done with extreme care. It's big.")
     ds = regrid(ds, grid, base='base180')
     return ds
 
