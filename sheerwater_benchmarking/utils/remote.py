@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 config_options = {
-    'big_scheduler': {
+    'large_scheduler': {
         'scheduler_cpu': 16,
         'scheduler_memory': "64GiB"
     },
@@ -19,6 +19,12 @@ config_options = {
     },
     'xxlarge_cluster': {
         'n_workers': 25
+    },
+    'large_node': {
+        'worker_vm_types': ['c2-standard-16', 'c3-standard-22']
+    },
+    'xlarge_node': {
+        'worker_vm_types': ['c2-standard-32', 'c3-standard-44']
     },
 }
 
