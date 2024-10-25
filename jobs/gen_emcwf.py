@@ -3,6 +3,7 @@ from itertools import product
 from sheerwater_benchmarking.forecasts.ecmwf_er import (ecmwf_agg, ecmwf_rolled, iri_ecmwf,
                                                         ecmwf_averaged_regrid,
                                                         ifs_er_reforecast_bias, ifs_extended_range_debiased,
+                                                        ifs_extended_range_debiased_regrid,
                                                         ifs_extended_range)
 
 
@@ -15,8 +16,8 @@ if __name__ == "__main__":
     # time_groups = ['weekly', 'biweekly']
     time_groups = ['weekly']
     # grids = ["global1_5", "global0_25"]
-    # grids = ["global0_25"]
-    grids = ["global1_5"]
+    grids = ["global0_25"]
+    # grids = ["global1_5"]
     # grids = ["global0_25", "global1_5"]
     # forecast_type = ["forecast", "reforecast"]
     # forecast_type = ["reforecast"]
@@ -33,10 +34,10 @@ if __name__ == "__main__":
     UPDATE_IRI = False
     UPDATE_IRI_AVERAGED = False
     UPDATE_ROLLED = False
-    # UPDATE_IFS_ER_GRID = True
-    UPDATE_IFS_ER_GRID = False
-    UPDATE_BIAS = True
-    # UPDATE_BIAS = False
+    UPDATE_IFS_ER_GRID = True
+    # UPDATE_IFS_ER_GRID = False
+    # UPDATE_BIAS = True
+    UPDATE_BIAS = False
     UPDATE_DEB = False
     UPDATE_AGG = False
 
@@ -61,30 +62,21 @@ if __name__ == "__main__":
                                            )
             for time, rt in product(time_groups, run_types):
                 if UPDATE_IFS_ER_GRID:
-                    try:
-                        ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
-                                                run_type=rt, time_group=time,
-                                                grid=grid,
-                                                remote=True,
-                                                recompute=True, force_overwrite=True,
-                                                # remote_config={'name': 'genevieve-run3',
-                                                #                'worker_vm_types': 'c2-standard-16',
-                                                #                'n_workers': 35,
-                                                #                'idle_timeout': '240 minutes'},
-                                                # )
-                                                remote_config={'name': 'genevieve-run2',
-                                                               'n_workers': 18,
-                                                               'idle_timeout': '120 minutes'}
-                                                )
-                    except KeyError:
-                        ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
-                                                run_type=rt, time_group=time,
-                                                grid=grid,
-                                                remote=True,
-                                                recompute=True, force_overwrite=True,
-                                                remote_config={'name': 'genevieve-run',
-                                                               'n_workers': 20, 'idle_timeout': '240 minutes'},
-                                                )
+                    ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
+                                            run_type=rt, time_group=time,
+                                            grid=grid,
+                                            remote=True,
+                                            recompute=True, force_overwrite=True,
+                                            remote_config={'name': 'genevieve-run3',
+                                                           'worker_vm_types': 'c2-standard-16',
+                                                           'n_workers': 35,
+                                                           'idle_timeout': '240 minutes'},
+                                            )
+                                            # remote_config={'name': 'genevieve-run2',
+                                            #                'worker_vm_types': 'c2-standard-16',
+                                            #                'n_workers': 35,
+                                            #                'idle_timeout': '240 minutes'},
+                                            # )
 
                 if UPDATE_BIAS:
                     if False:
