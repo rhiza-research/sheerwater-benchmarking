@@ -1,9 +1,7 @@
 """Verification metrics for forecasts."""
 from importlib import import_module
-import itertools
 
 import pandas as pd
-import dask
 
 from sheerwater_benchmarking.utils import cacheable, dask_remote
 
@@ -60,7 +58,8 @@ def get_metric_fn(prob_type, metric, spatial=True):
 
 @dask_remote
 @cacheable(data_type='basic',
-           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth', 'metric', 'grid', 'mask', 'region'],
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
+                       'truth', 'metric', 'grid', 'mask', 'region'],
            cache=True)
 def single_metric(start_time, end_time, variable, lead, forecast, truth,
                   metric, grid="global1_5", mask='lsm', region='africa'):
@@ -96,7 +95,8 @@ def single_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth', 'metric', 'grid', 'mask', 'region'],
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
+                       'truth', 'metric', 'grid', 'mask', 'region'],
            cache=True)
 def single_spatial_metric(start_time, end_time, variable, lead, forecast, truth,
                   metric, grid="global1_5", mask='lsm', region='africa'):
@@ -135,20 +135,23 @@ def single_spatial_metric(start_time, end_time, variable, lead, forecast, truth,
 def _metric(start_time, end_time, variable, lead, forecast, truth,
             metric, baseline=None, grid="global1_5", mask='lsm', region='africa', spatial=True):
     """Compute a metric for a forecast at a specific lead."""
-
     if spatial:
-        m_ds = single_spatial_metric(start_time, end_time, variable, lead, forecast, truth, metric, grid=grid, mask=mask, region=region)
+        m_ds = single_spatial_metric(start_time, end_time, variable, lead, forecast,
+                                     truth, metric, grid=grid, mask=mask, region=region)
     else:
         print("Calling metric!")
-        m_ds = single_metric(start_time, end_time, variable, lead, forecast, truth, metric, grid=grid, mask=mask, region=region)
+        m_ds = single_metric(start_time, end_time, variable, lead, forecast,
+                             truth, metric, grid=grid, mask=mask, region=region)
         print("Returned metric!")
 
     # Get the baseline if it exists and run its metric
     if baseline:
         if spatial:
-            base_ds = single_spatial_metric(start_time, end_time, variable, lead, baseline, truth, metric, grid=grid, mask=mask, region=region)
+            base_ds = single_spatial_metric(start_time, end_time, variable, lead, baseline,
+                                            truth, metric, grid=grid, mask=mask, region=region)
         else:
-            base_ds = single_metric(start_time, end_time, variable, lead, baseline, truth, metric, grid=grid, mask=mask, region=region)
+            base_ds = single_metric(start_time, end_time, variable, lead, baseline,
+                                    truth, metric, grid=grid, mask=mask, region=region)
 
         print("Got metrics. Computing skill")
         # Compute the skill
@@ -183,7 +186,8 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='basic',
-           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
+                       'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
            cache=False)
 def summary_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, baseline=None, grid="global1_5", mask='lsm', region='global'):
@@ -201,32 +205,33 @@ def summary_metric(start_time, end_time, variable, lead, forecast, truth,
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
            cache=True)
-def summary_metrics_table(start_time, end_time, variable, truth, metric, baseline=None, grid='global1_5', mask='lsm', region='global'):
+def summary_metrics_table(start_time, end_time, variable,
+                          truth, metric, baseline=None, grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-
     forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015']
     leads = ["week1", "week2", "week3", "week4", "week5"]
 
     # Create a dict to insert our data
     results = {forecast:[] for forecast in forecasts}
 
-    combos = itertools.product(forecasts, leads)
     for forecast in forecasts:
         lead_vals = []
         for lead in leads:
             # Try running as dask delayed
-            print(f"Running for {forecast} and {lead} with variable {variable}, metric {metric}, grid {grid}, and region {region}")
+            print(f"""Running for {forecast} and {lead} with variable {variable},
+                      metric {metric}, grid {grid}, and region {region}""")
             # First get the value without the baseline
-            val = dask.delayed(summary_metric)(start_time, end_time, variable, lead, forecast, truth, metric, None, grid, mask, region)
+            val = summary_metric(start_time, end_time, variable, lead, forecast, truth,
+                                 metric, None, grid, mask, region)
             lead_vals.append(val)
 
             # IF there is a baseline get the skill
             if baseline:
-                val = dask.delayed(summary_metric)(start_time, end_time, variable, lead, forecast, truth, metric, baseline, grid, mask, region)
+                val = summary_metric(start_time, end_time, variable, lead, forecast, truth,
+                                     metric, baseline, grid, mask, region)
                 lead_vals.append(val)
 
-        l = dask.compute(*lead_vals)
-        results[forecast] = l
+        results[forecast] = lead_vals
 
     # Turn the dict into a pandas dataframe with appropriate columns
     leads_skill = [lead + '_skill' for lead in leads]

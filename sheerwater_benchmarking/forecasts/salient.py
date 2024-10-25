@@ -61,7 +61,6 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
 def salient(start_time, end_time, variable, lead, prob_type='deterministic',
             grid='global0_25', mask='lsm', region='africa'):
     """Standard format forecast data for Salient."""
-
     if region != 'africa' and region != 'east_africa':
         raise NotImplementedError("Salient forecasts only work for Africa.")
 

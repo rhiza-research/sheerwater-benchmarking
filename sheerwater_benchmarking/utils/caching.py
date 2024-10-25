@@ -116,7 +116,7 @@ def write_to_delta(cache_path, df):
     write_deltalake(cache_path, df)
 
 def postgres_table_name(table_name):
-    """Return a qualified postgres table name"""
+    """Return a qualified postgres table name."""
     return hashlib.md5(table_name.encode()).hexdigest()
 
 def read_from_postgres(table_name):

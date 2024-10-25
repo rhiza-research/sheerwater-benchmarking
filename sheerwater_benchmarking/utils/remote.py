@@ -52,7 +52,8 @@ def dask_remote(func):
                 coiled_default_options.update(kwargs['remote_config'])
                 cluster = coiled.Cluster(**coiled_default_options)
                 cluster.get_client()
-            elif 'remote_config' in kwargs and (isinstance(kwargs['remote_config'], str) or isinstance(kwargs['remote_config'], list)):
+            elif 'remote_config' in kwargs and (isinstance(kwargs['remote_config'], str) or
+                                                isinstance(kwargs['remote_config'], list)):
                 if isinstance(kwargs['remote_config'], list):
                     for conf in kwargs['remote_config']:
                         if conf in config_options:

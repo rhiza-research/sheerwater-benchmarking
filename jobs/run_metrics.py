@@ -1,5 +1,5 @@
 """Runs metrics and updates the caches."""
-from sheerwater_benchmarking.metrics import spatial_metric, summary_metrics_table
+from sheerwater_benchmarking.metrics import summary_metrics_table
 import itertools
 
 supported_metrics = {
@@ -27,12 +27,16 @@ forecasts = ["salient", "ecmwf_ifs_er"]
 truths = ["era5"]
 #baselines = [None, "ecmwf_ifs_er", "climatology_rolling", "climatology_2015"]
 #baselines = [None, "ecmwf_er", "climatology_rolling", "climatology_2015"]
-baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015"]
+#baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015"]
+baselines = ["ecmwf_ifs_er", "climatology_2015"]
 leads = ["week1", "week2", "week3", "week4", "week5"]
-metrics = ["mae", "crps"]
+#metrics = ["mae", "crps"]
+metrics = ["mae"]
 variables = ["precip", "tmp2m"]
 #grids = ["global1_5", "global0_25"]
-grids = ["global1_5"]
+#grids = ["global1_5"]
+grids = ["global0_25"]
+region = "east_africa"
 
 # Make a loop that iterates these combinations
 #combos = itertools.product(forecasts, truths, baselines, leads, metrics, variables, grids)
@@ -55,5 +59,8 @@ grids = ["global1_5"]
 
 combos = itertools.product(metrics, variables, grids, baselines)
 for metric, variable, grid, baseline in combos:
-    summary_metrics_table("2016-01-01", "2023-01-01", variable, "era5", metric, baseline=baseline, grid=grid, region="africa",
-                          remote=True, force_overwrite=True, backend='postgres', remote_config=['big_scheduler','large_cluster'])
+    print(metric, baseline)
+    summary_metrics_table("2016-01-01", "2023-01-01", variable, "era5", metric,
+                          baseline=baseline, grid=grid, region=region,
+                          remote=True, force_overwrite=True, backend='postgres',
+                          remote_config=['big_scheduler','xxlarge_cluster','big_node'])
