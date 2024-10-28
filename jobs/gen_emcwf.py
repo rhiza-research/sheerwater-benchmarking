@@ -7,8 +7,8 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import (ecmwf_agg, ecmwf_rolled,
 
 
 if __name__ == "__main__":
-    vars = ["tmp2m", "precip"]
-    # vars = ["precip", "tmp2m"]
+    # vars = ["tmp2m", "precip"]
+    vars = ["precip", "tmp2m"]
     # vars = ["precip"]
     # vars = ["tmp2m"]
     aggs = [14, 7]
@@ -68,6 +68,8 @@ if __name__ == "__main__":
                                             recompute=True, force_overwrite=True,
                                             remote_config={'name': 'genevieve-run3',
                                                            'worker_vm_types': 'c2-standard-16',
+                                                        #    'scheduler_vm_type': 'c4-standard-32',
+                                                           'scheduler_memory': '128 GiB',
                                                            'n_workers': 35,
                                                            'idle_timeout': '240 minutes'},
                                             )

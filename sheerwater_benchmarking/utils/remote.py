@@ -18,9 +18,9 @@ def dask_remote(func):
                 'name': 'sheerwater_shared',
                 'n_workers': [3, 8],
                 'idle_timeout': "120 minutes",
-                'scheduler_cpu': 8,
-                'scheduler_memory': "32GiB",
-                'worker_vm_types': ['c2-standard-8', 'c3-standard-8'],
+                # 'scheduler_cpu': 8,
+                # 'scheduler_memory': "32GiB",
+                # 'worker_vm_types': ['c2-standard-8', 'c3-standard-8'],
                 'spot_policy': 'spot_with_fallback',
             }
 

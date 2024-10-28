@@ -535,8 +535,66 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['variable', 'forecast_type', 'member_id', 'run_type', 'time_group', 'grid'],
+           cache=True,
+           timeseries=['start_date', 'model_issuance_date'],
+           chunking={"lat": 120, "lon": 240, "lead_time": 40,
+                     "start_date": 20,
+                     "model_issuance_date": 20, "start_year": 1,
+                     "member": 1},
+           auto_rechunk=False)
+def ifs_extended_range_hres(start_time, end_time, variable, forecast_type, member_id=None,
+                            run_type='average', time_group='weekly', grid="global1_5"):
+    """Fetches IFS extended range forecast, and split into members for 0.25 degrees.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
+        member_id (int): The member id to fetch.
+        run_type (str): The type of run to fetch. One of: "average", "perturbed".
+        time_group (str): The time grouping to use. One of: "daily", "weekly", "biweekly"
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+    """
+    """IRI ECMWF average forecast with regridding."""
+    ds = ifs_extended_range_raw(start_time, end_time, variable, forecast_type=forecast_type,
+                                run_type=run_type, time_group=time_group, grid='global1_5')
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
+
+    if variable == 'tmp2m':
+        ds[variable] = ds[variable] - 273.15
+        ds.attrs.update(units='C')
+    elif variable == 'precip':
+        ds[variable] = ds[variable] * 1000.0
+        ds.attrs.update(units='mm')
+        ds = np.maximum(ds, 0)
+
+    if grid == 'global1_5':
+        return ds
+    # Regrid onto appropriate grid
+
+    if forecast_type == 'reforecast':
+        raise NotImplementedError("Regridding reforecast data should be done with extreme care. It's big.")
+
+    if run_type == 'perturbed' and member_id is None:
+        raise ValueError("Member id must be specified to regrid perturbed runs.")
+
+    if run_type == 'perturbed':
+        # Get a single member id for perturbed runs
+        ds = ds.isel(member=member_id)
+
+    ds = regrid(ds, grid, base='base180')
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
            cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
            cache=True,
+           cache_disable_if={'grid': 'global1_5', 'run_type': 'average'},
            timeseries=['start_date', 'model_issuance_date'],
            chunking={"lat": 100, "lon": 100, "lead_time": 40,
                      "start_date": 1,
@@ -560,30 +618,21 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
     """
-    """IRI ECMWF average forecast with regridding."""
-    ds = ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
-                                run_type, time_group, grid='global1_5')
-    # Convert to base180 longitude
-    ds = lon_base_change(ds, to_base="base180")
+    if run_type == 'perturbed' and grid != 'global1_5':
+        # Load the perturbed runs to get the number of members
+        ds_p = ifs_extended_range_raw(start_time, end_time, variable, forecast_type, run_type=run_type,
+                                      time_group=time_group, grid='global1_5')
+        n_members = len(ds_p.member)
 
-    if variable == 'tmp2m':
-        ds[variable] = ds[variable] - 273.15
-        ds.attrs.update(units='C')
-    elif variable == 'precip':
-        ds[variable] = ds[variable] * 1000.0
-        ds.attrs.update(units='mm')
-        ds = np.maximum(ds, 0)
-
-    if grid == 'global1_5':
-        return ds
-    # Regrid onto appropriate grid
-
-    if forecast_type == 'reforecast':
-        raise NotImplementedError("Regridding reforecast data should be done with extreme care. It's big.")
-
-    chunks = {'lat': 100, 'lon': 100, 'lead_time': 40, 'start_date': 1, 'member': 100}
-    ds = ds.chunk(chunks)
-    ds = regrid(ds, grid, base='base180')
+        # Re-grid each member individually
+        vals = [ifs_extended_range_hres(start_time, end_time, variable, forecast_type,
+                                        member_id=i, run_type=run_type, time_group=time_group, grid=grid)
+                for i in range(n_members)]
+        ds = xr.concat(vals, dim='member')
+    else:
+        # No special handling needed
+        ds = ifs_extended_range_hres(start_time, end_time, variable, forecast_type,
+                                     run_type=run_type, time_group=time_group, grid=grid)
     return ds
 
 
