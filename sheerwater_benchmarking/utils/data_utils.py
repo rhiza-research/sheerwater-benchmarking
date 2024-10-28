@@ -224,6 +224,27 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
     return ds
 
 
+def is_valid(ds, var, mask, region, grid, valid_threshold=0.5):
+    """Check if the dataset is valid in the given region and mask."""
+    if mask == 'lsm':
+        # Import here to avoid circular imports
+        from sheerwater_benchmarking.masks import land_sea_mask
+        mask_ds = land_sea_mask(grid=grid).compute()
+    elif mask == None:
+        mask_ds = get_grid_ds(grid_id=grid).compute()
+    else:
+        raise ValueError("Only land-sea mask is implemented.")
+
+    mask_ds = clip_region(mask_ds, region)
+
+    data_count = (~ds[var].where(mask_ds >= 0.0).isnull()).sum(dim=['lat', 'lon']).min()['mask'].compute().values
+    mask_count = (~mask_ds.isnull()).sum()['mask'].compute().values
+
+    if data_count < mask_count * valid_threshold:
+        return False
+    return True
+
+
 def get_anomalies(ds, clim, var, time_dim='time'):
     """Calculate the anomalies of a dataset.
 

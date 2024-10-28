@@ -81,8 +81,11 @@ def get_region(region):
         gdf = gpd.read_file(load_object(filepath))
 
         # Filter the gdf
-        gdf = gdf.where(gdf['sovereignt'].isin(['Kenya', 'Burundi', 'Rwanda', 'Tanzania', 'Uganda'])).dropna(how='all')
-
+        gdf = gdf.where(gdf['sovereignt'].isin(['Kenya',
+                                                'Burundi',
+                                                'Rwanda',
+                                                'United Republic of Tanzania',
+                                                'Uganda'])).dropna(how='all')
         data = (lons, lats, gdf)
     elif region == "conus":
         lons = np.array([-125.0, -67.0])
