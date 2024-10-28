@@ -20,6 +20,7 @@ aiohttp==3.10.10
     # via aiobotocore
     # via coiled
     # via gcsfs
+    # via jupyter-server-proxy
     # via kopf
     # via kubernetes-asyncio
     # via s3fs
@@ -369,10 +370,13 @@ jupyter-lsp==2.2.5
     # via jupyterlab
 jupyter-server==2.14.2
     # via jupyter-lsp
+    # via jupyter-server-proxy
     # via jupyterlab
     # via jupyterlab-server
     # via notebook
     # via notebook-shim
+jupyter-server-proxy==4.4.0
+    # via sheerwater-benchmarking
 jupyter-server-terminals==0.5.3
     # via jupyter-server
 jupyterlab==4.2.5
@@ -736,6 +740,8 @@ shapely==2.0.6
     # via cartopy
     # via geopandas
     # via terracotta
+simpervisor==1.0.0
+    # via jupyter-server-proxy
 six==1.16.0
     # via asttokens
     # via bleach
@@ -784,6 +790,7 @@ tornado==6.4.1
     # via ipykernel
     # via jupyter-client
     # via jupyter-server
+    # via jupyter-server-proxy
     # via jupyterlab
     # via notebook
     # via terminado
@@ -800,6 +807,7 @@ traitlets==5.14.3
     # via jupyter-core
     # via jupyter-events
     # via jupyter-server
+    # via jupyter-server-proxy
     # via jupyterlab
     # via matplotlib-inline
     # via nbclient

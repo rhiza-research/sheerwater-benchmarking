@@ -93,6 +93,7 @@ dependencies = [
     "weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2",
     "deltalake",
     "xskillscore>=0.0.26",
+    "jupyter-server-proxy",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
