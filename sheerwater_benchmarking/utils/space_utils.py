@@ -73,7 +73,7 @@ def get_region(region):
         filepath = 'gs://sheerwater-datalake/africa.geojson'
         gdf = gpd.read_file(load_object(filepath))
         data = (lons, lats, gdf)
-    if region == "east_africa":
+    elif region == "east_africa":
         # Get the countries of Africa shapefile
         lons = np.array([28.2, 42.6])
         lats = np.array([-12.1, 5.6])
@@ -81,7 +81,7 @@ def get_region(region):
         gdf = gpd.read_file(load_object(filepath))
 
         # Filter the gdf
-        gdf = gdf.where(gdf['sovereignt'].isin(['Kenya','Burundi','Rwanda','Tanzania','Uganda'])).dropna(how='all')
+        gdf = gdf.where(gdf['sovereignt'].isin(['Kenya', 'Burundi', 'Rwanda', 'Tanzania', 'Uganda'])).dropna(how='all')
 
         data = (lons, lats, gdf)
     elif region == "conus":
