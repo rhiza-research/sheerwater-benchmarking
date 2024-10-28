@@ -2,8 +2,10 @@
 from importlib import import_module
 
 import pandas as pd
+import xarray as xr
 
-from sheerwater_benchmarking.utils import cacheable, dask_remote
+from sheerwater_benchmarking.utils import cacheable, dask_remote, clip_region, is_valid
+from weatherbench2.metrics import _spatial_average
 
 
 def get_datasource_fn(datasource):
@@ -57,49 +59,12 @@ def get_metric_fn(prob_type, metric, spatial=True):
         raise ImportError(f"Did not find implementation for metric {metric}")
 
 @dask_remote
-@cacheable(data_type='basic',
-           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
-                       'truth', 'metric', 'grid', 'mask', 'region'],
-           cache=True)
-def single_metric(start_time, end_time, variable, lead, forecast, truth,
-                  metric, grid="global1_5", mask='lsm', region='africa'):
-    """Compute a metric for a forecast at a specific lead."""
-    if metric == "crps":
-        prob_type = "probabilistic"
-    elif metric == "mae":
-        prob_type = "deterministic"
-    else:
-        raise ValueError("Unsupported metric")
-
-    # Get the forecast
-    fcst_fn = get_datasource_fn(forecast)
-    fcst = fcst_fn(start_time, end_time, variable, lead=lead,
-                   prob_type=prob_type, grid=grid, mask=mask, region=region)
-
-    # Get the truth to compare against
-    truth_fn = get_datasource_fn(truth)
-    obs = truth_fn(start_time, end_time, variable, lead=lead, grid=grid, mask=mask, region=region)
-
-    # Check to see the prob type attribute
-    enhanced_prob_type = fcst.attrs['prob_type']
-
-    metric_fn, metric_kwargs, metric_lib = get_metric_fn(enhanced_prob_type, metric, spatial=False)
-    if metric_lib == 'xskillscore':
-        assert prob_type == 'probabilistic'
-        fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
-        m_ds = metric_fn(observations=obs, forecasts=fcst, **metric_kwargs)
-    else:
-        m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, skipna=True)
-
-    return m_ds[variable].values.max()
-
-@dask_remote
 @cacheable(data_type='array',
            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
                        'truth', 'metric', 'grid', 'mask', 'region'],
            cache=True)
-def single_spatial_metric(start_time, end_time, variable, lead, forecast, truth,
-                  metric, grid="global1_5", mask='lsm', region='africa'):
+def unaggregated_metric(start_time, end_time, variable, lead, forecast, truth,
+                  metric, grid="global1_5", mask='lsm', region='global'):
     """Compute a metric for a forecast at a specific lead."""
     if metric == "crps":
         prob_type = "probabilistic"
@@ -121,48 +86,103 @@ def single_spatial_metric(start_time, end_time, variable, lead, forecast, truth,
     enhanced_prob_type = fcst.attrs['prob_type']
 
     metric_fn, metric_kwargs, metric_lib = get_metric_fn(enhanced_prob_type, metric, spatial=True)
+
+    # Run the metric without aggregating in time or space
     if metric_lib == 'xskillscore':
         assert prob_type == 'probabilistic'
         fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
-        m_ds = metric_fn(observations=obs, forecasts=fcst, **metric_kwargs)
+        m_ds = metric_fn(observations=obs, forecasts=fcst, mean=False, **metric_kwargs)
     else:
-        m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, skipna=True)
-
-    return m_ds
-
-
-@dask_remote
-def _metric(start_time, end_time, variable, lead, forecast, truth,
-            metric, baseline=None, grid="global1_5", mask='lsm', region='africa', spatial=True):
-    """Compute a metric for a forecast at a specific lead."""
-    if spatial:
-        m_ds = single_spatial_metric(start_time, end_time, variable, lead, forecast,
-                                     truth, metric, grid=grid, mask=mask, region=region)
-    else:
-        print("Calling metric!")
-        m_ds = single_metric(start_time, end_time, variable, lead, forecast,
-                             truth, metric, grid=grid, mask=mask, region=region)
-        print("Returned metric!")
-
-    # Get the baseline if it exists and run its metric
-    if baseline:
-        if spatial:
-            base_ds = single_spatial_metric(start_time, end_time, variable, lead, baseline,
-                                            truth, metric, grid=grid, mask=mask, region=region)
-        else:
-            base_ds = single_metric(start_time, end_time, variable, lead, baseline,
-                                    truth, metric, grid=grid, mask=mask, region=region)
-
-        print("Got metrics. Computing skill")
-        # Compute the skill
-        m_ds = (1 - (m_ds/base_ds))
+        m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=False, skipna=True)
+        m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
     return m_ds
 
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
+                       'truth', 'metric', 'grid', 'mask', 'region', 'time_grouping'],
+           cache=True)
+def single_metric(start_time, end_time, variable, lead, forecast, truth,
+                  metric, time_grouping=None, grid="global1_5", mask='lsm', region='africa'):
+    """Compute a metric for a forecast at a specific lead."""
+
+    # Get the unaggregated metric
+    ds = unaggregated_metric(start_time, end_time, variable, lead, forecast, truth,
+                             metric, grid, mask, region='global')
+
+    # Check to make sure it supports this region/time
+    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.99):
+        print("Tried to get invalid metric aggregation")
+        raise NotImplementedError("Forecast not implemented for these parameters.")
+
+    # Clip it to the region
+    ds = clip_region(ds, region)
+
+    # Group the time column based on time grouping
+    if time_grouping:
+        if time_grouping == 'monthOfYear':
+            ds.coords["time"] = ds.time.dt.strftime("%B")
+        elif time_grouping == 'year':
+            ds.coords["time"] = ds.time.dt.year
+        else:
+            raise ValueError("Invalid time grouping")
+
+        ds = ds.groupby(time=xr.groupers.UniqueGrouper()).mean()
+
+        # Now average just in space
+        return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+    else:
+        # Average in time
+        ds = ds.mean(dim="time")
+
+        # Average in space
+        return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
+                       'truth', 'metric', 'grid', 'mask', 'region', 'time_grouping'],
+           cache=True)
+def single_spatial_metric(start_time, end_time, variable, lead, forecast, truth,
+                  metric, time_grouping=None, grid="global1_5", mask='lsm', region='africa'):
+    """Compute a metric for a forecast at a specific lead."""
+
+    # Get the unaggregated metric
+    ds = unaggregated_metric(start_time, end_time, variable, lead, forecast, truth,
+                             metric, grid, mask, region='global')
+
+    # Check to make sure it supports this region/time
+    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.99):
+        print("Tried to get invalid metric aggregation")
+        raise NotImplementedError("Forecast not implemented for these parameters.")
+
+
+    # Clip it to the region
+    ds = clip_region(ds, region)
+
+    # Group the time column based on time grouping
+    if time_grouping:
+        if time_grouping == 'monthOfYear':
+            ds.coords["time"] = ds.time.dt.month
+        elif time_grouping == 'year':
+            ds.coords["time"] = ds.time.dt.year
+        else:
+            raise ValueError("Invalid time grouping")
+
+        ds = ds.groupby(time=xr.groupers.UniqueGrouper()).mean()
+
+        return ds
+    else:
+        # Average just in time
+        ds = ds.mean(dim="time")
+        return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region', 'time_grouping'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
                'grid': {
@@ -171,32 +191,42 @@ def _metric(start_time, end_time, variable, lead, forecast, truth,
            },
            cache=False)
 def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
-                   metric, baseline=None, grid="global1_5", mask='lsm', region='global'):
-    """Runs and caches a geospatial metric."""
-    m_ds = _metric(start_time, end_time, variable, lead, forecast, truth,
-                   metric, baseline, grid, mask, region, spatial=True)
+                   metric, time_grouping=None, baseline=None, grid="global1_5", mask='lsm', region='global'):
+    m_ds = single_spatial_metric(start_time, end_time, variable, lead, forecast,
+                                 truth, metric, time_grouping, grid=grid, mask=mask, region=region)
 
-    # Convert to standard naming
-    m_ds = m_ds.rename_vars({variable: f'{variable}_{metric}'})
-    if 'latitude' in m_ds.dims:
-        m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+    # Get the baseline if it exists and run its metric
+    if baseline:
+        base_ds = single_spatial_metric(start_time, end_time, variable, lead, baseline,
+                                        truth, metric, time_grouping, grid=grid, mask=mask, region=region)
+
+        print("Got metrics. Computing skill")
+
+        # Compute the skill
+        m_ds = (1 - (m_ds/base_ds))
 
     return m_ds
 
 
 @dask_remote
-@cacheable(data_type='basic',
+@cacheable(data_type='array',
            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
                        'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
            cache=False)
 def summary_metric(start_time, end_time, variable, lead, forecast, truth,
-                   metric, baseline=None, grid="global1_5", mask='lsm', region='global'):
-    """Runs and caches a summary metric."""
-    try:
-        m_ds = _metric(start_time, end_time, variable, lead, forecast, truth,
-                       metric, baseline, grid, mask, region, spatial=False)
-    except NotImplementedError:
-        return None
+                   metric, time_grouping=None, baseline=None, grid="global1_5", mask='lsm', region='global'):
+    m_ds = single_metric(start_time, end_time, variable, lead, forecast,
+                                 truth, metric, time_grouping, grid=grid, mask=mask, region=region)
+
+    # Get the baseline if it exists and run its metric
+    if baseline:
+        base_ds = single_metric(start_time, end_time, variable, lead, baseline,
+                                        truth, metric, time_grouping, grid=grid, mask=mask, region=region)
+
+        print("Got metrics. Computing skill")
+
+        # Compute the skill
+        m_ds = (1 - (m_ds/base_ds))
 
     return m_ds
 
@@ -208,7 +238,8 @@ def summary_metric(start_time, end_time, variable, lead, forecast, truth,
 def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, baseline=None, grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015']
+    #forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015']
+    forecasts = ['salient', 'climatology_2015']
     leads = ["week1", "week2", "week3", "week4", "week5"]
 
     # Create a dict to insert our data
