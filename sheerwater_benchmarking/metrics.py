@@ -109,28 +109,24 @@ def global_metric(start_time, end_time, variable, lead, forecast, truth,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
-                       'truth', 'metric', 'grid', 'mask', 'region', 'time_grouping', 'mode'],
-           chunking={"lat": 121, "lon": 240, "time": 1000},
+                       'truth', 'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": -1},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
-               },
-               'mode': {
-                   'summary': {"time": -1}
+                   'global0_25': {"lat": 721, "lon": 1440, "time": 30}
                },
            },
            cache=True)
 def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
-                  metric, time_grouping=None, grid="global1_5",
-                  mask='lsm', region='africa', mode='summary'):
-    """Compute a metric for a forecast at a specific lead."""
+                  metric, time_grouping=None, spatial=False, grid="global1_5",
+                  mask='lsm', region='africa'):
+    """Compute a grouped metric for a forecast at a specific lead."""
     # Get the unaggregated metric
     ds = global_metric(start_time, end_time, variable, lead, forecast, truth,
                              metric, grid, mask, region='global')
 
     # Check to make sure it supports this region/time
     if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.99):
-        print("Tried to get invalid metric aggregation")
         raise NotImplementedError("Forecast not implemented for these parameters.")
 
     # Clip it to the region
@@ -138,40 +134,30 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Group the time column based on time grouping
     if time_grouping:
-        if time_grouping == 'monthOfYear':
-            #ds.coords["time"] = ds.time.dt.strftime("%B")
+        if time_grouping == 'month_of_year':
+            # TODO if you want this as a name: ds.coords["time"] = ds.time.dt.strftime("%B")
             ds.coords["time"] = ds.time.dt.month
         elif time_grouping == 'year':
             ds.coords["time"] = ds.time.dt.year
+        elif time_grouping == 'quarter_of_year':
+            ds.coords["time"] = ds.time.dt.quarter
         else:
             raise ValueError("Invalid time grouping")
 
-        ds = ds.groupby(time=xr.groupers.UniqueGrouper()).mean()
-        for coord in ds.coords:
-            if coord != 'time' and coord != 'lat' and coord != 'lon':
-                ds = ds.reset_coords(coord, drop=True)
-
-        # Now average just in space
-        if mode == 'spatial':
-            return ds
-        elif mode == 'summary':
-            return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
-        else:
-            raise ValueError("Invalid metric mode.")
+        ds = ds.groupby("time").mean()
     else:
         # Average in time
         ds = ds.mean(dim="time")
-        for coord in ds.coords:
-            if coord != 'time' and coord != 'lat' and coord != 'lon':
-                ds = ds.reset_coords(coord, drop=True)
 
-        # Average in space
-        if mode == 'spatial':
-            return ds
-        elif mode == 'summary':
-            return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
-        else:
-            raise ValueError("Invalid metric mode.")
+    for coord in ds.coords:
+        if coord not in ['time', 'lat', 'lon']:
+            ds = ds.reset_coords(coord, drop=True)
+
+    # Average in space
+    if spatial:
+        return ds
+    else:
+        return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
 
 
 @dask_remote
