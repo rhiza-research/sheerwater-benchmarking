@@ -3,6 +3,9 @@ from dask.distributed import Client, get_client, LocalCluster
 import coiled
 import logging
 from functools import wraps
+import os
+import pwd
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -36,8 +39,10 @@ def dask_remote(func):
         # See if there are extra function args to run this remotely
         if 'remote' in kwargs and kwargs['remote']:
 
+            default_name = 'sheerwater_' + pwd.getpwuid(os.getuid())[0]
+
             coiled_default_options = {
-                'name': 'sheerwater_shared',
+                'name': default_name,
                 'n_workers': [3, 8],
                 'idle_timeout': "120 minutes",
                 'scheduler_cpu': 8,
@@ -46,14 +51,16 @@ def dask_remote(func):
                 'spot_policy': 'spot_with_fallback',
             }
 
+            if 'remote_name' in kwargs and isinstance(kwargs['remote_name'], str):
+                coiled_default_options['name'] = kwargs['remote_name']
+
             if 'remote_config' in kwargs and isinstance(kwargs['remote_config'], dict):
                 # setup coiled cluster with remote config
                 logger.info("Attaching to coiled cluster with custom configuration")
                 coiled_default_options.update(kwargs['remote_config'])
-                cluster = coiled.Cluster(**coiled_default_options)
-                cluster.get_client()
             elif 'remote_config' in kwargs and (isinstance(kwargs['remote_config'], str) or
                                                 isinstance(kwargs['remote_config'], list)):
+                logger.info("Attaching to coiled cluster with preset configuration")
                 if isinstance(kwargs['remote_config'], list):
                     for conf in kwargs['remote_config']:
                         if conf in config_options:
@@ -66,13 +73,12 @@ def dask_remote(func):
                         coiled_default_options.update(config_options[conf])
                     else:
                         print(f"Unknown preset remote config option {conf}. Skipping.")
-                cluster = coiled.Cluster(**coiled_default_options)
-                cluster.get_client()
             else:
                 # Just setup a coiled cluster
                 logger.info("Attaching to coiled cluster with default configuration")
-                cluster = coiled.Cluster(**coiled_default_options)
-                cluster.get_client()
+
+            cluster = coiled.Cluster(**coiled_default_options)
+            cluster.get_client()
         else:
             # Setup a local cluster
             try:
