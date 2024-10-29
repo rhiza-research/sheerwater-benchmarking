@@ -271,7 +271,7 @@ def era5_agg(start_time, end_time, variable, agg=14,
 
     if anom:
         # Import here to avoid circular dependency
-        from sheerwater_benchmarking.data_transforms import climatology_raw
+        from sheerwater_benchmarking.baselines import climatology_raw
         # Get the climatology on the same grid
         clim = climatology_raw(variable, **clim_params, grid=grid)
         # Get the anomalies
