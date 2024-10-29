@@ -28,15 +28,19 @@ truths = ["era5"]
 #baselines = [None, "ecmwf_ifs_er", "climatology_rolling", "climatology_2015"]
 #baselines = [None, "ecmwf_er", "climatology_rolling", "climatology_2015"]
 #baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015"]
-baselines = ["ecmwf_ifs_er", "climatology_2015"]
+#baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015"]
+baselines = ["climatology_2015"]
 leads = ["week1", "week2", "week3", "week4", "week5"]
 #metrics = ["mae", "crps"]
-metrics = ["mae", "crps"]
+metrics = ["crps"]
+#variables = ["precip", "tmp2m"]
 variables = ["precip", "tmp2m"]
-#grids = ["global1_5", "global0_25"]
+grids = ["global0_25"]
 #grids = ["global1_5"]
-grids = ["global1_5"]
-regions = ["africa", "east_africa", "global"]
+#grids = ["global1_5"]
+#regions = ["africa", "east_africa", "global"]
+#regions = ["east_africa", "global"]
+regions = ["africa", "east_africa"]
 
 # Make a loop that iterates these combinations
 #combos = itertools.product(forecasts, truths, baselines, leads, metrics, variables, grids)
@@ -57,10 +61,10 @@ regions = ["africa", "east_africa", "global"]
 #    spatial_metric(start_year, end_year, variable, lead, forecast, truth, metric, baseline, grid=grid,
 #                   cache=True, backend='terracotta', force_overwrite=True, remote=True)
 
-combos = itertools.product(metrics, variables, grids, baselines)
-for metric, variable, grid, baseline in combos:
+combos = itertools.product(metrics, variables, grids, baselines, regions)
+for metric, variable, grid, baseline, region in combos:
     print(metric, baseline)
     summary_metrics_table("2016-01-01", "2023-01-01", variable, "era5", metric,
                           baseline=baseline, grid=grid, region=region,
-                          remote=True, force_overwrite=True, backend='postgres', recompute=True
-                          remote_config=['big_scheduler','xxlarge_cluster','big_node'])
+                          remote=True, force_overwrite=True, backend='postgres', recompute=True,
+                          remote_config=['large_scheduler','xxlarge_cluster','large_node'])
