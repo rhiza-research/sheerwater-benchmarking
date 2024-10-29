@@ -60,7 +60,7 @@ def get_metric_fn(prob_type, metric, spatial=True):
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries=['time']
+           timeseries=['time'],
            cache_args=['variable', 'lead', 'forecast',
                        'truth', 'metric', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
@@ -179,6 +179,7 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
     print("Got metrics. Computing skill")
 
     # Compute the skill
+    # TODO - think about base metric of 0
     m_ds = (1 - (m_ds/base_ds))
 
     return m_ds
@@ -187,7 +188,7 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
 @dask_remote
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
-                       'grid', 'mask', 'region', 'time_grouping'],
+                       'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
 def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None, baseline=None,
@@ -199,7 +200,7 @@ def summary_metrics_table(start_time, end_time, variable,
     # Turn the dict into a pandas dataframe with appropriate columns
     leads_skill = [lead + '_skill' for lead in leads]
 
-    # Create a dict to insert our data
+    # Create a list to insert our data
     results = []
 
     for forecast in forecasts:
@@ -211,8 +212,10 @@ def summary_metrics_table(start_time, end_time, variable,
                       metric {metric}, grid {grid}, and region {region}""")
             # First get the value without the baseline
             ds = grouped_metric(start_time, end_time, variable, lead, forecast, truth,
-                                 metric, time_grouping, spatial=False, grid, mask, region)
+                                 metric, time_grouping, False, grid, mask, region)
 
+            # If there is a time grouping keep as xarray for combining
+            # otherwise keep scalar value in dict
             if time_grouping:
                 if forecast_ds:
                     ds = ds.rename({variable: lead})
@@ -220,12 +223,12 @@ def summary_metrics_table(start_time, end_time, variable,
                 else:
                     forecast_ds = ds.rename({variable: lead})
             else:
-                forecast_dict[lead] = ds[variable].values.max()
+                forecast_dict[lead] = float(ds[variable].values)
 
             # IF there is a baseline get the skill
             if baseline:
                 skill_ds = skill_metric(start_time, end_time, variable, lead, forecast, truth,
-                                        metric, baseline, time_grouping, spatial=False, grid, mask, region)
+                                        metric, baseline, time_grouping, False, grid, mask, region)
 
                 if time_grouping:
                     # If there is a time grouping merge the two dataframes
@@ -233,11 +236,10 @@ def summary_metrics_table(start_time, end_time, variable,
                     # Rename the variable
                     skill_ds = skill_ds.rename({variable: leads_skill[i]})
 
-                    #forecast_ds = xr.combine_by_coords(forecast_ds, skill_ds)
                     forecast_ds = xr.combine_by_coords([forecast_ds, skill_ds])
                 else:
                     # Otherwise just append it to the row
-                    forecast_dict[leads_skill[i]] = skill_ds[variable].values.max()
+                    forecast_dict[leads_skill[i]] = float(skill_ds[variable].values)
 
         if time_grouping:
             # prep the rows from the dataset

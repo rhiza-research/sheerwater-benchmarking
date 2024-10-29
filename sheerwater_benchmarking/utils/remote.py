@@ -91,5 +91,8 @@ def dask_remote(func):
         if 'remote_config' in kwargs:
             del kwargs['remote_config']
 
+        if 'remote_name' in kwargs:
+            del kwargs['remote_name']
+
         return func(*args, **kwargs)
     return wrapper
