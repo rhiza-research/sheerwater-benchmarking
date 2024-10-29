@@ -92,7 +92,8 @@ dependencies = [
     "xarray-regrid",
     "weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2",
     "deltalake",
-    "xskillscore>=0.0.26",
+    "jupyter-server-proxy",
+    "xskillscore @ git+https://github.com/rhiza-research/xskillscore",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

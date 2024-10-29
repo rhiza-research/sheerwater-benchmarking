@@ -3,7 +3,7 @@ from .caching import cacheable
 from .remote import dask_remote
 from .secrets import cdsapi_secret, ecmwf_secret, salient_secret, salient_auth
 from .data_utils import (apply_mask, roll_and_agg, regrid, clip_region,
-                         lon_base_change, get_globe_slice, get_anomalies)
+                         lon_base_change, get_globe_slice, get_anomalies, is_valid)
 from .general_utils import (load_netcdf, write_zarr, load_zarr, load_object)
 
 from .space_utils import (get_grid, get_grid_ds, is_wrapped,
@@ -43,4 +43,5 @@ __all__ = [
     get_globe_slice,
     check_bases,
     get_anomalies,
+    is_valid,
 ]
