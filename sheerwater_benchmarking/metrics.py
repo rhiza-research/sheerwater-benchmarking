@@ -114,9 +114,9 @@ def unaggregated_metric(start_time, end_time, variable, lead, forecast, truth,
            },
            cache=True)
 def single_metric(start_time, end_time, variable, lead, forecast, truth,
-                  metric, time_grouping=None, grid="global1_5", mask='lsm', region='africa', mode='summary'):
+                  metric, time_grouping=None, grid="global1_5",
+                  mask='lsm', region='africa', mode='summary'):
     """Compute a metric for a forecast at a specific lead."""
-
     # Get the unaggregated metric
     ds = unaggregated_metric(start_time, end_time, variable, lead, forecast, truth,
                              metric, grid, mask, region='global')
@@ -169,10 +169,13 @@ def single_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region', 'time_grouping', 'mode'],
+           cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
+                       'grid', 'mask', 'region', 'time_grouping', 'mode'],
            cache=False)
 def combined_metric(start_time, end_time, variable, lead, forecast, truth,
-           metric, time_grouping=None, baseline=None, grid="global1_5", mask='lsm', region='global', mode='summary'):
+                    metric, time_grouping=None, baseline=None, grid="global1_5",
+                    mask='lsm', region='global', mode='summary'):
+    """Compute skill either spatially or as a region summary."""
     m_ds = single_metric(start_time, end_time, variable, lead, forecast,
                                  truth, metric, time_grouping, grid=grid, mask=mask, region=region, mode=mode)
 
@@ -191,14 +194,16 @@ def combined_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='tabular',
-           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region', 'time_grouping'],
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
+                       'grid', 'mask', 'region', 'time_grouping'],
            cache=True)
 def summary_metrics_table(start_time, end_time, variable,
-                          truth, metric, time_grouping=None, baseline=None, grid='global1_5', mask='lsm', region='global'):
+                          truth, metric, time_grouping=None, baseline=None,
+                          grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    #forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015']
-    forecasts = ['salient', 'climatology_2015']
+    forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015']
     leads = ["week1", "week2", "week3", "week4", "week5"]
+
     # Turn the dict into a pandas dataframe with appropriate columns
     leads_skill = [lead + '_skill' for lead in leads]
 

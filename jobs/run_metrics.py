@@ -8,19 +8,15 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--start-time", default="2016-01-01", type=str)
 parser.add_argument("--end-time", default="2023-01-01", type=str)
 parser.add_argument("--baseline", type=str, nargs='*')
-parser.add_argument("--lead", type=str, nargs='*')
 parser.add_argument("--metric", type=str, nargs='*')
 parser.add_argument("--grid", type=str, nargs='*')
 parser.add_argument("--region", type=str, nargs='*')
 args = parser.parse_args()
 
-baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015", "climatology_2015", "climatology_trend", "climatology_rolling"]
+baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015",
+             "climatology_2015", "climatology_trend", "climatology_rolling"]
 if args.baseline:
     baselines = args.baseline
-
-leads = ["week1", "week2", "week3", "week4", "week5"]
-if args.lead:
-    leads = args.lead
 
 metrics = ["mae", "crps"]
 if args.metric:
@@ -35,7 +31,7 @@ if args.grid:
     grids = args.grid
 
 regions = ["africa", "east_africa", "global"]
-if args.region
+if args.region:
     region = args.region
 
 combos = itertools.product(metrics, variables, grids, baselines, regions)

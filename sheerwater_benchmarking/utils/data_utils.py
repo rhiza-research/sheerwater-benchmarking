@@ -230,7 +230,7 @@ def is_valid(ds, var, mask, region, grid, valid_threshold=0.5):
         # Import here to avoid circular imports
         from sheerwater_benchmarking.masks import land_sea_mask
         mask_ds = land_sea_mask(grid=grid).compute()
-    elif mask == None:
+    elif mask is None:
         mask_ds = get_grid_ds(grid_id=grid).compute()
     else:
         raise ValueError("Only land-sea mask is implemented.")
