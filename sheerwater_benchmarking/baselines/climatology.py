@@ -5,7 +5,7 @@ import numpy as np
 import xarray as xr
 import dask
 
-from sheerwater_benchmarking.climatology import (climatology_rolling_agg, climatology_agg, climatology_trend)
+from sheerwater_benchmarking.data_transforms import (climatology_rolling_agg, climatology_agg, climatology_trend)
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates, apply_mask, clip_region)
 
 

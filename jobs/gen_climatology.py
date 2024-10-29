@@ -1,6 +1,6 @@
 """Generate land-sea masks for all grids and bases."""
 from itertools import product
-from sheerwater_benchmarking.climatology import (climatology_raw, climatology_agg,
+from sheerwater_benchmarking.data_transforms import (climatology_raw, climatology_agg,
                                                  climatology_rolling_agg, climatology_trend)
 
 
@@ -23,9 +23,9 @@ first_year = 1985
 last_year = 2014
 
 UPDATE_CLIM = False
-UPDATE_CLIM_ROLLING = True 
-UPDATE_CLIM_TREND = False 
-UPDATE_CLIM_AGG = False 
+UPDATE_CLIM_ROLLING = True
+UPDATE_CLIM_TREND = False
+UPDATE_CLIM_AGG = False
 UPDATE_CLIM_FCST = False
 UPDATE_CLIM_FCST_ROLLING = False
 

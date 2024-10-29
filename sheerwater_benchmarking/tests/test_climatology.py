@@ -3,7 +3,7 @@
 
 """Test file for climatology data validation."""
 
-from sheerwater_benchmarking.climatology import climatology, climatology_standard_30yr
+from sheerwater_benchmarking.data_transforms import climatology, climatology_standard_30yr
 
 
 def test_climatology():
