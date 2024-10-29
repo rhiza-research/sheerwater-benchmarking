@@ -111,9 +111,12 @@ def read_from_delta(cache_path):
     return DeltaTable(cache_path).to_pandas()
 
 
-def write_to_delta(cache_path, df):
+def write_to_delta(cache_path, df, overwrite=False):
     """Write a pandas dataframe to a delta table."""
-    write_deltalake(cache_path, df)
+    if overwrite:
+        write_deltalake(cache_path, df, mode='overwrite', schema_mode='overwrite')
+    else:
+        write_deltalake(cache_path, df)
 
 def postgres_table_name(table_name):
     """Return a qualified postgres table name."""
@@ -673,7 +676,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_path}.")
-                                write_to_delta(cache_path, ds)
+                                write_to_delta(cache_path, ds, overwrite=True)
 
                         elif backend == 'postgres':
                             print(f"Caching result for {cache_key} in postgres.")
