@@ -380,7 +380,7 @@ def climatology_plus_trend_2015(start_time, end_time, variable, lead, prob_type=
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def climatology_rolling(start_time, end_time, variable, lead, prob_type='deterministic',
+def rolling_climatology(start_time, end_time, variable, lead, prob_type='deterministic',
                         grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     leads_param = {
