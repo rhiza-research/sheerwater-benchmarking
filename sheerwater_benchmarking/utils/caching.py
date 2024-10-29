@@ -4,6 +4,7 @@ import dateparser
 from functools import wraps
 from inspect import signature, Parameter
 import logging
+import hashlib
 
 import gcsfs
 from google.cloud import storage
@@ -12,6 +13,7 @@ from rasterio.io import MemoryFile
 from rasterio.enums import Resampling
 import terracotta as tc
 import sqlalchemy
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -109,10 +111,16 @@ def read_from_delta(cache_path):
     return DeltaTable(cache_path).to_pandas()
 
 
-def write_to_delta(cache_path, df):
+def write_to_delta(cache_path, df, overwrite=False):
     """Write a pandas dataframe to a delta table."""
-    write_deltalake(cache_path, df)
+    if overwrite:
+        write_deltalake(cache_path, df, mode='overwrite', schema_mode='overwrite')
+    else:
+        write_deltalake(cache_path, df)
 
+def postgres_table_name(table_name):
+    """Return a qualified postgres table name."""
+    return hashlib.md5(table_name.encode()).hexdigest()
 
 def read_from_postgres(table_name):
     """Read a pandas df from a table in the sheerwater postgres.
@@ -126,10 +134,12 @@ def read_from_postgres(table_name):
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
+    table_name = postgres_table_name(table_name)
+
     try:
         engine = sqlalchemy.create_engine(
             f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
-        df = pd.read_sql_query(f'select * from {table_name}', con=engine)
+        df = pd.read_sql_query(f'select * from "{table_name}"', con=engine)
         return df
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on the
@@ -144,6 +154,8 @@ def check_exists_postgres(table_name):
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
+
+    table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
@@ -168,6 +180,8 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
     """
     # Get the postgres write secret
     pgwrite_pass = postgres_write_password()
+
+    table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
@@ -248,7 +262,7 @@ def write_to_terracotta(cache_key, ds):
 
 def cache_exists(backend, cache_path):
     """Check if a cache exists generically."""
-    if backend == 'zarr' or backend == 'delta':
+    if backend == 'zarr' or backend == 'delta' or backend == 'pickle':
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
         return fs.exists(cache_path)
@@ -427,6 +441,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     cache_path = cache_key
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = False
+            elif data_type == 'basic':
+                backend = "pickle" if backend is None else backend
+                cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.pkl'
+                null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                supports_filepath = True
             else:
                 raise ValueError("Caching currently only supports the 'array' and 'tabular' datatypes")
 
@@ -551,8 +570,26 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         else:
                             raise ValueError("""Only delta, and postgres backends are
                                              supported for tabular data.""")
+                    elif data_type == 'basic':
+                        if backend == 'pickle':
+                            if filepath_only:
+                                cache_map = fs.get_mapper(cache_path)
+
+                                return cache_map
+                            else:
+                                print(f"Opening cache {cache_path}")
+                                with fs.open(cache_path) as f:
+                                    ds = pickle.load(f)
+
+                                if validate_cache_timeseries and timeseries is not None:
+                                    raise NotImplementedError("""Timeseries validation is not currently implemented
+                                                              for basic datasets.""")
+                                else:
+                                    compute_result = False
+                        else:
+                            raise ValueError("Only pickle backend supported for basic types.")
                     else:
-                        print("Auto caching currently only supports array and tabular types.")
+                        print("Auto caching currently only supports array, tabular, and basic types.")
                 elif fs.exists(null_path) and not recompute and cache and not retry_null_cache:
                     print(f"Found null cache for {null_path}. Skipping computation.")
                     return None
@@ -639,7 +676,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_path}.")
-                                write_to_delta(cache_path, ds)
+                                write_to_delta(cache_path, ds, overwrite=True)
 
                         elif backend == 'postgres':
                             print(f"Caching result for {cache_key} in postgres.")
@@ -658,6 +695,23 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write_to_postgres(ds, cache_key, overwrite=True)
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
+                    elif data_type == 'basic':
+                        if backend == 'pickle':
+                            write = False
+                            if fs.exists(cache_path) and not force_overwrite:
+                                inp = input(f'A cache already exists at {
+                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write = True
+                            else:
+                                write = True
+
+                            if write:
+                                print(f"Caching result for {cache_path}.")
+                                with fs.open(cache_path, 'wb') as f:
+                                    pickle.dump(ds, f)
+                        else:
+                            raise ValueError("Only pickle backend is implemented for basic data data")
 
             if filepath_only:
                 cache_map = fs.get_mapper(cache_path)
