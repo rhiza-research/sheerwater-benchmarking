@@ -60,12 +60,19 @@ def get_metric_fn(prob_type, metric, spatial=True):
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
+           timeseries=['time']
+           cache_args=['variable', 'lead', 'forecast',
                        'truth', 'metric', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               },
+           },
            cache=True)
-def unaggregated_metric(start_time, end_time, variable, lead, forecast, truth,
+def global_metric(start_time, end_time, variable, lead, forecast, truth,
                   metric, grid="global1_5", mask='lsm', region='global'):
-    """Compute a metric for a forecast at a specific lead."""
+    """Compute a metric without aggregated in time or space at a specific lead."""
     if metric == "crps":
         prob_type = "probabilistic"
     elif metric == "mae":
@@ -113,12 +120,12 @@ def unaggregated_metric(start_time, end_time, variable, lead, forecast, truth,
                },
            },
            cache=True)
-def single_metric(start_time, end_time, variable, lead, forecast, truth,
+def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                   metric, time_grouping=None, grid="global1_5",
                   mask='lsm', region='africa', mode='summary'):
     """Compute a metric for a forecast at a specific lead."""
     # Get the unaggregated metric
-    ds = unaggregated_metric(start_time, end_time, variable, lead, forecast, truth,
+    ds = global_metric(start_time, end_time, variable, lead, forecast, truth,
                              metric, grid, mask, region='global')
 
     # Check to make sure it supports this region/time
@@ -176,12 +183,12 @@ def combined_metric(start_time, end_time, variable, lead, forecast, truth,
                     metric, time_grouping=None, baseline=None, grid="global1_5",
                     mask='lsm', region='global', mode='summary'):
     """Compute skill either spatially or as a region summary."""
-    m_ds = single_metric(start_time, end_time, variable, lead, forecast,
+    m_ds = grouped_metric(start_time, end_time, variable, lead, forecast,
                                  truth, metric, time_grouping, grid=grid, mask=mask, region=region, mode=mode)
 
     # Get the baseline if it exists and run its metric
     if baseline:
-        base_ds = single_metric(start_time, end_time, variable, lead, baseline,
+        base_ds = grouped_metric(start_time, end_time, variable, lead, baseline,
                                 truth, metric, time_grouping, grid=grid, mask=mask, region=region, mode=mode)
 
         print("Got metrics. Computing skill")
