@@ -14,7 +14,7 @@ parser.add_argument("--region", type=str, nargs='*')
 args = parser.parse_args()
 
 baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
-             "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
+             "climatology_2015", "climatology_trend_2015", "climatology_incremental"]
 if args.baseline:
     baselines = args.baseline
 
