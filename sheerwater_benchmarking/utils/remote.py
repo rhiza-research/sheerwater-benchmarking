@@ -61,14 +61,10 @@ def dask_remote(func):
             elif 'remote_config' in kwargs and (isinstance(kwargs['remote_config'], str) or
                                                 isinstance(kwargs['remote_config'], list)):
                 logger.info("Attaching to coiled cluster with preset configuration")
-                if isinstance(kwargs['remote_config'], list):
-                    for conf in kwargs['remote_config']:
-                        if conf in config_options:
-                            coiled_default_options.update(config_options[conf])
-                        else:
-                            print(f"Unknown preset remote config option {conf}. Skipping.")
-                else:
-                    conf = kwargs['remote_config']
+                if not isinstance(kwargs['remote_config', list]):
+                    kwargs['remote_config'] = [kwargs['remote_config']]
+
+                for conf in kwargs['remote_config']:
                     if conf in config_options:
                         coiled_default_options.update(config_options[conf])
                     else:
