@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, clip_region, roll_and_agg)
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, clip_region)
 
 
 @dask_remote
@@ -121,6 +121,7 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg=1
         end_time: Last time of the forecast period.
         variable: Variable to compute climatology for.
         clim_years: Number of years to compute climatology over.
+        agg: Aggregation period in days.
         grid: Grid resolution of the data.
     """
     #  Get reanalysis data for the appropriate look back period
@@ -153,7 +154,7 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg=1
 @dask_remote
 @cacheable(data_type='array',
            timeseries='forecast_date',
-           cache_args=['variable', 'clim_years', 'grid', 'mask', 'region'],
+           cache_args=['variable', 'clim_years', 'agg', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
                'grid': {
@@ -161,7 +162,7 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg=1
                }
            },
            cache=False)
-def climatology_rolling(start_time, end_time, variable, clim_years=30,
+def climatology_rolling(start_time, end_time, variable, clim_years=30, agg=14,
                         grid="global1_5", mask='lsm', region='global'):
     """Compute a rolling {clim_years}-yr climatology of the ERA5 data.
 
@@ -170,11 +171,13 @@ def climatology_rolling(start_time, end_time, variable, clim_years=30,
         end_time: Last time of the forecast period.
         variable: Variable to compute climatology for.
         clim_years: Number of years to compute climatology over.
+        agg: Aggregation period in days.
         grid: Grid resolution of the data.
         mask: Mask to apply to the data.
         region: Region to clip the data to.
     """
-    ds = climatology_rolling_raw(start_time, end_time, variable, clim_years=clim_years, grid=grid)
+    ds = climatology_rolling_agg(start_time, end_time, variable, clim_years=clim_years,
+                                 agg=agg, grid=grid)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

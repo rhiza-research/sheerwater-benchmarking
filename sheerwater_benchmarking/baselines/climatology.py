@@ -30,6 +30,7 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
         variable (str): The weather variable to fetch.
         first_year (int): The first year to use for the climatology.
         last_year (int): The last year to use for the climatology.
+        trend (bool): Whether to include a trend in the forecast.
         prob_type (str): The type of forecast to generate.
         agg (str): The aggregation period to use, in days
         grid (str): The grid to produce the forecast on.

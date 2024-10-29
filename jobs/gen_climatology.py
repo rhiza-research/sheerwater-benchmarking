@@ -2,7 +2,6 @@
 from itertools import product
 from sheerwater_benchmarking.climatology import (climatology_raw, climatology_agg,
                                                  climatology_rolling_agg, climatology_trend)
-from sheerwater_benchmarking.baselines.climatology import (climatology_timeseries)
 
 
 vars = ["tmp2m", "precip"]
