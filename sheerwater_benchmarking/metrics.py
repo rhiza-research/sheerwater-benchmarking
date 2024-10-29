@@ -123,19 +123,26 @@ def single_metric(start_time, end_time, variable, lead, forecast, truth,
     # Group the time column based on time grouping
     if time_grouping:
         if time_grouping == 'monthOfYear':
-            ds.coords["time"] = ds.time.dt.strftime("%B")
+            #ds.coords["time"] = ds.time.dt.strftime("%B")
+            ds.coords["time"] = ds.time.dt.month
         elif time_grouping == 'year':
             ds.coords["time"] = ds.time.dt.year
         else:
             raise ValueError("Invalid time grouping")
 
         ds = ds.groupby(time=xr.groupers.UniqueGrouper()).mean()
+        for coord in ds.coords:
+            if coord != 'time' and coord != 'lat' and coord != 'lon':
+                ds = ds.reset_coords(coord, drop=True)
 
         # Now average just in space
         return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
     else:
         # Average in time
         ds = ds.mean(dim="time")
+        for coord in ds.coords:
+            if coord != 'time' and coord != 'lat' and coord != 'lon':
+                ds = ds.reset_coords(coord, drop=True)
 
         # Average in space
         return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
@@ -172,11 +179,18 @@ def single_spatial_metric(start_time, end_time, variable, lead, forecast, truth,
             raise ValueError("Invalid time grouping")
 
         ds = ds.groupby(time=xr.groupers.UniqueGrouper()).mean()
+        for coord in ds.coords:
+            if coord != 'time' and coord != 'lat' and coord != 'lon':
+                ds = ds.reset_coords(coord, drop=True)
 
         return ds
     else:
         # Average just in time
         ds = ds.mean(dim="time")
+        for coord in ds.coords:
+            if coord != 'time' and coord != 'lat' and coord != 'lon':
+                ds = ds.reset_coords(coord, drop=True)
+
         return ds
 
 
@@ -211,7 +225,7 @@ def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
-                       'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
+                       'truth', 'metric', 'baseline', 'grid', 'mask', 'region', 'time_grouping'],
            cache=False)
 def summary_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, time_grouping=None, baseline=None, grid="global1_5", mask='lsm', region='global'):
@@ -233,49 +247,73 @@ def summary_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='tabular',
-           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region'],
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region', 'time_grouping'],
            cache=True)
 def summary_metrics_table(start_time, end_time, variable,
-                          truth, metric, baseline=None, grid='global1_5', mask='lsm', region='global'):
+                          truth, metric, time_grouping=None, baseline=None, grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     #forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015']
     forecasts = ['salient', 'climatology_2015']
     leads = ["week1", "week2", "week3", "week4", "week5"]
-
-    # Create a dict to insert our data
-    results = {forecast:[] for forecast in forecasts}
-
-    for forecast in forecasts:
-        lead_vals = []
-        for lead in leads:
-            # Try running as dask delayed
-            print(f"""Running for {forecast} and {lead} with variable {variable},
-                      metric {metric}, grid {grid}, and region {region}""")
-            # First get the value without the baseline
-            val = summary_metric(start_time, end_time, variable, lead, forecast, truth,
-                                 metric, None, grid, mask, region)
-            lead_vals.append(val)
-
-            # IF there is a baseline get the skill
-            if baseline:
-                val = summary_metric(start_time, end_time, variable, lead, forecast, truth,
-                                     metric, baseline, grid, mask, region)
-                lead_vals.append(val)
-
-        results[forecast] = lead_vals
-
     # Turn the dict into a pandas dataframe with appropriate columns
     leads_skill = [lead + '_skill' for lead in leads]
 
-    # interleave
-    cols = leads + leads_skill
-    cols[::2] = leads
-    cols[1::2] = leads_skill
+    # Create a dict to insert our data
+    results = []
 
-    print(results)
+    for forecast in forecasts:
+        forecast_ds = None
+        forecast_dict = {'forecast': forecast}
+        for i, lead in enumerate(leads):
+
+            print(f"""Running for {forecast} and {lead} with variable {variable},
+                      metric {metric}, grid {grid}, and region {region}""")
+            # First get the value without the baseline
+            ds = summary_metric(start_time, end_time, variable, lead, forecast, truth,
+                                 metric, time_grouping, None, grid, mask, region)
+
+            if time_grouping:
+                if forecast_ds:
+                    ds = ds.rename({variable: lead})
+                    forecast_ds = xr.combine_by_coords([forecast_ds, ds])
+                else:
+                    forecast_ds = ds.rename({variable: lead})
+            else:
+                forecast_dict[lead] = ds[variable].values.max()
+
+            # IF there is a baseline get the skill
+            if baseline:
+                skill_ds = summary_metric(start_time, end_time, variable, lead, forecast, truth,
+                                     metric, time_grouping, baseline, grid, mask, region)
+
+                if time_grouping:
+                    # If there is a time grouping merge the two dataframes
+
+                    # Rename the variable
+                    skill_ds = skill_ds.rename({variable: leads_skill[i]})
+
+                    #forecast_ds = xr.combine_by_coords(forecast_ds, skill_ds)
+                    forecast_ds = xr.combine_by_coords([forecast_ds, skill_ds])
+                else:
+                    # Otherwise just append it to the row
+                    forecast_dict[leads_skill[i]] = skill_ds[variable].values.max()
+
+        if time_grouping:
+            # prep the rows from the dataset
+            df = forecast_ds.to_pandas()
+
+            # Add a column for the forecast
+            df['forecast'] = forecast
+            df = df.reset_index().rename(columns={'index':'time'})
+
+            # append all the rows to the results
+            results = results + df.to_dict(orient='records')
+        else:
+            results.append(forecast_dict)
+
 
     # create the dataframe
-    df = pd.DataFrame.from_dict(results, orient='index', columns=cols)
+    df = pd.DataFrame.from_records(results, index='forecast')
 
     # Rename the index
     df = df.reset_index().rename(columns={'index':'forecast'})
