@@ -169,6 +169,8 @@ def climatology_rolling(start_time, end_time, variable, clim_years=30, agg=14,
                         grid="global1_5", mask='lsm', region='global'):
     """Compute a rolling {clim_years}-yr climatology of the ERA5 data.
 
+    TODO: ABC specific; export and change name.
+
     Args:
         start_time: First time of the forecast period.
         end_time: Last time of the forecast period.
@@ -202,6 +204,8 @@ def climatology_rolling(start_time, end_time, variable, clim_years=30, agg=14,
            auto_rechunk=False)
 def climatology_trend(variable, first_year=1985, last_year=2014, agg=14, grid='global1_5'):
     """Fit the climatological trend for a specific day of year.
+
+    TODO: rename this cache to avoid clashing with the forecast name.
 
     Args:
         variable: Variable to compute climatology for.
@@ -338,8 +342,8 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def climatology_plus_trend_2015(start_time, end_time, variable, lead, prob_type='deterministic',
-                                grid='global0_25', mask='lsm', region='global'):
+def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='deterministic',
+                           grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     leads_param = {
         "week1": (7, 0),
@@ -380,8 +384,8 @@ def climatology_plus_trend_2015(start_time, end_time, variable, lead, prob_type=
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def rolling_climatology(start_time, end_time, variable, lead, prob_type='deterministic',
-                        grid='global0_25', mask='lsm', region='global'):
+def climatology_incremental(start_time, end_time, variable, lead, prob_type='deterministic',
+                            grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     leads_param = {
         "week1": (7, 0),
