@@ -61,10 +61,10 @@ def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='gl
 @cacheable(data_type='array',
            cache=True,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
-           chunking={"lat": 121, "lon": 240, "doy": 30, "member": 30},
+           chunking={"lat": 121, "lon": 240, "dayofyear": 30, "member": 30},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'doy': 1}
+                   'global0_25': {"lat": 721, "lon": 1440, 'dayofyear': 1}
                }
            },
            auto_rechunk=False)
@@ -84,7 +84,6 @@ def climatology_agg(variable, first_year=1985, last_year=2014,
     elif prob_type != 'probabilistic':
         raise ValueError(f"Unsupported prob_type: {prob_type}")
     # Otherwise, get ensemble members sampled from climatology
-
     def sample_members(sub_ds, members=100):
         doy = sub_ds.dayofyear.values[0]
         ind = np.random.randint(0, len(sub_ds.time.values), size=(members,))
@@ -248,8 +247,13 @@ def climatology_rolling(start_time, end_time, variable, clim_years=30, agg=14,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'first_year', 'last_year', 'agg', 'grid'],
-           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
+           chunking={"lat": 121, "lon": 240, "dayofyear": 366},
            cache=True,
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'dayofyear': 10}
+               }
+           },
            auto_rechunk=False)
 def climatology_trend(variable, first_year=1985, last_year=2014, agg=14, grid='global1_5'):
     """Fit the climatological trend for a specific day of year.

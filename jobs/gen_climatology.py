@@ -6,6 +6,7 @@ from sheerwater_benchmarking.climatology import (climatology_raw, climatology_ag
 
 vars = ["tmp2m", "precip"]
 grids = ["global0_25", "global1_5"]
+# grids = ["global0_25"]
 aggs = [7, 14]
 
 start_time = "1979-01-01"
@@ -22,9 +23,9 @@ first_year = 1985
 last_year = 2014
 
 UPDATE_CLIM = False
-UPDATE_CLIM_ROLLING = True
-UPDATE_CLIM_TREND = True
-UPDATE_CLIM_AGG = True
+UPDATE_CLIM_ROLLING = True 
+UPDATE_CLIM_TREND = False 
+UPDATE_CLIM_AGG = False 
 UPDATE_CLIM_FCST = False
 UPDATE_CLIM_FCST_ROLLING = False
 
@@ -48,25 +49,25 @@ for var, grid in product(vars, grids):
                                              'idle_timeout': '240 minutes',
                                              'name': 'genevieve'
                                          },
-                                         recompute=True, force_overwrite=True)
+                                        #  recompute=True, force_overwrite=True
+                                        )
 
         if UPDATE_CLIM_TREND:
-            ds = climatology_trend(start_time, end_time, variable=var,
-                                   first_year=first_year, last_year=last_year,
-                                   agg=agg, grid=grid,
-                                   remote=True, remote_config={
-                                       'n_workers': 10,
-                                       'idle_timeout': '240 minutes',
-                                       'name': 'genevieve'
-                                   },
-                                   recompute=True, force_overwrite=True)
+            ds = climatology_trend(var, first_year=first_year, last_year=last_year,
+                                    agg=agg, grid=grid,
+                                    remote=True, remote_config={
+                                        'n_workers': 25,
+                                        'idle_timeout': '240 minutes',
+                                        'name': 'genevieve2'
+                                    },
+                                    recompute=True, force_overwrite=True)
 
         for prob_type in prob_types:
             if UPDATE_CLIM_AGG:
                 ds = climatology_agg(variable=var,
                                      first_year=first_year, last_year=last_year,
-                                     prob_type=prob_type, agg=agg,
-                                     recompute=True, force_overwrite=True,
+                                     prob_type=prob_type, agg=agg, grid=grid,
+                                    #  recompute=True, force_overwrite=True,
                                      remote=True, remote_config={
                                          'n_workers': 10,
                                          'idle_timeout': '240 minutes',
