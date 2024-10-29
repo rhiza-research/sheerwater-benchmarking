@@ -583,7 +583,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                                 if validate_cache_timeseries and timeseries is not None:
                                     raise NotImplementedError("""Timeseries validation is not currently implemented
-                                                              for tabular datasets.""")
+                                                              for basic datasets.""")
                                 else:
                                     compute_result = False
                         else:
