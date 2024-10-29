@@ -32,7 +32,7 @@ if args.grid:
 
 regions = ["africa", "east_africa", "global"]
 if args.region:
-    region = args.region
+    regions = args.region
 
 combos = itertools.product(metrics, variables, grids, baselines, regions)
 for metric, variable, grid, baseline, region in combos:
