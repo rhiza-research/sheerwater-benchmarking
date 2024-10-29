@@ -58,6 +58,7 @@ def get_metric_fn(prob_type, metric, spatial=True):
     except (ImportError, AttributeError):
         raise ImportError(f"Did not find implementation for metric {metric}")
 
+
 @dask_remote
 @cacheable(data_type='array',
            timeseries=['time'],
@@ -118,12 +119,12 @@ def global_metric(start_time, end_time, variable, lead, forecast, truth,
            },
            cache=True)
 def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
-                  metric, time_grouping=None, spatial=False, grid="global1_5",
-                  mask='lsm', region='africa'):
+                   metric, time_grouping=None, spatial=False, grid="global1_5",
+                   mask='lsm', region='africa'):
     """Compute a grouped metric for a forecast at a specific lead."""
     # Get the unaggregated metric
     ds = global_metric(start_time, end_time, variable, lead, forecast, truth,
-                             metric, grid, mask, region='global')
+                       metric, grid, mask, region='global')
 
     # Check to make sure it supports this region/time
     if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.99):
@@ -166,15 +167,15 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                        'time_grouping', 'spatial', 'grid', 'mask', 'region'],
            cache=False)
 def skill_metric(start_time, end_time, variable, lead, forecast, truth,
-                    metric, baseline, time_grouping=None, spatial=False, grid="global1_5",
-                    mask='lsm', region='global'):
+                 metric, baseline, time_grouping=None, spatial=False, grid="global1_5",
+                 mask='lsm', region='global'):
     """Compute skill either spatially or as a region summary."""
     m_ds = grouped_metric(start_time, end_time, variable, lead, forecast,
-                                 truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
+                          truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
 
     # Get the baseline if it exists and run its metric
     base_ds = grouped_metric(start_time, end_time, variable, lead, baseline,
-                            truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
+                             truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
 
     print("Got metrics. Computing skill")
 
@@ -212,7 +213,7 @@ def summary_metrics_table(start_time, end_time, variable,
                       metric {metric}, grid {grid}, and region {region}""")
             # First get the value without the baseline
             ds = grouped_metric(start_time, end_time, variable, lead, forecast, truth,
-                                 metric, time_grouping, False, grid, mask, region)
+                                metric, time_grouping, False, grid, mask, region)
 
             # If there is a time grouping keep as xarray for combining
             # otherwise keep scalar value in dict
@@ -232,7 +233,6 @@ def summary_metrics_table(start_time, end_time, variable,
 
                 if time_grouping:
                     # If there is a time grouping merge the two dataframes
-
                     # Rename the variable
                     skill_ds = skill_ds.rename({variable: leads_skill[i]})
 
@@ -247,20 +247,18 @@ def summary_metrics_table(start_time, end_time, variable,
 
             # Add a column for the forecast
             df['forecast'] = forecast
-            df = df.reset_index().rename(columns={'index':'time'})
+            df = df.reset_index().rename(columns={'index': 'time'})
 
             # append all the rows to the results
             results = results + df.to_dict(orient='records')
         else:
             results.append(forecast_dict)
 
-
     # create the dataframe
     df = pd.DataFrame.from_records(results, index='forecast')
 
     # Rename the index
-    df = df.reset_index().rename(columns={'index':'forecast'})
+    df = df.reset_index().rename(columns={'index': 'forecast'})
 
     print(df)
     return df
-
