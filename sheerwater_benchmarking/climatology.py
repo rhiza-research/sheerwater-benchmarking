@@ -13,7 +13,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, apply_mask, c
            cache_args=['variable', 'first_year', 'last_year', 'grid'],
            chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
            auto_rechunk=False)
-def climatology_raw(variable, first_year=1986, last_year=2015, grid='global1_5'):
+def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5'):
     """Compute the climatology of the ERA5 data. Years are inclusive."""
     start_time = f"{first_year}-01-01"
     end_time = f"{last_year+1}-01-01"
@@ -30,6 +30,35 @@ def climatology_raw(variable, first_year=1986, last_year=2015, grid='global1_5')
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
+           cache=True)
+def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mask='lsm', region='global'):
+    """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
+    # Get single day, masked data between start and end years
+    ds = climatology_raw(variable, first_year, last_year, grid=grid)
+
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'grid', 'mask', 'region'],
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
+           cache=False,
+           auto_rechunk=False)
+def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='global'):
+    """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
+    # Get single day, masked data between start and end years
+    return climatology(variable, 1991, 2020, grid=grid, mask=mask, region=region)
+
+
+@dask_remote
+@cacheable(data_type='array',
            cache=True,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
            chunking={"lat": 121, "lon": 240, "doy": 30, "member": 30},
@@ -39,7 +68,7 @@ def climatology_raw(variable, first_year=1986, last_year=2015, grid='global1_5')
                }
            },
            auto_rechunk=False)
-def climatology_agg(variable, first_year=1986, last_year=2015,
+def climatology_agg(variable, first_year=1985, last_year=2014,
                     prob_type='deterministic', agg=14, grid="global1_5"):
     """Generates aggregated climatology."""
     start_time = f"{first_year}-01-01"
@@ -75,37 +104,8 @@ def climatology_agg(variable, first_year=1986, last_year=2015,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
-           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
-           cache=True)
-def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mask='lsm', region='global'):
-    """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
-    # Get single day, masked data between start and end years
-    ds = climatology_raw(variable, first_year, last_year, grid=grid)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'grid', 'mask', 'region'],
-           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
-           cache=False,
-           auto_rechunk=False)
-def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='global'):
-    """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
-    # Get single day, masked data between start and end years
-    return climatology(variable, 1991, 2020, grid=grid, mask=mask, region=region)
-
-
-@dask_remote
-@cacheable(data_type='array',
            timeseries='forecast_date',
-           cache_args=['variable', 'clim_years', 'grid'],
+           cache_args=['variable', 'clim_years', 'agg', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
                'grid': {
@@ -113,7 +113,7 @@ def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='gl
                }
            },
            cache=True)
-def climatology_rolling_raw(start_time, end_time, variable, clim_years=30, grid="global1_5"):
+def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg=14, grid="global1_5"):
     """Compute a rolling {clim_years}-yr climatology of the ERA5 data.
 
     Args:
@@ -130,7 +130,7 @@ def climatology_rolling_raw(start_time, end_time, variable, clim_years=30, grid=
     new_end = (dateparser.parse(end_time) - relativedelta(years=1)).strftime("%Y-%m-%d")
 
     # Get ERA5 data, and ignore cache validation if start_time is earlier than the cache
-    ds = era5_daily(new_start, new_end, variable=variable, grid=grid)
+    ds = era5_rolled(new_start, new_end, variable=variable, agg=agg, grid=grid)
     ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
 
     def doy_rolling(sub_ds, years):
@@ -146,44 +146,6 @@ def climatology_rolling_raw(start_time, end_time, variable, clim_years=30, grid=
     # goes up until the year ~before~ the forecast date value, e.g,.
     # the climatology for forecast date 2016-01-01 is computed up until 2015-01-01.
     ds = ds.assign_coords(time=ds['time'].to_index() + pd.DateOffset(years=1))
-    ds = ds.rename({'time': 'forecast_date'})
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
-           timeseries='time',
-           cache=True,
-           cache_args=['variable', 'clim_years', 'agg', 'grid'],
-           chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
-               }
-           },
-           auto_rechunk=False)
-def climatology_rolling_agg(start_time, end_time, variable, clim_years=30,
-                            agg=14, grid="global1_5"):
-    """Generates a daily timeseries of climatology with rolling aggregation.
-
-    This climatology is valid as a baseline for all times.
-
-    Args:
-        start_time (str): The start time of the timeseries forecast.
-        end_time (str): The end time of the timeseries forecast.
-        variable (str): The weather variable to fetch.
-        clim_years (int): The number of years to use for the climatology.
-        agg (str): The aggregation period to use, in days
-        grid (str): The grid to produce the forecast on.
-    """
-    # Get climatology on the corresponding grid
-    ds = climatology_rolling_raw(start_time, end_time, variable=variable, clim_years=clim_years, grid=grid)
-    ds = ds.rename({'forecast_date': 'time'})
-    ds = ds.drop('dayofyear')
-
-    # Roll and aggregate the data
-    agg_fn = "sum" if variable == "precip" else "mean"
-    ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
     return ds
 
 
@@ -217,6 +179,100 @@ def climatology_rolling(start_time, end_time, variable, clim_years=30,
     ds = apply_mask(ds, mask, var=variable, grid=grid)
     # Clip to specified region
     ds = clip_region(ds, region=region)
+    return ds
+
+
+# @dask_remote
+# @cacheable(data_type='array',
+#            timeseries='time',
+#            cache=True,
+#            cache_args=['variable', 'clim_years', 'prob_type', 'agg', 'grid'],
+#            chunking={"lat": 121, "lon": 240, "time": 1000},
+#            chunk_by_arg={
+#                'grid': {
+#                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+#                }
+#            },
+#            auto_rechunk=False)
+# def climatology_rolling_wip(start_time, end_time, variable, clim_years=30,
+#                             prob_type='deterministic', agg=14, grid="global1_5"):
+#     """Generates a daily timeseries of climatology with rolling aggregation.
+
+#     This climatology is valid as a baseline for all times.
+
+#     Args:
+#         start_time (str): The start time of the timeseries forecast.
+#         end_time (str): The end time of the timeseries forecast.
+#         variable (str): The weather variable to fetch.
+#         clim_years (int): The number of years to use for the climatology.
+#         agg (str): The aggregation period to use, in days
+#         grid (str): The grid to produce the forecast on.
+#     """
+#     #  Get reanalysis data for the appropriate look back period
+#     # We need data from clim_years before the start_time until 1 year before the end_time
+#     # as this climatology excludes the most recent year for use in operational forecasting
+#     new_start = (dateparser.parse(start_time) - relativedelta(years=clim_years)).strftime("%Y-%m-%d")
+
+#     # Get ERA5 data, and ignore cache validation if start_time is earlier than the cache
+#     ds = era5_rolled(new_start, end_time, variable=variable, agg=agg, grid=grid)
+#     ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
+
+#     if prob_type == 'deterministic':
+#         def doy_rolling(sub_ds, years):
+#             return sub_ds.rolling(time=years, min_periods=years, center=False).mean()
+#     elif prob_type == 'probabilistic':
+#         def doy_rolling(sub_ds, years):
+#             def sample_members(sub_ds, members=100):
+#                 doy = sub_ds.dayofyear.values[0]
+#                 ind = np.random.randint(0, len(sub_ds.time.values), size=(members,))
+#                 sub = sub_ds.isel(time=ind)
+#                 sub = sub.assign_coords(time=np.arange(members)).rename({'time': 'member'})
+#                 sub = sub.assign_coords(dayofyear=doy)
+#                 return sub
+#             return sub_ds.rolling(time=years, min_periods=years, center=False).map(sample_members)
+#     else:
+#         raise ValueError(f"Unsupported prob_type: {prob_type}")
+
+#     # Rechunk the data to have a single time chunk for efficient rolling
+#     ds = ds.chunk(time=1)
+#     ds = ds.groupby('dayofyear').map(doy_rolling, years=clim_years)
+#     ds = ds.dropna('time', how='all')
+
+#     return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'first_year', 'last_year', 'agg', 'grid'],
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
+           cache=True,
+           auto_rechunk=False)
+def climatology_trend(variable, first_year=1985, last_year=2014, agg=14, grid='global1_5'):
+    """Fit the climatological trend for a specific day of year.
+
+    Args:
+        variable: Variable to compute climatology for.
+        first_year: First year of the climatology.
+        last_year: Last year of the climatology.
+        agg: Aggregation period in days.
+        grid: Grid resolution of the data.
+    """
+    start_time = f"{first_year}-01-01"
+    end_time = f"{last_year+1}-01-01"
+
+    # Get single day, masked data between start and end years
+    ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
+
+    # Add day of year as a coordinate
+    ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
+    ds = ds.assign_coords(year=ds.time.dt.year)
+
+    def fit_trend(sub_ds):
+        sub_ds = sub_ds.swap_dims({"time": "year"})
+        return sub_ds.polyfit(dim='year', deg=1)
+
+    # Fit the trend for each day of the year
+    ds = ds.groupby('dayofyear').map(fit_trend)
     return ds
 
 
