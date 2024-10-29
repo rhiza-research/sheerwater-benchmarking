@@ -163,24 +163,23 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
-                       'grid', 'mask', 'region', 'time_grouping', 'mode'],
+                       'time_grouping', 'spatial', 'grid', 'mask', 'region'],
            cache=False)
-def combined_metric(start_time, end_time, variable, lead, forecast, truth,
-                    metric, time_grouping=None, baseline=None, grid="global1_5",
-                    mask='lsm', region='global', mode='summary'):
+def skill_metric(start_time, end_time, variable, lead, forecast, truth,
+                    metric, baseline, time_grouping=None, spatial=False, grid="global1_5",
+                    mask='lsm', region='global'):
     """Compute skill either spatially or as a region summary."""
     m_ds = grouped_metric(start_time, end_time, variable, lead, forecast,
-                                 truth, metric, time_grouping, grid=grid, mask=mask, region=region, mode=mode)
+                                 truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
 
     # Get the baseline if it exists and run its metric
-    if baseline:
-        base_ds = grouped_metric(start_time, end_time, variable, lead, baseline,
-                                truth, metric, time_grouping, grid=grid, mask=mask, region=region, mode=mode)
+    base_ds = grouped_metric(start_time, end_time, variable, lead, baseline,
+                            truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
 
-        print("Got metrics. Computing skill")
+    print("Got metrics. Computing skill")
 
-        # Compute the skill
-        m_ds = (1 - (m_ds/base_ds))
+    # Compute the skill
+    m_ds = (1 - (m_ds/base_ds))
 
     return m_ds
 
@@ -211,8 +210,8 @@ def summary_metrics_table(start_time, end_time, variable,
             print(f"""Running for {forecast} and {lead} with variable {variable},
                       metric {metric}, grid {grid}, and region {region}""")
             # First get the value without the baseline
-            ds = combined_metric(start_time, end_time, variable, lead, forecast, truth,
-                                 metric, time_grouping, None, grid, mask, region, mode='summary')
+            ds = grouped_metric(start_time, end_time, variable, lead, forecast, truth,
+                                 metric, time_grouping, spatial=False, grid, mask, region)
 
             if time_grouping:
                 if forecast_ds:
@@ -225,8 +224,8 @@ def summary_metrics_table(start_time, end_time, variable,
 
             # IF there is a baseline get the skill
             if baseline:
-                skill_ds = combined_metric(start_time, end_time, variable, lead, forecast, truth,
-                                     metric, time_grouping, baseline, grid, mask, region, mode='summary')
+                skill_ds = skill_metric(start_time, end_time, variable, lead, forecast, truth,
+                                        metric, baseline, time_grouping, spatial=False, grid, mask, region)
 
                 if time_grouping:
                     # If there is a time grouping merge the two dataframes
