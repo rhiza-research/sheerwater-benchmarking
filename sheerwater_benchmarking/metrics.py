@@ -102,10 +102,19 @@ def unaggregated_metric(start_time, end_time, variable, lead, forecast, truth,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
-                       'truth', 'metric', 'grid', 'mask', 'region', 'time_grouping'],
+                       'truth', 'metric', 'grid', 'mask', 'region', 'time_grouping', 'mode'],
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               },
+               'mode': {
+                   'summary': {"time": -1}
+               },
+           },
            cache=True)
 def single_metric(start_time, end_time, variable, lead, forecast, truth,
-                  metric, time_grouping=None, grid="global1_5", mask='lsm', region='africa'):
+                  metric, time_grouping=None, grid="global1_5", mask='lsm', region='africa', mode='summary'):
     """Compute a metric for a forecast at a specific lead."""
 
     # Get the unaggregated metric
@@ -136,7 +145,12 @@ def single_metric(start_time, end_time, variable, lead, forecast, truth,
                 ds = ds.reset_coords(coord, drop=True)
 
         # Now average just in space
-        return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+        if mode == 'spatial':
+            return ds
+        elif mode == 'summary':
+            return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+        else:
+            raise ValueError("Invalid metric mode.")
     else:
         # Average in time
         ds = ds.mean(dim="time")
@@ -145,97 +159,27 @@ def single_metric(start_time, end_time, variable, lead, forecast, truth,
                 ds = ds.reset_coords(coord, drop=True)
 
         # Average in space
-        return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
-
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
-                       'truth', 'metric', 'grid', 'mask', 'region', 'time_grouping'],
-           cache=True)
-def single_spatial_metric(start_time, end_time, variable, lead, forecast, truth,
-                  metric, time_grouping=None, grid="global1_5", mask='lsm', region='africa'):
-    """Compute a metric for a forecast at a specific lead."""
-
-    # Get the unaggregated metric
-    ds = unaggregated_metric(start_time, end_time, variable, lead, forecast, truth,
-                             metric, grid, mask, region='global')
-
-    # Check to make sure it supports this region/time
-    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.99):
-        print("Tried to get invalid metric aggregation")
-        raise NotImplementedError("Forecast not implemented for these parameters.")
-
-
-    # Clip it to the region
-    ds = clip_region(ds, region)
-
-    # Group the time column based on time grouping
-    if time_grouping:
-        if time_grouping == 'monthOfYear':
-            ds.coords["time"] = ds.time.dt.month
-        elif time_grouping == 'year':
-            ds.coords["time"] = ds.time.dt.year
+        if mode == 'spatial':
+            return ds
+        elif mode == 'summary':
+            return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
         else:
-            raise ValueError("Invalid time grouping")
-
-        ds = ds.groupby(time=xr.groupers.UniqueGrouper()).mean()
-        for coord in ds.coords:
-            if coord != 'time' and coord != 'lat' and coord != 'lon':
-                ds = ds.reset_coords(coord, drop=True)
-
-        return ds
-    else:
-        # Average just in time
-        ds = ds.mean(dim="time")
-        for coord in ds.coords:
-            if coord != 'time' and coord != 'lat' and coord != 'lon':
-                ds = ds.reset_coords(coord, drop=True)
-
-        return ds
+            raise ValueError("Invalid metric mode.")
 
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region', 'time_grouping'],
-           chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
-               }
-           },
+           cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline', 'grid', 'mask', 'region', 'time_grouping', 'mode'],
            cache=False)
-def spatial_metric(start_time, end_time, variable, lead, forecast, truth,
-                   metric, time_grouping=None, baseline=None, grid="global1_5", mask='lsm', region='global'):
-    m_ds = single_spatial_metric(start_time, end_time, variable, lead, forecast,
-                                 truth, metric, time_grouping, grid=grid, mask=mask, region=region)
-
-    # Get the baseline if it exists and run its metric
-    if baseline:
-        base_ds = single_spatial_metric(start_time, end_time, variable, lead, baseline,
-                                        truth, metric, time_grouping, grid=grid, mask=mask, region=region)
-
-        print("Got metrics. Computing skill")
-
-        # Compute the skill
-        m_ds = (1 - (m_ds/base_ds))
-
-    return m_ds
-
-
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
-                       'truth', 'metric', 'baseline', 'grid', 'mask', 'region', 'time_grouping'],
-           cache=False)
-def summary_metric(start_time, end_time, variable, lead, forecast, truth,
-                   metric, time_grouping=None, baseline=None, grid="global1_5", mask='lsm', region='global'):
+def combined_metric(start_time, end_time, variable, lead, forecast, truth,
+           metric, time_grouping=None, baseline=None, grid="global1_5", mask='lsm', region='global', mode='summary'):
     m_ds = single_metric(start_time, end_time, variable, lead, forecast,
-                                 truth, metric, time_grouping, grid=grid, mask=mask, region=region)
+                                 truth, metric, time_grouping, grid=grid, mask=mask, region=region, mode=mode)
 
     # Get the baseline if it exists and run its metric
     if baseline:
         base_ds = single_metric(start_time, end_time, variable, lead, baseline,
-                                        truth, metric, time_grouping, grid=grid, mask=mask, region=region)
+                                truth, metric, time_grouping, grid=grid, mask=mask, region=region, mode=mode)
 
         print("Got metrics. Computing skill")
 
@@ -269,8 +213,8 @@ def summary_metrics_table(start_time, end_time, variable,
             print(f"""Running for {forecast} and {lead} with variable {variable},
                       metric {metric}, grid {grid}, and region {region}""")
             # First get the value without the baseline
-            ds = summary_metric(start_time, end_time, variable, lead, forecast, truth,
-                                 metric, time_grouping, None, grid, mask, region)
+            ds = combined_metric(start_time, end_time, variable, lead, forecast, truth,
+                                 metric, time_grouping, None, grid, mask, region, mode='summary')
 
             if time_grouping:
                 if forecast_ds:
@@ -283,8 +227,8 @@ def summary_metrics_table(start_time, end_time, variable,
 
             # IF there is a baseline get the skill
             if baseline:
-                skill_ds = summary_metric(start_time, end_time, variable, lead, forecast, truth,
-                                     metric, time_grouping, baseline, grid, mask, region)
+                skill_ds = combined_metric(start_time, end_time, variable, lead, forecast, truth,
+                                     metric, time_grouping, baseline, grid, mask, region, mode='summary')
 
                 if time_grouping:
                     # If there is a time grouping merge the two dataframes
