@@ -104,7 +104,7 @@ def climatology_agg(variable, first_year=1985, last_year=2014,
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries='forecast_date',
+           timeseries='time',
            cache_args=['variable', 'clim_years', 'agg', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
@@ -146,6 +146,7 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg=1
     # goes up until the year ~before~ the forecast date value, e.g,.
     # the climatology for forecast date 2016-01-01 is computed up until 2015-01-01.
     ds = ds.assign_coords(time=ds['time'].to_index() + pd.DateOffset(years=1))
+    ds = ds.drop('dayofyear')
     return ds
 
 
