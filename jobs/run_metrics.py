@@ -13,8 +13,8 @@ parser.add_argument("--grid", type=str, nargs='*')
 parser.add_argument("--region", type=str, nargs='*')
 args = parser.parse_args()
 
-baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015",
-             "climatology_2015", "climatology_trend", "climatology_rolling"]
+baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
+             "climatology_2015", "climatology_trend_2015", "climatology_incremental"]
 if args.baseline:
     baselines = args.baseline
 
@@ -40,4 +40,4 @@ for metric, variable, grid, baseline, region in combos:
     summary_metrics_table(args.start_time, args.end_time, variable, "era5", metric,
                           baseline=baseline, grid=grid, region=region,
                           remote=True, force_overwrite=True, backend='postgres', recompute=True,
-                          remote_config=['large_scheduler','xxlarge_cluster','large_node'])
+                          remote_config=['large_scheduler', 'xxlarge_cluster', 'large_node'])
