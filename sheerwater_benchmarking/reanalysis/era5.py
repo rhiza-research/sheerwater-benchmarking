@@ -134,7 +134,12 @@ def era5_raw(start_time, end_time, variable, grid="global0_25"):  # noqa ARG001
 
     # Convert local dataset naming and units
     ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+
+    # Raw latitudes are in descending order
+    ds = ds.sortby('lat')
     ds = ds.rename_vars(name_dict={var: variable})
+
+    # Ensure that latitude is sorted before slicing
 
     return ds
 
@@ -181,7 +186,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'grid'],
-           cache_disable_if={'grid': 'global1_5'},
+           cache_disable_if={'grid': 'global0_25'},
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
                'grid': {
@@ -192,6 +197,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
     """ERA5 daily reanalysis with regridding."""
     ds = era5_daily(start_time, end_time, variable, grid='global0_25')
+    ds = ds.sortby('lat')  # TODO: remove if we fix the era5 daily caches
     if grid == 'global0_25':
         return ds
     # Regrid onto appropriate grid

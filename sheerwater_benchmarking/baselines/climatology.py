@@ -2,13 +2,14 @@
 import dateparser
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+from calendar import isleap
 import numpy as np
-import pandas as pd
 import xarray as xr
 import dask
 
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates, apply_mask, clip_region)
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
+                                           apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
 
 
 @dask_remote
@@ -19,16 +20,18 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates, ap
 def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5'):
     """Compute the climatology of the ERA5 data. Years are inclusive."""
     start_time = f"{first_year}-01-01"
-    end_time = f"{last_year+1}-01-01"
+    end_time = f"{last_year}-12-31"
 
     # Get single day, masked data between start and end years
     ds = era5_daily(start_time, end_time, variable=variable, grid=grid)
 
     # Add day of year as a coordinate
-    ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
+    ds = add_dayofyear(ds)
+    ds = pad_with_leapdays(ds)
 
-    # Take average over the period to produce climatology
-    return ds.groupby('dayofyear').mean(dim='time')
+    # Take average over the period to produce climatology that includes leap years
+    ds = ds.groupby('dayofyear').mean(dim='time')
+    return ds
 
 
 @dask_remote
@@ -36,7 +39,7 @@ def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5')
            cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
            chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
            cache=True)
-def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mask='lsm', region='global'):
+def climatology_abc(variable, first_year=1985, last_year=2014, grid="global1_5", mask='lsm', region='global'):
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
     # Get single day, masked data between start and end years
     ds = climatology_raw(variable, first_year, last_year, grid=grid)
@@ -50,18 +53,6 @@ def climatology(variable, first_year=1991, last_year=2020, grid="global1_5", mas
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'grid', 'mask', 'region'],
-           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
-           cache=False,
-           auto_rechunk=False)
-def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='global'):
-    """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
-    # Get single day, masked data between start and end years
-    return climatology(variable, 1991, 2020, grid=grid, mask=mask, region=region)
-
-
-@dask_remote
-@cacheable(data_type='array',
            cache=True,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 30, "member": 30},
@@ -71,38 +62,39 @@ def climatology_standard_30yr(variable, grid="global1_5", mask="lsm", region='gl
                }
            },
            auto_rechunk=False)
-def climatology_agg(variable, first_year=1985, last_year=2014,
-                    prob_type='deterministic', agg=14, grid="global1_5"):
+def climatology_agg_raw(variable, first_year=1985, last_year=2014,
+                        prob_type='deterministic', agg=14, grid="global1_5"):
     """Generates aggregated climatology."""
     start_time = f"{first_year}-01-01"
-    end_time = f"{last_year+1}-01-01"
+    end_time = f"{last_year}-12-31"
     ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
 
     # Add day of year as a coordinate
-    ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
+    ds = add_dayofyear(ds)
+    ds = pad_with_leapdays(ds)
 
     # Take average over the period to produce climatology
     if prob_type == 'deterministic':
         return ds.groupby('dayofyear').mean(dim='time')
-    elif prob_type != 'probabilistic':
+    elif prob_type == 'probabilistic':
+        # Otherwise, get ensemble members sampled from climatology
+        def sample_members(sub_ds, members=30):
+            doy = sub_ds.dayofyear.values[0]
+            ind = np.random.randint(0, len(sub_ds.time.values), size=(members,))
+            sub = sub_ds.isel(time=ind)
+            sub = sub.assign_coords(time=np.arange(members)).rename({'time': 'member'})
+            sub = sub.assign_coords(dayofyear=doy)
+            return sub
+
+        doys = []
+        for doy in np.unique(ds.dayofyear.values):
+            doys.append(
+                sample_members(ds.isel(time=(ds.dayofyear.values == doy))))
+        ds = xr.concat(doys, dim='dayofyear')
+        ds = ds.chunk({'dayofyear': 1, 'member': 30})
+        return ds
+    else:
         raise ValueError(f"Unsupported prob_type: {prob_type}")
-    # Otherwise, get ensemble members sampled from climatology
-
-    def sample_members(sub_ds, members=100):
-        doy = sub_ds.dayofyear.values[0]
-        ind = np.random.randint(0, len(sub_ds.time.values), size=(members,))
-        sub = sub_ds.isel(time=ind)
-        sub = sub.assign_coords(time=np.arange(members)).rename({'time': 'member'})
-        sub = sub.assign_coords(dayofyear=doy)
-        return sub
-
-    doys = []
-    for doy in range(1, 367):
-        doys.append(
-            sample_members(ds.isel(time=(ds.dayofyear.values == doy))))
-    ds = xr.concat(doys, dim='dayofyear')
-    ds = ds.chunk({'dayofyear': 1, 'member': 30})
-    return ds
 
 
 @dask_remote
@@ -135,7 +127,8 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg=1
 
     # Get ERA5 data, and ignore cache validation if start_time is earlier than the cache
     ds = era5_rolled(new_start, new_end, variable=variable, agg=agg, grid=grid)
-    ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
+    ds = add_dayofyear(ds)
+    ds = pad_with_leapdays(ds)
 
     def doy_rolling(sub_ds, years):
         return sub_ds.rolling(time=years, min_periods=years, center=False).mean()
@@ -144,12 +137,6 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg=1
     ds = ds.chunk(time=1)
     ds = ds.groupby('dayofyear').map(doy_rolling, years=clim_years)
     ds = ds.dropna('time', how='all')
-
-    # Ground truth for the current time is not available at forecast time,
-    # so we must shift the time index forward one year to provide climatology that
-    # goes up until the year ~before~ the forecast date value, e.g,.
-    # the climatology for forecast date 2016-01-01 is computed up until 2015-01-01.
-    ds = ds.assign_coords(time=ds['time'].to_index() + pd.DateOffset(years=1))
     ds = ds.drop('dayofyear')
     return ds
 
@@ -165,11 +152,9 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg=1
                }
            },
            cache=False)
-def climatology_rolling(start_time, end_time, variable, clim_years=30, agg=14,
-                        grid="global1_5", mask='lsm', region='global'):
+def climatology_rolling_abc(start_time, end_time, variable, clim_years=30, agg=14,
+                            grid="global1_5", mask='lsm', region='global'):
     """Compute a rolling {clim_years}-yr climatology of the ERA5 data.
-
-    TODO: ABC specific; export and change name.
 
     Args:
         start_time: First time of the forecast period.
@@ -202,7 +187,7 @@ def climatology_rolling(start_time, end_time, variable, clim_years=30, agg=14,
                }
            },
            auto_rechunk=False)
-def climatology_trend(variable, first_year=1985, last_year=2014, agg=14, grid='global1_5'):
+def climatology_linear_fit(variable, first_year=1985, last_year=2014, agg=14, grid='global1_5'):
     """Fit the climatological trend for a specific day of year.
 
     TODO: rename this cache to avoid clashing with the forecast name.
@@ -215,13 +200,14 @@ def climatology_trend(variable, first_year=1985, last_year=2014, agg=14, grid='g
         grid: Grid resolution of the data.
     """
     start_time = f"{first_year}-01-01"
-    end_time = f"{last_year+1}-01-01"
+    end_time = f"{last_year}-12-31"
 
     # Get single day, masked data between start and end years
     ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
 
     # Add day of year as a coordinate
-    ds = ds.assign_coords(dayofyear=ds.time.dt.dayofyear)
+    ds = add_dayofyear(ds)
+    ds = pad_with_leapdays(ds)
     ds = ds.assign_coords(year=ds.time.dt.year)
 
     def fit_trend(sub_ds):
@@ -262,35 +248,37 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
     # Create a target date dataset
     target_dates = get_dates(start_time, end_time, stride='day', return_string=False)
     time_ds = xr.Dataset({'time': target_dates})
-    time_ds = time_ds.assign_coords(dayofyear=time_ds['time'].dt.dayofyear)
+    time_ds = add_dayofyear(time_ds)
 
     if trend:
         if prob_type == 'probabilistic':
             raise NotImplementedError("Probabilistic trend forecasts are not supported.")
 
         time_ds = time_ds.assign_coords(year=time_ds['time'].dt.year)
-        coeff = climatology_trend(variable, first_year=first_year, last_year=last_year,
-                                  prob_type=prob_type, agg=agg, grid=grid)
+        coeff = climatology_linear_fit(variable, first_year=first_year, last_year=last_year,
+                                       prob_type=prob_type, agg=agg, grid=grid)
         with dask.config.set(**{'array.slicing.split_large_chunks': True}):
             coeff = coeff.sel(dayofyear=time_ds.dayofyear)
             coeff = coeff.drop('dayofyear')
 
-        # Get estimate
-        ds = coeff[f"{variable}_polyfit_coefficients"].sel(degree=1) * coeff["year"].astype("float") \
-            + coeff[f"{variable}_polyfit_coefficients"].sel(degree=0)
-        ds = ds.to_dataset(name=variable)
-        if variable == 'precip':
-            ds = np.maximum(ds, 0)
+        def linear_fit(coeff):
+            """Compute the linear fit y = a * year + b for the given coefficients."""
+            est = coeff[f"{variable}_polyfit_coefficients"].sel(degree=1) * coeff["year"].astype("float") \
+                + coeff[f"{variable}_polyfit_coefficients"].sel(degree=0)
+            est = est.to_dataset(name=variable)
+            if variable == 'precip':
+                est = np.maximum(est, 0)
+            return est
+        ds = linear_fit(coeff)
         ds = ds.drop('year')
     else:
         # Get climatology on the corresponding global grid
-        ds = climatology_agg(variable, first_year=first_year, last_year=last_year,
-                             prob_type=prob_type, agg=agg, grid=grid)
+        ds = climatology_agg_raw(variable, first_year=first_year, last_year=last_year,
+                                 prob_type=prob_type, agg=agg, grid=grid)
         # Select the climatology data for the target dates, and split large chunks
         with dask.config.set(**{'array.slicing.split_large_chunks': True}):
             ds = ds.sel(dayofyear=time_ds.dayofyear)
             ds = ds.drop('dayofyear')
-
     return ds
 
 
@@ -384,8 +372,8 @@ def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='dete
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def climatology_incremental(start_time, end_time, variable, lead, prob_type='deterministic',
-                            grid='global0_25', mask='lsm', region='global'):
+def climatology_rolling(start_time, end_time, variable, lead, prob_type='deterministic',
+                        grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     leads_param = {
         "week1": (7, 0),
@@ -407,11 +395,21 @@ def climatology_incremental(start_time, end_time, variable, lead, prob_type='det
         raise NotImplementedError("Only deterministic forecasts are available for rolling climatology.")
 
     # Get daily data
-    new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
+    start_dt = dateparser.parse(start_time)
+    start_dt += timedelta(days=time_shift)  # we want climatology for 0, 7, 14, ... days ahead of the forecast time
+    start_dt -= relativedelta(years=1)  # exclude the most recent year for operational forecasting (handles leap year)
+    new_start = datetime.strftime(start_dt, "%Y-%m-%d")
+
+    end_dt = dateparser.parse(end_time)
+    end_dt += timedelta(days=time_shift)  # we want climatology for 0, 7, 14, ... days ahead of the forecast time
+    end_dt -= relativedelta(years=1)  # exclude the most recent year for operational forecasting (handles leap year)
+    new_end = datetime.strftime(end_dt, "%Y-%m-%d")
+
     # TODO: need to ensure that this shifting doesn't grab data that's not available
     ds = climatology_rolling_agg(new_start, new_end, variable, clim_years=30, agg=agg, grid=grid)
-    ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
+
+    # Undo time-shifting
+    ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D') + relativedelta(years=1))
 
     ds = ds.assign_attrs(prob_type="deterministic")
 

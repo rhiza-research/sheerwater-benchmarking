@@ -51,7 +51,6 @@ dependencies = [
     "dask",
     "dask[complete]",
     "click",
-    "coiled",
     "numpy",
     "httplib2",
     "s3fs",
@@ -94,6 +93,7 @@ dependencies = [
     "deltalake",
     "jupyter-server-proxy",
     "xskillscore @ git+https://github.com/rhiza-research/xskillscore",
+    "coiled>=1.58.1",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

@@ -195,7 +195,8 @@ def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None, baseline=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    #forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015', 'climatology_trend_2015', 'climatology_incremental']
+    # forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
+    # 'climatology_trend_2015', 'climatology_incremental']
     forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015', 'climatology_trend_2015']
     leads = ["week1", "week2", "week3", "week4", "week5"]
 
