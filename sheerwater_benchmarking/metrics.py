@@ -128,7 +128,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Check to make sure it supports this region/time
     if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.95):
-        raise NotImplementedError("Forecast not implemented for these parameters.")
+        return None
 
     # Clip it to the region
     ds = clip_region(ds, region)
@@ -173,9 +173,15 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
     m_ds = grouped_metric(start_time, end_time, variable, lead, forecast,
                           truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
 
+    if not m_ds:
+        return None
+
     # Get the baseline if it exists and run its metric
     base_ds = grouped_metric(start_time, end_time, variable, lead, baseline,
                              truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
+
+    if not base_ds:
+        raise NotImplementedError("Cannot compute skill for null base")
 
     print("Got metrics. Computing skill")
 
@@ -192,7 +198,7 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
 def summary_metrics_table(start_time, end_time, variable,
-                          truth, metric, time_grouping=None, baseline=None,
+                          truth, metric, baseline=None, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     # forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
@@ -203,36 +209,23 @@ def summary_metrics_table(start_time, end_time, variable,
     # Turn the dict into a pandas dataframe with appropriate columns
     leads_skill = [lead + '_skill' for lead in leads]
 
-    # Create a list to insert our data
-    results = []
+    # For the time grouping we are going to store it in an xarray with dimensions
+    # forecast and time, which we instantiate
+    results_ds = xr.Dataset(coords={'forecast': forecasts, 'time': None})
 
     for forecast in forecasts:
-        forecast_ds = None
-        forecast_dict = {'forecast': forecast}
         for i, lead in enumerate(leads):
 
             print(f"""Running for {forecast} and {lead} with variable {variable},
                       metric {metric}, grid {grid}, and region {region}""")
             # First get the value without the baseline
-            try:
-                ds = grouped_metric(start_time, end_time, variable, lead, forecast, truth,
-                                    metric, time_grouping, False, grid, mask, region)
-            except NotImplementedError:
-                ds = None
+            ds = grouped_metric(start_time, end_time, variable, lead, forecast, truth,
+                                metric, time_grouping, False, grid, mask, region)
 
-            # If there is a time grouping keep as xarray for combining
-            # otherwise keep scalar value in dict
-            if time_grouping:
-                if forecast_ds:
-                    ds = ds.rename({variable: lead})
-                    forecast_ds = xr.combine_by_coords([forecast_ds, ds])
-                else:
-                    forecast_ds = ds.rename({variable: lead})
-            else:
-                if ds:
-                    forecast_dict[lead] = float(ds[variable].values)
-                else:
-                    forecast_dict[lead] = None
+            if ds:
+                ds = ds.rename({variable: lead})
+                ds = ds.expand_dims({'forecast': [forecast]}, axis=0)
+                results_ds = xr.combine_by_coords([results_ds, ds])
 
             # IF there is a baseline get the skill
             if baseline:
@@ -240,36 +233,18 @@ def summary_metrics_table(start_time, end_time, variable,
                     skill_ds = skill_metric(start_time, end_time, variable, lead, forecast, truth,
                                             metric, baseline, time_grouping, False, grid, mask, region)
                 except NotImplementedError:
-                    skill_ds = None
+                    # IF we raise then return early - we can't do this baseline
+                    return None
 
-                if time_grouping:
-                    # If there is a time grouping merge the two dataframes
-                    # Rename the variable
+                if skill_ds:
                     skill_ds = skill_ds.rename({variable: leads_skill[i]})
+                    skill_ds = skill_ds.expand_dims({'forecast': [forecast]}, axis=0)
+                    results_ds = xr.combine_by_coords([results_ds, skill_ds])
 
-                    forecast_ds = xr.combine_by_coords([forecast_ds, skill_ds])
-                else:
-                    # Otherwise just append it to the row
-                    if skill_ds:
-                        forecast_dict[leads_skill[i]] = float(skill_ds[variable].values)
-                    else:
-                        forecast_dict[leads_skill[i]] = None
+    if not time_grouping:
+        results_ds = results_ds.reset_coords('time', drop=True)
 
-        if time_grouping:
-            # prep the rows from the dataset
-            df = forecast_ds.to_pandas()
-
-            # Add a column for the forecast
-            df['forecast'] = forecast
-            df = df.reset_index().rename(columns={'index': 'time'})
-
-            # append all the rows to the results
-            results = results + df.to_dict(orient='records')
-        else:
-            results.append(forecast_dict)
-
-    # create the dataframe
-    df = pd.DataFrame.from_records(results, index='forecast')
+    df = results_ds.to_dataframe()
 
     # Rename the index
     df = df.reset_index().rename(columns={'index': 'forecast'})
