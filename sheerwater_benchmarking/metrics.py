@@ -173,6 +173,9 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
     m_ds = grouped_metric(start_time, end_time, variable, lead, forecast,
                           truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
 
+    if not m_ds:
+        return None
+
     # Get the baseline if it exists and run its metric
     base_ds = grouped_metric(start_time, end_time, variable, lead, baseline,
                              truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
