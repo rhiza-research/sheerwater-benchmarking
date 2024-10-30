@@ -237,8 +237,8 @@ def is_valid(ds, var, mask, region, grid, valid_threshold=0.5):
 
     mask_ds = clip_region(mask_ds, region)
 
-    data_count = (~ds[var].where(mask_ds >= 0.0).isnull()).sum(dim=['lat', 'lon']).min()['mask'].compute().values
-    mask_count = (~mask_ds.isnull()).sum()['mask'].compute().values
+    data_count = (~ds[var].where(mask_ds > 0.0).isnull()).sum(dim=['lat', 'lon']).min()['mask'].compute().values
+    mask_count = int((mask_ds['mask'] > 0.0).sum().compute().values)
 
     if data_count < mask_count * valid_threshold:
         return False

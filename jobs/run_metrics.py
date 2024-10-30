@@ -8,13 +8,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--start-time", default="2016-01-01", type=str)
 parser.add_argument("--end-time", default="2023-01-01", type=str)
 parser.add_argument("--baseline", type=str, nargs='*')
+parser.add_argument("--variable", type=str, nargs='*')
 parser.add_argument("--metric", type=str, nargs='*')
 parser.add_argument("--grid", type=str, nargs='*')
 parser.add_argument("--region", type=str, nargs='*')
 args = parser.parse_args()
 
 baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
-             "climatology_2015", "climatology_trend_2015", "climatology_incremental"]
+             "climatology_2015", "climatology_trend_2015"]
 if args.baseline:
     baselines = args.baseline
 
