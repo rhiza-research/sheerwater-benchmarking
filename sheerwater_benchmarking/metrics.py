@@ -3,8 +3,12 @@ from importlib import import_module
 
 import xarray as xr
 
+from sheerwater_benchmarking.baselines import climatology_raw
 from sheerwater_benchmarking.utils import cacheable, dask_remote, clip_region, is_valid
 from weatherbench2.metrics import _spatial_average
+
+PROB_METRICS = ['crps']  # a list of probabilistic metrics
+CLIM_METRICS = ['acc', 'seeps']  # a list of probabilistic metrics
 
 
 def get_datasource_fn(datasource):
@@ -26,13 +30,22 @@ def get_datasource_fn(datasource):
     return fn
 
 
-def get_metric_fn(prob_type, metric, spatial=True):
+def get_metric_fn(prob_type, metric, variable, spatial=True, grid='global1_5'):
     """Import the correct metrics function from weatherbench."""
     # Make sure things are consistent
-    if prob_type == 'deterministic' and metric == 'crps':
+    if prob_type == 'deterministic' and metric in PROB_METRICS:
         raise ValueError("Cannot run CRPS on deterministic forecasts.")
-    elif (prob_type == 'ensemble' or prob_type == 'quantile') and metric == 'mae':
+    elif (prob_type == 'ensemble' or prob_type == 'quantile') and metric not in PROB_METRICS:
         raise ValueError("Cannot run MAE on probabilistic forecasts.")
+
+    if metric == 'acc' and spatial:
+        raise NotImplementedError("Cannot run ACC spatial metric.")
+
+    clim_ds = None
+    if metric in CLIM_METRICS:
+        clim_ds = climatology_raw(variable, first_year=1985, last_year=2014, grid=grid)
+        # Reset day of year column to an integer
+        clim_ds['dayofyear'] = clim_ds['dayofyear'].dt.dayofyear
 
     wb_metrics = {
         'crps': ('xskillscore', 'crps_ensemble', {}),
@@ -41,6 +54,11 @@ def get_metric_fn(prob_type, metric, spatial=True):
         'spatial-crps-q': ('weatherbench2.metrics', 'SpatialQuantileCRPS', {'quantile_dim': 'member'}),
         'mae': ('weatherbench2.metrics', 'MAE', {}),
         'spatial-mae': ('weatherbench2.metrics', 'SpatialMAE', {}),
+        'acc': ('weatherbench2.metrics', 'ACC', {'climatology': clim_ds}),
+        'mse': ('weatherbench2.metrics', 'MSE', {}),
+        'spatial-mse': ('weatherbench2.metrics', 'SpatialMSE', {}),
+        'bias': ('weatherbench2.metrics', 'Bias', {}),
+        'spatial-bias': ('weatherbench2.metrics', 'SpatialBias', {}),
     }
 
     if spatial:
@@ -59,6 +77,44 @@ def get_metric_fn(prob_type, metric, spatial=True):
 
 
 @dask_remote
+def eval_metric(start_time, end_time, variable, lead, forecast, truth,
+                metric, spatial=True, avg_time=False,
+                grid="global1_5", mask='lsm', region='global'):
+    """Compute a metric without aggregated in time or space at a specific lead."""
+    if metric in PROB_METRICS:
+        prob_type = "probabilistic"
+    else:
+        prob_type = "deterministic"
+
+    # Get the forecast
+    fcst_fn = get_datasource_fn(forecast)
+    fcst = fcst_fn(start_time, end_time, variable, lead=lead,
+                   prob_type=prob_type, grid=grid, mask=mask, region=region)
+
+    # Get the truth to compare against
+    truth_fn = get_datasource_fn(truth)
+    obs = truth_fn(start_time, end_time, variable, lead=lead, grid=grid, mask=mask, region=region)
+
+    # Check to see the prob type attribute
+    enhanced_prob_type = fcst.attrs['prob_type']
+
+    metric_fn, metric_kwargs, metric_lib = get_metric_fn(
+        enhanced_prob_type, metric, variable=variable, spatial=spatial, grid=grid)
+
+    # Run the metric without aggregating in time or space
+    if metric_lib == 'xskillscore':
+        assert metric == 'crps'
+        fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
+        m_ds = metric_fn(observations=obs, forecasts=fcst, mean=avg_time, **metric_kwargs)
+    else:
+        m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+        if spatial:
+            m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+
+    return m_ds
+
+
+@dask_remote
 @cacheable(data_type='array',
            timeseries=['time'],
            cache_args=['variable', 'lead', 'forecast',
@@ -73,50 +129,25 @@ def get_metric_fn(prob_type, metric, spatial=True):
 def global_metric(start_time, end_time, variable, lead, forecast, truth,
                   metric, grid="global1_5", mask='lsm', region='global'):
     """Compute a metric without aggregated in time or space at a specific lead."""
-    if metric == "crps":
-        prob_type = "probabilistic"
-    elif metric == "mae":
-        prob_type = "deterministic"
-    else:
-        raise ValueError("Unsupported metric")
-
-    # Get the forecast
-    fcst_fn = get_datasource_fn(forecast)
-    fcst = fcst_fn(start_time, end_time, variable, lead=lead,
-                   prob_type=prob_type, grid=grid, mask=mask, region=region)
-
-    # Get the truth to compare against
-    truth_fn = get_datasource_fn(truth)
-    obs = truth_fn(start_time, end_time, variable, lead=lead, grid=grid, mask=mask, region=region)
-
-    # Check to see the prob type attribute
-    enhanced_prob_type = fcst.attrs['prob_type']
-
-    metric_fn, metric_kwargs, metric_lib = get_metric_fn(enhanced_prob_type, metric, spatial=True)
-
-    # Run the metric without aggregating in time or space
-    if metric_lib == 'xskillscore':
-        assert prob_type == 'probabilistic'
-        fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
-        m_ds = metric_fn(observations=obs, forecasts=fcst, mean=False, **metric_kwargs)
-    else:
-        m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=False, skipna=True)
-        m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
-
+    if region != 'global':
+        raise ValueError('Global metric must be run with region global.')
+    m_ds = eval_metric(start_time, end_time, variable, lead, forecast, truth,
+                       metric, spatial=True, avg_time=False,
+                       grid=grid, mask=mask, region=region)
     return m_ds
 
 
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
-                       'truth', 'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
-           chunking={"lat": 121, "lon": 240, "time": -1},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, "time": 30}
-               },
-           },
-           cache=True)
+@ dask_remote
+@ cacheable(data_type='array',
+            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
+                        'truth', 'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
+            chunking={"lat": 121, "lon": 240, "time": -1},
+            chunk_by_arg={
+                'grid': {
+                    'global0_25': {"lat": 721, "lon": 1440, "time": 30}
+                },
+            },
+            cache=True)
 def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, time_grouping=None, spatial=False, grid="global1_5",
                    mask='lsm', region='africa'):
@@ -160,11 +191,11 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
 
 
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
-                       'time_grouping', 'spatial', 'grid', 'mask', 'region'],
-           cache=False)
+@ dask_remote
+@ cacheable(data_type='array',
+            cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
+                        'time_grouping', 'spatial', 'grid', 'mask', 'region'],
+            cache=False)
 def skill_metric(start_time, end_time, variable, lead, forecast, truth,
                  metric, baseline, time_grouping=None, spatial=False, grid="global1_5",
                  mask='lsm', region='global'):
@@ -191,11 +222,11 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
     return m_ds
 
 
-@dask_remote
-@cacheable(data_type='tabular',
-           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
-                       'time_grouping', 'grid', 'mask', 'region'],
-           cache=True)
+@ dask_remote
+@ cacheable(data_type='tabular',
+            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
+                        'time_grouping', 'grid', 'mask', 'region'],
+            cache=True)
 def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, baseline=None, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
@@ -249,3 +280,6 @@ def summary_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
+
+
+__all__ = ['eval_metric', 'global_metric', 'grouped_metric', 'skill_metric', 'summary_metrics_table']
