@@ -38,12 +38,10 @@ def get_metric_fn(prob_type, metric, variable, spatial=True, grid='global1_5'):
     elif (prob_type == 'ensemble' or prob_type == 'quantile') and metric not in PROB_METRICS:
         raise ValueError("Cannot run MAE on probabilistic forecasts.")
 
-    if metric == 'acc' and spatial:
-        raise NotImplementedError("Cannot run ACC spatial metric.")
-
     clim_ds = None
     if metric in CLIM_METRICS:
-        clim_ds = climatology_raw(variable, first_year=1985, last_year=2014, grid=grid)
+        # Use NOAA definition of climatology for evaluation
+        clim_ds = climatology_raw(variable, first_year=1991, last_year=2020, grid=grid)
         # Reset day of year column to an integer
         clim_ds['dayofyear'] = clim_ds['dayofyear'].dt.dayofyear
 
@@ -55,6 +53,7 @@ def get_metric_fn(prob_type, metric, variable, spatial=True, grid='global1_5'):
         'mae': ('weatherbench2.metrics', 'MAE', {}),
         'spatial-mae': ('weatherbench2.metrics', 'SpatialMAE', {}),
         'acc': ('weatherbench2.metrics', 'ACC', {'climatology': clim_ds}),
+        'spatial-acc': ('weatherbench2.metrics', 'SpatialACC', {'climatology': clim_ds}),
         'mse': ('weatherbench2.metrics', 'MSE', {}),
         'spatial-mse': ('weatherbench2.metrics', 'SpatialMSE', {}),
         'bias': ('weatherbench2.metrics', 'Bias', {}),
@@ -137,8 +136,8 @@ def global_metric(start_time, end_time, variable, lead, forecast, truth,
     return m_ds
 
 
-@ dask_remote
-@ cacheable(data_type='array',
+@dask_remote
+@cacheable(data_type='array',
             cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
                         'truth', 'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
             chunking={"lat": 121, "lon": 240, "time": -1},
@@ -191,8 +190,8 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
 
 
-@ dask_remote
-@ cacheable(data_type='array',
+@dask_remote
+@cacheable(data_type='array',
             cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
                         'time_grouping', 'spatial', 'grid', 'mask', 'region'],
             cache=False)
@@ -222,8 +221,8 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
     return m_ds
 
 
-@ dask_remote
-@ cacheable(data_type='tabular',
+@dask_remote
+@cacheable(data_type='tabular',
             cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
                         'time_grouping', 'grid', 'mask', 'region'],
             cache=True)
