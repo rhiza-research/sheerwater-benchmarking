@@ -3,8 +3,42 @@ import dateparser
 from datetime import datetime, timedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY, WEEKLY, YEARLY
 
+import numpy as np
+import pandas as pd
+import xarray as xr
+from calendar import isleap
+
 
 DATETIME_FORMAT = "%Y-%m-%d"
+
+
+def add_dayofyear(ds, time_dim="time"):
+    """Add a day of year coordinate to time dim, in the year 1904 (a leap year)."""
+    ds = ds.assign_coords(dayofyear=(
+        time_dim, pd.to_datetime([dateparser.parse(f"1904-{m}-{d}") for d, m in
+                                  zip(ds[time_dim].dt.day.values, ds[time_dim].dt.month.values)])))
+    return ds
+
+
+def pad_with_leapdays(ds, time_dim="time"):
+    """Pad the dataset with pseudo leap days in every year.
+
+    Requires the input dataframe to have a dayofyear column. Modifies the input dataset. 
+    """
+    # Find the years that don't have a leap day
+    missing_leaps = [x for x in np.unique(ds[time_dim].dt.year.values) if not isleap(x)]
+    missing_dates = [dateparser.parse(f"{x}-02-28") for x in missing_leaps]
+
+    # Get the value on the 28th for these years
+    missing_ds = ds.sel({time_dim: missing_dates})
+
+    # Set the day of year to the 29th for these years
+    missing_ds['dayofyear'] = (time_dim, [dateparser.parse("1904-02-29")]*len(missing_dates))
+
+    # Add these new dates into the dataset and sort
+    ds = xr.concat([ds, missing_ds], dim=time_dim)
+    ds = ds.sortby(time_dim)
+    return ds
 
 
 def generate_dates_in_between(start_time, end_time, date_frequency, return_string=False):

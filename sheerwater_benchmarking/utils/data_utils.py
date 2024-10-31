@@ -13,6 +13,7 @@ from .space_utils import (get_grid_ds,
                           base360_to_base180, base180_to_base360,
                           is_wrapped, check_bases,
                           get_region)
+from .time_utils import add_dayofyear
 
 
 def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
@@ -259,7 +260,7 @@ def get_anomalies(ds, clim, var, time_dim='time'):
         time_dim (str): The name of the time dimension.
     """
     # Create a day of year timeseries
-    ds = ds.assign_coords(dayofyear=ds[time_dim].dt.dayofyear)
+    ds = add_dayofyear(ds, time_dim=time_dim)
     with dask.config.set(**{'array.slicing.split_large_chunks': True}):
         clim_ds = clim.sel(dayofyear=ds.dayofyear)
         clim_ds = clim_ds.drop('dayofyear')
