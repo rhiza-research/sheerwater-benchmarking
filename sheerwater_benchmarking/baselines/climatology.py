@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from calendar import isleap
 import numpy as np
+import pandas as pd
 import xarray as xr
 import dask
 
@@ -143,7 +144,7 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg=1
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries='forecast_date',
+           timeseries='time',
            cache_args=['variable', 'clim_years', 'agg', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
@@ -151,7 +152,7 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg=1
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }
            },
-           cache=False)
+           cache=True)
 def climatology_rolling_abc(start_time, end_time, variable, clim_years=30, agg=14,
                             grid="global1_5", mask='lsm', region='global'):
     """Compute a rolling {clim_years}-yr climatology of the ERA5 data.
@@ -187,10 +188,8 @@ def climatology_rolling_abc(start_time, end_time, variable, clim_years=30, agg=1
                }
            },
            auto_rechunk=False)
-def climatology_linear_fit(variable, first_year=1985, last_year=2014, agg=14, grid='global1_5'):
+def climatology_linear_weights(variable, first_year=1985, last_year=2014, agg=14, grid='global1_5'):
     """Fit the climatological trend for a specific day of year.
-
-    TODO: rename this cache to avoid clashing with the forecast name.
 
     Args:
         variable: Variable to compute climatology for.
@@ -211,10 +210,10 @@ def climatology_linear_fit(variable, first_year=1985, last_year=2014, agg=14, gr
     ds = ds.assign_coords(year=ds.time.dt.year)
 
     def fit_trend(sub_ds):
-        sub_ds = sub_ds.swap_dims({"time": "year"})
-        return sub_ds.polyfit(dim='year', deg=1)
+        return sub_ds.swap_dims({"time": "year"}).polyfit(dim='year', deg=1)
 
     # Fit the trend for each day of the year
+    ds = ds.chunk({'lat': 50, 'lon': 50, 'time': -1})
     ds = ds.groupby('dayofyear').map(fit_trend)
     return ds
 
@@ -255,8 +254,8 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
             raise NotImplementedError("Probabilistic trend forecasts are not supported.")
 
         time_ds = time_ds.assign_coords(year=time_ds['time'].dt.year)
-        coeff = climatology_linear_fit(variable, first_year=first_year, last_year=last_year,
-                                       prob_type=prob_type, agg=agg, grid=grid)
+        coeff = climatology_linear_weights(variable, first_year=first_year, last_year=last_year,
+                                           prob_type=prob_type, agg=agg, grid=grid)
         with dask.config.set(**{'array.slicing.split_large_chunks': True}):
             coeff = coeff.sel(dayofyear=time_ds.dayofyear)
             coeff = coeff.drop('dayofyear')
@@ -405,11 +404,15 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
     end_dt -= relativedelta(years=1)  # exclude the most recent year for operational forecasting (handles leap year)
     new_end = datetime.strftime(end_dt, "%Y-%m-%d")
 
-    # TODO: need to ensure that this shifting doesn't grab data that's not available
     ds = climatology_rolling_agg(new_start, new_end, variable, clim_years=30, agg=agg, grid=grid)
 
     # Undo time-shifting
-    ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D') + relativedelta(years=1))
+    times = [x + pd.DateOffset(years=1) - pd.DateOffset(days=time_shift) for x in ds.time.values]
+    ds = ds.assign_coords(time=times)
+
+    # Handle duplicate values due to leap years
+    ## TODO: handle this in a more general way ## 
+    ds = ds.drop_duplicates(dim='time')
 
     ds = ds.assign_attrs(prob_type="deterministic")
 

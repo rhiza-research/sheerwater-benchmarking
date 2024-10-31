@@ -1,18 +1,18 @@
 """Generate land-sea masks for all grids and bases."""
 from itertools import product
 from sheerwater_benchmarking.baselines.climatology import (
-    climatology_raw,  climatology_rolling_agg, climatology_linear_fit, climatology_agg_raw,
-    climatology_abc)
+    climatology_raw,  climatology_rolling_agg, climatology_linear_weights, climatology_agg_raw,
+    climatology_abc, climatology_rolling_abc)
 
 
 vars = ["tmp2m", "precip"]
-grids = ["global0_25", "global1_5"]
-# grids = ["global1_5"]
+# grids = ["global0_25", "global1_5"]
+grids = ["global1_5"]
 # grids = ["global0_25"]
 aggs = [7, 14]
 
 start_time = "1979-01-01"
-end_time = "2025-01-01"
+end_time = "2024-01-01"
 forecast_start_time = "2015-05-14"
 forecast_end_time = "2023-06-30"
 prob_types = ["deterministic", "probabilistic"]
@@ -28,9 +28,10 @@ last_year = 2014
 
 UPDATE_CLIM = False
 UPDATE_CLIM_ABC = False
-UPDATE_CLIM_ROLLING = True
-UPDATE_CLIM_TREND = False
+UPDATE_CLIM_ROLLING = False
+UPDATE_CLIM_TREND = True
 UPDATE_CLIM_AGG = False
+UPDATE_CLIM_ROLLING_ABC = False
 
 for var, grid in product(vars, grids):
     # Update standard 30-year climatology
@@ -51,14 +52,23 @@ for var, grid in product(vars, grids):
             ds = climatology_rolling_agg(rolling_start_time, end_time, variable=var,
                                          clim_years=clim_years, agg=agg, grid=grid,
                                          remote=True, remote_name='genevieve', remote_config='xlarge_cluster',
-                                          recompute=True, force_overwrite=True
+                                         recompute=True, force_overwrite=True
                                          )
 
+        if UPDATE_CLIM_ROLLING_ABC:
+            for mask, region in product(masks, regions):
+                ds = climatology_rolling_abc(rolling_start_time, end_time, variable=var,
+                                             clim_years=clim_years, agg=agg, grid=grid,
+                                             mask=mask, region=region,
+                                             remote=True, remote_name='genevieve', remote_config='xlarge_cluster',
+                                             recompute=True, force_overwrite=True
+                                             )
+
         if UPDATE_CLIM_TREND:
-            ds = climatology_linear_fit(var, first_year=first_year, last_year=last_year,
-                                        agg=agg, grid=grid,
-                                        remote=True, remote_name='genevieve', remote_config='xlarge_cluster',
-                                        recompute=True, force_overwrite=True)
+            ds = climatology_linear_weights(var, first_year=first_year, last_year=last_year,
+                                            agg=agg, grid=grid,
+                                            remote=True, remote_name='genevieve', remote_config='xlarge_cluster',
+                                            recompute=True, force_overwrite=True)
 
         for prob_type in prob_types:
             if UPDATE_CLIM_AGG:
