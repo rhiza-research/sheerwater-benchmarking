@@ -23,7 +23,7 @@ def add_dayofyear(ds, time_dim="time"):
 def pad_with_leapdays(ds, time_dim="time"):
     """Pad the dataset with pseudo leap days in every year.
 
-    Requires the input dataframe to have a dayofyear column. Modifies the input dataset. 
+    Requires the input dataframe to have a dayofyear column. Modifies the input dataset.
     """
     # Find the years that don't have a leap day
     missing_leaps = [x for x in np.unique(ds[time_dim].dt.year.values) if not isleap(x)]

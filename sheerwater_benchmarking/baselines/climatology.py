@@ -2,7 +2,6 @@
 import dateparser
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from calendar import isleap
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -411,7 +410,7 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
     ds = ds.assign_coords(time=times)
 
     # Handle duplicate values due to leap years
-    ## TODO: handle this in a more general way ## 
+    ## TODO: handle this in a more general way ##
     ds = ds.drop_duplicates(dim='time')
 
     ds = ds.assign_attrs(prob_type="deterministic")
