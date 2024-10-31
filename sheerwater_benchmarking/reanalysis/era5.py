@@ -134,6 +134,9 @@ def era5_raw(start_time, end_time, variable, grid="global0_25"):  # noqa ARG001
 
     # Convert local dataset naming and units
     ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+
+    # Raw latitudes are in descending order
+    ds = ds.sortby('lat')
     ds = ds.rename_vars(name_dict={var: variable})
 
     return ds
@@ -181,7 +184,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'grid'],
-           cache_disable_if={'grid': 'global1_5'},
+           cache_disable_if={'grid': 'global0_25'},
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
                'grid': {

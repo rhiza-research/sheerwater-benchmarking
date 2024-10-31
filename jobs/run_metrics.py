@@ -8,13 +8,15 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--start-time", default="2016-01-01", type=str)
 parser.add_argument("--end-time", default="2023-01-01", type=str)
 parser.add_argument("--baseline", type=str, nargs='*')
+parser.add_argument("--variable", type=str, nargs='*')
 parser.add_argument("--metric", type=str, nargs='*')
 parser.add_argument("--grid", type=str, nargs='*')
 parser.add_argument("--region", type=str, nargs='*')
+parser.add_argument("--time-grouping", type=str, nargs='*')
 args = parser.parse_args()
 
 baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
-             "climatology_2015", "climatology_trend_2015", "climatology_incremental"]
+             "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
 if args.baseline:
     baselines = args.baseline
 
@@ -34,10 +36,15 @@ regions = ["africa", "east_africa", "global"]
 if args.region:
     regions = args.region
 
-combos = itertools.product(metrics, variables, grids, baselines, regions)
-for metric, variable, grid, baseline, region in combos:
+time_groupings = [None, "month_of_year", "year"]
+if args.time_grouping:
+    time_groupings = args.time_grouping
+    time_groupings = [x if x != 'None' else None for x in time_groupings]
+
+combos = itertools.product(metrics, variables, grids, baselines, regions, time_groupings)
+for metric, variable, grid, baseline, region, time_grouping in combos:
     print(metric, baseline)
     summary_metrics_table(args.start_time, args.end_time, variable, "era5", metric,
-                          baseline=baseline, grid=grid, region=region,
+                          baseline=baseline, time_grouping=time_grouping, grid=grid, region=region,
                           remote=True, force_overwrite=True, backend='postgres', recompute=True,
                           remote_config=['large_scheduler', 'xxlarge_cluster', 'large_node'])

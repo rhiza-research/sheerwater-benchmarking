@@ -13,6 +13,7 @@ from .space_utils import (get_grid_ds,
                           base360_to_base180, base180_to_base360,
                           is_wrapped, check_bases,
                           get_region)
+from .time_utils import add_dayofyear
 
 
 def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
@@ -237,8 +238,8 @@ def is_valid(ds, var, mask, region, grid, valid_threshold=0.5):
 
     mask_ds = clip_region(mask_ds, region)
 
-    data_count = (~ds[var].where(mask_ds >= 0.0).isnull()).sum(dim=['lat', 'lon']).min()['mask'].compute().values
-    mask_count = (~mask_ds.isnull()).sum()['mask'].compute().values
+    data_count = (~ds[var].where(mask_ds > 0.0).isnull()).sum(dim=['lat', 'lon']).min()['mask'].compute().values
+    mask_count = int((mask_ds['mask'] > 0.0).sum().compute().values)
 
     if data_count < mask_count * valid_threshold:
         return False
@@ -259,7 +260,7 @@ def get_anomalies(ds, clim, var, time_dim='time'):
         time_dim (str): The name of the time dimension.
     """
     # Create a day of year timeseries
-    ds = ds.assign_coords(dayofyear=ds[time_dim].dt.dayofyear)
+    ds = add_dayofyear(ds, time_dim=time_dim)
     with dask.config.set(**{'array.slicing.split_large_chunks': True}):
         clim_ds = clim.sel(dayofyear=ds.dayofyear)
         clim_ds = clim_ds.drop('dayofyear')
