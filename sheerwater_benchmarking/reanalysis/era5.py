@@ -139,8 +139,6 @@ def era5_raw(start_time, end_time, variable, grid="global0_25"):  # noqa ARG001
     ds = ds.sortby('lat')
     ds = ds.rename_vars(name_dict={var: variable})
 
-    # Ensure that latitude is sorted before slicing
-
     return ds
 
 
@@ -197,7 +195,6 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
     """ERA5 daily reanalysis with regridding."""
     ds = era5_daily(start_time, end_time, variable, grid='global0_25')
-    ds = ds.sortby('lat')  # TODO: remove if we fix the era5 daily caches
     if grid == 'global0_25':
         return ds
     # Regrid onto appropriate grid
