@@ -240,7 +240,8 @@ def summary_metrics_table(start_time, end_time, variable,
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                  'climatology_trend_2015', 'climatology_rolling']
-    leads = ["week1", "week2", "week3", "week4", "week5"]
+    leads = ["week1", "week2", "week3", "week4", "week5",
+             "weeks12", "weeks34", "weeks56"]
 
     # Turn the dict into a pandas dataframe with appropriate columns
     leads_skill = [lead + '_skill' for lead in leads]
@@ -251,7 +252,6 @@ def summary_metrics_table(start_time, end_time, variable,
 
     for forecast in forecasts:
         for i, lead in enumerate(leads):
-
             print(f"""Running for {forecast} and {lead} with variable {variable},
                       metric {metric}, grid {grid}, and region {region}""")
             # First get the value without the baseline
@@ -263,7 +263,7 @@ def summary_metrics_table(start_time, end_time, variable,
                 ds = ds.expand_dims({'forecast': [forecast]}, axis=0)
                 results_ds = xr.combine_by_coords([results_ds, ds])
 
-            # IF there is a baseline get the skill
+            # If there is a baseline get the skill
             if baseline:
                 try:
                     skill_ds = skill_metric(start_time, end_time, variable, lead, forecast, truth,
@@ -284,7 +284,6 @@ def summary_metrics_table(start_time, end_time, variable,
 
     # Rename the index
     df = df.reset_index().rename(columns={'index': 'forecast'})
-
     print(df)
     return df
 
