@@ -49,6 +49,8 @@ def get_metric_fn(prob_type, metric, clim_ds=None, spatial=True):
         'spatial-acc': ('weatherbench2.metrics', 'SpatialACC', {'climatology': clim_ds}),
         'mse': ('weatherbench2.metrics', 'MSE', {}),
         'spatial-mse': ('weatherbench2.metrics', 'SpatialMSE', {}),
+        'rmse': ('weatherbench2.metrics', 'RMSESqrtBeforeTimeAvg', {}),
+        'spatial-rmse': ('weatherbench2.metrics', 'SpatialRMSE', {}),
         'bias': ('weatherbench2.metrics', 'Bias', {}),
         'spatial-bias': ('weatherbench2.metrics', 'SpatialBias', {}),
     }
