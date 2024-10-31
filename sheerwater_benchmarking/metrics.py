@@ -100,8 +100,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         else:
             raise ValueError("Cannot compute climatology for this metric.")
         # Use NOAA definition of climatology for evaluation
-        clim_ds = climatology_agg_raw(variable, first_year=1991, last_year=2020, agg=agg,
-                                      grid=grid, mask=mask, region=region)
+        clim_ds = climatology_agg_raw(variable, first_year=1991, last_year=2020, agg=agg, grid=grid)
         # Reset day of year column to an integer
         clim_ds['dayofyear'] = clim_ds['dayofyear'].dt.dayofyear
     else:

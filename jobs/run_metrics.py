@@ -20,7 +20,7 @@ baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
 if args.baseline:
     baselines = args.baseline
 
-metrics = ["mae", "crps"]
+metrics = ["mae", "crps", "acc", "bias", "rmse"]
 if args.metric:
     metrics = args.metric
 
@@ -32,7 +32,7 @@ grids = ["global0_25", "global1_5"]
 if args.grid:
     grids = args.grid
 
-regions = ["africa", "east_africa", "global"]
+regions = ["africa", "east_africa", "global", "conus"]
 if args.region:
     regions = args.region
 

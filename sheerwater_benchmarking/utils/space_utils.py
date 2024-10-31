@@ -77,7 +77,7 @@ def get_region(region):
         # Get the countries of Africa shapefile
         lons = np.array([28.2, 42.6])
         lats = np.array([-12.1, 5.6])
-        filepath = 'gs://sheerwater-datalake/africa.geojson'
+        filepath = 'gs://sheerwater-datalake/regions/africa.geojson'
         gdf = gpd.read_file(load_object(filepath))
 
         # Filter the gdf
@@ -90,7 +90,11 @@ def get_region(region):
     elif region == "conus":
         lons = np.array([-125.0, -67.0])
         lats = np.array([25.0, 50.0])
-        data = (lons, lats)
+        filepath = 'gs://sheerwater-datalake/regions/usa.geojson'
+        gdf = gpd.read_file(load_object(filepath))
+        # Remove non-CONUS states
+        gdf = gdf[~gdf['NAME'].isin(['Alaska', 'Hawaii', 'Puerto Rico'])]
+        data = (lons, lats, gdf)
     elif region == "global":
         lons = np.array([-180.0, 180.0])
         lats = np.array([-90.0, 90.0])
