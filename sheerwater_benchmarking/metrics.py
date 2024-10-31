@@ -3,7 +3,7 @@ from importlib import import_module
 
 import xarray as xr
 
-from sheerwater_benchmarking.baselines import climatology_raw
+from sheerwater_benchmarking.baselines import climatology_agg_raw
 from sheerwater_benchmarking.utils import cacheable, dask_remote, clip_region, is_valid
 from weatherbench2.metrics import _spatial_average
 
@@ -30,20 +30,13 @@ def get_datasource_fn(datasource):
     return fn
 
 
-def get_metric_fn(prob_type, metric, variable, spatial=True, grid='global1_5'):
+def get_metric_fn(prob_type, metric, clim_ds=None, spatial=True):
     """Import the correct metrics function from weatherbench."""
     # Make sure things are consistent
     if prob_type == 'deterministic' and metric in PROB_METRICS:
         raise ValueError("Cannot run CRPS on deterministic forecasts.")
     elif (prob_type == 'ensemble' or prob_type == 'quantile') and metric not in PROB_METRICS:
         raise ValueError("Cannot run MAE on probabilistic forecasts.")
-
-    clim_ds = None
-    if metric in CLIM_METRICS:
-        # Use NOAA definition of climatology for evaluation
-        clim_ds = climatology_raw(variable, first_year=1991, last_year=2020, grid=grid)
-        # Reset day of year column to an integer
-        clim_ds['dayofyear'] = clim_ds['dayofyear'].dt.dayofyear
 
     wb_metrics = {
         'crps': ('xskillscore', 'crps_ensemble', {}),
@@ -97,8 +90,22 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     # Check to see the prob type attribute
     enhanced_prob_type = fcst.attrs['prob_type']
 
+    if metric in CLIM_METRICS:
+        if 'weeks' in lead:
+            agg = 14  # biweekly
+        elif 'week' in lead:
+            agg = 7  # weekly
+        else:
+            raise ValueError("Cannot compute climatology for this metric.")
+        # Use NOAA definition of climatology for evaluation
+        clim_ds = climatology_agg_raw(variable, first_year=1991, last_year=2020, agg=agg,
+                                      grid=grid, mask=mask, region=region)
+        # Reset day of year column to an integer
+        clim_ds['dayofyear'] = clim_ds['dayofyear'].dt.dayofyear
+    else:
+        clim_ds = None
     metric_fn, metric_kwargs, metric_lib = get_metric_fn(
-        enhanced_prob_type, metric, variable=variable, spatial=spatial, grid=grid)
+        enhanced_prob_type, metric, clim_ds=clim_ds, spatial=spatial)
 
     # Run the metric without aggregating in time or space
     if metric_lib == 'xskillscore':
@@ -138,15 +145,15 @@ def global_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='array',
-            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
-                        'truth', 'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
-            chunking={"lat": 121, "lon": 240, "time": -1},
-            chunk_by_arg={
-                'grid': {
-                    'global0_25': {"lat": 721, "lon": 1440, "time": 30}
-                },
-            },
-            cache=True)
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
+                       'truth', 'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": -1},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, "time": 30}
+               },
+           },
+           cache=True)
 def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, time_grouping=None, spatial=False, grid="global1_5",
                    mask='lsm', region='africa'):
@@ -192,9 +199,9 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='array',
-            cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
-                        'time_grouping', 'spatial', 'grid', 'mask', 'region'],
-            cache=False)
+           cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
+                       'time_grouping', 'spatial', 'grid', 'mask', 'region'],
+           cache=False)
 def skill_metric(start_time, end_time, variable, lead, forecast, truth,
                  metric, baseline, time_grouping=None, spatial=False, grid="global1_5",
                  mask='lsm', region='global'):
@@ -223,9 +230,9 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='tabular',
-            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
-                        'time_grouping', 'grid', 'mask', 'region'],
-            cache=True)
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
+                       'time_grouping', 'grid', 'mask', 'region'],
+           cache=True)
 def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, baseline=None, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
