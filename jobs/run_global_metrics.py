@@ -41,7 +41,7 @@ if args.lead:
     leadss = args.lead
 
 if args.remote:
-    start_remote(remote_config=['large_cluster'])
+    start_remote(remote_config=['xlarge_cluster', 'large_scheduler'])
 
 #combos = itertools.product(metrics, variables, grids, baselines, regions, time_groupings)
 combos = itertools.product(metrics, variables, grids, leads, forecasts)
@@ -53,5 +53,5 @@ for metric in metrics:
                     try:
                         global_metric(args.start_time, args.end_time, variable, lead, forecast, "era5", metric, grid=grid)
                     except Exception as e:
-                        print(f"Failed to run global metric {} {} {} {} {}: {traceback.format_exc()}")
+                        print(f"Failed to run global metric {forecast} {lead} {grid} {variable} {metric}: {traceback.format_exc()}")
 

@@ -26,6 +26,7 @@ for f in files:
         files_to_list.append(f)
 
 # Check with the user to see if this many files should be renamed
+print(f"Found {len(files_to_list)} files:")
 for i, f in enumerate(files_to_list):
     print(f)
 
