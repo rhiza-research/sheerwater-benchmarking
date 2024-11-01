@@ -51,6 +51,8 @@ spec:
             value: "nearest"
           - name: TC_REPROJECTION_METHOD
             value: "nearest"
+          - name: TC_ALLOWED_ORIGINS_TILES
+            value: '["*"]'
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-secrets
