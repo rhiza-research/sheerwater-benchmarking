@@ -238,7 +238,7 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
            timeseries='time',
            cache_args=['variable', 'agg', 'grid'],
            chunking={"lat": 300, "lon": 300, "time": 366})
-def _era5_rolled_for_clim(start_time, end_time, variable, agg=14, grid="global1_5"):
+def _era5_chunked_for_clim(start_time, end_time, variable, agg=14, grid="global1_5"):
     """Aggregates the hourly ERA5 data into daily data and rolls.
 
     Args:
