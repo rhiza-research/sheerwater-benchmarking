@@ -3,10 +3,11 @@ import argparse
 import itertools
 
 from sheerwater_benchmarking.metrics import summary_metrics_table
+from sheerwater_benchmarking.utils import start_remote
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--start-time", default="2016-01-01", type=str)
-parser.add_argument("--end-time", default="2023-01-01", type=str)
+parser.add_argument("--end-time", default="2022-12-31", type=str)
 parser.add_argument("--baseline", type=str, nargs='*')
 parser.add_argument("--variable", type=str, nargs='*')
 parser.add_argument("--metric", type=str, nargs='*')
@@ -41,10 +42,10 @@ if args.time_grouping:
     time_groupings = args.time_grouping
     time_groupings = [x if x != 'None' else None for x in time_groupings]
 
+start_remote(remote_name='josh2', remote_config=['large_cluster'])
+
 combos = itertools.product(metrics, variables, grids, baselines, regions, time_groupings)
 for metric, variable, grid, baseline, region, time_grouping in combos:
     print(metric, baseline)
     summary_metrics_table(args.start_time, args.end_time, variable, "era5", metric,
-                          baseline=baseline, time_grouping=time_grouping, grid=grid, region=region,
-                          remote=True, force_overwrite=True, backend='postgres', recompute=True,
-                          remote_config=['large_scheduler', 'xxlarge_cluster', 'large_node'])
+                          baseline=baseline, time_grouping=time_grouping, grid=grid, region=region)

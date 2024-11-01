@@ -254,7 +254,7 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
 
         time_ds = time_ds.assign_coords(year=time_ds['time'].dt.year)
         coeff = climatology_linear_weights(variable, first_year=first_year, last_year=last_year,
-                                           prob_type=prob_type, agg=agg, grid=grid)
+                                           agg=agg, grid=grid)
         with dask.config.set(**{'array.slicing.split_large_chunks': True}):
             coeff = coeff.sel(dayofyear=time_ds.dayofyear)
             coeff = coeff.drop('dayofyear')

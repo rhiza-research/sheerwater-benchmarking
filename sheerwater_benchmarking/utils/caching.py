@@ -195,7 +195,7 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
                            and can see sheerwater-benchmarking-postgres.""")
 
 
-def write_to_terracotta(cache_key, ds):
+def write_to_terracotta(cache_key, ds, clip_extreme_quantile=0.05):
     """Write geospatial array to terracotta.
 
     Args:
@@ -226,6 +226,11 @@ def write_to_terracotta(cache_key, ds):
     if (ds['x'] > 180.0).any():
         lon_base_change(ds, lon_dim='x')
         ds = ds.sortby(['x'])
+
+    # Clip the extremes based on input
+    upper_thresh = ds.quantile(1-clip_extreme_quantile)
+    lower_thresh = ds.quantile(clip_extreme_quantile)
+    ds = ds.clip(min=lower_thresh, max=upper_thresh)
 
     # Adapt the CRS
     ds.rio.write_crs("epsg:4326", inplace=True)
@@ -262,7 +267,7 @@ def write_to_terracotta(cache_key, ds):
 
 def cache_exists(backend, cache_path):
     """Check if a cache exists generically."""
-    if backend == 'zarr' or backend == 'delta' or backend == 'pickle':
+    if backend == 'zarr' or backend == 'delta' or backend == 'pickle' or backend == 'terracotta':
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
         return fs.exists(cache_path)
@@ -271,7 +276,7 @@ def cache_exists(backend, cache_path):
 
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
-              auto_rechunk=False, cache=True, cache_disable_if=None, backend=None):
+              auto_rechunk=False, cache=True, cache_disable_if=None, backend=None, storage_backend=None):
     """Decorator for caching function results.
 
     Args:
@@ -315,6 +320,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "force_overwrite": False,
         "retry_null_cache": False,
         "backend": None,
+        "storage_backend": None,
     }
 
     def create_cacheable(func):
@@ -322,11 +328,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
-                auto_rechunk, cache, cache_disable_if, backend
+                auto_rechunk, cache, cache_disable_if, backend, storage_backend
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, validate_cache_timeseries, \
-                force_overwrite, retry_null_cache, backend = get_cache_args(
+                force_overwrite, retry_null_cache, backend, storage_backend = get_cache_args(
                     kwargs, cache_kwargs)
 
             if passed_cache is not None:
@@ -425,12 +431,17 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             cache_key = func.__name__ + '/' + '_'.join(flat_values)
             if data_type == 'array':
                 backend = "zarr" if backend is None else backend
+                if storage_backend is None:
+                    storage_backend = backend
+
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
                 # Set the default
                 backend = "delta" if backend is None else backend
+                if storage_backend is None:
+                    storage_backend = backend
 
                 if backend == 'delta':
                     cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.delta'
@@ -594,21 +605,22 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     print(f"Found null cache for {null_path}. Skipping computation.")
                     return None
 
-            if compute_result:
-                if recompute:
-                    print(f"Recompute for {cache_key} requested. Not checking for cached result.")
-                elif not cache:
-                    # The function isn't cacheable, recomputing
-                    pass
-                else:
-                    print(f"Cache doesn't exist for {cache_key}. Running function")
+            if compute_result or backend != storage_backend:
+                if compute_result:
+                    if recompute:
+                        print(f"Recompute for {cache_key} requested. Not checking for cached result.")
+                    elif not cache:
+                        # The function isn't cacheable, recomputing
+                        pass
+                    else:
+                        print(f"Cache doesn't exist for {cache_key}. Running function")
 
-                if timeseries is not None and (start_time is None or end_time is None):
-                    raise ValueError('Need to pass start and end time arguments when recomputing function.')
+                    if timeseries is not None and (start_time is None or end_time is None):
+                        raise ValueError('Need to pass start and end time arguments when recomputing function.')
 
-                ##### IF NOT EXISTS ######
-                ds = func(*args, **kwargs)
-                ##########################
+                    ##### IF NOT EXISTS ######
+                    ds = func(*args, **kwargs)
+                    ##########################
 
                 # Store the result
                 if cache:
@@ -619,43 +631,45 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             return None
 
                     if data_type == 'array':
-                        write = False
-                        if fs.exists(cache_path) and not force_overwrite:
-                            inp = input(f'A cache already exists at {
-                                        cache_path}. Are you sure you want to overwrite it? (y/n)')
-                            if inp == 'y' or inp == 'Y':
-                                write = True
-                        else:
-                            write = True
-
-                        if write:
-                            print(f"Caching result for {cache_path}.")
-                            if isinstance(ds, xr.Dataset):
-                                cache_map = fs.get_mapper(cache_path)
-
-                                if chunking:
-                                    # If we aren't doing auto chunking delete the encoding chunks
-                                    ds = drop_encoded_chunks(ds)
-
-                                    chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
-                                    chunking = prune_chunking_dimensions(ds, chunking)
-
-                                    ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')
-
-                                    # Reopen the dataset to truncate the computational path
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
-                                else:
-                                    chunks = 'auto'
-                                    ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
-
-                                    # Reopen the dataset to truncate the computational path
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                        if storage_backend == 'zarr':
+                            write = False
+                            if fs.exists(cache_path) and not force_overwrite:
+                                inp = input(f'A cache already exists at {
+                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write = True
                             else:
-                                raise RuntimeError(
-                                    f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
+                                write = True
+
+                            if write:
+
+                                print(f"Caching result for {cache_path}.")
+                                if isinstance(ds, xr.Dataset):
+                                    cache_map = fs.get_mapper(cache_path)
+
+                                    if chunking:
+                                        # If we aren't doing auto chunking delete the encoding chunks
+                                        ds = drop_encoded_chunks(ds)
+
+                                        chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
+                                        chunking = prune_chunking_dimensions(ds, chunking)
+
+                                        ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')
+
+                                        # Reopen the dataset to truncate the computational path
+                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                    else:
+                                        chunks = 'auto'
+                                        ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
+
+                                        # Reopen the dataset to truncate the computational path
+                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                else:
+                                    raise RuntimeError(
+                                        f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
 
                         # Either way if terracotta is specified as a backend try to write the result array to terracotta
-                        if backend == 'terracotta':
+                        elif storage_backend == 'terracotta':
                             print(f"Also caching {cache_key} to terracotta.")
                             write_to_terracotta(cache_key, ds)
 
@@ -664,7 +678,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             raise RuntimeError(f"""Tabular datatypes must return pandas dataframe
                                                or none instead of {type(ds)}""")
 
-                        if backend == 'delta':
+                        if storage_backend == 'delta':
                             write = False
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
@@ -678,7 +692,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 print(f"Caching result for {cache_path}.")
                                 write_to_delta(cache_path, ds, overwrite=True)
 
-                        elif backend == 'postgres':
+                        elif storage_backend == 'postgres':
                             print(f"Caching result for {cache_key} in postgres.")
 
                             write = False
