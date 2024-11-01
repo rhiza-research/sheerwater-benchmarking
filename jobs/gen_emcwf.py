@@ -11,12 +11,13 @@ if __name__ == "__main__":
     # vars = ["precip", "tmp2m"]
     # vars = ["precip"]
     # vars = ["tmp2m"]
-    aggs = [14, 7]
+    # aggs = [14, 7]
+    aggs = [14]
     # time_groups = ['weekly', 'biweekly']
-    time_groups = ['weekly']
+    time_groups = ['biweekly']
     # grids = ["global1_5", "global0_25"]
-    grids = ["global0_25"]
-    # grids = ["global1_5"]
+    # grids = ["global0_25"]
+    grids = ["global1_5"]
     # grids = ["global0_25", "global1_5"]
     # forecast_type = ["forecast", "reforecast"]
     # forecast_type = ["reforecast"]
@@ -36,8 +37,8 @@ if __name__ == "__main__":
     UPDATE_IFS_ER_GRID = True
     # UPDATE_IFS_ER_GRID = False
     # UPDATE_BIAS = True
-    UPDATE_BIAS = False
-    UPDATE_DEB = False
+    UPDATE_BIAS = True 
+    UPDATE_DEB = True 
     UPDATE_AGG = False
 
     for var, ft in product(vars, forecast_type):
@@ -91,11 +92,10 @@ if __name__ == "__main__":
                     ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
                                                         run_type=rt, time_group=time,
                                                         grid=grid,
-                                                        recompute=True, force_overwrite=True,
+                                                        # recompute=True, force_overwrite=True,
                                                         remote=True,
-                                                        remote_config={'name': 'genevieve-run2',
-                                                                    'n_workers': 18,
-                                                                    'idle_timeout': '120 minutes'}
+                                                        remote_name = 'genevieve',
+                                                        remote_config='xlarge_cluster'
                                                         )
 
             for agg in aggs:

@@ -701,10 +701,17 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', t
     n_leads = len(ds_deb.lead_time)
 
     # Accumulate all the per lead biases
-    biases = [ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=i,
-                                          run_type=run_type, time_group=time_group,
-                                          grid=grid)
-              for i in range(n_leads)]
+    biases = []
+    for i in range(n_leads):
+        if i == 16:
+            recompute = True
+            force_overwrite = True
+        else:
+            recompute = False
+            force_overwrite = False
+        biases.append(ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=i,
+                                                  run_type=run_type, time_group=time_group,
+                                                  grid=grid, recompute=recompute, force_overwrite=force_overwrite))
     # Concatenate leads and unstack
     ds_biases = xr.concat(biases, dim='lead_time')
     return ds_biases

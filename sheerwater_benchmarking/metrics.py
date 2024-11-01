@@ -161,7 +161,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     """Compute a grouped metric for a forecast at a specific lead."""
     # Get the unaggregated metric
     ds = global_metric(start_time, end_time, variable, lead, forecast, truth,
-                       metric, grid, mask, region='global')
+                       metric, grid, mask, region='global', force_overwrite=True)
 
     # Check to make sure it supports this region/time
     if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.95):
@@ -238,10 +238,15 @@ def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, baseline=None, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
-                 'climatology_trend_2015', 'climatology_rolling']
-    leads = ["week1", "week2", "week3", "week4", "week5",
-             "weeks12", "weeks34", "weeks56"]
+    # forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
+    #              'climatology_trend_2015', 'climatology_rolling']
+    forecasts = ['salient']
+    # forecasts = ['ecmwf_ifs_er', 'climatology_2015',
+    #              'climatology_trend_2015', 'climatology_rolling', 'perpp']
+    leads = ["week1", "week2", "week3", "week4", "week5"]
+    # leads = ["week1", "week2", "week3", "week4", "week5",
+    #          "weeks12", "weeks34", "weeks56"]
+    # leads = ["weeks56"]
 
     # Turn the dict into a pandas dataframe with appropriate columns
     leads_skill = [lead + '_skill' for lead in leads]

@@ -8,6 +8,7 @@ import xarray as xr
 import dask
 
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
+from sheerwater_benchmarking.reanalysis.era5 import _era5_rolled_for_clim
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
                                            apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
 
@@ -201,18 +202,11 @@ def climatology_linear_weights(variable, first_year=1985, last_year=2014, agg=14
     end_time = f"{last_year}-12-31"
 
     # Get single day, masked data between start and end years
-    ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
-
-    # Add day of year as a coordinate
-    ds = add_dayofyear(ds)
-    ds = pad_with_leapdays(ds)
-    ds = ds.assign_coords(year=ds.time.dt.year)
+    ds = _era5_rolled_for_clim(start_time, end_time, variable=variable, agg=agg, grid=grid)
 
     def fit_trend(sub_ds):
         return sub_ds.swap_dims({"time": "year"}).polyfit(dim='year', deg=1)
-
     # Fit the trend for each day of the year
-    ds = ds.chunk({'lat': 50, 'lon': 50, 'time': -1})
     ds = ds.groupby('dayofyear').map(fit_trend)
     return ds
 
@@ -254,7 +248,7 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
 
         time_ds = time_ds.assign_coords(year=time_ds['time'].dt.year)
         coeff = climatology_linear_weights(variable, first_year=first_year, last_year=last_year,
-                                           prob_type=prob_type, agg=agg, grid=grid)
+                                           agg=agg, grid=grid)
         with dask.config.set(**{'array.slicing.split_large_chunks': True}):
             coeff = coeff.sel(dayofyear=time_ds.dayofyear)
             coeff = coeff.drop('dayofyear')

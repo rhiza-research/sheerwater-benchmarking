@@ -6,9 +6,9 @@ from sheerwater_benchmarking.baselines.climatology import (
 
 
 vars = ["tmp2m", "precip"]
-grids = ["global0_25", "global1_5"]
+# grids = ["global0_25", "global1_5"]
 # grids = ["global1_5"]
-# grids = ["global0_25"]
+grids = ["global0_25"]
 aggs = [7, 14]
 
 start_time = "1979-01-01"
@@ -32,8 +32,8 @@ last_val_year = 2020
 UPDATE_CLIM = False
 UPDATE_CLIM_ABC = False
 UPDATE_CLIM_ROLLING = False
-UPDATE_CLIM_TREND = False
-UPDATE_CLIM_AGG = True
+UPDATE_CLIM_TREND = True
+UPDATE_CLIM_AGG = False
 UPDATE_CLIM_ROLLING_ABC = False
 
 for var, grid in product(vars, grids):
@@ -70,7 +70,7 @@ for var, grid in product(vars, grids):
         if UPDATE_CLIM_TREND:
             ds = climatology_linear_weights(var, first_year=first_year, last_year=last_year,
                                             agg=agg, grid=grid,
-                                            remote=True, remote_name='genevieve', remote_config='xlarge_cluster',
+                                            remote=True, remote_name='linear-fit', remote_config='xxlarge_cluster',
                                             recompute=True, force_overwrite=True)
 
         for prob_type in prob_types:
