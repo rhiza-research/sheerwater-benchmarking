@@ -112,7 +112,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     # Run the metric without aggregating in time or space
     if metric_lib == 'xskillscore':
         assert metric == 'crps'  # only crps is currently supported from xskillscore
-        fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
+        fcst = fcst.chunk(member=-1, time=500, lat=100, lon=100)  # member must be -1 to succeed
+        obs = obs.chunk(time=500, lat=100, lon=100)  # ensure chunks align
         m_ds = metric_fn(observations=obs, forecasts=fcst, mean=avg_time, **metric_kwargs)
     else:
         m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
