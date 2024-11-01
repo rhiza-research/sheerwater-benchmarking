@@ -195,7 +195,7 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
                            and can see sheerwater-benchmarking-postgres.""")
 
 
-def write_to_terracotta(cache_key, ds, clip_extreme_quantile=0.05):
+def write_to_terracotta(cache_key, ds, clip_extreme_quantile=0.00):
     """Write geospatial array to terracotta.
 
     Args:
