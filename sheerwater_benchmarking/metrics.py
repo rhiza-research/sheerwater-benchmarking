@@ -8,7 +8,7 @@ from sheerwater_benchmarking.utils import cacheable, dask_remote, clip_region, i
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
-CLIM_METRICS = ['acc', 'seeps']  # a list of probabilistic metrics
+CLIM_METRICS = ['acc']  # a list of metrics that use require a climatology input
 
 
 def get_datasource_fn(datasource):
@@ -34,9 +34,9 @@ def get_metric_fn(prob_type, metric, clim_ds=None, spatial=True):
     """Import the correct metrics function from weatherbench."""
     # Make sure things are consistent
     if prob_type == 'deterministic' and metric in PROB_METRICS:
-        raise ValueError("Cannot run CRPS on deterministic forecasts.")
+        raise ValueError("Cannot run probabilistic metric on deterministic forecasts.")
     elif (prob_type == 'ensemble' or prob_type == 'quantile') and metric not in PROB_METRICS:
-        raise ValueError("Cannot run MAE on probabilistic forecasts.")
+        raise ValueError("Cannot run deterministic metric on probabilistic forecasts.")
 
     wb_metrics = {
         'crps': ('xskillscore', 'crps_ensemble', {}),
@@ -93,6 +93,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     enhanced_prob_type = fcst.attrs['prob_type']
 
     if metric in CLIM_METRICS:
+        # Get the appropriate climatology dataframe for metric calculation
         if 'weeks' in lead:
             agg = 14  # biweekly
         elif 'week' in lead:
@@ -110,7 +111,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Run the metric without aggregating in time or space
     if metric_lib == 'xskillscore':
-        assert metric == 'crps'
+        assert metric == 'crps'  # only crps is currently supported from xskillscore
         fcst = fcst.chunk(member=-1, time=1, lat=100, lon=100)
         m_ds = metric_fn(observations=obs, forecasts=fcst, mean=avg_time, **metric_kwargs)
     else:
@@ -161,7 +162,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     """Compute a grouped metric for a forecast at a specific lead."""
     # Get the unaggregated metric
     ds = global_metric(start_time, end_time, variable, lead, forecast, truth,
-                       metric, grid, mask, region='global', force_overwrite=True)
+                       metric, grid, mask, region='global')
 
     # Check to make sure it supports this region/time
     if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.95):
