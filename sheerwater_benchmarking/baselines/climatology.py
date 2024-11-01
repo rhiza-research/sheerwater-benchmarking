@@ -8,7 +8,6 @@ import xarray as xr
 import dask
 
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
-from sheerwater_benchmarking.reanalysis.era5 import _era5_rolled_for_clim
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
                                            apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
 
@@ -179,6 +178,34 @@ def climatology_rolling_abc(start_time, end_time, variable, clim_years=30, agg=1
 
 @dask_remote
 @cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'agg', 'grid'],
+           chunking={"lat": 300, "lon": 300, "time": 366})
+def _era5_rolled_for_clim(start_time, end_time, variable, agg=14, grid="global1_5"):
+    """Aggregates the hourly ERA5 data into daily data and rolls.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        agg (str): The aggregation period to use, in days
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+            - global0_25: 0.25 degree global grid
+    """
+    # Get single day, masked data between start and end years
+    ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
+
+    # Add day of year as a coordinate
+    ds = add_dayofyear(ds)
+    ds = pad_with_leapdays(ds)
+    ds = ds.assign_coords(year=ds.time.dt.year)
+    ds = ds.chunk({'lat': 300, 'lon': 300, 'time': 366})
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
            cache_args=['variable', 'first_year', 'last_year', 'agg', 'grid'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 366},
            cache=True,
@@ -203,7 +230,7 @@ def climatology_linear_weights(variable, first_year=1985, last_year=2014, agg=14
 
     # Get single day, masked data between start and end years
     ds = _era5_rolled_for_clim(start_time, end_time, variable=variable, agg=agg, grid=grid,
-                               recompute=True, force_overwrite=True)
+                               recompute=True, force_overwrite=True)  # need these to be recomputed
 
     def fit_trend(sub_ds):
         return sub_ds.swap_dims({"time": "year"}).polyfit(dim='year', deg=1)

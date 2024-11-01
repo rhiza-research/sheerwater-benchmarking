@@ -11,7 +11,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            cdsapi_secret,
                                            get_grid, get_variable,
                                            apply_mask, clip_region, roll_and_agg, lon_base_change,
-                                           regrid, get_anomalies, add_dayofyear, pad_with_leapdays)
+                                           regrid, get_anomalies)
 
 
 @cacheable(data_type='array', cache_args=['year', 'variable', 'grid'])
@@ -230,34 +230,6 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
     agg_fn = "sum" if variable == "precip" else "mean"
     ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
 
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
-           timeseries='time',
-           cache_args=['variable', 'agg', 'grid'],
-           chunking={"lat": 300, "lon": 300, "time": 366})
-def _era5_chunked_for_clim(start_time, end_time, variable, agg=14, grid="global1_5"):
-    """Aggregates the hourly ERA5 data into daily data and rolls.
-
-    Args:
-        start_time (str): The start date to fetch data for.
-        end_time (str): The end date to fetch.
-        variable (str): The weather variable to fetch.
-        agg (str): The aggregation period to use, in days
-        grid (str): The grid resolution to fetch the data at. One of:
-            - global1_5: 1.5 degree global grid
-            - global0_25: 0.25 degree global grid
-    """
-    # Get single day, masked data between start and end years
-    ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
-
-    # Add day of year as a coordinate
-    ds = add_dayofyear(ds)
-    ds = pad_with_leapdays(ds)
-    ds = ds.assign_coords(year=ds.time.dt.year)
-    ds = ds.chunk({'lat': 300, 'lon': 300, 'time': 366})
     return ds
 
 
