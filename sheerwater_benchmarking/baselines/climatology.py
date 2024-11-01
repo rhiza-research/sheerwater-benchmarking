@@ -178,6 +178,34 @@ def climatology_rolling_abc(start_time, end_time, variable, clim_years=30, agg=1
 
 @dask_remote
 @cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'agg', 'grid'],
+           chunking={"lat": 300, "lon": 300, "time": 366})
+def _era5_rolled_for_clim(start_time, end_time, variable, agg=14, grid="global1_5"):
+    """Aggregates the hourly ERA5 data into daily data and rolls.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        agg (str): The aggregation period to use, in days
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+            - global0_25: 0.25 degree global grid
+    """
+    # Get single day, masked data between start and end years
+    ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
+
+    # Add day of year as a coordinate
+    ds = add_dayofyear(ds)
+    ds = pad_with_leapdays(ds)
+    ds = ds.assign_coords(year=ds.time.dt.year)
+    ds = ds.chunk({'lat': 300, 'lon': 300, 'time': 366})
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
            cache_args=['variable', 'first_year', 'last_year', 'agg', 'grid'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 366},
            cache=True,
@@ -201,18 +229,12 @@ def climatology_linear_weights(variable, first_year=1985, last_year=2014, agg=14
     end_time = f"{last_year}-12-31"
 
     # Get single day, masked data between start and end years
-    ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
-
-    # Add day of year as a coordinate
-    ds = add_dayofyear(ds)
-    ds = pad_with_leapdays(ds)
-    ds = ds.assign_coords(year=ds.time.dt.year)
+    ds = _era5_rolled_for_clim(start_time, end_time, variable=variable, agg=agg, grid=grid,
+                               recompute=True, force_overwrite=True)  # need these to be recomputed
 
     def fit_trend(sub_ds):
         return sub_ds.swap_dims({"time": "year"}).polyfit(dim='year', deg=1)
-
     # Fit the trend for each day of the year
-    ds = ds.chunk({'lat': 50, 'lon': 50, 'time': -1})
     ds = ds.groupby('dayofyear').map(fit_trend)
     return ds
 
@@ -254,7 +276,7 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
 
         time_ds = time_ds.assign_coords(year=time_ds['time'].dt.year)
         coeff = climatology_linear_weights(variable, first_year=first_year, last_year=last_year,
-                                           prob_type=prob_type, agg=agg, grid=grid)
+                                           agg=agg, grid=grid)
         with dask.config.set(**{'array.slicing.split_large_chunks': True}):
             coeff = coeff.sel(dayofyear=time_ds.dayofyear)
             coeff = coeff.drop('dayofyear')
@@ -288,13 +310,13 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
 def climatology_2015(start_time, end_time, variable, lead, prob_type='deterministic',
                      grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    leads_param = {
+    lead_params = {
         "week1": (7, 0),
         "week2": (7, 7),
         "week3": (7, 14),
         "week4": (7, 21),
         "week5": (7, 28),
-        "week6": (7, 36),
+        "week6": (7, 35),
         "weeks12": (14, 0),
         "weeks23": (14, 7),
         "weeks34": (14, 14),
@@ -302,7 +324,9 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
         "weeks56": (14, 28),
     }
 
-    agg, time_shift = leads_param[lead]
+    agg, time_shift = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for climatology.")
 
     # Get daily data
     new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
@@ -331,13 +355,13 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
 def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='deterministic',
                            grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    leads_param = {
+    lead_params = {
         "week1": (7, 0),
         "week2": (7, 7),
         "week3": (7, 14),
         "week4": (7, 21),
         "week5": (7, 28),
-        "week6": (7, 36),
+        "week6": (7, 35),
         "weeks12": (14, 0),
         "weeks23": (14, 7),
         "weeks34": (14, 14),
@@ -345,10 +369,12 @@ def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='dete
         "weeks56": (14, 28),
     }
 
-    agg, time_shift = leads_param[lead]
+    agg, time_shift = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for climatology trend.")
 
     if prob_type == 'probabilistic':
-        raise NotImplementedError("Probabilistic trend forecasts are not supported.")
+        raise NotImplementedError("Probabilistic climatology trend forecasts are not supported.")
 
     # Get daily data
     new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
@@ -373,13 +399,13 @@ def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='dete
 def climatology_rolling(start_time, end_time, variable, lead, prob_type='deterministic',
                         grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    leads_param = {
+    lead_params = {
         "week1": (7, 0),
         "week2": (7, 7),
         "week3": (7, 14),
         "week4": (7, 21),
         "week5": (7, 28),
-        "week6": (7, 36),
+        "week6": (7, 35),
         "weeks12": (14, 0),
         "weeks23": (14, 7),
         "weeks34": (14, 14),
@@ -387,7 +413,9 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
         "weeks56": (14, 28),
     }
 
-    agg, time_shift = leads_param[lead]
+    agg, time_shift = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for rolling climatology.")
 
     if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecasts are available for rolling climatology.")

@@ -5,18 +5,20 @@ from sheerwater_benchmarking.baselines.climatology import (
     climatology_abc, climatology_rolling_abc)
 
 
-vars = ["tmp2m", "precip"]
+vars = ["precip"]
+# vars = ["tmp2m", "precip"]
 # grids = ["global0_25", "global1_5"]
-grids = ["global1_5"]
-# grids = ["global0_25"]
-aggs = [7, 14]
+# grids = ["global1_5"]
+grids = ["global0_25"]
+# aggs = [7, 14]
+aggs = [7]
 
 start_time = "1979-01-01"
 end_time = "2024-01-01"
 forecast_start_time = "2015-05-14"
 forecast_end_time = "2023-06-30"
-prob_types = ["deterministic", "probabilistic"]
-# prob_types = ["deterministic"]
+# prob_types = ["deterministic", "probabilistic"]
+prob_types = ["deterministic"]
 regions = ["global"]
 masks = ["lsm"]
 # 30 years after the start time
@@ -25,6 +27,9 @@ clim_years = 30
 
 first_year = 1985
 last_year = 2014
+
+first_val_year = 1991
+last_val_year = 2020
 
 UPDATE_CLIM = False
 UPDATE_CLIM_ABC = False
@@ -67,13 +72,20 @@ for var, grid in product(vars, grids):
         if UPDATE_CLIM_TREND:
             ds = climatology_linear_weights(var, first_year=first_year, last_year=last_year,
                                             agg=agg, grid=grid,
-                                            remote=True, remote_name='genevieve', remote_config='xlarge_cluster',
-                                            recompute=True, force_overwrite=True)
+                                            remote=True, remote_name='genevieve', remote_config='xxlarge_cluster',
+                                            recompute=True, force_overwrite=True
+                                            )
 
         for prob_type in prob_types:
             if UPDATE_CLIM_AGG:
+                # ds = climatology_agg_raw(variable=var,
+                #                          first_year=first_year, last_year=last_year,
+                #                          prob_type=prob_type, agg=agg, grid=grid,
+                #                          recompute=True, force_overwrite=True,
+                #                          remote=True, remote_name='genevieve', remote_config='xlarge_cluster'
+                #                          )
                 ds = climatology_agg_raw(variable=var,
-                                         first_year=first_year, last_year=last_year,
+                                         first_year=first_val_year, last_year=last_val_year,
                                          prob_type=prob_type, agg=agg, grid=grid,
                                          recompute=True, force_overwrite=True,
                                          remote=True, remote_name='genevieve', remote_config='xlarge_cluster'

@@ -63,8 +63,8 @@ def perpp_ecmwf(start_time, end_time, variable, lead="weeks56", grid="global1_5"
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def perpp(start_time, end_time, variable, lead, prob_type='deterministic',
-          grid='global0_25', mask='lsm', region='global'):
-    """Standard format forecast data for Salient."""
+          grid='global1_5', mask='lsm', region='global'):
+    """Standard format forecast data for Persistance++ Model."""
     lead_params = {
         "weeks56": "weeks56",
     }
