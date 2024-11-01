@@ -237,7 +237,7 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'agg', 'grid'],
-           chunking={"lat": 50, "lon": 50, "time": -1})
+           chunking={"lat": 300, "lon": 300, "time": 366})
 def _era5_rolled_for_clim(start_time, end_time, variable, agg=14, grid="global1_5"):
     """Aggregates the hourly ERA5 data into daily data and rolls.
 
@@ -257,6 +257,7 @@ def _era5_rolled_for_clim(start_time, end_time, variable, agg=14, grid="global1_
     ds = add_dayofyear(ds)
     ds = pad_with_leapdays(ds)
     ds = ds.assign_coords(year=ds.time.dt.year)
+    ds = ds.chunk({'lat': 300, 'lon': 300, 'time': 366})
     return ds
 
 
@@ -332,13 +333,13 @@ def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', re
         mask (str): The mask to apply to the data.
         region (str): The region to clip the data to.
     """
-    leads_param = {
+    lead_params = {
         "week1": (7, 0),
         "week2": (7, 7),
         "week3": (7, 14),
         "week4": (7, 21),
         "week5": (7, 28),
-        "week6": (7, 36),
+        "week6": (7, 35),
         "weeks12": (14, 0),
         "weeks23": (14, 7),
         "weeks34": (14, 14),
@@ -346,7 +347,9 @@ def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', re
         "weeks56": (14, 28),
     }
 
-    agg, time_shift = leads_param.get(lead)
+    agg, time_shift = lead_params.get(lead, (None, None))
+    if time_shift is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for ERA5.")
 
     # Get daily data
     new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")

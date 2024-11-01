@@ -202,7 +202,8 @@ def climatology_linear_weights(variable, first_year=1985, last_year=2014, agg=14
     end_time = f"{last_year}-12-31"
 
     # Get single day, masked data between start and end years
-    ds = _era5_rolled_for_clim(start_time, end_time, variable=variable, agg=agg, grid=grid)
+    ds = _era5_rolled_for_clim(start_time, end_time, variable=variable, agg=agg, grid=grid,
+                               recompute=True, force_overwrite=True)
 
     def fit_trend(sub_ds):
         return sub_ds.swap_dims({"time": "year"}).polyfit(dim='year', deg=1)
@@ -282,13 +283,13 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
 def climatology_2015(start_time, end_time, variable, lead, prob_type='deterministic',
                      grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    leads_param = {
+    lead_params = {
         "week1": (7, 0),
         "week2": (7, 7),
         "week3": (7, 14),
         "week4": (7, 21),
         "week5": (7, 28),
-        "week6": (7, 36),
+        "week6": (7, 35),
         "weeks12": (14, 0),
         "weeks23": (14, 7),
         "weeks34": (14, 14),
@@ -296,7 +297,9 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
         "weeks56": (14, 28),
     }
 
-    agg, time_shift = leads_param[lead]
+    agg, time_shift = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for climatology.")
 
     # Get daily data
     new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
@@ -325,13 +328,13 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
 def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='deterministic',
                            grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    leads_param = {
+    lead_params = {
         "week1": (7, 0),
         "week2": (7, 7),
         "week3": (7, 14),
         "week4": (7, 21),
         "week5": (7, 28),
-        "week6": (7, 36),
+        "week6": (7, 35),
         "weeks12": (14, 0),
         "weeks23": (14, 7),
         "weeks34": (14, 14),
@@ -339,10 +342,12 @@ def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='dete
         "weeks56": (14, 28),
     }
 
-    agg, time_shift = leads_param[lead]
+    agg, time_shift = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for climatology trend.")
 
     if prob_type == 'probabilistic':
-        raise NotImplementedError("Probabilistic trend forecasts are not supported.")
+        raise NotImplementedError("Probabilistic climatology trend forecasts are not supported.")
 
     # Get daily data
     new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
@@ -367,13 +372,13 @@ def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='dete
 def climatology_rolling(start_time, end_time, variable, lead, prob_type='deterministic',
                         grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    leads_param = {
+    lead_params = {
         "week1": (7, 0),
         "week2": (7, 7),
         "week3": (7, 14),
         "week4": (7, 21),
         "week5": (7, 28),
-        "week6": (7, 36),
+        "week6": (7, 35),
         "weeks12": (14, 0),
         "weeks23": (14, 7),
         "weeks34": (14, 14),
@@ -381,7 +386,9 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
         "weeks56": (14, 28),
     }
 
-    agg, time_shift = leads_param[lead]
+    agg, time_shift = lead_params.get(lead, (None, None))
+    if agg is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for rolling climatology.")
 
     if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecasts are available for rolling climatology.")

@@ -5,11 +5,13 @@ from sheerwater_benchmarking.baselines.climatology import (
     climatology_abc, climatology_rolling_abc)
 
 
-vars = ["tmp2m", "precip"]
+vars = ["precip"]
+# vars = ["tmp2m", "precip"]
 # grids = ["global0_25", "global1_5"]
 # grids = ["global1_5"]
 grids = ["global0_25"]
-aggs = [7, 14]
+# aggs = [7, 14]
+aggs = [7]
 
 start_time = "1979-01-01"
 end_time = "2024-01-01"
@@ -70,8 +72,9 @@ for var, grid in product(vars, grids):
         if UPDATE_CLIM_TREND:
             ds = climatology_linear_weights(var, first_year=first_year, last_year=last_year,
                                             agg=agg, grid=grid,
-                                            remote=True, remote_name='linear-fit', remote_config='xxlarge_cluster',
-                                            recompute=True, force_overwrite=True)
+                                            remote=True, remote_name='genevieve', remote_config='xxlarge_cluster',
+                                            recompute=True, force_overwrite=True
+                                            )
 
         for prob_type in prob_types:
             if UPDATE_CLIM_AGG:

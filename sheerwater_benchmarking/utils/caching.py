@@ -103,6 +103,11 @@ def drop_encoded_chunks(ds):
         if 'chunks' in ds[var].encoding:
             del ds[var].encoding['chunks']
 
+    for coord in ds.coords:
+        if 'chunks' in ds[coord].encoding:
+            del ds[coord].encoding['chunks']
+
+
     return ds
 
 
