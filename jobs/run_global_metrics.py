@@ -18,7 +18,7 @@ def run_grouped(combo):
     metric, variable, grid, lead, forecast = combo
 
     try:
-        grouped_metric(variable, lead, forecast, "era5", metric, grid=grid,
+        global_metric(start_time, end_time, variable, lead, forecast, "era5", metric, grid=grid,
                        force_overwrite=True, filepath_only=True, recompute=recompute)
     except Exception as e:
         print(f"Failed to run global metric {forecast} {lead} {grid} {variable} {metric}: {traceback.format_exc()}")
