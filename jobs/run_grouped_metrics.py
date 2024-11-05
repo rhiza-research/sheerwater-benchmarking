@@ -8,10 +8,10 @@ from sheerwater_benchmarking.metrics import grouped_metric
 from sheerwater_benchmarking.utils import start_remote
 from jobs import parse_args, run_in_parallel
 
-start_time, end_time, forecasts, metrics, variables, grids, regions, leads, time_groupings, baselines, parallelism, recompute, backend, remote_name, remote = parse_args()
+start_time, end_time, forecasts, metrics, variables, grids, regions, leads, time_groupings, baselines, parallelism, recompute, backend, remote_name, remote, remote_config = parse_args()
 
 if remote:
-    start_remote(remote_config=['large_cluster'], remote_name=remote_name)
+    start_remote(remote_config=remote_config, remote_name=remote_name)
 
 combos = itertools.product(metrics, variables, grids, regions, leads, forecasts, time_groupings)
 
