@@ -17,6 +17,8 @@ def parse_args():
     parser.add_argument("--backend", type=str, default=None)
     parser.add_argument("--parallelism", type=int, default=1)
     parser.add_argument("--recompute", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--remote", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--remote-name", type=str, default=None)
     args = parser.parse_args()
 
     forecasts = ["salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
@@ -54,7 +56,7 @@ def parse_args():
         time_groupings = args.time_grouping
         time_groupings = [x if x != 'None' else None for x in time_groupings]
 
-    return args.start_time, args.end_time, forecasts, metrics, variables, grids, regions, leads, time_groupings, baselines, args.parallelism, args.recompute, args.backend
+    return args.start_time, args.end_time, forecasts, metrics, variables, grids, regions, leads, time_groupings, baselines, args.parallelism, args.recompute, args.backend, args.remote_name, args.remote
 
 def run_in_parallel(func, iterable, parallelism):
     iterable, copy = itertools.tee(iterable)
