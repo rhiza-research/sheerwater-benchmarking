@@ -112,8 +112,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     # Run the metric without aggregating in time or space
     if metric_lib == 'xskillscore':
         assert metric == 'crps'  # only crps is currently supported from xskillscore
-        fcst = fcst.chunk(member=-1, time=500, lat=100, lon=100)  # member must be -1 to succeed
-        obs = obs.chunk(time=500, lat=100, lon=100)  # ensure chunks align
+        fcst = fcst.chunk(member=-1, time=1, lat=500, lon=500)  # member must be -1 to succeed
+        obs = obs.chunk(time=1, lat=500, lon=500)  # ensure chunks align
         m_ds = metric_fn(observations=obs, forecasts=fcst, mean=avg_time, **metric_kwargs)
     else:
         m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
@@ -209,8 +209,11 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
                  metric, baseline, time_grouping=None, spatial=False, grid="global1_5",
                  mask='lsm', region='global'):
     """Compute skill either spatially or as a region summary."""
-    m_ds = grouped_metric(start_time, end_time, variable, lead, forecast,
-                          truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
+    try:
+        m_ds = grouped_metric(start_time, end_time, variable, lead, forecast,
+                              truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
+    except NotImplementedError:
+        return None
 
     if not m_ds:
         return None
@@ -256,8 +259,11 @@ def summary_metrics_table(start_time, end_time, variable,
             print(f"""Running for {forecast} and {lead} with variable {variable},
                       metric {metric}, grid {grid}, and region {region}""")
             # First get the value without the baseline
-            ds = grouped_metric(start_time, end_time, variable, lead, forecast, truth,
-                                metric, time_grouping, False, grid, mask, region)
+            try:
+                ds = grouped_metric(start_time, end_time, variable, lead, forecast, truth,
+                                    metric, time_grouping, False, grid, mask, region)
+            except NotImplementedError:
+                ds = None
 
             if ds:
                 ds = ds.rename({variable: lead})
