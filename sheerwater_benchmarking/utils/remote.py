@@ -96,3 +96,8 @@ def dask_remote(func):
 
         return func(*args, **kwargs)
     return wrapper
+
+
+@dask_remote
+def set_dask_backend_remote(remote=True):
+    pass

@@ -1,6 +1,6 @@
 """Utility functions for benchmarking."""
 from .caching import cacheable
-from .remote import dask_remote
+from .remote import dask_remote, set_dask_backend_remote
 from .secrets import cdsapi_secret, ecmwf_secret, salient_secret, salient_auth
 from .data_utils import (apply_mask, roll_and_agg, regrid, clip_region,
                          lon_base_change, get_globe_slice, get_anomalies, is_valid)
@@ -19,6 +19,7 @@ from .weather_utils import get_variable
 __all__ = [
     "cacheable",
     "dask_remote",
+    "set_dask_backend_remote",
     "cdsapi_secret",
     "ecmwf_secret",
     "salient_secret",

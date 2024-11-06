@@ -147,6 +147,9 @@ def lon_base_change(ds, to_base="base180", lon_dim='lon'):
     # Then assign new coordinates
     ds = ds.assign_coords({lon_dim: lons})
 
+    # Always sort the lats
+    ds = ds.sortby('lat')
+
     # Sort the lons after conversion, unless the slice
     # you're considering wraps around the meridian
     # in the resultant base.
