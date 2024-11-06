@@ -61,7 +61,7 @@ def parse_args():
     if args.remote_config:
         remote_config = args.remote_config
 
-    return args.start_time, args.end_time, forecasts, metrics, variables, grids, regions, leads, time_groupings, baselines, args.parallelism, args.recompute, args.backend, args.remote_name, args.remote, args.remote_config
+    return args.start_time, args.end_time, forecasts, metrics, variables, grids, regions, leads, time_groupings, baselines, args.parallelism, args.recompute, args.backend, args.remote_name, args.remote, remote_config
 
 def run_in_parallel(func, iterable, parallelism):
     iterable, copy = itertools.tee(iterable)
