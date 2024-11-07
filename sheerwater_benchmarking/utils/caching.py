@@ -200,7 +200,7 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
                            and can see sheerwater-benchmarking-postgres.""")
 
 
-def write_to_terracotta(cache_key, ds, clip_extreme_quantile=0.00):
+def write_to_terracotta(cache_key, ds):
     """Write geospatial array to terracotta.
 
     Args:
@@ -211,10 +211,12 @@ def write_to_terracotta(cache_key, ds, clip_extreme_quantile=0.00):
     lats = ['lat', 'y', 'latitude']
     lons = ['lon', 'x', 'longitude']
     if len(ds.dims) != 2:
-        raise RuntimeError("Can only store two dimensional geospatial data to terracotta")
+        if len(ds.dims) != 3 or 'time' not in ds.dims:
+            raise RuntimeError("Can only store two dimensional geospatial data to terracotta")
 
     foundx = False
     foundy = False
+    foundTime = False
     for y in lats:
         if y in ds.dims:
             ds = ds.rename({y: 'y'})
@@ -225,49 +227,59 @@ def write_to_terracotta(cache_key, ds, clip_extreme_quantile=0.00):
             foundx = True
 
     if not foundx or not foundy:
-        raise RuntimeError("Can only store two dimensional geospatial data to terracotta")
+        raise RuntimeError("Can only store two dimensional or three dimensional (with time) geospatial data to terracotta")
 
     # Adjust coordinates
     if (ds['x'] > 180.0).any():
         lon_base_change(ds, lon_dim='x')
         ds = ds.sortby(['x'])
 
-    # Clip the extremes based on input
-    upper_thresh = ds.quantile(1-clip_extreme_quantile)
-    lower_thresh = ds.quantile(clip_extreme_quantile)
-    ds = ds.clip(min=lower_thresh, max=upper_thresh)
-
     # Adapt the CRS
     ds.rio.write_crs("epsg:4326", inplace=True)
     ds = ds.rio.reproject('EPSG:3857', resampling=Resampling.nearest, nodata=np.nan)
     ds.rio.write_crs("epsg:3857", inplace=True)
 
-    # Write the raster
-    with MemoryFile() as mem_dst:
-        ds.rio.to_raster(mem_dst.name, driver="COG")
+    def write_individual_raster(ds, cache_key):
+        # Write the raster
+        with MemoryFile() as mem_dst:
+            ds.rio.to_raster(mem_dst.name, driver="COG")
 
-        storage_client = storage.Client()
-        bucket = storage_client.bucket("sheerwater-datalake")
-        blob = bucket.blob(f'rasters/{cache_key}.tif')
-        blob.upload_from_file(mem_dst)
+            storage_client = storage.Client()
+            bucket = storage_client.bucket("sheerwater-datalake")
+            blob = bucket.blob(f'rasters/{cache_key}.tif')
+            blob.upload_from_file(mem_dst)
 
-        # Register with terracotta
-        tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
-        driver = tc.get_driver("postgresql://sheerwater-benchmarking-postgres:5432/terracotta")
+            # Register with terracotta
+            tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
+            driver = tc.get_driver("postgresql://sheerwater-benchmarking-postgres:5432/terracotta")
 
-        try:
-            driver.get_keys()
-        except sqlalchemy.exc.DatabaseError:
-            # Create a metastore
-            print("Creating new terracotta metastore")
-            driver.create(['key'])
+            try:
+                driver.get_keys()
+            except sqlalchemy.exc.DatabaseError:
+                # Create a metastore
+                print("Creating new terracotta metastore")
+                driver.create(['key'])
 
-        # Insert the parameters.
-        with driver.connect():
-            driver.insert({'key': cache_key.replace('/', '_')}, mem_dst,
-                          override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif')
+            # Insert the parameters.
+            with driver.connect():
+                driver.insert({'key': cache_key.replace('/', '_')}, mem_dst,
+                              override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif')
 
-        print(f"Inserted {cache_key.replace('/', '_')} into the terracotta database.")
+            print(f"Inserted {cache_key.replace('/', '_')} into the terracotta database.")
+
+    if 'time' in ds.dims:
+        for t in ds.time:
+            # Select just this time and squeeze the dimension
+            sub_ds = ds.sel(time=t)
+            sub_ds = sub_ds.reset_coords('time', drop=True)
+
+            # add the time to the cache_key
+            sub_cache_key = cache_key + '_' + str(t.values)
+
+            write_individual_raster(sub_ds, sub_cache_key)
+    else:
+        write_individual_raster(ds, cache_key)
+
 
 
 def cache_exists(backend, cache_path):
