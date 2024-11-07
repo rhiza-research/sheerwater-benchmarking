@@ -453,7 +453,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'postgres':
-                    cache_key = cache_key.replace('/', '_')
                     cache_path = cache_key
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = False
