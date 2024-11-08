@@ -69,7 +69,13 @@ def parse_args():
             args.recompute, args.backend, args.remote_name, args.remote, remote_config)
 
 def run_in_parallel(func, iterable, parallelism):
-    """Run a function in parallel with dask delayed."""
+    """Run a function in parallel with dask delayed.
+
+    Args:
+        func(callable): A function to call. Must take one of iterable as an argument.
+        iterable (iterable): Any iterable object to pass to func.
+        parallelism (int): Number of func(iterables) to run in parallel at a time.
+    """
     iterable, copy = itertools.tee(iterable)
     length = len(list(copy))
     if parallelism <= 1:
