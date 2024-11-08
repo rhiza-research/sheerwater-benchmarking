@@ -2,6 +2,7 @@ import argparse
 import dask
 import itertools
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-time", default="2016-01-01", type=str)
@@ -22,13 +23,12 @@ def parse_args():
     parser.add_argument("--remote-config", type=str, nargs='*')
     args = parser.parse_args()
 
-    forecasts = ["salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
+    forecasts = ["perpp", "salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
                  "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
     if args.forecast:
         forecasts = args.forecast
 
-    baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
-                 "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
+    baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015"]
     if args.baseline:
         baselines = args.baseline
 
@@ -48,7 +48,7 @@ def parse_args():
     if args.region:
         regions = args.region
 
-    leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
+    leads = ["week1", "week2", "week3", "week4", "week5", "week6", "weeks34", "weeks56"]
     if args.lead:
         leads = args.lead
 
@@ -62,6 +62,7 @@ def parse_args():
         remote_config = args.remote_config
 
     return args.start_time, args.end_time, forecasts, metrics, variables, grids, regions, leads, time_groupings, baselines, args.parallelism, args.recompute, args.backend, args.remote_name, args.remote, remote_config
+
 
 def run_in_parallel(func, iterable, parallelism):
     iterable, copy = itertools.tee(iterable)
@@ -81,4 +82,3 @@ def run_in_parallel(func, iterable, parallelism):
 
             dask.compute(output)
             counter = counter + parallelism
-
