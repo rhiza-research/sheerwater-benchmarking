@@ -217,7 +217,6 @@ def write_to_terracotta(cache_key, ds):
 
     foundx = False
     foundy = False
-    foundTime = False
     for y in lats:
         if y in ds.dims:
             ds = ds.rename({y: 'y'})
@@ -228,7 +227,7 @@ def write_to_terracotta(cache_key, ds):
             foundx = True
 
     if not foundx or not foundy:
-        raise RuntimeError("Can only store two dimensional or three dimensional (with time) geospatial data to terracotta")
+        raise RuntimeError("Can only store two or three dimensional (with time) geospatial data to terracotta")
 
     # Adjust coordinates
     if (ds['x'] > 180.0).any():
@@ -331,8 +330,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         cache_disable_if(dict, list): If the cache arguments match the dict or list of dicts
             then the cache will be disabled. This is useful for disabling caching based on
             certain arguments. Defaults to None.
-        backend(str): The name of the backend to use for cache storage. None for
+        backend(str): The name of the backend to use for cache recall/storage. None for
             default, zarr, delta, postgres, terracotta.
+        storage_backend(str): The name of the backend to use for cache storag onlye. None
+            to match backend. Useful for pulling from one backend and writing to another.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
