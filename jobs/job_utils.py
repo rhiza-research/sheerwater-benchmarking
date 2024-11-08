@@ -1,9 +1,11 @@
+"""Utility functions for the metrics jobs."""
 import argparse
 import dask
 import itertools
 
 
 def parse_args():
+    """Standard argument parsing for the jobs."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-time", default="2016-01-01", type=str)
     parser.add_argument("--end-time", default="2022-12-31", type=str)
@@ -67,18 +69,19 @@ def parse_args():
 
 
 def run_in_parallel(func, iterable, parallelism):
+    """Run a function in parallel on an iterable."""
     iterable, copy = itertools.tee(iterable)
     length = len(list(copy))
     if parallelism <= 1:
-        for i, l in enumerate(iterable):
+        for i, batch in enumerate(iterable):
             print(f"Running {i+1}/{length}")
-            func(l)
+            func(batch)
     else:
         counter = 0
-        for l in itertools.batched(iterable, parallelism):
+        for batch in itertools.batched(iterable, parallelism):
             output = []
             print(f"Running {counter+1}...{counter+parallelism}/{length}")
-            for i in l:
+            for i in batch:
                 out = dask.delayed(func)(i)
                 output.append(out)
 
