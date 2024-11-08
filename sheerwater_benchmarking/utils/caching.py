@@ -107,7 +107,6 @@ def drop_encoded_chunks(ds):
         if 'chunks' in ds[coord].encoding:
             del ds[coord].encoding['chunks']
 
-
     return ds
 
 
@@ -123,9 +122,11 @@ def write_to_delta(cache_path, df, overwrite=False):
     else:
         write_deltalake(cache_path, df)
 
+
 def postgres_table_name(table_name):
     """Return a qualified postgres table name."""
     return hashlib.md5(table_name.encode()).hexdigest()
+
 
 def read_from_postgres(table_name):
     """Read a pandas df from a table in the sheerwater postgres.
@@ -206,6 +207,7 @@ def write_to_terracotta(cache_key, ds, clip_extreme_quantile=0.00):
     Args:
         cache_key(str): The unique key to store the data in terracotta
         ds (xr.Dataset): Dataset which holds raster
+        clip_extreme_quantile(float): The quantile to clip the data at
     """
     # Check to make sure this is geospatial data
     lats = ['lat', 'y', 'latitude']
@@ -281,7 +283,8 @@ def cache_exists(backend, cache_path):
 
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
-              auto_rechunk=False, cache=True, cache_disable_if=None, backend=None, storage_backend=None):
+              auto_rechunk=False, cache=True, cache_disable_if=None,
+              backend=None, storage_backend=None):
     """Decorator for caching function results.
 
     Args:
@@ -313,7 +316,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         cache_disable_if(dict, list): If the cache arguments match the dict or list of dicts
             then the cache will be disabled. This is useful for disabling caching based on
             certain arguments. Defaults to None.
-        backend(str): The name of the backend to use for cache storage. None for
+        backend(str): The name of the backend to use for cache loading. None for
+            default, zarr, delta, postgres, terracotta.
+        storage_backend(str): The name of the backend to use for storage. None for
             default, zarr, delta, postgres, terracotta.
     """
     # Valid configuration kwargs for the cacheable decorator

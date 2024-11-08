@@ -18,13 +18,15 @@ combos = itertools.product(metrics, variables, grids, regions, leads, forecasts,
 
 
 def run_grouped(combo):
+    """Run grouped metric for a combination of parameters."""
     print(combo)
     metric, variable, grid, region, lead, forecast, time_grouping = combo
 
     try:
-        grouped_metric(start_time, end_time, variable, lead, forecast, "era5", metric, spatial=True, time_grouping=time_grouping, grid=grid, region=region,
+        grouped_metric(start_time, end_time, variable, lead, forecast, "era5", metric, spatial=True,
+                       time_grouping=time_grouping, grid=grid, region=region,
                        force_overwrite=True, filepath_only=True, recompute=recompute, storage_backend=backend)
-    except Exception as e:
+    except Exception:
         print(f"Failed to run global metric {forecast} {lead} {grid} {variable} {metric}: {traceback.format_exc()}")
 
 

@@ -21,19 +21,24 @@ if backend is not None:
 
 
 def run_metrics_table(combo):
+    """Run metrics table for a combination of parameters."""
     metric, variable, grid, region, time_grouping, baseline = combo
 
     try:
-        summary_metrics_table(start_time, end_time, variable, "era5", metric, baseline=baseline, time_grouping=time_grouping, grid=grid, region=region,
-                              force_overwrite=True, filepath_only=filepath_only, recompute=recompute, storage_backend=backend)
-    except Exception as e:
+        summary_metrics_table(start_time, end_time, variable, "era5", metric, baseline=baseline,
+                              time_grouping=time_grouping, grid=grid, region=region,
+                              force_overwrite=True, filepath_only=filepath_only,
+                              recompute=recompute, storage_backend=backend)
+    except Exception:
         print(f"Failed to run table metric {grid} {variable} {metric} {
               region} {baseline} {time_grouping}: {traceback.format_exc()}")
 
     try:
-        biweekly_summary_metrics_table(start_time, end_time, variable, "era5", metric, baseline=baseline, time_grouping=time_grouping, grid=grid, region=region,
-                                       force_overwrite=True, filepath_only=filepath_only, recompute=recompute, storage_backend=backend)
-    except Exception as e:
+        biweekly_summary_metrics_table(start_time, end_time, variable, "era5", metric, baseline=baseline,
+                                       time_grouping=time_grouping, grid=grid, region=region,
+                                       force_overwrite=True, filepath_only=filepath_only,
+                                       recompute=recompute, storage_backend=backend)
+    except Exception:
         print(f"Failed to run biweekly table metric {grid} {variable} {metric} {
               region} {baseline} {time_grouping}: {traceback.format_exc()}")
 

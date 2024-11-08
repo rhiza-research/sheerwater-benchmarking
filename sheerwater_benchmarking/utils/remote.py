@@ -32,6 +32,7 @@ config_options = {
 }
 
 def start_remote(remote_name=None, remote_config=None):
+    """Start a remote dask cluster."""
     default_name = 'sheerwater_' + pwd.getpwuid(os.getuid())[0]
 
     coiled_default_options = {

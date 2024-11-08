@@ -572,7 +572,6 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     elif variable == 'precip':
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
-        
         ds = np.maximum(ds, 0)
 
     if grid == 'global1_5':
