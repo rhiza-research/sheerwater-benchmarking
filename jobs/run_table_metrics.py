@@ -35,14 +35,15 @@ def run_metrics_table(combo):
         print(f"Failed to run metric {grid} {variable} {metric} \
                 {region} {baseline} {time_grouping}: {traceback.format_exc()}")
 
-    try:
-        biweekly_summary_metrics_table(start_time, end_time, variable, "era5", metric, baseline=baseline,
-                                       time_grouping=time_grouping, grid=grid, region=region,
-                                       force_overwrite=True, filepath_only=filepath_only,
-                                       recompute=recompute, storage_backend=backend)
-    except:  # noqa: E722
-        print(f"Failed to run biweekly metric {grid} {variable} {metric} \
-                {region} {baseline} {time_grouping}: {traceback.format_exc()}")
+    if grid == "global1_5":
+        try:
+            biweekly_summary_metrics_table(start_time, end_time, variable, "era5", metric, baseline=baseline,
+                                           time_grouping=time_grouping, grid=grid, region=region,
+                                           force_overwrite=True, filepath_only=filepath_only,
+                                           recompute=recompute, storage_backend=backend)
+        except:  # noqa: E722
+            print(f"Failed to run biweekly metric {grid} {variable} {metric} \
+                    {region} {baseline} {time_grouping}: {traceback.format_exc()}")
 
 
 if __name__ == "__main__":
