@@ -16,7 +16,8 @@ parser.add_argument("--region", type=str, nargs='*')
 parser.add_argument("--time-grouping", type=str, nargs='*')
 args = parser.parse_args()
 
-baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015"]
+baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
+             "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
 if args.baseline:
     baselines = args.baseline
 
