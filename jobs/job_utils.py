@@ -1,11 +1,11 @@
-"""Utility functions for the metrics jobs."""
+"""Utilities for running jobs."""
 import argparse
 import dask
 import itertools
 
 
 def parse_args():
-    """Standard argument parsing for the jobs."""
+    """Parses arguments for jobs."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-time", default="2016-01-01", type=str)
     parser.add_argument("--end-time", default="2022-12-31", type=str)
@@ -64,24 +64,24 @@ def parse_args():
     if args.remote_config:
         remote_config = args.remote_config
 
-    return args.start_time, args.end_time, forecasts, metrics, variables, grids, regions, leads, time_groupings,  \
-        baselines, args.parallelism, args.recompute, args.backend, args.remote_name, args.remote, remote_config
-
+    return (args.start_time, args.end_time, forecasts, metrics, variables, grids,
+            regions, leads, time_groupings, baselines, args.parallelism,
+            args.recompute, args.backend, args.remote_name, args.remote, remote_config)
 
 def run_in_parallel(func, iterable, parallelism):
-    """Run a function in parallel on an iterable."""
+    """Run a function in parallel with dask delayed."""
     iterable, copy = itertools.tee(iterable)
     length = len(list(copy))
     if parallelism <= 1:
-        for i, batch in enumerate(iterable):
+        for i, it in enumerate(iterable):
             print(f"Running {i+1}/{length}")
-            func(batch)
+            func(it)
     else:
         counter = 0
-        for batch in itertools.batched(iterable, parallelism):
+        for it in itertools.batched(iterable, parallelism):
             output = []
             print(f"Running {counter+1}...{counter+parallelism}/{length}")
-            for i in batch:
+            for i in it:
                 out = dask.delayed(func)(i)
                 output.append(out)
 

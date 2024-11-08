@@ -7,8 +7,9 @@ from sheerwater_benchmarking.metrics import global_metric
 from sheerwater_benchmarking.utils import start_remote
 from jobs import parse_args, run_in_parallel
 
-start_time, end_time, forecasts, metrics, variables, grids, regions, leads, time_groupings, \
-    baselines, parallelism, recompute, backend, remote_name, remote, remote_config = parse_args()
+(start_time, end_time, forecasts, metrics, variables, grids,
+ regions, leads, time_groupings, baselines, parallelism,
+ recompute, backend, remote_name, remote, remote_config) = parse_args()
 
 if remote:
     start_remote(remote_config=remote_config, remote_name=remote_name)
@@ -17,13 +18,13 @@ combos = itertools.product(metrics, variables, grids, leads, forecasts)
 
 
 def run_grouped(combo):
-    """Run grouped metric for a combination of parameters."""
+    """Run global metrics."""
     metric, variable, grid, lead, forecast = combo
 
     try:
         global_metric(start_time, end_time, variable, lead, forecast, "era5", metric, grid=grid,
-                      force_overwrite=True, filepath_only=True, recompute=recompute)
-    except Exception:
+                       force_overwrite=True, filepath_only=True, recompute=recompute)
+    except: # noqa:E722
         print(f"Failed to run global metric {forecast} {lead} {grid} {variable} {metric}: {traceback.format_exc()}")
 
 
