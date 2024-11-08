@@ -66,15 +66,12 @@ def perpp(start_time, end_time, variable, lead, prob_type='deterministic',
           grid='global1_5', mask='lsm', region='global'):
     """Standard format forecast data for Persistance++ Model."""
     lead_params = {
+        "weeks34": "weeks34",
         "weeks56": "weeks56",
     }
     lead_id = lead_params.get(lead, None)
-    if lead is None:
+    if lead_id is None:
         raise NotImplementedError(f"Lead {lead} not implemented for perpp.")
-
-    # Temp: change when we have all variables
-    if variable != 'tmp2m':
-        raise NotImplementedError(f"Variable {variable} not implemented for perpp.")
 
     ds = perpp_ecmwf(start_time, end_time, variable, lead=lead_id, grid=grid)
     if prob_type != 'deterministic':

@@ -306,9 +306,9 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
 @cacheable(data_type='array',
            timeseries='time',
            cache=False,
-           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def climatology_2015(start_time, end_time, variable, lead, prob_type='deterministic',
-                     grid='global0_25', mask='lsm', region='global'):
+           cache_args=['variable', 'first_year', 'last_year', 'lead', 'prob_type', 'grid', 'mask', 'region'])
+def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, last_year=2014,
+                         trend=False, prob_type='deterministic', grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     lead_params = {
         "week1": (7, 0),
@@ -331,8 +331,8 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
     # Get daily data
     new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
     new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    ds = climatology_timeseries(new_start, new_end, variable, first_year=1985, last_year=2014,
-                                trend=False, prob_type=prob_type, agg=agg, grid=grid)
+    ds = climatology_timeseries(new_start, new_end, variable, first_year=first_year, last_year=last_year,
+                                trend=trend, prob_type=prob_type, agg=agg, grid=grid)
     ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
     if prob_type == 'deterministic':
@@ -352,43 +352,35 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
+def climatology_2015(start_time, end_time, variable, lead, prob_type='deterministic',
+                     grid='global0_25', mask='lsm', region='global'):
+    """Standard format forecast data for climatology forecast."""
+    return climatology_forecast(start_time, end_time, variable, lead, first_year=1985, last_year=2014,
+                                trend=False, prob_type=prob_type, grid=grid, mask=mask, region=region)
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
+def climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
+                     grid='global0_25', mask='lsm', region='global'):
+    """Standard format forecast data for climatology forecast."""
+    return climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
+                                trend=False, prob_type=prob_type, grid=grid, mask=mask, region=region)
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='deterministic',
                            grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    lead_params = {
-        "week1": (7, 0),
-        "week2": (7, 7),
-        "week3": (7, 14),
-        "week4": (7, 21),
-        "week5": (7, 28),
-        "week6": (7, 35),
-        "weeks12": (14, 0),
-        "weeks23": (14, 7),
-        "weeks34": (14, 14),
-        "weeks45": (14, 21),
-        "weeks56": (14, 28),
-    }
-
-    agg, time_shift = lead_params.get(lead, (None, None))
-    if agg is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for climatology trend.")
-
-    if prob_type == 'probabilistic':
-        raise NotImplementedError("Probabilistic climatology trend forecasts are not supported.")
-
-    # Get daily data
-    new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    ds = climatology_timeseries(new_start, new_end, variable, first_year=1985, last_year=2014,
-                                trend=True, prob_type=prob_type, agg=agg, grid=grid)
-    ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
-    ds = ds.assign_attrs(prob_type="deterministic")
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-    return ds
+    return climatology_forecast(start_time, end_time, variable, lead, first_year=1985, last_year=2014,
+                                trend=True, prob_type=prob_type, grid=grid, mask=mask, region=region)
 
 
 @dask_remote

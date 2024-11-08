@@ -577,11 +577,12 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
-
     if forecast_type == 'reforecast':
         raise NotImplementedError("Regridding reforecast data should be done with extreme care. It's big.")
 
-    chunks = {'lat': 100, 'lon': 100, 'lead_time': 40, 'start_date': 1, 'member': 100}
+    chunks = {'lat': 100, 'lon': 100, 'lead_time': 40, 'start_date': 1}
+    if run_type == 'perturbed':
+        chunks['member'] = 100
     ds = ds.chunk(chunks)
     ds = regrid(ds, grid, base='base180')
     return ds

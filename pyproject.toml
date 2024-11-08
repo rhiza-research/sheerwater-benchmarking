@@ -121,4 +121,4 @@ coiled-notebook = "./tools/create-and-notebook.sh"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["./sheerwater_benchmarking"]
+packages = ["./sheerwater_benchmarking", "./jobs"]

@@ -22,9 +22,9 @@ end_time = "2024-11-01"
 UPDATE_DAILY = False
 UPDATE_DAILY_REGRID = False
 UPDATE_ROLLED = False
-UPDATE_AGG = True 
-
+UPDATE_AGG = True
 FLAG = False
+
 for var, grid in product(vars, grids):
     if UPDATE_DAILY:
         ds = era5_daily(start_time, end_time, variable=var, grid=grid,

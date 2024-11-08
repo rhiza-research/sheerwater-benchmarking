@@ -15,13 +15,13 @@ config_options = {
         'scheduler_memory': "64GiB"
     },
     'large_cluster': {
-        'n_workers': 10
+        'n_workers': [10, 11]
     },
     'xlarge_cluster': {
-        'n_workers': 15
+        'n_workers': [15, 16]
     },
     'xxlarge_cluster': {
-        'n_workers': 25
+        'n_workers': [25, 26]
     },
     'large_node': {
         'worker_vm_types': ['c2-standard-16', 'c3-standard-22']
@@ -32,6 +32,46 @@ config_options = {
 }
 
 
+def start_remote(remote_name=None, remote_config=None):
+    """Generic function to start a remote cluster."""
+    default_name = 'sheerwater_' + pwd.getpwuid(os.getuid())[0]
+
+    coiled_default_options = {
+        'name': default_name,
+        'n_workers': [3, 8],
+        'idle_timeout': "120 minutes",
+        'scheduler_cpu': 8,
+        'scheduler_memory': "32GiB",
+        'worker_vm_types': ['c2-standard-8', 'c3-standard-8'],
+        'spot_policy': 'spot_with_fallback',
+    }
+
+    if remote_name and isinstance(remote_name, str):
+        coiled_default_options['name'] = remote_name
+
+    if remote_config and isinstance(remote_config, dict):
+        # setup coiled cluster with remote config
+        logger.info("Attaching to coiled cluster with custom configuration")
+        coiled_default_options.update(remote_config)
+    elif remote_config and (isinstance(remote_config, str) or
+                            isinstance(remote_config, list)):
+        logger.info("Attaching to coiled cluster with preset configuration")
+        if not isinstance(remote_config, list):
+            remote_config = [remote_config]
+
+        for conf in remote_config:
+            if conf in config_options:
+                coiled_default_options.update(config_options[conf])
+            else:
+                print(f"Unknown preset remote config option {conf}. Skipping.")
+    else:
+        # Just setup a coiled cluster
+        logger.info("Attaching to coiled cluster with default configuration")
+
+    cluster = coiled.Cluster(**coiled_default_options)
+    cluster.get_client()
+
+
 def dask_remote(func):
     """Decorator to run a function on a remote dask cluster."""
     @wraps(func)
@@ -39,42 +79,16 @@ def dask_remote(func):
         # See if there are extra function args to run this remotely
         if 'remote' in kwargs and kwargs['remote']:
 
-            default_name = 'sheerwater_' + pwd.getpwuid(os.getuid())[0]
+            remote_name = None
+            if 'remote_name' in kwargs:
+                remote_name = kwargs['remote_name']
 
-            coiled_default_options = {
-                'name': default_name,
-                'n_workers': [3, 8],
-                'idle_timeout': "120 minutes",
-                'scheduler_cpu': 8,
-                'scheduler_memory': "32GiB",
-                'worker_vm_types': ['c2-standard-8', 'c3-standard-8'],
-                'spot_policy': 'spot_with_fallback',
-            }
+            remote_config = None
+            if 'remote_config' in kwargs:
+                remote_config = kwargs['remote_config']
 
-            if 'remote_name' in kwargs and isinstance(kwargs['remote_name'], str):
-                coiled_default_options['name'] = kwargs['remote_name']
+            start_remote(remote_name, remote_config)
 
-            if 'remote_config' in kwargs and isinstance(kwargs['remote_config'], dict):
-                # setup coiled cluster with remote config
-                logger.info("Attaching to coiled cluster with custom configuration")
-                coiled_default_options.update(kwargs['remote_config'])
-            elif 'remote_config' in kwargs and (isinstance(kwargs['remote_config'], str) or
-                                                isinstance(kwargs['remote_config'], list)):
-                logger.info("Attaching to coiled cluster with preset configuration")
-                if not isinstance(kwargs['remote_config'], list):
-                    kwargs['remote_config'] = [kwargs['remote_config']]
-
-                for conf in kwargs['remote_config']:
-                    if conf in config_options:
-                        coiled_default_options.update(config_options[conf])
-                    else:
-                        print(f"Unknown preset remote config option {conf}. Skipping.")
-            else:
-                # Just setup a coiled cluster
-                logger.info("Attaching to coiled cluster with default configuration")
-
-            cluster = coiled.Cluster(**coiled_default_options)
-            cluster.get_client()
         else:
             # Setup a local cluster
             try:
