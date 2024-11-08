@@ -15,13 +15,13 @@ config_options = {
         'scheduler_memory': "64GiB"
     },
     'large_cluster': {
-        'n_workers': 10
+        'n_workers': [10, 11]
     },
     'xlarge_cluster': {
-        'n_workers': 15
+        'n_workers': [15, 16]
     },
     'xxlarge_cluster': {
-        'n_workers': 25
+        'n_workers': [25, 26]
     },
     'large_node': {
         'worker_vm_types': ['c2-standard-16', 'c3-standard-22']
