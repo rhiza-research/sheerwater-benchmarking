@@ -50,8 +50,8 @@ def get_metric_fn(prob_type, metric, spatial=True):
         'spatial-acc': ('xskillscore', 'pearson_r', {'dim': 'time'}),
         'mse': ('weatherbench2.metrics', 'MSE', {}),
         'spatial-mse': ('weatherbench2.metrics', 'SpatialMSE', {}),
-        'rmse': ('xskillscore', 'rmse', {'dim': ['lat', 'lon', 'time']}),
-        'spatial-rmse': ('xskillscore', 'rmse', {'dim': 'time'}),
+        'rmse': ('weatherbench2.metrics', 'MSE', {}),
+        'spatial-rmse': ('weatherbench2.metrics', 'SpatialMSE', {}),
         'bias': ('weatherbench2.metrics', 'Bias', {}),
         'spatial-bias': ('weatherbench2.metrics', 'SpatialBias', {}),
     }
@@ -114,13 +114,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             fcst = (fcst - clim_ds).chunk(time=-1)  # time must be -1 to succeed
             obs = (obs - clim_ds).chunk(time=-1)  # time must be -1 to succeed
             m_ds = metric_fn(a=obs, b=fcst, skipna=True, **metric_kwargs)
-        elif metric == 'rmse':
-            assert avg_time, "RMSE must be averaged in time"
-            fcst = fcst.chunk(time=-1)  # time must be -1 to succeed
-            obs = obs.chunk(time=-1)  # time must be -1 to succeed
-            m_ds = metric_fn(a=obs, b=fcst, skipna=True, **metric_kwargs)
         else:
-            raise NotImplementedError("Only CRPS, RMSE and ACC are implemented for xskillscore.")
+            raise NotImplementedError("Only CRPS and ACC are implemented for xskillscore.")
     else:
         if metric == 'acc':
             assert avg_time, "ACC must be averaged in time"
@@ -129,6 +124,10 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
         if spatial:
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+
+    if metric == 'rmse':
+        # Take the square root after aggregation
+        m_ds = m_ds ** 0.5
 
     return m_ds
 
