@@ -179,6 +179,9 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         ds = eval_metric(start_time, end_time, variable, lead=lead,
                          forecast=forecast, truth=truth, spatial=False, avg_time=True,
                          metric=metric, grid=grid, mask=mask, region=region)
+        for coord in ds.coords:
+            if coord not in ['time']:
+                ds = ds.reset_coords(coord, drop=True)
         return ds
 
     # Get the unaggregated global metric
@@ -279,8 +282,7 @@ def _summary_metrics_table(start_time, end_time, variable,
                 ds = grouped_metric(start_time, end_time, variable,
                                     lead=lead, forecast=forecast, truth=truth,
                                     metric=metric, time_grouping=time_grouping, spatial=False,
-                                    grid=grid, mask=mask, region=region,
-                                    recompute=True, force_overwrite=True)
+                                    grid=grid, mask=mask, region=region)
             except NotImplementedError:
                 ds = None
 
@@ -293,7 +295,8 @@ def _summary_metrics_table(start_time, end_time, variable,
             if baseline:
                 try:
                     skill_ds = skill_metric(start_time, end_time, variable, lead, forecast, truth,
-                                            metric, baseline, time_grouping, False, grid, mask, region)
+                                            metric, baseline, time_grouping, spatial=False,
+                                            grid=grid, mask=mask, region=region)
                 except NotImplementedError:
                     # IF we raise then return early - we can't do this baseline
                     return None
