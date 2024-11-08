@@ -214,6 +214,7 @@ def write_to_terracotta(cache_key, ds):
         if len(ds.dims) != 3 or 'time' not in ds.dims:
             raise RuntimeError("Can only store two dimensional geospatial data to terracotta")
 
+
     foundx = False
     foundy = False
     foundTime = False
@@ -239,46 +240,51 @@ def write_to_terracotta(cache_key, ds):
     ds = ds.rio.reproject('EPSG:3857', resampling=Resampling.nearest, nodata=np.nan)
     ds.rio.write_crs("epsg:3857", inplace=True)
 
-    def write_individual_raster(ds, cache_key):
+    def write_individual_raster(driver, bucket, ds, cache_key):
         # Write the raster
         with MemoryFile() as mem_dst:
             ds.rio.to_raster(mem_dst.name, driver="COG")
 
-            storage_client = storage.Client()
-            bucket = storage_client.bucket("sheerwater-datalake")
             blob = bucket.blob(f'rasters/{cache_key}.tif')
             blob.upload_from_file(mem_dst)
 
-            # Register with terracotta
-            tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
-            driver = tc.get_driver("postgresql://sheerwater-benchmarking-postgres:5432/terracotta")
-
-            try:
-                driver.get_keys()
-            except sqlalchemy.exc.DatabaseError:
-                # Create a metastore
-                print("Creating new terracotta metastore")
-                driver.create(['key'])
-
-            # Insert the parameters.
-            with driver.connect():
-                driver.insert({'key': cache_key.replace('/', '_')}, mem_dst,
-                              override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif')
+            driver.insert({'key': cache_key.replace('/', '_')}, mem_dst,
+                            override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif', skip_metadata=False)
 
             print(f"Inserted {cache_key.replace('/', '_')} into the terracotta database.")
 
-    if 'time' in ds.dims:
-        for t in ds.time:
-            # Select just this time and squeeze the dimension
-            sub_ds = ds.sel(time=t)
-            sub_ds = sub_ds.reset_coords('time', drop=True)
+    storage_client = storage.Client()
+    bucket = storage_client.bucket("sheerwater-datalake")
 
-            # add the time to the cache_key
-            sub_cache_key = cache_key + '_' + str(t.values)
-
-            write_individual_raster(sub_ds, sub_cache_key)
+    # Register with terracotta
+    tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
+    if not hasattr(write_to_terracotta, 'driver'):
+        driver = tc.get_driver("postgresql://sheerwater-benchmarking-postgres:5432/terracotta")
+        write_to_terracotta.driver = driver
     else:
-        write_individual_raster(ds, cache_key)
+        driver = write_to_terracotta.driver
+
+    try:
+        driver.get_keys()
+    except sqlalchemy.exc.DatabaseError:
+        # Create a metastore
+        print("Creating new terracotta metastore")
+        driver.create(['key'])
+
+    # Insert the parameters.
+    with driver.connect():
+        if 'time' in ds.dims:
+            for t in ds.time:
+                # Select just this time and squeeze the dimension
+                sub_ds = ds.sel(time=t)
+                sub_ds = sub_ds.reset_coords('time', drop=True)
+
+                # add the time to the cache_key
+                sub_cache_key = cache_key + '_' + str(t.values)
+
+                write_individual_raster(driver, bucket, sub_ds, sub_cache_key)
+        else:
+            write_individual_raster(driver, bucket, ds, cache_key)
 
 
 
