@@ -2,7 +2,6 @@
 """Tooling for cache management."""
 
 import argparse
-import click
 import gcsfs
 import sys
 

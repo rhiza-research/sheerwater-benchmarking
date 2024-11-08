@@ -31,6 +31,7 @@ config_options = {
     },
 }
 
+
 def start_remote(remote_name=None, remote_config=None):
     """Generic function to start a remote cluster."""
     default_name = 'sheerwater_' + pwd.getpwuid(os.getuid())[0]
@@ -45,7 +46,7 @@ def start_remote(remote_name=None, remote_config=None):
         'spot_policy': 'spot_with_fallback',
     }
 
-    if  remote_name and isinstance(remote_name, str):
+    if remote_name and isinstance(remote_name, str):
         coiled_default_options['name'] = remote_name
 
     if remote_config and isinstance(remote_config, dict):
@@ -53,7 +54,7 @@ def start_remote(remote_name=None, remote_config=None):
         logger.info("Attaching to coiled cluster with custom configuration")
         coiled_default_options.update(remote_config)
     elif remote_config and (isinstance(remote_config, str) or
-                                        isinstance(remote_config, list)):
+                            isinstance(remote_config, list)):
         logger.info("Attaching to coiled cluster with preset configuration")
         if not isinstance(remote_config, list):
             remote_config = [remote_config]

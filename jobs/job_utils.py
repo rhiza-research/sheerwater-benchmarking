@@ -3,6 +3,7 @@ import argparse
 import dask
 import itertools
 
+
 def parse_args():
     """Parses arguments for jobs."""
     parser = argparse.ArgumentParser()
@@ -24,7 +25,7 @@ def parse_args():
     parser.add_argument("--remote-config", type=str, nargs='*')
     args = parser.parse_args()
 
-    forecasts = ["salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
+    forecasts = ["perpp", "salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
                  "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
     if args.forecast:
         forecasts = args.forecast
@@ -50,7 +51,7 @@ def parse_args():
     if args.region:
         regions = args.region
 
-    leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
+    leads = ["week1", "week2", "week3", "week4", "week5", "week6", "weeks34", "weeks56"]
     if args.lead:
         leads = args.lead
 
@@ -86,4 +87,3 @@ def run_in_parallel(func, iterable, parallelism):
 
             dask.compute(output)
             counter = counter + parallelism
-

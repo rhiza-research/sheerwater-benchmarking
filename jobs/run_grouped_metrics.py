@@ -17,6 +17,7 @@ if remote:
 
 combos = itertools.product(metrics, variables, grids, regions, leads, forecasts, time_groupings)
 
+
 def run_grouped(combo):
     """Run grouped metrics."""
     print(combo)
