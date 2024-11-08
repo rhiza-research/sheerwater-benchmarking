@@ -2,7 +2,7 @@
 import argparse
 import itertools
 
-from sheerwater_benchmarking.metrics import summary_metrics_table
+from sheerwater_benchmarking.metrics import summary_metrics_table, biweekly_summary_metrics_table
 from sheerwater_benchmarking.utils import start_remote
 
 parser = argparse.ArgumentParser()
@@ -16,12 +16,14 @@ parser.add_argument("--region", type=str, nargs='*')
 parser.add_argument("--time-grouping", type=str, nargs='*')
 args = parser.parse_args()
 
-baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
-             "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
+# baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
+#              "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
+baselines = ["climatology_2015"]
 if args.baseline:
     baselines = args.baseline
 
-metrics = ["mae", "crps", "acc", "bias", "rmse"]
+# metrics = ["mae", "crps", "acc", "bias", "rmse"]
+metrics = ["mae", "acc", "bias", "rmse"]
 if args.metric:
     metrics = args.metric
 
@@ -29,7 +31,8 @@ variables = ["precip", "tmp2m"]
 if args.variable:
     variables = args.variable
 
-grids = ["global0_25", "global1_5"]
+# grids = ["global0_25", "global1_5"]
+grids = ["global1_5"]
 if args.grid:
     grids = args.grid
 
@@ -37,15 +40,18 @@ regions = ["africa", "east_africa", "global", "conus"]
 if args.region:
     regions = args.region
 
-time_groupings = [None, "month_of_year", "year"]
+# time_groupings = [None, "month_of_year", "year"]
+time_groupings = [None]
 if args.time_grouping:
     time_groupings = args.time_grouping
     time_groupings = [x if x != 'None' else None for x in time_groupings]
 
-start_remote(remote_name='josh2', remote_config=['large_cluster'])
+start_remote(remote_name='genevieve', remote_config=['large_cluster'])
 
 combos = itertools.product(metrics, variables, grids, baselines, regions, time_groupings)
 for metric, variable, grid, baseline, region, time_grouping in combos:
-    print(metric, baseline)
-    summary_metrics_table(args.start_time, args.end_time, variable, "era5", metric,
-                          baseline=baseline, time_grouping=time_grouping, grid=grid, region=region)
+    print(metric, variable, grid, baseline, region, time_grouping)
+    biweekly_summary_metrics_table(args.start_time, args.end_time, variable, "era5", metric,
+                                   backend='postgres',
+                                   baseline=baseline, time_grouping=time_grouping,
+                                   grid=grid, region=region)
