@@ -572,12 +572,12 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     elif variable == 'precip':
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
+        
         ds = np.maximum(ds, 0)
 
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
-
     if forecast_type == 'reforecast':
         raise NotImplementedError("Regridding reforecast data should be done with extreme care. It's big.")
 
