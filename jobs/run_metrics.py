@@ -49,10 +49,10 @@ start_remote(remote_name='genevieve-metrics', remote_config=['xlarge_cluster'])
 combos = itertools.product(metrics, variables, grids, baselines, regions, time_groupings)
 for metric, variable, grid, baseline, region, time_grouping in combos:
     print(metric, baseline)
-    summary_metrics_table(args.start_time, args.end_time, variable, "era5", metric,
+    summary_metrics_table(args.start_time, args.end_time, variable, "era5", metric, backend='postgres',
                           baseline=baseline, time_grouping=time_grouping, grid=grid, region=region)
 
     if grid == "global1_5":
         # Only run biweekly metrics for the global1_5 grid
-        biweekly_summary_metrics_table(args.start_time, args.end_time, variable, "era5", metric,
+        biweekly_summary_metrics_table(args.start_time, args.end_time, variable, "era5", metric, backend='postgres',
                                        baseline=baseline, time_grouping=time_grouping, grid=grid, region=region)
