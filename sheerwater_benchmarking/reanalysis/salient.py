@@ -6,7 +6,7 @@ import xarray as xr
 
 import salientsdk as sk
 
-from sheerwater_benchmarking.utils import (cacheable, dask_remote, salient_secret,
+from sheerwater_benchmarking.utils import (cacheable, dask_remote, salient_secret, get_variable,
                                            apply_mask, clip_region, roll_and_agg)
 
 
@@ -27,7 +27,7 @@ def salient_era5_raw(start_time, end_time, variable, grid="salient0_25"):  # noq
         geoname="all_africa",  # the full African continent
         force=True))
 
-    var = {"precip": "precip", "tmp2m": "temp"}[variable]
+    var = get_variable(variable, 'salient')
 
     hist = sk.data_timeseries(
         loc=loc,
@@ -41,6 +41,11 @@ def salient_era5_raw(start_time, end_time, variable, grid="salient0_25"):  # noq
     )
 
     ds = xr.load_dataset(hist)
+
+    # Select the right variable
+    ds = ds['vals'].to_dataset()
+    ds = ds.rename_vars(name_dict={'vals': variable})
+
     return ds
 
 
@@ -48,13 +53,8 @@ def salient_era5_raw(start_time, end_time, variable, grid="salient0_25"):  # noq
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'agg', 'grid'],
-           chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
-               }
-           })
-def salient_era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
+           chunking={"lat": 300, "lon": 400, "time": 300})
+def salient_era5_rolled(start_time, end_time, variable, agg=7, grid="salient0_25"):
     """Aggregates the hourly ERA5 data into daily data and rolls.
 
     Args:
