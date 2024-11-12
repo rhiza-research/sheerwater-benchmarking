@@ -167,9 +167,9 @@ def global_metric(start_time, end_time, variable, lead, forecast, truth,
                },
            },
            cache=True)
-def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
-                   metric, time_grouping=None, spatial=False, grid="global1_5",
-                   mask='lsm', region='africa'):
+def grouped_metric_salient_val(start_time, end_time, variable, lead, forecast, truth,
+                               metric, time_grouping=None, spatial=False, grid="global1_5",
+                               mask='lsm', region='africa'):
     """Compute a grouped metric for a forecast at a specific lead."""
     if metric in COUPLED_METRICS and time_grouping is not None:
         raise NotImplementedError("Cannot run time grouping for coupled metrics.")
@@ -222,7 +222,8 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     if spatial:
         return ds
     else:
-        return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+        # return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+        return ds.mean(dim=['lat', 'lon'])
 
 
 @dask_remote
@@ -230,14 +231,14 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
            cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
                        'time_grouping', 'spatial', 'grid', 'mask', 'region'],
            cache=False)
-def skill_metric(start_time, end_time, variable, lead, forecast, truth,
-                 metric, baseline, time_grouping=None, spatial=False, grid="global1_5",
-                 mask='lsm', region='global'):
+def skill_metric_salient_val(start_time, end_time, variable, lead, forecast, truth,
+                             metric, baseline, time_grouping=None, spatial=False, grid="global1_5",
+                             mask='lsm', region='global'):
     """Compute skill either spatially or as a region summary."""
     try:
-        m_ds = grouped_metric(start_time, end_time, variable, lead, forecast,
-                              truth, metric, time_grouping, spatial=spatial,
-                              grid=grid, mask=mask, region=region)
+        m_ds = grouped_metric_salient_val(start_time, end_time, variable, lead, forecast,
+                                          truth, metric, time_grouping, spatial=spatial,
+                                          grid=grid, mask=mask, region=region)
     except NotImplementedError:
         return None
 
@@ -245,8 +246,8 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
         return None
 
     # Get the baseline if it exists and run its metric
-    base_ds = grouped_metric(start_time, end_time, variable, lead, baseline,
-                             truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
+    base_ds = grouped_metric_salient_val(start_time, end_time, variable, lead, baseline,
+                                         truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
 
     if not base_ds:
         raise NotImplementedError("Cannot compute skill for null base")
@@ -279,10 +280,10 @@ def _summary_metrics_table(start_time, end_time, variable,
                       metric {metric}, grid {grid}, and region {region}""")
             # First get the value without the baseline
             try:
-                ds = grouped_metric(start_time, end_time, variable,
-                                    lead=lead, forecast=forecast, truth=truth,
-                                    metric=metric, time_grouping=time_grouping, spatial=False,
-                                    grid=grid, mask=mask, region=region)
+                ds = grouped_metric_salient_val(start_time, end_time, variable,
+                                                lead=lead, forecast=forecast, truth=truth,
+                                                metric=metric, time_grouping=time_grouping, spatial=False,
+                                                grid=grid, mask=mask, region=region)
             except NotImplementedError:
                 ds = None
 
@@ -294,9 +295,9 @@ def _summary_metrics_table(start_time, end_time, variable,
             # If there is a baseline get the skill
             if baseline:
                 try:
-                    skill_ds = skill_metric(start_time, end_time, variable, lead, forecast, truth,
-                                            metric, baseline, time_grouping, spatial=False,
-                                            grid=grid, mask=mask, region=region)
+                    skill_ds = skill_metric_salient_val(start_time, end_time, variable, lead, forecast, truth,
+                                                        metric, baseline, time_grouping, spatial=False,
+                                                        grid=grid, mask=mask, region=region)
                 except NotImplementedError:
                     # IF we raise then return early - we can't do this baseline
                     return None
@@ -321,12 +322,11 @@ def _summary_metrics_table(start_time, end_time, variable,
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
-def summary_metrics_table(start_time, end_time, variable,
-                          truth, metric, baseline=None, time_grouping=None,
-                          grid='global1_5', mask='lsm', region='global'):
+def summary_metrics_table_salient_val(start_time, end_time, variable,
+                                      truth, metric, baseline=None, time_grouping=None,
+                                      grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
-                 'climatology_trend_2015', 'climatology_rolling']
+    forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015']
     leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 baseline=baseline, time_grouping=time_grouping,

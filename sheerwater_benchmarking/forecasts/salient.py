@@ -1,9 +1,11 @@
 """Pulls Salient Predictions S2S forecasts from the Salient API."""
 
-
+import numpy as np
 import xarray as xr
 
-from sheerwater_benchmarking.utils import (cacheable, dask_remote,
+import salientsdk as sk
+
+from sheerwater_benchmarking.utils import (cacheable, dask_remote, salient_secret,
                                            get_variable, apply_mask, clip_region, regrid)
 
 
