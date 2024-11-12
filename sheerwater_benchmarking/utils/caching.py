@@ -188,6 +188,7 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
     pgwrite_pass = postgres_write_password()
 
     table_name = postgres_table_name(table_name)
+    print("Writing to postgres: ", table_name)
 
     try:
         engine = sqlalchemy.create_engine(

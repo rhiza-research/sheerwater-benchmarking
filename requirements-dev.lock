@@ -12,6 +12,7 @@
 -e file:.
 affine==2.4.0
     # via rasterio
+    # via xee
 aiobotocore==2.15.2
     # via s3fs
 aiohappyeyeballs==2.4.3
@@ -72,6 +73,8 @@ beautifulsoup4==4.12.3
     # via nbconvert
 bleach==6.1.0
     # via nbconvert
+blessings==1.7
+    # via ee
 blinker==1.8.2
     # via flask
 bokeh==3.6.0
@@ -83,6 +86,11 @@ botocore==1.35.36
     # via aiobotocore
     # via boto3
     # via s3transfer
+bqplot==0.12.43
+    # via geemap
+branca==0.8.0
+    # via folium
+    # via ipyleaflet
 cachetools==5.5.0
     # via asyncache
     # via google-auth
@@ -118,6 +126,7 @@ click==8.1.7
     # via dask
     # via distributed
     # via flask
+    # via geocoder
     # via kopf
     # via mercantile
     # via rasterio
@@ -134,6 +143,8 @@ cloudpickle==3.1.0
     # via distributed
 coiled==1.58.1
     # via sheerwater-benchmarking
+colour==0.1.5
+    # via geemap
 comm==0.2.2
     # via ipykernel
     # via ipywidgets
@@ -153,6 +164,7 @@ dask==2024.10.0
     # via distributed
     # via salientsdk
     # via sheerwater-benchmarking
+    # via xarray
     # via xhistogram
     # via xskillscore
 dask-expr==1.1.16
@@ -167,6 +179,7 @@ decorator==5.1.1
     # via fabric
     # via gcsfs
     # via ipython
+    # via ratelim
 defusedxml==0.7.1
     # via nbconvert
 deltalake==0.20.2
@@ -179,8 +192,17 @@ distributed==2024.10.0
     # via dask-kubernetes
 durationpy==0.9
     # via kubernetes
+earthengine-api==1.3.0
+    # via eerepr
+    # via geemap
+    # via sheerwater-benchmarking
+    # via xee
 ecmwf-api-client==1.6.3
     # via sheerwater-benchmarking
+ee==0.2
+    # via sheerwater-benchmarking
+eerepr==0.0.4
+    # via geemap
 executing==2.1.0
     # via stack-data
 fabric==3.2.2
@@ -199,6 +221,8 @@ flask-cors==5.0.0
 flox==0.9.13
     # via sheerwater-benchmarking
     # via xarray-regrid
+folium==0.18.0
+    # via geemap
 fonttools==4.54.1
     # via matplotlib
 fqdn==1.5.1
@@ -210,8 +234,14 @@ fsspec==2024.10.0
     # via dask
     # via gcsfs
     # via s3fs
+future==1.0.0
+    # via geocoder
 gcsfs==2024.10.0
     # via sheerwater-benchmarking
+geemap==0.35.1
+    # via sheerwater-benchmarking
+geocoder==1.38.1
+    # via geemap
 geopandas==1.0.1
     # via salientsdk
     # via sheerwater-benchmarking
@@ -225,8 +255,10 @@ google-api-core==2.22.0
     # via google-cloud-secret-manager
     # via google-cloud-storage
 google-api-python-client==2.149.0
+    # via earthengine-api
     # via sheerwater-benchmarking
 google-auth==2.35.0
+    # via earthengine-api
     # via gcsfs
     # via google-api-core
     # via google-api-python-client
@@ -237,6 +269,7 @@ google-auth==2.35.0
     # via google-cloud-storage
     # via kubernetes
 google-auth-httplib2==0.2.0
+    # via earthengine-api
     # via google-api-python-client
 google-auth-oauthlib==1.2.1
     # via gcsfs
@@ -246,6 +279,7 @@ google-cloud-secret-manager==2.21.0
     # via salientsdk
     # via sheerwater-benchmarking
 google-cloud-storage==2.18.2
+    # via earthengine-api
     # via gcsfs
     # via sheerwater-benchmarking
 google-crc32c==1.6.0
@@ -284,6 +318,7 @@ httpcore==1.0.6
     # via httpx
     # via httpx-ws
 httplib2==0.22.0
+    # via earthengine-api
     # via google-api-python-client
     # via google-auth-httplib2
     # via sheerwater-benchmarking
@@ -309,14 +344,28 @@ iniconfig==2.0.0
 invoke==2.2.0
     # via coiled
     # via fabric
+ipyevents==2.0.2
+    # via geemap
+ipyfilechooser==0.6.0
+    # via geemap
 ipykernel==6.29.5
     # via jupyterlab
+    # via sheerwater-benchmarking
+ipyleaflet==0.19.2
+    # via geemap
     # via sheerwater-benchmarking
 ipython==8.29.0
     # via ipykernel
     # via ipywidgets
+ipytree==0.2.2
+    # via geemap
 ipywidgets==8.1.5
+    # via bqplot
     # via coiled
+    # via ipyevents
+    # via ipyfilechooser
+    # via ipyleaflet
+    # via ipytree
 iso8601==2.1.0
     # via kopf
 isoduration==20.11.0
@@ -327,9 +376,11 @@ jedi==0.19.1
     # via ipython
 jinja2==3.1.4
     # via bokeh
+    # via branca
     # via dask
     # via distributed
     # via flask
+    # via folium
     # via jupyter-server
     # via jupyterlab
     # via jupyterlab-server
@@ -366,6 +417,8 @@ jupyter-core==5.7.2
     # via nbformat
 jupyter-events==0.10.0
     # via jupyter-server
+jupyter-leaflet==0.19.2
+    # via ipyleaflet
 jupyter-lsp==2.2.5
     # via jupyterlab
 jupyter-server==2.14.2
@@ -418,6 +471,7 @@ marshmallow==3.23.0
     # via terracotta
 matplotlib==3.9.2
     # via cartopy
+    # via geemap
     # via sheerwater-benchmarking
 matplotlib-inline==0.1.7
     # via ipykernel
@@ -460,11 +514,14 @@ numcodecs==0.13.1
     # via zarr
 numpy==1.26.4
     # via bokeh
+    # via bqplot
     # via cartopy
     # via cftime
     # via contourpy
     # via dask
     # via flox
+    # via folium
+    # via geemap
     # via geopandas
     # via h5py
     # via matplotlib
@@ -517,6 +574,7 @@ packaging==24.1
     # via matplotlib
     # via nbconvert
     # via pip-requirements-parser
+    # via plotly
     # via pyogrio
     # via pytest
     # via rioxarray
@@ -524,9 +582,11 @@ packaging==24.1
     # via xarray
 pandas==2.2.3
     # via bokeh
+    # via bqplot
     # via dask
     # via dask-expr
     # via flox
+    # via geemap
     # via geopandas
     # via pvlib
     # via salientsdk
@@ -556,6 +616,8 @@ pip-requirements-parser==32.0.1
     # via coiled
 platformdirs==4.3.6
     # via jupyter-core
+plotly==5.24.1
+    # via geemap
 pluggy==1.5.0
     # via pytest
 prometheus-client==0.21.0
@@ -616,15 +678,20 @@ pyparsing==3.2.0
     # via matplotlib
     # via pip-requirements-parser
     # via rasterio
+pyperclip==1.9.0
+    # via geemap
 pyproj==3.7.0
     # via cartopy
     # via geopandas
     # via rioxarray
+    # via xee
 pyshp==2.3.1
     # via cartopy
+    # via geemap
 pytest==8.3.3
     # via sheerwater-benchmarking
 python-box==7.2.0
+    # via geemap
     # via kr8s
 python-dateutil==2.9.0.post0
     # via arrow
@@ -667,6 +734,8 @@ pyzmq==26.2.0
 rasterio==1.4.1
     # via rioxarray
     # via terracotta
+ratelim==0.1.6
+    # via geocoder
 ratelimit==2.2.1
     # via salientsdk
 referencing==0.35.1
@@ -678,7 +747,10 @@ regex==2024.9.11
 requests==2.32.3
     # via cads-api-client
     # via cdsapi
+    # via earthengine-api
+    # via folium
     # via gcsfs
+    # via geocoder
     # via google-api-core
     # via google-cloud-storage
     # via jupyterlab-server
@@ -730,6 +802,8 @@ scipy==1.14.1
     # via weatherbench2
     # via xarray-regrid
     # via xskillscore
+scooby==0.10.0
+    # via geemap
 send2trash==1.8.3
     # via jupyter-server
 setuptools==75.2.0
@@ -744,6 +818,8 @@ simpervisor==1.0.0
 six==1.16.0
     # via asttokens
     # via bleach
+    # via blessings
+    # via geocoder
     # via kubernetes
     # via kubernetes-asyncio
     # via patsy
@@ -765,6 +841,8 @@ statsmodels==0.14.4
     # via xskillscore
 tblib==3.0.0
     # via distributed
+tenacity==9.0.0
+    # via plotly
 terminado==0.18.1
     # via jupyter-server
     # via jupyter-server-terminals
@@ -798,6 +876,7 @@ tqdm==4.66.6
     # via multiurl
     # via terracotta
 traitlets==5.14.3
+    # via bqplot
     # via comm
     # via ipykernel
     # via ipython
@@ -812,6 +891,10 @@ traitlets==5.14.3
     # via nbclient
     # via nbconvert
     # via nbformat
+    # via traittypes
+traittypes==0.2.1
+    # via bqplot
+    # via ipyleaflet
 types-python-dateutil==2.9.0.20241003
     # via arrow
 typing-extensions==4.12.2
@@ -863,9 +946,12 @@ xarray==2024.10.0
     # via sheerwater-benchmarking
     # via weatherbench2
     # via xarray-regrid
+    # via xee
     # via xhistogram
     # via xskillscore
 xarray-regrid==0.4.0
+    # via sheerwater-benchmarking
+xee==0.0.19
     # via sheerwater-benchmarking
 xhistogram==0.3.2
     # via xskillscore
@@ -873,6 +959,8 @@ xskillscore @ git+https://github.com/rhiza-research/xskillscore@1489aafa837a250d
     # via sheerwater-benchmarking
 xyzservices==2024.9.0
     # via bokeh
+    # via folium
+    # via ipyleaflet
 yarl==1.16.0
     # via aiohttp
 zarr==2.18.3

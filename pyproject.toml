@@ -94,6 +94,11 @@ dependencies = [
     "jupyter-server-proxy",
     "xskillscore @ git+https://github.com/rhiza-research/xskillscore",
     "coiled>=1.58.1",
+    "ee>=0.2",
+    "earthengine-api>=1.3.0",
+    "geemap>=0.35.1",
+    "ipyleaflet>=0.19.2",
+    "xee>=0.0.19",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
