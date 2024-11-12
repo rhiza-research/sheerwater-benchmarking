@@ -4,7 +4,7 @@ import cdsapi
 import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid,
-                                           lon_base_change)
+                                           lon_base_change, regrid)
 
 
 @cacheable(data_type='array', cache_args=['grid'])
@@ -64,6 +64,9 @@ def land_sea_mask(grid="global1_5"):
 
     # Sort and select a subset of the data
     ds = ds.sortby(['lon', 'lat'])  # CDS API returns lat data in descending order, breaks slicing
+
+    if 'salient' in grid:
+        ds = regrid(ds, grid, method='linear')
 
     ds = ds.compute()
     os.remove(path)
