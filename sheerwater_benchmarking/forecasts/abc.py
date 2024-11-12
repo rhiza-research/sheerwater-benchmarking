@@ -24,6 +24,12 @@ def perpp_ecmwf_raw(start_time, end_time, variable, lead="weeks56"):  # noqa: AR
     # Pull the Salient dataset
     var = get_variable(variable, 'abc')
     lead_id = {
+        'week1': '1w',
+        'week2': '2w',
+        'week3': '3w',
+        'week4': '4w',
+        'week5': '5w',
+        'week6': '6w',
         'weeks12': '12w',
         'weeks34': '34w',
         'weeks56': '56w',
@@ -66,6 +72,12 @@ def perpp(start_time, end_time, variable, lead, prob_type='deterministic',
           grid='global1_5', mask='lsm', region='global'):
     """Standard format forecast data for Persistance++ Model."""
     lead_params = {
+        "week1": "week1",
+        "week2": "week2",
+        "week3": "week3",
+        "week4": "week4",
+        "week5": "week5",
+        "week6": "week6",
         "weeks34": "weeks34",
         "weeks56": "weeks56",
     }
