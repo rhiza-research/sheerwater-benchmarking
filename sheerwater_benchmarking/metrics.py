@@ -95,7 +95,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     if metric in CLIM_METRICS:
         # Get the appropriate climatology dataframe for metric calculation
-        clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
+        clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1981, last_year=2010,
                                        trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
 
     metric_fn, metric_kwargs, metric_lib = get_metric_fn(
