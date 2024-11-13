@@ -134,6 +134,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='array',
+           timeseries='time',
            cache_args=['variable', 'lead', 'forecast',
                        'truth', 'metric', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
@@ -145,13 +146,34 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
            cache=True)
 def global_metric(start_time, end_time, variable, lead, forecast, truth,
                   metric, grid="global1_5", mask='lsm', region='global'):
-    """Compute a metric without aggregating space (and optionally time) at a specific lead."""
+    """Compute a metric without aggregating space but not in time at a specific lead."""
+    if region != 'global':
+        raise ValueError('Global metric must be run with region global.')
+    m_ds = eval_metric(start_time, end_time, variable, lead, forecast, truth,
+                       metric, spatial=True, avg_time=False,
+                       grid=grid, mask=mask, region=region)
+    return m_ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
+                       'truth', 'metric', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
+               },
+           },
+           cache=True)
+def aggregated_global_metric(start_time, end_time, variable, lead, forecast, truth,
+                             metric, grid="global1_5", mask='lsm', region='global'):
+    """Compute a metric without aggregating space, but aggregate in time at a specific lead."""
     if region != 'global':
         raise ValueError('Global metric must be run with region global.')
 
-    avg_time = True if metric in COUPLED_METRICS else False
     m_ds = eval_metric(start_time, end_time, variable, lead, forecast, truth,
-                       metric, spatial=True, avg_time=avg_time,
+                       metric, spatial=True, avg_time=True,
                        grid=grid, mask=mask, region=region)
     return m_ds
 
@@ -184,12 +206,16 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                 ds = ds.reset_coords(coord, drop=True)
         return ds
 
-    # Get the unaggregated global metric
-    ds = global_metric(start_time, end_time, variable, lead=lead,
-                       forecast=forecast, truth=truth,
-                       metric=metric, grid=grid, mask=mask, region='global')
-
-    if metric not in COUPLED_METRICS:
+    if metric in COUPLED_METRICS:
+        # Get the unaggregated global metric
+        ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
+                                      forecast=forecast, truth=truth,
+                                      metric=metric, grid=grid, mask=mask, region='global')
+    else:
+        # Get the unaggregated global metric
+        ds = global_metric(start_time, end_time, variable, lead=lead,
+                           forecast=forecast, truth=truth,
+                           metric=metric, grid=grid, mask=mask, region='global')
         # Group the time column based on time grouping
         if time_grouping:
             if time_grouping == 'month_of_year':
@@ -207,7 +233,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
             # Average in time
             ds = ds.mean(dim="time")
 
-    # Check to make sure it supports this region/time
+    # Perform regional clipping
     if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.95):
         return None
 
@@ -356,5 +382,6 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
     return df
 
 
-__all__ = ['eval_metric', 'global_metric', 'grouped_metric', 'skill_metric',
+__all__ = ['eval_metric', 'global_metric', 'aggregated_global_metric',
+           'grouped_metric', 'skill_metric',
            'summary_metrics_table', 'biweekly_summary_metrics_table']
