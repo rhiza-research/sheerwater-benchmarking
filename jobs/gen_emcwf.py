@@ -7,9 +7,9 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import (ecmwf_agg, ecmwf_rolled,
 
 
 if __name__ == "__main__":
-    vars = ["tmp2m", "precip"]
+    # vars = ["tmp2m", "precip"]
     # vars = ["precip", "tmp2m"]
-    # vars = ["precip"]
+    vars = ["precip"]
     # vars = ["tmp2m"]
     aggs = [14, 7]
     # aggs = [14]
