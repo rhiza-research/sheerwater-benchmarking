@@ -586,7 +586,7 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     if forecast_type == 'reforecast':
         raise NotImplementedError("Regridding reforecast data should be done with extreme care. It's big.")
 
-    chunks = {'lat': 300, 'lon': 300, 'lead_time': 40, 'start_date': 1}
+    chunks = {'lat': 121, 'lon': 240, 'lead_time': 1, 'start_date': 600}
     if run_type == 'perturbed':
         chunks['member'] = 100
     ds = ds.chunk(chunks)
@@ -780,7 +780,8 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
     # Regrid onto appropriate grid
     chunks = {'lat': 121, 'lon': 240, 'lead_time': 1, 'start_date': 600}
     ds = ds.chunk(chunks)
-    ds = regrid(ds, grid, base='base180')
+    method = 'conservative' if variable == 'precip' else 'linear'
+    ds = regrid(ds, grid, base='base180', method=method)
     return ds
 
 
