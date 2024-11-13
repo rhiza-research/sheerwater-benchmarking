@@ -573,6 +573,12 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
         ds = np.maximum(ds, 0)
+        if time_group == 'weekly':
+            ds = ds * 7
+        elif time_group == 'biweekly':
+            ds = ds * 14
+        else:
+            raise ValueError("Only weekly and biweekly aggregations are supported for precipitation.")
 
     if grid == 'global1_5':
         return ds
@@ -580,11 +586,12 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     if forecast_type == 'reforecast':
         raise NotImplementedError("Regridding reforecast data should be done with extreme care. It's big.")
 
-    chunks = {'lat': 100, 'lon': 100, 'lead_time': 40, 'start_date': 1}
+    chunks = {'lat': 300, 'lon': 300, 'lead_time': 40, 'start_date': 1}
     if run_type == 'perturbed':
         chunks['member'] = 100
     ds = ds.chunk(chunks)
-    ds = regrid(ds, grid, base='base180')
+    method = 'conservative' if variable == 'precip' else 'linear'
+    ds = regrid(ds, grid, base='base180', method=method)
     return ds
 
 
