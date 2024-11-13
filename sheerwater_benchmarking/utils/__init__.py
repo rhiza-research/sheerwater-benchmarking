@@ -7,7 +7,7 @@ from .data_utils import (apply_mask, roll_and_agg, regrid, clip_region,
 from .general_utils import (load_netcdf, write_zarr, load_zarr, load_object)
 
 from .space_utils import (get_grid, get_grid_ds, is_wrapped,
-                          base360_to_base180, base180_to_base360, check_bases)
+                          base360_to_base180, base180_to_base360, check_bases, get_region)
 
 from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_dates,
                          pad_with_leapdays, add_dayofyear)
@@ -48,4 +48,5 @@ __all__ = [
     "pad_with_leapdays",
     "add_dayofyear",
     "start_remote",
+    "get_region"
 ]
