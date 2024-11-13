@@ -7,9 +7,9 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import (ecmwf_agg, ecmwf_rolled,
 
 
 if __name__ == "__main__":
-    # vars = ["tmp2m", "precip"]
+    vars = ["tmp2m", "precip"]
     # vars = ["precip", "tmp2m"]
-    vars = ["precip"]
+    # vars = ["precip"]
     # vars = ["tmp2m"]
     aggs = [14, 7]
     # aggs = [14]
@@ -44,9 +44,9 @@ if __name__ == "__main__":
                                     grid=grid,
                                     remote=True,
                                     remote_config={'name': 'ecmwf-regrid',
-                                                   'worker_vm_types': 'c4-highmem-192',
-                                                   'n_workers': 4,
-                                                   'idle_timeout': '120 minutes'})
+                                                   'worker_vm_types': 'c2-standard-16',
+                                                   'n_workers': 35,
+                                                   'idle_timeout': '240 minutes'})
         if UPDATE_BIAS:
             ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
                                              run_type=rt, time_group=time,
