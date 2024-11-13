@@ -542,9 +542,9 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
                      "start_date": 1,
                      "model_issuance_date": 1, "start_year": 1,
                      "member": 100},
-           auto_rechunk=False)
-def ifs_extended_range(start_time, end_time, variable, forecast_type,
-                       run_type='average', time_group='weekly', grid="global1_5"):
+           auto_rechunk=True)
+def ifs_extended_range_rechunk(start_time, end_time, variable, forecast_type,
+                               run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast and reforecast data from the WeatherBench2 dataset.
 
     Args:
@@ -561,6 +561,8 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
             - global1_5: 1.5 degree global grid
     """
     """IRI ECMWF average forecast with regridding."""
+    if grid != 'global1_5':
+        raise ValueError("Only the global1_5 grid is supported for pre-regridding pipeline.")
     ds = ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
                                 run_type, time_group, grid='global1_5')
     # Convert to base180 longitude
@@ -580,16 +582,46 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
         else:
             raise ValueError("Only weekly and biweekly aggregations are supported for precipitation.")
 
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
+           cache=True,
+           timeseries=['start_date', 'model_issuance_date'],
+           chunking={"lat": 100, "lon": 100, "lead_time": 40,
+                     "start_date": 1,
+                     "model_issuance_date": 1, "start_year": 1,
+                     "member": 100},
+           cache_disable_if={'grid': 'global1_5'},
+           auto_rechunk=False)
+def ifs_extended_range(start_time, end_time, variable, forecast_type,
+                       run_type='average', time_group='weekly', grid="global1_5"):
+    """Fetches IFS extended range forecast and reforecast data from the WeatherBench2 dataset.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
+        run_type (str): The type of run to fetch. One of:
+            - average: to download the averaged of the perturbed runs
+            - perturbed: to download all perturbed runs
+            - [int 0-50]: to download a specific  perturbed run
+        time_group (str): The time grouping to use. One of: "daily", "weekly", "biweekly"
+        grid (str): The grid resolution to fetch the data at. One of:
+            - global1_5: 1.5 degree global grid
+    """
+    """IRI ECMWF average forecast with regridding."""
+    ds = ifs_extended_range_rechunk(start_time, end_time, variable, forecast_type,
+                                    run_type, time_group, grid='global1_5')
     if grid == 'global1_5':
         return ds
+
     # Regrid onto appropriate grid
     if forecast_type == 'reforecast':
         raise NotImplementedError("Regridding reforecast data should be done with extreme care. It's big.")
-
-    chunks = {'lat': 121, 'lon': 240, 'lead_time': 1, 'start_date': 600}
-    if run_type == 'perturbed':
-        chunks['member'] = 100
-    ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
     ds = regrid(ds, grid, base='base180', method=method)
     return ds

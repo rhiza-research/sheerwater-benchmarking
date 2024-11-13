@@ -7,9 +7,9 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import (ecmwf_agg, ecmwf_rolled,
 
 
 if __name__ == "__main__":
-    vars = ["tmp2m", "precip"]
+    # vars = ["tmp2m", "precip"]
     # vars = ["precip", "tmp2m"]
-    # vars = ["precip"]
+    vars = ["precip"]
     # vars = ["tmp2m"]
     aggs = [14, 7]
     # aggs = [14]
@@ -37,14 +37,16 @@ if __name__ == "__main__":
 
     for var, ft, grid, time, rt in product(vars, forecast_type, grids, time_groups, run_types):
         if UPDATE_IFS_ER_GRID:
-            if grid != "global0_25": #and ft == "reforecast":
+            if grid != "global0_25" or (grid == 'global0_25' and ft == "reforecast"):
                 continue
             ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
                                     run_type=rt, time_group=time,
                                     grid=grid,
                                     remote=True,
-                                    # recompute=True, force_overwrite=True,
-                                    remote_name='genevieve_ecmwf2', remote_config=['xxlarge_cluster', 'large_node', 'large_scheduler'])
+                                    remote_config={'name': 'ecmwf-regrid',
+                                                   'worker_vm_types': 'c4-highmem-192',
+                                                   'n_workers': 4,
+                                                   'idle_timeout': '120 minutes'})
         if UPDATE_BIAS:
             ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
                                              run_type=rt, time_group=time,
