@@ -187,15 +187,20 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
     # Get the postgres write secret
     pgwrite_pass = postgres_write_password()
 
-    table_name = postgres_table_name(table_name)
+    new_table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
             f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
         if overwrite:
-            pandas_df.to_sql(table_name, engine, if_exists='replace')
+            pandas_df.to_sql(new_table_name, engine, if_exists='replace')
         else:
-            pandas_df.to_sql(table_name, engine)
+            pandas_df.to_sql(new_table_name, engine)
+
+        # Also log the table name in the tables table
+        pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
+        pd_name.to_sql('cache_tables', engine, if_exists='append')
+
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
                            and can see sheerwater-benchmarking-postgres.""")
