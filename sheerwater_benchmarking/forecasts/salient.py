@@ -95,16 +95,16 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
 
     ds = ds.rename({'forecast_date': 'time'})
 
-    if variable == 'precip':
-        # Convert from mm/day to total precipitation
-        if timescale == "sub-seasonal":
-            ds[variable] *= 7  # weekly
-        elif timescale == "seasonal":
-            # TODO: correct for specific number of days in the months requested
-            ds[variable] *= 30  # monthly
-        elif timescale == "long-range":
-            # TODO: correct for specific number of days in the quarters requested
-            ds[variable] *= 120  # quarterly
+    # if variable == 'precip':
+    #     # Convert from mm/day to total precipitation
+    #     if timescale == "sub-seasonal":
+    #         ds[variable] *= 7  # weekly
+    #     elif timescale == "seasonal":
+    #         # TODO: correct for specific number of days in the months requested
+    #         ds[variable] *= 30  # monthly
+    #     elif timescale == "long-range":
+    #         # TODO: correct for specific number of days in the quarters requested
+    #         ds[variable] *= 120  # quarterly
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

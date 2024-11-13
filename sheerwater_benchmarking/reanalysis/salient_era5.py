@@ -51,6 +51,36 @@ def salient_era5_raw(start_time, end_time, variable, grid="salient0_25"):  # noq
 
 @dask_remote
 @cacheable(data_type='array',
+           timeseries='forecast_date',
+           cache_args=['variable', 'timescale'],
+           cache=False,
+           chunking={"lat": 300, "lon": 400, "time": 300},
+           auto_rechunk=False)
+def salient_aligned_era5_raw(start_time, end_time, variable, timescale="sub-seasonal"):
+    """Salient function that returns data from GCP mirror.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        timescale (str): The timescale of the forecast. One of:
+            - sub-seasonal
+            - seasonal
+            - long-range
+
+    """
+    # Pull the Salient dataset
+    var = get_variable(variable, 'salient')
+    filename = f'gs://sheerwater-datalake/salient-data/v9/africa/{var}_{timescale}/truth'
+    ds = xr.open_zarr(filename,
+                      chunks={'forecast_date': 3, 'lat': 300, 'lon': 316, 'lead': 10})
+    ds = ds['vals_actual'].to_dataset()
+    ds = ds.rename(vals_actual=variable)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
            timeseries='time',
            cache_args=['variable', 'agg', 'grid'],
            chunking={"lat": 300, "lon": 400, "time": 300})
@@ -115,6 +145,54 @@ def salient_era5(start_time, end_time, variable, lead, grid='salient0_25', mask=
     if variable == 'precip':
         # Convert from mm/day to total precipitation
         ds[variable] *= agg  # weekly
+
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'grid', 'mask', 'region'])
+def salient_aligned_era5(start_time, end_time, variable, lead, grid='salient0_25', mask='lsm', region='africa'):
+    """Standard format task data for ERA5 Reanalysis.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        lead (str): The lead time of the forecast.
+        grid (str): The grid resolution to fetch the data at.
+        mask (str): The mask to apply to the data.
+        region (str): The region to clip the data to.
+    """
+    lead_params = {
+        "week1": ('sub-seasonal', 1),
+        "week2": ('sub-seasonal', 2),
+        "week3": ('sub-seasonal', 3),
+        "week4": ('sub-seasonal', 4),
+        "week5": ('sub-seasonal', 5),
+    }
+
+    timescale, lead_id = lead_params.get(lead,  (None, None))
+    if timescale is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for Salient ERA5.")
+    if grid != "salient0_25":
+        raise NotImplementedError(f"Grid {grid} not implemented for Salient ERA5.")
+
+    # Get daily data
+    ds = salient_aligned_era5_raw(start_time, end_time, variable, timescale=timescale)
+    ds = ds.sel(lead=lead_id)
+
+    ds = ds.rename({'forecast_date': 'time'})
+
+    # if variable == 'precip':
+    # Convert from mm/day to total precipitation
+    # ds[variable] *= agg  # weekly
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
