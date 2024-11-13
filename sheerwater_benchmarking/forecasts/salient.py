@@ -44,7 +44,8 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
     ds = ds.dropna('forecast_date', how='all')
 
     # Regrid the data
-    ds = regrid(ds, grid)
+    method = 'conservative' if variable == 'precip' else 'linear'
+    ds = regrid(ds, grid, base='base180', method=method, time_dim="forecast_date")
     return ds
 
 

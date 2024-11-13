@@ -58,8 +58,9 @@ def perpp_ecmwf(start_time, end_time, variable, lead="weeks56", grid="global1_5"
     """Processed ABC forecast files."""
     ds = perpp_ecmwf_raw(start_time, end_time, variable, lead=lead)
 
-    # Regrid the data
-    ds = regrid(ds, grid)
+    method = 'conservative' if variable == 'precip' else 'linear'
+    # Need all lats / lons in a single chunk for the output to be reasonable
+    ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date")
     return ds
 
 

@@ -538,63 +538,10 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 100, "lon": 100, "lead_time": 40,
-                     "start_date": 1,
-                     "model_issuance_date": 1, "start_year": 1,
-                     "member": 100},
-           auto_rechunk=True)
-def ifs_extended_range_rechunk(start_time, end_time, variable, forecast_type,
-                               run_type='average', time_group='weekly', grid="global1_5"):
-    """Fetches IFS extended range forecast and reforecast data from the WeatherBench2 dataset.
-
-    Args:
-        start_time (str): The start date to fetch data for.
-        end_time (str): The end date to fetch.
-        variable (str): The weather variable to fetch.
-        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
-        run_type (str): The type of run to fetch. One of:
-            - average: to download the averaged of the perturbed runs
-            - perturbed: to download all perturbed runs
-            - [int 0-50]: to download a specific  perturbed run
-        time_group (str): The time grouping to use. One of: "daily", "weekly", "biweekly"
-        grid (str): The grid resolution to fetch the data at. One of:
-            - global1_5: 1.5 degree global grid
-    """
-    """IRI ECMWF average forecast with regridding."""
-    if grid != 'global1_5':
-        raise ValueError("Only the global1_5 grid is supported for pre-regridding pipeline.")
-    ds = ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
-                                run_type, time_group, grid='global1_5')
-    # Convert to base180 longitude
-    ds = lon_base_change(ds, to_base="base180")
-
-    if variable == 'tmp2m':
-        ds[variable] = ds[variable] - 273.15
-        ds.attrs.update(units='C')
-    elif variable == 'precip':
-        ds[variable] = ds[variable] * 1000.0
-        ds.attrs.update(units='mm')
-        ds = np.maximum(ds, 0)
-        if time_group == 'weekly':
-            ds = ds * 7
-        elif time_group == 'biweekly':
-            ds = ds * 14
-        else:
-            raise ValueError("Only weekly and biweekly aggregations are supported for precipitation.")
-
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
-           cache=True,
-           timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 100, "lon": 100, "lead_time": 40,
-                     "start_date": 1,
-                     "model_issuance_date": 1, "start_year": 1,
-                     "member": 100},
-           cache_disable_if={'grid': 'global1_5'},
+           chunking={"lat": 721, "lon": 1440, "lead_time": 1,
+                     "start_date": 20,
+                     "model_issuance_date": 20, "start_year": 1,
+                     "member": 50},
            auto_rechunk=False)
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
@@ -614,16 +561,42 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
             - global1_5: 1.5 degree global grid
     """
     """IRI ECMWF average forecast with regridding."""
-    ds = ifs_extended_range_rechunk(start_time, end_time, variable, forecast_type,
-                                    run_type, time_group, grid='global1_5')
+    ds = ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
+                                run_type, time_group, grid='global1_5')
+    # Convert to base180 longitude
+    ds = lon_base_change(ds, to_base="base180")
+
+    if variable == 'tmp2m':
+        ds[variable] = ds[variable] - 273.15
+        ds.attrs.update(units='C')
+    elif variable == 'precip':
+        ds[variable] = ds[variable] * 1000.0
+        ds.attrs.update(units='mm')
+        ds = np.maximum(ds, 0)
+        if time_group == 'weekly':
+            ds = ds * 7
+        elif time_group == 'biweekly':
+            ds = ds * 14
+        else:
+            raise ValueError("Only weekly and biweekly aggregations are supported for precipitation.")
+
     if grid == 'global1_5':
         return ds
-
     # Regrid onto appropriate grid
     if forecast_type == 'reforecast':
         raise NotImplementedError("Regridding reforecast data should be done with extreme care. It's big.")
+
+    # Need all lats / lons in a single chunk to be reasonable
+    chunks = {'lat': 121, 'lon': 240, 'lead_time': 1}
+    if run_type == 'perturbed':
+        chunks['member'] = 50
+        chunks['start_date'] = 20
+    else:
+        chunks['start_date'] = 1000
+    ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
-    ds = regrid(ds, grid, base='base180', method=method)
+    # Need all lats / lons in a single chunk for the output to be reasonable
+    ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date", output_chunks={"lat": 721, "lon": 1440})
     return ds
 
 
@@ -796,12 +769,10 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
            cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, 'start_date': 1000, "member": 1},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'start_date': 30}
-               },
-           })
+           chunking={"lat": 721, "lon": 1440, "lead_time": 1,
+                     "start_date": 20,
+                     "model_issuance_date": 20, "start_year": 1,
+                     "member": 50})
 def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in_days=6,
                                        run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts."""
@@ -809,11 +780,18 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
                                      run_type=run_type, time_group=time_group, grid='global1_5')
     if grid == 'global1_5':
         return ds
-    # Regrid onto appropriate grid
-    chunks = {'lat': 121, 'lon': 240, 'lead_time': 1, 'start_date': 600}
+
+    # Need all lats / lons in a single chunk to be reasonable
+    chunks = {'lat': 121, 'lon': 240, 'lead_time': 1}
+    if run_type == 'perturbed':
+        chunks['member'] = 50
+        chunks['start_date'] = 20
+    else:
+        chunks['start_date'] = 1000
     ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
-    ds = regrid(ds, grid, base='base180', method=method)
+    # Need all lats / lons in a single chunk for the output to be reasonable
+    ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date", output_chunks={"lat": 721, "lon": 1440})
     return ds
 
 
