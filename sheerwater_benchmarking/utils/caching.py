@@ -135,7 +135,8 @@ def read_from_postgres(table_name, hash_table_name=True):
     we'll just hard code a connection to the running sheerwater database.
 
     Args:
-        table_name: The table name to read from
+        table_name (str): The table name to read from
+        hash_table_name (bool): whether to hash the table name. Default true
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
