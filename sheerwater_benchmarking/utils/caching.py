@@ -48,9 +48,10 @@ def get_chunk_size(ds, size_in='MB'):
         size_in (str): The size to return the chunk size in. One of:
             'KB', 'MB', 'GB', 'TB' for kilo, mega, giga, and terabytes respectively.
     """
-    chunk_sizes = [np.median(chunks) for dim, chunks in ds.chunks.items()]
+    chunk_groups = [(dim, np.median(chunks)) for dim, chunks in ds.chunks.items()]
     div = {'KB': 10**3, 'MB': 10**6, 'GB': 10**9, 'TB': 10**12}[size_in]
-    return np.product(chunk_sizes) * 4 / div
+    chunk_sizes = [x[1] for x in chunk_groups]
+    return np.product(chunk_sizes) * 4 / div, chunk_groups
 
 
 def chunk_to_zarr(ds, cache_map, chunking):
@@ -58,11 +59,12 @@ def chunk_to_zarr(ds, cache_map, chunking):
     ds = drop_encoded_chunks(ds)
     chunking = prune_chunking_dimensions(ds, chunking)
     ds = ds.chunk(chunks=chunking)
-    chunk_size = get_chunk_size(ds)
+    chunk_size, chunk_with_labels = get_chunk_size(ds)
     if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
         print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
-        import pdb; pdb.set_trace()
-
+        print(chunk_with_labels)
+        import pdb
+        pdb.set_trace()
     ds.to_zarr(store=cache_map, mode='w')
 
 

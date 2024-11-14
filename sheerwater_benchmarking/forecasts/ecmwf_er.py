@@ -550,7 +550,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
                    'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 30, "start_date": 30}
                },
            },
-           auto_rechunk=True)
+           auto_rechunk=False)
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast and reforecast data from the WeatherBench2 dataset.
@@ -739,7 +739,17 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', t
            cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 6, 'start_date': 10, "member": 50})
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
+                     "start_date": 1000,
+                     "model_issuance_date": 1000, "start_year": 1,
+                     "member": 1},
+           chunk_by_arg={
+               'grid': {
+                   # A note: a setting where time is in groups of 200 works better for regridding tasks,
+                   # but is less good for storage.
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 30, "start_date": 30}
+               },
+           })
 def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6,
                                 run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts."""
@@ -768,7 +778,7 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
         dsp = ds_sub + nbhd_df
         return dsp
 
-    ds = ds_f.groupby('start_date').map(bias_correct, margin_in_days=margin_in_days)
+    ds = ds_f.groupby('start_date').map(bias_correct, margin_in_days)
     # Should not be below zero after bias correction
     if variable == 'precip':
         ds = np.maximum(ds, 0)
@@ -780,10 +790,17 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
            cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date'],
-           chunking={"lat": 721, "lon": 1440, "lead_time": 1,
-                     "start_date": 200,
-                     "model_issuance_date": 200, "start_year": 1,
-                     "member": 1})
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
+                     "start_date": 1000,
+                     "model_issuance_date": 1000, "start_year": 1,
+                     "member": 1},
+           chunk_by_arg={
+               'grid': {
+                   # A note: a setting where time is in groups of 200 works better for regridding tasks,
+                   # but is less good for storage.
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 30, "start_date": 30}
+               },
+           })
 def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in_days=6,
                                        run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts."""
