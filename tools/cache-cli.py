@@ -11,7 +11,8 @@ def cache():
 @click.option('--glob', '-g', type=str, help="Globable regex of the cache key to delete - pass '*' to delete all caches")
 def delete(backend, name, glob):
     num = cache_delete(backend, name, glob)
-    click.echo(f"Successfully deleted {num} files")
+    if num is not None:
+        click.echo(f"Successfully deleted {num} files")
 
 @cache.command()
 @click.option('--backend', '-b', type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle']), default='zarr', help="The backend to find the cache")

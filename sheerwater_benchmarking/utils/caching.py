@@ -128,7 +128,7 @@ def postgres_table_name(table_name):
     return hashlib.md5(table_name.encode()).hexdigest()
 
 
-def read_from_postgres(table_name):
+def read_from_postgres(table_name, hash_table_name=True):
     """Read a pandas df from a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
@@ -140,7 +140,8 @@ def read_from_postgres(table_name):
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
-    table_name = postgres_table_name(table_name)
+    if hash_table_name:
+        table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
@@ -199,6 +200,7 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
 
         # Also log the table name in the tables table
         pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
+        pd_name = pd.DataFrame(pd_name)
         pd_name.to_sql('cache_tables', engine, if_exists='append')
 
     except sqlalchemy.exc.InterfaceError:
