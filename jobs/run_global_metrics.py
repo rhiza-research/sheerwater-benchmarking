@@ -24,6 +24,8 @@ def run_grouped(combo):
     try:
         global_metric(start_time, end_time, variable, lead, forecast, "era5", metric, grid=grid,
                        force_overwrite=True, filepath_only=True, recompute=recompute)
+    except KeyboardInterrupt as e:
+        raise(e)
     except: # noqa:E722
         print(f"Failed to run global metric {forecast} {lead} {grid} {variable} {metric}: {traceback.format_exc()}")
 
