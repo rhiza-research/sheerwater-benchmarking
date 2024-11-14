@@ -69,7 +69,6 @@ def regrid(ds, output_grid, method='conservative', base="base180", output_chunks
     kwargs = {'output_chunks': output_chunks} if method == 'conservative' else {}
     regridder = getattr(ds.regrid, method)
     ds = regridder(ds_out, **kwargs)
-    from xarray_regrid
     return ds
 
 
