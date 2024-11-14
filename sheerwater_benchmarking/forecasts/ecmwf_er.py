@@ -589,14 +589,15 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     # Need all lats / lons in a single chunk to be reasonable
     chunks = {'lat': 121, 'lon': 240, 'lead_time': 1}
     if run_type == 'perturbed':
-        chunks['member'] = 50
-        chunks['start_date'] = 20
+        chunks['member'] = 1
+        chunks['start_date'] = 30
     else:
-        chunks['start_date'] = 1000
+        chunks['start_date'] = 30
     ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date", output_chunks={"lat": 721, "lon": 1440})
+    ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date",
+                output_chunks={"lat": 721, "lon": 1440, "member": 1, "start_date": 1})
     return ds
 
 
@@ -791,7 +792,8 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
     ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date", output_chunks={"lat": 721, "lon": 1440})
+    ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date",
+                output_chunks={"lat": 721, "lon": 1440})
     return ds
 
 
