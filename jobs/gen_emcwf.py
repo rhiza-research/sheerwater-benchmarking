@@ -31,7 +31,7 @@ if __name__ == "__main__":
     end_time = "2023-06-30"
 
     UPDATE_IFS_ER_GRID = False
-    UPDATE_BIAS = True 
+    UPDATE_BIAS = True
     UPDATE_AGG = False
 
     for var, ft, grid, time, rt in product(vars, forecast_type, grids, time_groups, run_types):
