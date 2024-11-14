@@ -669,10 +669,11 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
     # We need ERA5 data from the start_time to 20 years before the first date
     first_date = ds_deb.model_issuance_date.min().values
     last_date = ds_deb.model_issuance_date.max().values
-    new_start = (first_date.astype('M8[D]').astype('O') - relativedelta(years=20)).strftime("%Y-%m-%d")
+    new_start = (first_date.astype('M8[D]').astype('O')
+                 - relativedelta(years=20)).strftime("%Y-%m-%d")
     # We need ERA5 data from the end time to the end time plus last lead in days
-    new_end = (
-        (last_date + ds_deb.lead_time.values).astype('M8[D]').astype('O') - relativedelta(years=1)).strftime("%Y-%m-%d")
+    new_end = ((last_date + ds_deb.lead_time.values).astype('M8[D]').astype('O')
+               - relativedelta(years=1)).strftime("%Y-%m-%d")
 
     # Get the pre-aggregated ERA5 data
     agg = {'daily': 1, 'weekly': 7, 'biweekly': 14}[time_group]

@@ -1,14 +1,70 @@
 import gcsfs
 import click
-from sheerwater_benchmarking.utils.secrets import postgres_read_password, postgres_write_password
-from sheerwater_benchmarking.utils.caching import read_from_postgres
 import terracotta as tc
 import re
-import pandas as pd
 import sqlalchemy
 from sqlalchemy import text
+import xarray as xr
+
+from sheerwater_benchmarking.utils import dask_remote
+from sheerwater_benchmarking.utils.secrets import postgres_write_password
+from sheerwater_benchmarking.utils.caching import read_from_postgres
+
+
+@dask_remote
+def cache_list_null(name, glob, null_frac=0.0):
+    """List all the caches that have a fraction of null values above a certain threshold.
+
+    NOTE: this is a slow function for big dataframes and should be run on a sufficient Dask cluster.
+
+    Args:
+        name (str): The name of the cache.
+        glob (str): The glob pattern to search for.
+        null_frac (float): The fraction of null values to check for.
+    """
+    print("Warning: This function is slow for big zarrs and should be run on a sufficient Dask cluster.")
+    files = cache_list('zarr', name, glob)
+    null_files = []
+    for f in files:
+        ds = xr.open_zarr('gs://' + f)
+        # Check if ds is above a fraction of null values
+        null_count = float(ds.isnull().sum().compute().to_array().values[0])
+        data_count = float(ds.count().compute().to_array().values[0])
+
+        if data_count == 0:
+            print(f"WARNING: gs://{f} has no data.")
+            null_files.append(f)
+            continue
+        if (null_count / data_count) > null_frac:
+            print(f"WARNING: {null_count / data_count * 100}% missing values,\n\tgs://{f}.")
+            null_files.append(f)
+
+    return null_files
+
+
+@dask_remote
+def cache_delete_null(name, glob, null_frac=0.0):
+    """List all the caches that have a fraction of null values above a certain threshold.
+
+    NOTE: this is a slow function for big dataframes and should be run on a sufficient Dask cluster.
+
+    Args:
+        name (str): The name of the cache.
+        glob (str): The glob pattern to search for.
+        null_frac (float): The fraction of null values to check for.
+    """
+    null_files = cache_list_null(name, glob, null_frac)
+    return _gui_cache_delete(null_files, backend='zarr')
+
 
 def cache_list(backend, name, glob):
+    """List all the caches that match the given name and glob pattern.
+
+    Args:
+        backend (str): The backend to use. One of: 'zarr', 'delta', 'pickle', 'terracotta', 'postgres'.
+        name (str): The name of the cache.
+        glob (str): The glob pattern to search for.
+    """
     if backend in ['zarr', 'delta', 'pickle']:
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
@@ -67,10 +123,21 @@ def cache_list(backend, name, glob):
     else:
         raise ValueError("Unsupported backend.")
 
+
 def cache_delete(backend, name, glob):
+    """Delete all the caches that match the given name and glob pattern.
 
+    Args:
+        backend (str): The backend to use. One of: 'zarr', 'delta', 'pickle', 'terracotta', 'postgres'.
+        name (str): The name of the cache.
+        glob (str): The glob pattern to search for.
+    """
     to_delete = cache_list(backend, name, glob)
+    return _gui_cache_delete(to_delete, backend)
 
+
+def _gui_cache_delete(to_delete, backend):
+    """Delete all the caches in a given list and return the number of caches deleted."""
     if len(to_delete) == 0:
         click.echo("No files to delete.")
         return
@@ -118,14 +185,12 @@ def cache_delete(backend, name, glob):
         if click.confirm("Do you want to delete these caches?"):
             with engine.connect() as connection:
                 for key in keys_to_delete:
-                    result = connection.execute(text(f'DROP Table "{key}"'))
-                    result = connection.execute(text(f"DELETE from cache_tables WHERE table_key = '{key}'"))
-
+                    connection.execute(text(f'DROP Table "{key}"'))
+                    connection.execute(text(f"DELETE from cache_tables WHERE table_key = '{key}'"))
                 connection.commit()
 
         return len(keys_to_delete)
     else:
         pass
-
 
     print("Files successfully deleted!")
