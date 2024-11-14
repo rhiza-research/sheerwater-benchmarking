@@ -686,7 +686,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                         chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
                                         chunking = prune_chunking_dimensions(ds, chunking)
 
-                                        ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')
+                                        # import pdb; pdb.set_trace()
+                                        ds = ds.chunk(chunks=chunking)
+                                        ds.to_zarr(store=cache_map, mode='w')
 
                                         # Reopen the dataset to truncate the computational path
                                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})

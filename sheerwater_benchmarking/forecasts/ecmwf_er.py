@@ -651,7 +651,7 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
            cache_args=['variable', 'lead', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 20, "model_issuance_date": 50})
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "model_issuance_date": 1000})
 def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type='average',
                                 time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead."""
@@ -706,7 +706,7 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
            cache_args=['variable', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 6, "model_issuance_date": 200})
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "model_issuance_date": 1000})
 def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for all leads."""
     # Fetch the reforecast data to calculate how many leads we need
@@ -763,12 +763,6 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
     # Should not be below zero after bias correction
     if variable == 'precip':
         ds = np.maximum(ds, 0)
-
-    if run_type == 'average':
-        ds = ds.chunk({'lat': 121, 'lon': 240, 'lead_time': 1, 'start_date': 1000})
-    else:
-        ds = ds.chunk({'lat': 121, 'lon': 240, 'lead_time': 1, 'start_date': 20, 'member': 50})
-
     return ds
 
 
