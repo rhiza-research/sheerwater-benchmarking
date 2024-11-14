@@ -6,12 +6,13 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import (ifs_extended_range_debia
 
 if __name__ == "__main__":
     # vars = ["tmp2m", "precip"]
-    # vars = ["precip", "tmp2m"]
-    vars = ["precip"]
+    vars = ["precip", "tmp2m"]
+    # vars = ["precip"]
     # vars = ["tmp2m"]
     aggs = [14, 7]
     # aggs = [14]
-    time_groups = ['weekly', 'biweekly']
+    # time_groups = ['weekly', 'biweekly']
+    time_groups = ['weekly']
     # time_groups = ['biweekly']
     grids = ["global1_5", "global0_25"]
     # grids = ["global0_25"]
@@ -41,7 +42,7 @@ if __name__ == "__main__":
                                     run_type=rt, time_group=time,
                                     grid=grid,
                                     remote=True,
-                                    remote_config={'name': 'ecmwf-regrid',
+                                    remote_config={'name': 'ecmwf-regrid2',
                                                    'worker_vm_types': 'c2-standard-16',
                                                    'n_workers': 35,
                                                    'idle_timeout': '240 minutes'})
