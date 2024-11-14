@@ -60,7 +60,7 @@ def perpp_ecmwf(start_time, end_time, variable, lead="weeks56", grid="global1_5"
 
     method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date")
+    ds = regrid(ds, grid, base='base180', method=method)
     return ds
 
 

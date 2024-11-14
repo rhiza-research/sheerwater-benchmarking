@@ -604,7 +604,7 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date",
+    ds = regrid(ds, grid, base='base180', method=method, 
                 output_chunks={"lat": 721, "lon": 1440})
     return ds
 
@@ -819,7 +819,7 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
     ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date",
+    ds = regrid(ds, grid, base='base180', method=method, 
                 output_chunks={"lat": 721, "lon": 1440})
     return ds
 

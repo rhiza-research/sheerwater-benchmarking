@@ -205,7 +205,7 @@ def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
     ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method=method, time_dim="time", output_chunks={"lat": 121, "lon": 240})
+    ds = regrid(ds, grid, base='base180', method=method, output_chunks={"lat": 121, "lon": 240})
     return ds
 
 

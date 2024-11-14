@@ -51,7 +51,7 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
     return ds_agg
 
 
-def regrid(ds, output_grid, method='conservative', base="base180", time_dim="time", output_chunks=None):
+def regrid(ds, output_grid, method='conservative', base="base180", output_chunks=None):
     """Regrid a dataset to a new grid.
 
     Args:
@@ -60,7 +60,6 @@ def regrid(ds, output_grid, method='conservative', base="base180", time_dim="tim
         method (str): The regridding method. One of:
             'linear', 'nearest', 'cubic', 'conservative', 'most_common'.
         base (str): The base of the longitudes. One of 'base180', 'base360'.
-        time_dim (str): The name of the time dimension.
         output_chunks (dict): Chunks for the output dataset (optional).
             Only used for conservative regridding.
     """
@@ -69,7 +68,8 @@ def regrid(ds, output_grid, method='conservative', base="base180", time_dim="tim
     # Output chunks only for conservative regridding
     kwargs = {'output_chunks': output_chunks} if method == 'conservative' else {}
     regridder = getattr(ds.regrid, method)
-    ds = regridder(ds_out, time_dim=time_dim, **kwargs)
+    ds = regridder(ds_out, **kwargs)
+    from xarray_regrid
     return ds
 
 
