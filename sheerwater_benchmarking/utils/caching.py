@@ -7,10 +7,13 @@ import logging
 import hashlib
 
 import gcsfs
-from google.cloud import storage
+#import google
+#from google.cloud import storage
+#from google.cloud.storage.blob import Blob
 from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
 from rasterio.enums import Resampling
+from google.cloud import storage
 import terracotta as tc
 import sqlalchemy
 import pickle
@@ -162,10 +165,21 @@ def write_to_zarr(ds, verify_path, cache_path):
     if fs.exists(verify_path):
         fs.rm(verify_path)
 
+    # Atomic write of a lock file using precondition!
+    #lock = verify_path + ".lock"
+
+    #storage_client = storage.Client()
+    #blob = Blob.from_string(lock, client=storage_client)
+
+    #try:
+    #    blob.upload_from_string("lock", if_generation_match=0)
+    #except google.api_core.exceptions.PreconditionFailed:
+    #    raise RuntimeError(f"Concurrent zarr write detected. If this is a mistake delete the lock file: {lock}")
     cache_map = fs.get_mapper(cache_path)
     ds.to_zarr(store=cache_map, mode='w')
 
     fs.touch(verify_path)
+    #fs.rm(lock)
 
 
 def postgres_table_name(table_name):
@@ -532,7 +546,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     storage_backend = backend
 
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
-                verify_path = "gs://sheerwater-datalake/temp/" + cache_key + '.verify'
+                verify_path = "gs://sheerwater-datalake/caches/" + cache_key + '.verify'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
