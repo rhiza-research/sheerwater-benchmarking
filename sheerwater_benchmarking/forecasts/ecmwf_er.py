@@ -464,8 +464,9 @@ def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="globa
             - global: global region
             - africa: the African continent
     """
-    ds = ecmwf_rolled(start_time, end_time, variable,
-                      forecast_type, agg=agg,  grid=grid)
+    time_group = {14: "biweekly", 7: "weekly"}[agg]
+    ds = ifs_extended_range(start_time, end_time, variable, forecast_type=forecast_type,
+                            run_type='average', time_group=time_group, grid=grid)
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
     return ds

@@ -1,3 +1,4 @@
+"""Utility functions for caching and deleting caches."""
 import gcsfs
 import click
 import terracotta as tc
@@ -146,10 +147,10 @@ def _gui_cache_delete(to_delete, backend):
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
         click.echo(to_delete)
-        l = len(to_delete)
+        length = len(to_delete)
         if click.confirm("Do you want to delete these caches?"):
             for i, f in enumerate(to_delete):
-                click.echo(f"Deleting {i+1}/{l}")
+                click.echo(f"Deleting {i+1}/{length}")
                 fs.rm(f, recursive=True)
 
         return len(to_delete)
@@ -159,10 +160,10 @@ def _gui_cache_delete(to_delete, backend):
 
         click.echo(to_delete)
 
-        l = len(to_delete)
+        length = len(to_delete)
         if click.confirm("Do you want to delete these caches?"):
             for i, f in enumerate(to_delete):
-                click.echo(f"Deleting {i+1}/{l}")
+                click.echo(f"Deleting {i+1}/{length}")
                 del_map = {'key': f}
                 driver.delete(del_map)
 
