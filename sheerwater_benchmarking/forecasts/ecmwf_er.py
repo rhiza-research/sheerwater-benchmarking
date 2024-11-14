@@ -539,9 +539,9 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            chunking={"lat": 721, "lon": 1440, "lead_time": 1,
-                     "start_date": 20,
-                     "model_issuance_date": 20, "start_year": 1,
-                     "member": 50},
+                     "start_date": 100,
+                     "model_issuance_date": 100, "start_year": 1,
+                     "member": 1},
            auto_rechunk=False)
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
@@ -590,14 +590,14 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     chunks = {'lat': 121, 'lon': 240, 'lead_time': 1}
     if run_type == 'perturbed':
         chunks['member'] = 1
-        chunks['start_date'] = 30
+        chunks['start_date'] = 100
     else:
-        chunks['start_date'] = 30
+        chunks['start_date'] = 100
     ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
     ds = regrid(ds, grid, base='base180', method=method, time_dim="start_date",
-                output_chunks={"lat": 721, "lon": 1440, "member": 1, "start_date": 1})
+                output_chunks={"lat": 721, "lon": 1440})
     return ds
 
 
@@ -664,7 +664,7 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
     if lead >= n_leads:
         # Lead does not exist
         return None
-    ds_deb = ds_deb.isel(lead_time=lead)
+    ds_deb = ds_deb.sel(lead_time=np.timedelta64(lead, 'D'))
 
     # We need ERA5 data from the start_time to 20 years before the first date
     first_date = ds_deb.model_issuance_date.min().values
@@ -710,13 +710,14 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
 def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for all leads."""
     # Fetch the reforecast data to calculate how many leads we need
-    ds_deb = ifs_extended_range(start_time, end_time, variable, forecast_type="reforecast",
-                                run_type=run_type, time_group=time_group, grid=grid)
-    n_leads = len(ds_deb.lead_time)
+    if time_group == 'weekly':
+        leads = [0, 7, 14, 21, 28, 35]
+    else:
+        leads = [0, 7, 14, 21, 28]
 
     # Accumulate all the per lead biases
     biases = []
-    for i in range(n_leads):
+    for i in leads:
         biases.append(ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=i,
                                                   run_type=run_type, time_group=time_group, grid=grid))
     # Concatenate leads and unstack
@@ -745,6 +746,11 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
     # Get forecast data
     ds_f = ifs_extended_range(start_time, end_time, variable, forecast_type='forecast',
                               run_type=run_type, time_group=time_group, grid=grid)
+    if time_group == 'weekly':
+        leads = [np.timedelta64(x, 'D') for x in [0, 7, 14, 21, 28, 35]]
+    else:
+        leads = [np.timedelta64(x, 'D') for x in [0, 7, 14, 21, 28]]
+    ds_f = ds_f.sel(lead_time=leads)
 
     def bias_correct(ds_sub, margin_in_days=6):
         date = ds_sub.start_date.values

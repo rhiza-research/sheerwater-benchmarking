@@ -496,6 +496,8 @@ numpy-groupies==0.11.2
 oauthlib==3.2.2
     # via kubernetes
     # via requests-oauthlib
+opt-einsum==3.4.0
+    # via sheerwater-benchmarking
 overrides==7.7.0
     # via jupyter-server
 packaging==24.1

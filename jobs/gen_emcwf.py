@@ -11,12 +11,12 @@ if __name__ == "__main__":
     # vars = ["tmp2m"]
     aggs = [14, 7]
     # aggs = [14]
-    # time_groups = ['weekly', 'biweekly']
-    time_groups = ['weekly']
+    time_groups = ['weekly', 'biweekly']
+    # time_groups = ['weekly']
     # time_groups = ['biweekly']
-    grids = ["global1_5", "global0_25"]
+    # grids = ["global1_5", "global0_25"]
     # grids = ["global0_25"]
-    # grids = ["global1_5"]
+    grids = ["global1_5"]
     # grids = ["global0_25", "global1_5"]
     forecast_type = ["forecast", "reforecast"]
     # forecast_type = ["reforecast"]
@@ -30,8 +30,8 @@ if __name__ == "__main__":
     start_time = "2015-05-14"
     end_time = "2023-06-30"
 
-    UPDATE_IFS_ER_GRID = True
-    UPDATE_BIAS = False
+    UPDATE_IFS_ER_GRID = False
+    UPDATE_BIAS = True 
     UPDATE_AGG = False
 
     for var, ft, grid, time, rt in product(vars, forecast_type, grids, time_groups, run_types):
