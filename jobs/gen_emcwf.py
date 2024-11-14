@@ -1,7 +1,7 @@
 """Re-run and re-cache the ECMWF aggregation and masking pipeline."""
 from itertools import product
 from sheerwater_benchmarking.forecasts.ecmwf_er import (ifs_extended_range_debiased,
-                                                        ifs_extended_range)
+                                                        ifs_extended_range, ecmwf_abc_wb)
 
 
 if __name__ == "__main__":
@@ -9,20 +9,21 @@ if __name__ == "__main__":
     vars = ["precip", "tmp2m"]
     # vars = ["precip"]
     # vars = ["tmp2m"]
-    aggs = [14, 7]
-    # aggs = [14]
-    time_groups = ['weekly', 'biweekly']
+    # aggs = [14, 7]
+    aggs = [14]
+    # time_groups = ['weekly', 'biweekly']
+    time_groups = []
     # time_groups = ['weekly']
     # time_groups = ['biweekly']
     # grids = ["global1_5", "global0_25"]
     # grids = ["global0_25"]
     grids = ["global1_5"]
     # grids = ["global0_25", "global1_5"]
-    # forecast_type = ["forecast", "reforecast"]
+    forecast_type = ["forecast", "reforecast"]
     # forecast_type = ["reforecast"]
-    forecast_type = ["forecast"]
-    run_types = ["average", "perturbed"]
-    # run_types = ["average"]
+    # forecast_type = ["forecast"]
+    # run_types = ["average", "perturbed"]
+    run_types = ["average"]
     # run_types = ["perturbed"]
     regions = ['global']
     masks = ["lsm"]
@@ -31,10 +32,10 @@ if __name__ == "__main__":
     end_time = "2023-06-30"
 
     UPDATE_IFS_ER_GRID = False
-    UPDATE_BIAS = True
-    UPDATE_AGG = False
+    UPDATE_BIAS = False
+    UPDATE_AGG = True
 
-    for var, ft, grid, time, rt in product(vars, forecast_type, grids, time_groups, run_types):
+    for var, ft, grid, time, rt in product(vars, forecast_type, grids, aggs, run_types):
         if UPDATE_IFS_ER_GRID:
             if grid != "global0_25" or (grid == 'global0_25' and ft == "reforecast"):
                 continue
@@ -64,11 +65,11 @@ if __name__ == "__main__":
             #     null_frac = null_count / data_count
             #     print(f"{var} {ft} {grid} {time} {rt} has {null_frac*100} % missing values.")
 
-        # for agg, region, mask in product(aggs, regions, masks):
-        #     if UPDATE_AGG:
-        #         ds = ecmwf_agg(start_time, end_time, variable=var, forecast_type=ft,
-        #                        grid=grid, agg=agg, mask=mask, region=region,
-        #                        recompute=True, force_overwrite=True,
-        #                        remote=True,
-        #                        remote_config={'name': 'update', 'n_workers': 10}
-        #                        )
+        for region, mask in product(regions, masks):
+            if UPDATE_AGG:
+                ds = ecmwf_abc_wb(start_time, end_time, variable=var, forecast_type=ft,
+                                  grid=grid, agg=time, mask=mask,
+                                  remote=True,
+                                  remote_config='large_cluster',
+                                  remote_name='ecmwf_agg'
+                                  )

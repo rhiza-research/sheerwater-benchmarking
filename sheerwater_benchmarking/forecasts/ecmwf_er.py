@@ -445,7 +445,7 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                      "start_date": 1000,
                      "model_issuance_date": 1000, "start_year": 29},
            auto_rechunk=False)
-def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
+def ecmwf_abc_wb(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Specialized function for the ABC model
