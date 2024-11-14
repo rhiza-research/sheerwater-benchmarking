@@ -56,13 +56,13 @@ if __name__ == "__main__":
                                              remote_config='large_cluster'
                                              )
 
-            null_count = float(ds.isnull().sum().compute().to_array().values[0])
-            data_count = float(ds.count().compute().to_array().values[0])
-            if data_count == 0:
-                print(f"{var} {ft} {grid} {time} {rt} has no data.")
-            else:
-                null_frac = null_count / data_count
-                print(f"{var} {ft} {grid} {time} {rt} has {null_frac*100} % missing values.")
+            # null_count = float(ds.isnull().sum().compute().to_array().values[0])
+            # data_count = float(ds.count().compute().to_array().values[0])
+            # if data_count == 0:
+            #     print(f"{var} {ft} {grid} {time} {rt} has no data.")
+            # else:
+            #     null_frac = null_count / data_count
+            #     print(f"{var} {ft} {grid} {time} {rt} has {null_frac*100} % missing values.")
 
         # for agg, region, mask in product(aggs, regions, masks):
         #     if UPDATE_AGG:
