@@ -57,11 +57,11 @@ def regrid(ds, output_grid, method='conservative', base="base180", time_dim="tim
     Args:
         ds (xr.Dataset): Dataset to regrid.
         output_grid (str): The output grid resolution. One of valid named grids.
-        method (str): The regridding method. One of: 
+        method (str): The regridding method. One of:
             'linear', 'nearest', 'cubic', 'conservative', 'most_common'.
         base (str): The base of the longitudes. One of 'base180', 'base360'.
         time_dim (str): The name of the time dimension.
-        output_chunks (dict): Chunks for the output dataset (optional). 
+        output_chunks (dict): Chunks for the output dataset (optional).
             Only used for conservative regridding.
     """
     # Interpret the grid
