@@ -63,8 +63,6 @@ def chunk_to_zarr(ds, cache_map, chunking):
     if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
         print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
         print(chunk_with_labels)
-        import pdb
-        pdb.set_trace()
     ds.to_zarr(store=cache_map, mode='w')
 
 

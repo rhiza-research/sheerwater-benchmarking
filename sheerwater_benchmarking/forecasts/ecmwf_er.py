@@ -441,9 +441,9 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            cache_args=['variable', 'forecast_type', 'agg', 'grid', 'mask'],
-           chunking={"lat": 32, "lon": 30, "lead_time": 1,
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
                      "start_date": 1000,
-                     "model_issuance_date": 1000, "start_year": 29},
+                     "model_issuance_date": 1000, "start_year": 1},
            auto_rechunk=False)
 def ecmwf_abc_wb(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
     """Fetches forecast data from the ECMWF IRI dataset.
