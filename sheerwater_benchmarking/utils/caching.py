@@ -155,6 +155,18 @@ def write_to_delta(cache_path, df, overwrite=False):
     else:
         write_deltalake(cache_path, df)
 
+def write_to_zarr(ds, verify_path, cache_path):
+    """Write to zarr with a temp write and move to make it more atomic."""
+    fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+
+    if fs.exists(verify_path):
+        fs.rm(verify_path)
+
+    cache_map = fs.get_mapper(cache_path)
+    ds.to_zarr(store=cache_map, mode='w')
+
+    fs.touch(verify_path)
+
 
 def postgres_table_name(table_name):
     """Return a qualified postgres table name."""
@@ -328,12 +340,21 @@ def write_to_terracotta(cache_key, ds):
             write_individual_raster(driver, bucket, ds, cache_key)
 
 
-def cache_exists(backend, cache_path):
+def cache_exists(backend, cache_path, verify_path=None):
     """Check if a cache exists generically."""
     if backend == 'zarr' or backend == 'delta' or backend == 'pickle' or backend == 'terracotta':
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-        return fs.exists(cache_path)
+        if backend == 'zarr':
+            if not fs.exists(verify_path) and fs.exists(cache_path):
+                print("Found cache, but it appears to be corrupted. Recomputing.")
+                return False
+            elif fs.exists(verify_path) and fs.exists(cache_path):
+                return True
+            else:
+                return False
+        else:
+            return fs.exists(cache_path)
     elif backend == 'postgres':
         return check_exists_postgres(cache_path)
 
@@ -504,12 +525,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     flat_values.append(str(val))
 
             cache_key = func.__name__ + '/' + '_'.join(flat_values)
+            verify_path = None
             if data_type == 'array':
                 backend = "zarr" if backend is None else backend
                 if storage_backend is None:
                     storage_backend = backend
 
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
+                verify_path = "gs://sheerwater-datalake/temp/" + cache_key + '.verify'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
@@ -547,7 +570,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 fs.rm(null_path, recursive=True)
 
             if not recompute and cache:
-                if cache_exists(backend, cache_path):
+                if cache_exists(backend, cache_path, verify_path):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
                     if data_type == 'array':
@@ -582,14 +605,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
                                     temp_cache_map = fs.get_mapper(temp_cache_path)
                                     chunk_to_zarr(ds, temp_cache_map, chunking)
-
-                                    # move to a permanent cache map
-                                    if fs.exists(cache_path):
-                                        print(f"Deleting {cache_path} to replace.")
-                                        fs.rm(cache_path, recursive=True)
-                                        print(f"Confirm deleted {cache_path} to replace.")
-
-                                    fs.mv(temp_cache_path, cache_path, recursive=True)
 
                                     # Reopen the dataset
                                     ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
@@ -704,7 +719,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     if data_type == 'array':
                         if storage_backend == 'zarr':
                             write = False
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if cache_exists(storage_backend, cache_path, verify_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
