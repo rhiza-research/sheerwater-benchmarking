@@ -14,6 +14,11 @@ from jobs import parse_args, run_in_parallel
 if remote:
     start_remote(remote_config=remote_config, remote_name=remote_name)
 
+
+# We can't do ACC in global metrics anymore
+if 'acc' in metrics:
+    metrics.remove('acc')
+
 combos = itertools.product(metrics, variables, grids, leads, forecasts)
 
 
