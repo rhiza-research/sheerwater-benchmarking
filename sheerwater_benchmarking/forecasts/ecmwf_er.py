@@ -539,8 +539,8 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            chunking={"lat": 721, "lon": 1440, "lead_time": 1,
-                     "start_date": 100,
-                     "model_issuance_date": 100, "start_year": 1,
+                     "start_date": 200,
+                     "model_issuance_date": 200, "start_year": 1,
                      "member": 1},
            auto_rechunk=False)
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
@@ -590,9 +590,9 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     chunks = {'lat': 121, 'lon': 240, 'lead_time': 1}
     if run_type == 'perturbed':
         chunks['member'] = 1
-        chunks['start_date'] = 100
+        chunks['start_date'] = 200
     else:
-        chunks['start_date'] = 100
+        chunks['start_date'] = 200
     ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
@@ -706,7 +706,7 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
            cache_args=['variable', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 20, "model_issuance_date": 50})
+           chunking={"lat": 121, "lon": 240, "lead_time": 6, "model_issuance_date": 200})
 def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for all leads."""
     # Fetch the reforecast data to calculate how many leads we need
@@ -730,12 +730,7 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', t
            cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, 'start_date': 1000, "member": 1},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'start_date': 30}
-               },
-           })
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, 'start_date': 1000, "member": 1})
 def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6,
                                 run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts."""
@@ -768,6 +763,12 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
     # Should not be below zero after bias correction
     if variable == 'precip':
         ds = np.maximum(ds, 0)
+
+    if run_type == 'average':
+        ds = ds.chunk({'lat': 121, 'lon': 240, 'lead_time': 1, 'start_date': 1000})
+    else:
+        ds = ds.chunk({'lat': 121, 'lon': 240, 'lead_time': 1, 'start_date': 20, 'member': 50})
+
     return ds
 
 
@@ -777,9 +778,9 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
            cache=True,
            timeseries=['start_date'],
            chunking={"lat": 721, "lon": 1440, "lead_time": 1,
-                     "start_date": 20,
-                     "model_issuance_date": 20, "start_year": 1,
-                     "member": 50})
+                     "start_date": 200,
+                     "model_issuance_date": 200, "start_year": 1,
+                     "member": 1})
 def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in_days=6,
                                        run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts."""
@@ -791,10 +792,10 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
     # Need all lats / lons in a single chunk to be reasonable
     chunks = {'lat': 121, 'lon': 240, 'lead_time': 1}
     if run_type == 'perturbed':
-        chunks['member'] = 50
-        chunks['start_date'] = 20
+        chunks['member'] = 1
+        chunks['start_date'] = 200
     else:
-        chunks['start_date'] = 1000
+        chunks['start_date'] = 200
     ds = ds.chunk(chunks)
     method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable

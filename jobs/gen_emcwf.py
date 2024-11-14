@@ -18,9 +18,9 @@ if __name__ == "__main__":
     # grids = ["global0_25"]
     grids = ["global1_5"]
     # grids = ["global0_25", "global1_5"]
-    forecast_type = ["forecast", "reforecast"]
+    # forecast_type = ["forecast", "reforecast"]
     # forecast_type = ["reforecast"]
-    # forecast_type = ["forecast"]
+    forecast_type = ["forecast"]
     run_types = ["average", "perturbed"]
     # run_types = ["average"]
     # run_types = ["perturbed"]
@@ -52,8 +52,7 @@ if __name__ == "__main__":
                                              grid=grid,
                                              #  recompute=True, force_overwrite=True,
                                              remote=True,
-                                             remote_name='genevieve',
-                                             remote_config='xxlarge_cluster'
+                                             remote_name='bigger_gen',
                                              )
 
         # for agg, region, mask in product(aggs, regions, masks):
