@@ -445,7 +445,40 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                      "start_date": 1000,
                      "model_issuance_date": 1000, "start_year": 29},
            auto_rechunk=False)
-def ecmwf_agg(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
+def ecmwf_abc_iri(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
+    """Fetches forecast data from the ECMWF IRI dataset.
+
+    Specialized function for the ABC model
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+        variable (str): The weather variable to fetch.
+        forecast_type (str): The type of forecast to fetch. One of "forecast" or "reforecast".
+        agg (str): The aggregation period to use, in days
+        grid (str): The grid resolution to fetch the data at.
+        mask (str): The mask to apply. One of:
+            - lsm: land-sea mask
+            - None: no mask
+    """
+    ds = ecmwf_rolled(start_time, end_time, variable,
+                      forecast_type, agg=agg,  grid=grid)
+    ds = lon_base_change(ds, to_base="base180")
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache=True,
+           timeseries=['start_date', 'model_issuance_date'],
+           cache_args=['variable', 'forecast_type', 'agg', 'grid', 'mask'],
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
+                     "start_date": 1000,
+                     "model_issuance_date": 1000, "start_year": 1},
+           auto_rechunk=False)
+def ecmwf_abc_wb(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Specialized function for the ABC model

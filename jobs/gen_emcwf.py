@@ -1,9 +1,7 @@
 """Re-run and re-cache the ECMWF aggregation and masking pipeline."""
 from itertools import product
-from sheerwater_benchmarking.forecasts.ecmwf_er import (ecmwf_agg, ecmwf_rolled, iri_ecmwf,
-                                                        ecmwf_averaged_regrid,
-                                                        ifs_er_reforecast_bias, ifs_extended_range_debiased,
-                                                        ifs_extended_range)
+from sheerwater_benchmarking.forecasts.ecmwf_er import (ifs_extended_range_debiased,
+                                                        ifs_extended_range, ecmwf_abc_iri)
 
 
 if __name__ == "__main__":
@@ -11,8 +9,8 @@ if __name__ == "__main__":
     # vars = ["precip", "tmp2m"]
     # vars = ["precip"]
     # vars = ["tmp2m"]
-    # aggs = [14, 7]
-    aggs = [14]
+    aggs = [14, 7]
+    # aggs = [14]
     # time_groups = ['weekly', 'biweekly']
     time_groups = ['biweekly']
     # grids = ["global1_5", "global0_25"]
@@ -77,42 +75,11 @@ if __name__ == "__main__":
                     #                'idle_timeout': '240 minutes'},
                     # )
 
-                if UPDATE_BIAS:
-                    if False:
-                        ds = ifs_er_reforecast_bias(start_time, end_time, variable=var,
-                                                    run_type=rt, time_group=time,
-                                                    grid=grid,
-                                                    # recompute=True, force_overwrite=True,
-                                                    remote=True,
-                                                    remote_config={'name': 'genevieve-run',
-                                                                   'n_workers': 15,
-                                                                   'idle_timeout': '240 minutes'}
-                                                    )
-                    ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
-                                                     run_type=rt, time_group=time,
-                                                     grid=grid,
-                                                     # recompute=True, force_overwrite=True,
-                                                     remote=True,
-                                                     remote_name='lead-bias',
-                                                     remote_config='xlarge_cluster'
-                                                     )
-
-            for agg in aggs:
-                # Go back and update the earlier parts of the pipeline
-                if UPDATE_ROLLED:
-                    ds = ecmwf_rolled(start_time, end_time, variable=var, forecast_type=ft,
-                                      grid=grid, agg=agg,
-                                      #   recompute=True, force_overwrite=True,
-                                      remote=True,
-                                      remote_config={'name': 'genevieve2',
-                                                     'n_workers': 25, 'idle_timeout': '240 minutes'},
-                                      )
-
-                for region, mask in product(regions, masks):
-                    if UPDATE_AGG:
-                        ds = ecmwf_agg(start_time, end_time, variable=var, forecast_type=ft,
-                                       grid=grid, agg=agg, mask=mask, region=region,
-                                       #    recompute=True, force_overwrite=True,
-                                       remote=True,
-                                       remote_config={'name': 'update', 'n_workers': 10}
-                                       )
+        for region, mask in product(regions, masks):
+            if UPDATE_AGG:
+                ds = ecmwf_abc_iri(start_time, end_time, variable=var, forecast_type=ft,
+                                   grid=grid, agg=time, mask=mask,
+                                   remote=True,
+                                   remote_config='large_cluster',
+                                   remote_name='genevieve2'
+                                   )
