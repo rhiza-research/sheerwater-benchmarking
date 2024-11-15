@@ -94,6 +94,7 @@ dependencies = [
     "jupyter-server-proxy",
     "xskillscore @ git+https://github.com/rhiza-research/xskillscore",
     "coiled>=1.58.1",
+    "opt-einsum>=3.4.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

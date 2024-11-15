@@ -47,7 +47,7 @@ def get_metric_fn(prob_type, metric, spatial=True):
         'mae': ('weatherbench2.metrics', 'MAE', {}),
         'spatial-mae': ('weatherbench2.metrics', 'SpatialMAE', {}),
         'acc': ('weatherbench2.metrics', 'ACC', {}),
-        'spatial-acc': ('xskillscore', 'pearson_r', {'dim': 'time'}),
+        'spatial-acc': ('weatherbench2.metrics', 'SpatialACC', {}),
         'mse': ('weatherbench2.metrics', 'MSE', {}),
         'spatial-mse': ('weatherbench2.metrics', 'SpatialMSE', {}),
         'rmse': ('weatherbench2.metrics', 'MSE', {}),
@@ -109,17 +109,12 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             fcst = fcst.chunk(member=-1, time=1, lat=250, lon=250)  # member must be -1 to succeed
             # drop all times not in fcst
             m_ds = metric_fn(observations=obs, forecasts=fcst, mean=avg_time, **metric_kwargs)
-        elif metric == 'acc':
-            assert avg_time, "ACC must be averaged in time"
-            fcst = (fcst - clim_ds).chunk(time=-1)  # time must be -1 to succeed
-            obs = (obs - clim_ds).chunk(time=-1)  # time must be -1 to succeed
-            m_ds = metric_fn(a=obs, b=fcst, skipna=True, **metric_kwargs)
         else:
-            raise NotImplementedError("Only CRPS and ACC are implemented for xskillscore.")
+            raise NotImplementedError("Only CRPS is implemented for xskillscore.")
     else:
         if metric == 'acc':
             assert avg_time, "ACC must be averaged in time"
-            fcst = fcst - clim_ds  # time must be -1 to succeed
+            fcst = fcst - clim_ds
             obs = obs - clim_ds
         m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
         if spatial:

@@ -441,9 +441,9 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            cache_args=['variable', 'forecast_type', 'agg', 'grid', 'mask'],
-           chunking={"lat": 32, "lon": 30, "lead_time": 1,
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
                      "start_date": 1000,
-                     "model_issuance_date": 1000, "start_year": 29},
+                     "model_issuance_date": 1000, "start_year": 1},
            auto_rechunk=False)
 def ecmwf_abc_iri(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
     """Fetches forecast data from the ECMWF IRI dataset.
@@ -497,8 +497,9 @@ def ecmwf_abc_wb(start_time, end_time, variable, forecast_type, agg=14, grid="gl
             - global: global region
             - africa: the African continent
     """
-    ds = ecmwf_rolled(start_time, end_time, variable,
-                      forecast_type, agg=agg,  grid=grid)
+    time_group = {14: "biweekly", 7: "weekly"}[agg]
+    ds = ifs_extended_range(start_time, end_time, variable, forecast_type=forecast_type,
+                            run_type='average', time_group=time_group, grid=grid)
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
     return ds
@@ -571,10 +572,17 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 100, "lon": 100, "lead_time": 40,
-                     "start_date": 1,
-                     "model_issuance_date": 1, "start_year": 1,
-                     "member": 100},
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
+                     "start_date": 1000,
+                     "model_issuance_date": 1000, "start_year": 1,
+                     "member": 1},
+           chunk_by_arg={
+               'grid': {
+                   # A note: a setting where time is in groups of 200 works better for regridding tasks,
+                   # but is less good for storage.
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 30, "start_date": 30}
+               },
+           },
            auto_rechunk=False)
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
                        run_type='average', time_group='weekly', grid="global1_5"):
@@ -606,6 +614,12 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
         ds = np.maximum(ds, 0)
+        if time_group == 'weekly':
+            ds = ds * 7
+        elif time_group == 'biweekly':
+            ds = ds * 14
+        else:
+            raise ValueError("Only weekly and biweekly aggregations are supported for precipitation.")
 
     if grid == 'global1_5':
         return ds
@@ -613,11 +627,18 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     if forecast_type == 'reforecast':
         raise NotImplementedError("Regridding reforecast data should be done with extreme care. It's big.")
 
-    chunks = {'lat': 100, 'lon': 100, 'lead_time': 40, 'start_date': 1}
+    # Need all lats / lons in a single chunk to be reasonable
+    chunks = {'lat': 121, 'lon': 240, 'lead_time': 1}
     if run_type == 'perturbed':
-        chunks['member'] = 100
+        chunks['member'] = 1
+        chunks['start_date'] = 200
+    else:
+        chunks['start_date'] = 200
     ds = ds.chunk(chunks)
-    ds = regrid(ds, grid, base='base180')
+    method = 'conservative' if variable == 'precip' else 'linear'
+    # Need all lats / lons in a single chunk for the output to be reasonable
+    ds = regrid(ds, grid, base='base180', method=method,
+                output_chunks={"lat": 721, "lon": 1440})
     return ds
 
 
@@ -671,7 +692,7 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
            cache_args=['variable', 'lead', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, "start_year": 20, "model_issuance_date": 50})
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "model_issuance_date": 1000})
 def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type='average',
                                 time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead."""
@@ -684,15 +705,16 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
     if lead >= n_leads:
         # Lead does not exist
         return None
-    ds_deb = ds_deb.isel(lead_time=lead)
+    ds_deb = ds_deb.sel(lead_time=np.timedelta64(lead, 'D'))
 
     # We need ERA5 data from the start_time to 20 years before the first date
     first_date = ds_deb.model_issuance_date.min().values
     last_date = ds_deb.model_issuance_date.max().values
-    new_start = (first_date.astype('M8[D]').astype('O') - relativedelta(years=20)).strftime("%Y-%m-%d")
+    new_start = (first_date.astype('M8[D]').astype('O')
+                 - relativedelta(years=20)).strftime("%Y-%m-%d")
     # We need ERA5 data from the end time to the end time plus last lead in days
-    new_end = (
-        (last_date + ds_deb.lead_time.values).astype('M8[D]').astype('O') - relativedelta(years=1)).strftime("%Y-%m-%d")
+    new_end = ((last_date + ds_deb.lead_time.values).astype('M8[D]').astype('O')
+               - relativedelta(years=1)).strftime("%Y-%m-%d")
 
     # Get the pre-aggregated ERA5 data
     agg = {'daily': 1, 'weekly': 7, 'biweekly': 14}[time_group]
@@ -726,17 +748,18 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
            cache_args=['variable', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 20, "model_issuance_date": 50})
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "model_issuance_date": 1000})
 def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for all leads."""
     # Fetch the reforecast data to calculate how many leads we need
-    ds_deb = ifs_extended_range(start_time, end_time, variable, forecast_type="reforecast",
-                                run_type=run_type, time_group=time_group, grid=grid)
-    n_leads = len(ds_deb.lead_time)
+    if time_group == 'weekly':
+        leads = [0, 7, 14, 21, 28, 35]
+    else:
+        leads = [0, 7, 14, 21, 28]
 
     # Accumulate all the per lead biases
     biases = []
-    for i in range(n_leads):
+    for i in leads:
         biases.append(ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=i,
                                                   run_type=run_type, time_group=time_group, grid=grid))
     # Concatenate leads and unstack
@@ -749,10 +772,15 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', t
            cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, 'start_date': 1000, "member": 1},
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
+                     "start_date": 1000,
+                     "model_issuance_date": 1000, "start_year": 1,
+                     "member": 1},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'start_date': 30}
+                   # A note: a setting where time is in groups of 200 works better for regridding tasks,
+                   # but is less good for storage.
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 30, "start_date": 30}
                },
            })
 def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6,
@@ -765,6 +793,11 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
     # Get forecast data
     ds_f = ifs_extended_range(start_time, end_time, variable, forecast_type='forecast',
                               run_type=run_type, time_group=time_group, grid=grid)
+    if time_group == 'weekly':
+        leads = [np.timedelta64(x, 'D') for x in [0, 7, 14, 21, 28, 35]]
+    else:
+        leads = [np.timedelta64(x, 'D') for x in [0, 7, 14, 21, 28]]
+    ds_f = ds_f.sel(lead_time=leads)
 
     def bias_correct(ds_sub, margin_in_days=6):
         date = ds_sub.start_date.values
@@ -778,7 +811,7 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
         dsp = ds_sub + nbhd_df
         return dsp
 
-    ds = ds_f.groupby('start_date').map(bias_correct, margin_in_days=margin_in_days)
+    ds = ds_f.groupby('start_date').map(bias_correct, margin_in_days)
     # Should not be below zero after bias correction
     if variable == 'precip':
         ds = np.maximum(ds, 0)
@@ -790,10 +823,15 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
            cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, 'start_date': 1000, "member": 1},
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
+                     "start_date": 1000,
+                     "model_issuance_date": 1000, "start_year": 1,
+                     "member": 1},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'start_date': 30}
+                   # A note: a setting where time is in groups of 200 works better for regridding tasks,
+                   # but is less good for storage.
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 30, "start_date": 30}
                },
            })
 def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in_days=6,
@@ -803,10 +841,19 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
                                      run_type=run_type, time_group=time_group, grid='global1_5')
     if grid == 'global1_5':
         return ds
-    # Regrid onto appropriate grid
-    chunks = {'lat': 121, 'lon': 240, 'lead_time': 1, 'start_date': 600}
+
+    # Need all lats / lons in a single chunk to be reasonable
+    chunks = {'lat': 121, 'lon': 240, 'lead_time': 1}
+    if run_type == 'perturbed':
+        chunks['member'] = 1
+        chunks['start_date'] = 200
+    else:
+        chunks['start_date'] = 200
     ds = ds.chunk(chunks)
-    ds = regrid(ds, grid, base='base180')
+    method = 'conservative' if variable == 'precip' else 'linear'
+    # Need all lats / lons in a single chunk for the output to be reasonable
+    ds = regrid(ds, grid, base='base180', method=method,
+                output_chunks={"lat": 721, "lon": 1440})
     return ds
 
 

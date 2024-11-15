@@ -6,7 +6,7 @@ from .data_utils import (apply_mask, roll_and_agg, regrid, clip_region,
                          lon_base_change, get_globe_slice, get_anomalies, is_valid)
 from .general_utils import (load_netcdf, write_zarr, load_zarr, load_object)
 
-from .space_utils import (get_grid, get_grid_ds, is_wrapped,
+from .space_utils import (get_grid, get_grid_ds, is_wrapped, get_region,
                           base360_to_base180, base180_to_base360, check_bases)
 
 from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_dates,
@@ -38,6 +38,7 @@ __all__ = [
     "get_grid_ds",
     "clip_region",
     "is_wrapped",
+    "get_region",
     "base360_to_base180",
     "base180_to_base360",
     "lon_base_change",

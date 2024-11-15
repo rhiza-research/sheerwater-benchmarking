@@ -24,6 +24,9 @@ from sheerwater_benchmarking.utils.secrets import postgres_write_password, postg
 
 logger = logging.getLogger(__name__)
 
+CHUNK_SIZE_UPPER_LIMIT_MB = 300
+CHUNK_SIZE_LOWER_LIMIT_MB = 30
+
 
 def get_cache_args(kwargs, cache_kwargs):
     """Extract the cache arguments from the kwargs and return them."""
@@ -35,6 +38,32 @@ def get_cache_args(kwargs, cache_kwargs):
         else:
             cache_args.append(cache_kwargs[k])
     return cache_args
+
+
+def get_chunk_size(ds, size_in='MB'):
+    """Get the chunk size of a dataset in MB or number of chunks.
+
+    Args:
+        ds (xr.Dataset): The dataset to get the chunk size of.
+        size_in (str): The size to return the chunk size in. One of:
+            'KB', 'MB', 'GB', 'TB' for kilo, mega, giga, and terabytes respectively.
+    """
+    chunk_groups = [(dim, np.median(chunks)) for dim, chunks in ds.chunks.items()]
+    div = {'KB': 10**3, 'MB': 10**6, 'GB': 10**9, 'TB': 10**12}[size_in]
+    chunk_sizes = [x[1] for x in chunk_groups]
+    return np.product(chunk_sizes) * 4 / div, chunk_groups
+
+
+def chunk_to_zarr(ds, cache_map, chunking):
+    """Write a dataset to a zarr cache map and check the chunking."""
+    ds = drop_encoded_chunks(ds)
+    chunking = prune_chunking_dimensions(ds, chunking)
+    ds = ds.chunk(chunks=chunking)
+    chunk_size, chunk_with_labels = get_chunk_size(ds)
+    if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
+        print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
+        print(chunk_with_labels)
+    ds.to_zarr(store=cache_map, mode='w')
 
 
 def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
@@ -91,9 +120,7 @@ def chunking_compare(ds, chunking):
     """
     # Get the chunks for the dataset
     ds_chunks = {dim: ds.chunks[dim][0] for dim in ds.chunks}
-
     chunking = prune_chunking_dimensions(ds, chunking)
-
     return ds_chunks == chunking
 
 
@@ -102,10 +129,14 @@ def drop_encoded_chunks(ds):
     for var in ds.data_vars:
         if 'chunks' in ds[var].encoding:
             del ds[var].encoding['chunks']
+        if 'preferred_chunks' in ds[var].encoding:
+            del ds[var].encoding['preferred_chunks']
 
     for coord in ds.coords:
         if 'chunks' in ds[coord].encoding:
             del ds[coord].encoding['chunks']
+        if 'preferred_chunks' in ds[coord].encoding:
+            del ds[coord].encoding['preferred_chunks']
 
     return ds
 
@@ -128,19 +159,21 @@ def postgres_table_name(table_name):
     return hashlib.md5(table_name.encode()).hexdigest()
 
 
-def read_from_postgres(table_name):
+def read_from_postgres(table_name, hash_table_name=True):
     """Read a pandas df from a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
     we'll just hard code a connection to the running sheerwater database.
 
     Args:
-        table_name: The table name to read from
+        table_name (str): The table name to read from
+        hash_table_name (bool): whether to hash the table name. Default true
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
-    table_name = postgres_table_name(table_name)
+    if hash_table_name:
+        table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
@@ -187,15 +220,21 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
     # Get the postgres write secret
     pgwrite_pass = postgres_write_password()
 
-    table_name = postgres_table_name(table_name)
+    new_table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
             f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
         if overwrite:
-            pandas_df.to_sql(table_name, engine, if_exists='replace')
+            pandas_df.to_sql(new_table_name, engine, if_exists='replace')
         else:
-            pandas_df.to_sql(table_name, engine)
+            pandas_df.to_sql(new_table_name, engine)
+
+        # Also log the table name in the tables table
+        pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
+        pd_name = pd.DataFrame(pd_name)
+        pd_name.to_sql('cache_tables', engine, if_exists='append')
+
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
                            and can see sheerwater-benchmarking-postgres.""")
@@ -335,6 +374,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             default, zarr, delta, postgres, terracotta.
         storage_backend(str): The name of the backend to use for cache storage only. None
             to match backend. Useful for pulling from one backend and writing to another.
+        auto_rechunk(bool): If True, will rechunk the cache on load if the cache chunking
+            does not match the requested chunking. Default is False.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -346,6 +387,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "retry_null_cache": False,
         "backend": None,
         "storage_backend": None,
+        "auto_rechunk":  None,
     }
 
     def create_cacheable(func):
@@ -357,11 +399,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, validate_cache_timeseries, \
-                force_overwrite, retry_null_cache, backend, storage_backend = get_cache_args(
+                force_overwrite, retry_null_cache, backend, \
+                storage_backend, pass_auto_rechunk = get_cache_args(
                     kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
+            if pass_auto_rechunk is not None:
+                auto_rechunk = pass_auto_rechunk
 
             params = signature(func).parameters
 
@@ -410,6 +455,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if not found:
                     raise RuntimeError(f"Specified cacheable argument {a} "
                                        "not discovered as passed argument or default argument.")
+
+            # Update chunking based on chunk_by_arg
+            chunking = merge_chunk_by_arg(chunking, chunk_by_arg, kwargs)
 
             # Now that we have all the cacheable args values we can calculate whether
             # the cache should be disable from them
@@ -531,10 +579,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     # data leading to corruption.
                                     temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
                                     temp_cache_map = fs.get_mapper(temp_cache_path)
-
-                                    ds = drop_encoded_chunks(ds)
-
-                                    ds.chunk(chunks=chunking).to_zarr(store=temp_cache_map, mode='w')
+                                    chunk_to_zarr(ds, temp_cache_map, chunking)
 
                                     # move to a permanent cache map
                                     if fs.exists(cache_path):
@@ -673,18 +718,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                                     if chunking:
                                         # If we aren't doing auto chunking delete the encoding chunks
-                                        ds = drop_encoded_chunks(ds)
-
-                                        chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
-                                        chunking = prune_chunking_dimensions(ds, chunking)
-
-                                        ds.chunk(chunks=chunking).to_zarr(store=cache_map, mode='w')
+                                        chunk_to_zarr(ds, cache_map, chunking)
 
                                         # Reopen the dataset to truncate the computational path
                                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
                                     else:
-                                        chunks = 'auto'
-                                        ds.chunk(chunks=chunks).to_zarr(store=cache_map, mode='w')
+                                        chunk_to_zarr(ds, cache_map, 'auto')
 
                                         # Reopen the dataset to truncate the computational path
                                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
