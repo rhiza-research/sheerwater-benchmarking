@@ -743,7 +743,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
 
-                                print(f"Caching result for {cache_path}.")
+                                print(f"Caching result for {cache_path} as zarr.")
                                 if isinstance(ds, xr.Dataset):
                                     cache_map = fs.get_mapper(cache_path)
 
@@ -783,12 +783,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path}.")
+                                print(f"Caching result for {cache_path} in delta.")
                                 write_to_delta(cache_path, ds, overwrite=True)
 
                         elif storage_backend == 'postgres':
-                            print(f"Caching result for {cache_key} in postgres.")
-
                             write = False
                             if check_exists_postgres(cache_key) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
@@ -799,7 +797,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path}.")
+                                print(f"Caching result for {cache_key} in postgres.")
                                 write_to_postgres(ds, cache_key, overwrite=True)
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
