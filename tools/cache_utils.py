@@ -183,11 +183,14 @@ def _gui_cache_delete(to_delete, backend):
             f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
 
         click.echo(to_delete)
+        l = len(keys_to_delete)
         if click.confirm("Do you want to delete these caches?"):
             with engine.connect() as connection:
-                for key in keys_to_delete:
-                    connection.execute(text(f'DROP Table "{key}"'))
-                    connection.execute(text(f"DELETE from cache_tables WHERE table_key = '{key}'"))
+                for i, key in enumerate(keys_to_delete):
+                    click.echo(f"Deleting {i+1}/{l}")
+                    result = connection.execute(text(f'DROP Table IF EXISTS "{key}"'))
+                    result = connection.execute(text(f"DELETE from cache_tables WHERE table_key = '{key}'"))
+
                 connection.commit()
 
         return len(keys_to_delete)
