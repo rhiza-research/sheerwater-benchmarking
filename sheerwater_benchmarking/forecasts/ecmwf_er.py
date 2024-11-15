@@ -399,9 +399,9 @@ def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='g
 @cacheable(data_type='array',
            cache_args=['variable', 'forecast_type', 'agg', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 1,
-                     "start_date": 1000,
-                     "model_issuance_date": 1000, "start_year": 1},
+           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                     "start_date": 30,
+                     "model_issuance_date": 30, "start_year": 1},
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                  agg=14, grid="global1_5"):
@@ -418,12 +418,6 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
     """
     # Read and combine all the data into an array
     ds = ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid=grid)
-    ds = ds.chunk({'lat': 721, 'lon': 1440})
-    if forecast_type == "reforecast":
-        ds = ds.chunk({'start_year': 29, 'model_issuance_date': 1})
-    else:
-        ds = ds.chunk({'start_date': 29})
-
     # Roll and aggregate the data
     agg_fn = "sum" if variable == "precip" else "mean"
     ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn=agg_fn)
@@ -436,9 +430,9 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            cache_args=['variable', 'forecast_type', 'agg', 'grid', 'mask'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 1,
-                     "start_date": 1000,
-                     "model_issuance_date": 1000, "start_year": 1},
+           chunking={"lat": 121, "lon": 240, "lead_time": 46,
+                     "start_date": 30,
+                     "model_issuance_date": 30, "start_year": 1},
            auto_rechunk=False)
 def ecmwf_abc_iri(start_time, end_time, variable, forecast_type, agg=14, grid="global1_5",  mask="lsm"):
     """Fetches forecast data from the ECMWF IRI dataset.
