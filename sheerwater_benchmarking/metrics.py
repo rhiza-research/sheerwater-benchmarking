@@ -9,7 +9,7 @@ from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
 CLIM_METRICS = ['acc']  # a list of metrics that use require a climatology input
-COUPLED_METRICS = ['acc', 'rmse']  # a list of metrics that are coupled in space and time
+COUPLED_METRICS = ['acc']  # a list of metrics that are coupled in space and time
 
 
 def get_datasource_fn(datasource):
@@ -81,6 +81,10 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     else:
         prob_type = "deterministic"
 
+    # Fail early for RMSE
+    if metric == 'rmse':
+        raise NotImplementedError("To take RMSE call eval_metric with MSE and take the square root.")
+
     # Get the forecast
     fcst_fn = get_datasource_fn(forecast)
     fcst = fcst_fn(start_time, end_time, variable, lead=lead,
@@ -119,10 +123,6 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
         if spatial:
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
-
-    if metric == 'rmse':
-        # Take the square root after aggregation
-        m_ds = m_ds ** 0.5
 
     return m_ds
 
@@ -207,6 +207,10 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                                       forecast=forecast, truth=truth,
                                       metric=metric, grid=grid, mask=mask, region='global')
     else:
+        called_metric = metric
+        if metric == 'rmse':
+            called_metric = 'mse'
+
         # Get the unaggregated global metric
         ds = global_metric(start_time, end_time, variable, lead=lead,
                            forecast=forecast, truth=truth,
@@ -240,10 +244,13 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
             ds = ds.reset_coords(coord, drop=True)
 
     # Average in space
-    if spatial:
-        return ds
-    else:
-        return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+    if not spatial:
+        ds = _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+
+    if metric == 'rmse':
+        ds = ds ** 0.5
+
+    return ds
 
 
 @dask_remote
