@@ -399,14 +399,9 @@ def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='g
 @cacheable(data_type='array',
            cache_args=['variable', 'forecast_type', 'agg', 'grid'],
            timeseries=['start_date', 'model_issuance_date'],
-           chunking={"lat": 121, "lon": 240, "lead_time": 46,
-                     "start_date": 30,
-                     "model_issuance_date": 30, "start_year": 1},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 1}
-               },
-           },
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
+                     "start_date": 1000,
+                     "model_issuance_date": 1000, "start_year": 1},
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
                  agg=14, grid="global1_5"):
