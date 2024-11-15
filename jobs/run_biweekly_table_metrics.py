@@ -26,6 +26,10 @@ def run_metrics_table(combo):
     """Run table metrics."""
     metric, variable, grid, region, time_grouping, baseline = combo
 
+    if metric == 'acc' and time_grouping is not None:
+        print("Cannot run ACC for time groupings.")
+        return
+
     try:
         biweekly_summary_metrics_table(start_time, end_time, variable, "era5", metric, baseline=baseline,
                                        time_grouping=time_grouping, grid=grid, region=region,
