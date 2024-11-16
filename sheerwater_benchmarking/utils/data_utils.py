@@ -220,7 +220,20 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
 
 
 def is_valid(ds, var, mask, region, grid, valid_threshold=0.5):
-    """Check if the dataset is valid in the given region and mask."""
+    """Check if the dataset is valid in the given region and mask.
+
+    If there are dimensions other than lat and lon, the function will
+    check the minimum number of valid data points in the dataset.
+
+    Args:
+        ds (xr.Dataset): Dataset to check.
+        var (str): Variable to check.
+        mask (str): The mask to apply. One of: 'lsm', None
+        region (str): The region to clip to. 
+        grid (str): The grid resolution of the dataset.
+        valid_threshold (float): The minimum fraction of valid data points
+            required for the dataset to be considered valid.
+    """
     if mask == 'lsm':
         # Import here to avoid circular imports
         from sheerwater_benchmarking.masks import land_sea_mask

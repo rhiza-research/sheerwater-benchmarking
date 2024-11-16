@@ -89,6 +89,10 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     fcst_fn = get_datasource_fn(forecast)
     fcst = fcst_fn(start_time, end_time, variable, lead=lead,
                    prob_type=prob_type, grid=grid, mask=mask, region=region)
+    if not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
+        # Forecast is not valid for this region, assuming not implemented
+        print(f"Forecast {forecast} is not valid for region {region}.")
+        return None
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
@@ -232,9 +236,9 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
             # Average in time
             ds = ds.mean(dim="time")
 
-    # Perform regional clipping
-    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.95):
-        return None
+    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
+        # Something has gone wrong in metric calculation
+        raise RuntimeError("Metric output is invalid. This is likely due to a bug in the metric calculation.")
 
     # Clip it to the region
     ds = clip_region(ds, region)
