@@ -24,6 +24,7 @@ regions = ['global', 'africa']
 
 known_invalid = {
     'salient': {'region': 'global'},
+    'perpp': {'prob_type': 'probabilistic'},
     'climatology_trend': {'prob_type': 'probabilistic'},
     'climatology_rolling': {'prob_type': 'probabilistic'},
 }
@@ -70,21 +71,21 @@ def test_forecast_validity(start_eval, end_eval):
             if not len(fcst_df.coords) > 0:
                 print("Invalid dataframe")
                 all_valid = False
-                invalid_params.append(kwargs)
+                invalid_params.append((forecast, kwargs))
                 continue
 
             # Make sure the forecast has at least weekly data
             if not has_weekly_forecast(start_eval, end_eval, fcst_df.time):
                 print("Invalid weekly forecast")
                 all_valid = False
-                invalid_params.append(kwargs)
+                invalid_params.append((forecast, kwargs))
                 continue
 
             # Check that the forecast is valid in the region and mask specified
             if not is_valid(fcst_df, var=variable, mask=None, region=region, grid=grid, valid_threshold=0.99):
                 print("Didn't pass valid check")
                 all_valid = False
-                invalid_params.append(kwargs)
+                invalid_params.append((forecast, kwargs))
                 continue
 
     assert all_valid, f"Invalid forecasts: {invalid_params}"
