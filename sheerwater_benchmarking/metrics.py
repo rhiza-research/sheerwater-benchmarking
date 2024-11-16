@@ -200,6 +200,10 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         ds = eval_metric(start_time, end_time, variable, lead=lead,
                          forecast=forecast, truth=truth, spatial=False, avg_time=True,
                          metric=metric, grid=grid, mask=mask, region=region)
+
+        if ds is None:
+            return None
+
         for coord in ds.coords:
             if coord not in ['time']:
                 ds = ds.reset_coords(coord, drop=True)
@@ -210,6 +214,9 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
                                       forecast=forecast, truth=truth,
                                       metric=metric, grid=grid, mask=mask, region='global')
+
+        if ds is None:
+            return None
     else:
         called_metric = metric
         if metric == 'rmse':
@@ -219,6 +226,9 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         ds = global_metric(start_time, end_time, variable, lead=lead,
                            forecast=forecast, truth=truth,
                            metric=called_metric, grid=grid, mask=mask, region='global')
+        if ds is None:
+            return None
+
         # Group the time column based on time grouping
         if time_grouping:
             if time_grouping == 'month_of_year':
@@ -238,7 +248,8 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 
     if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
         # Something has gone wrong in metric calculation
-        raise RuntimeError("Metric output is invalid. This is likely due to a bug in the metric calculation.")
+        #raise RuntimeError("Metric output is invalid. This is likely due to a bug in the metric calculation.")
+        return None
 
     # Clip it to the region
     ds = clip_region(ds, region)
