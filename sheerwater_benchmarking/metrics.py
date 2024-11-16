@@ -214,7 +214,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         # Get the unaggregated global metric
         ds = global_metric(start_time, end_time, variable, lead=lead,
                            forecast=forecast, truth=truth,
-                           metric=metric, grid=grid, mask=mask, region='global')
+                           metric=called_metric, grid=grid, mask=mask, region='global')
         # Group the time column based on time grouping
         if time_grouping:
             if time_grouping == 'month_of_year':
@@ -291,7 +291,7 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
 @dask_remote
 def _summary_metrics_table(start_time, end_time, variable,
                            truth, metric, leads, forecasts,
-                           baseline=None, time_grouping=None,
+                           time_grouping=None,
                            grid='global1_5', mask='lsm', region='global'):
     """Internal function to compute summary metrics table for flexible leads and forecasts."""
     # Turn the dict into a pandas dataframe with appropriate columns
@@ -319,21 +319,6 @@ def _summary_metrics_table(start_time, end_time, variable,
                 ds = ds.expand_dims({'forecast': [forecast]}, axis=0)
                 results_ds = xr.combine_by_coords([results_ds, ds])
 
-            # If there is a baseline get the skill
-            if baseline:
-                try:
-                    skill_ds = skill_metric(start_time, end_time, variable, lead, forecast, truth,
-                                            metric, baseline, time_grouping, spatial=False,
-                                            grid=grid, mask=mask, region=region)
-                except NotImplementedError:
-                    # IF we raise then return early - we can't do this baseline
-                    return None
-
-                if skill_ds:
-                    skill_ds = skill_ds.rename({variable: leads_skill[i]})
-                    skill_ds = skill_ds.expand_dims({'forecast': [forecast]}, axis=0)
-                    results_ds = xr.combine_by_coords([results_ds, skill_ds])
-
     if not time_grouping:
         results_ds = results_ds.reset_coords('time', drop=True)
 
@@ -346,18 +331,18 @@ def _summary_metrics_table(start_time, end_time, variable,
 
 @dask_remote
 @cacheable(data_type='tabular',
-           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
 def summary_metrics_table(start_time, end_time, variable,
-                          truth, metric, baseline=None, time_grouping=None,
+                          truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                  'climatology_trend_2015', 'climatology_rolling']
     leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
-                                baseline=baseline, time_grouping=time_grouping,
+                                time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)
 
     print(df)
@@ -366,18 +351,18 @@ def summary_metrics_table(start_time, end_time, variable,
 
 @dask_remote
 @cacheable(data_type='tabular',
-           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
 def biweekly_summary_metrics_table(start_time, end_time, variable,
-                                   truth, metric, baseline=None, time_grouping=None,
+                                   truth, metric, time_grouping=None,
                                    grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     forecasts = ['perpp', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                  'climatology_trend_2015', 'climatology_rolling']
     leads = ["weeks34", "weeks56"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
-                                baseline=baseline, time_grouping=time_grouping,
+                                time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)
 
     print(df)

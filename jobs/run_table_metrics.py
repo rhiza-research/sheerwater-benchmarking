@@ -9,13 +9,13 @@ from jobs import parse_args, run_in_parallel
 
 (start_time, end_time, forecasts, metrics,
  variables, grids, regions, leads,
- time_groupings, baselines, parallelism, recompute,
+ time_groupings, parallelism, recompute,
  backend, remote_name, remote, remote_config) = parse_args()
 
 if remote:
     start_remote(remote_config=remote_config, remote_name=remote_name)
 
-combos = itertools.product(metrics, variables, grids, regions, time_groupings, baselines)
+combos = itertools.product(metrics, variables, grids, regions, time_groupings)
 
 filepath_only = True
 if backend is not None:
@@ -24,14 +24,14 @@ if backend is not None:
 
 def run_metrics_table(combo):
     """Run table metrics."""
-    metric, variable, grid, region, time_grouping, baseline = combo
+    metric, variable, grid, region, time_grouping = combo
 
     if metric == 'acc' and time_grouping is not None:
         print("Cannot run ACC for time groupings.")
         return
 
     try:
-        summary_metrics_table(start_time, end_time, variable, "era5", metric, baseline=baseline,
+        summary_metrics_table(start_time, end_time, variable, "era5", metric,
                               time_grouping=time_grouping, grid=grid, region=region,
                               force_overwrite=True, filepath_only=filepath_only,
                               recompute=recompute, storage_backend=backend)
@@ -39,7 +39,7 @@ def run_metrics_table(combo):
         raise(e)
     except:  # noqa: E722
         print(f"Failed to run metric {grid} {variable} {metric} \
-                {region} {baseline} {time_grouping}: {traceback.format_exc()}")
+                {region} {time_grouping}: {traceback.format_exc()}")
 
 
 if __name__ == "__main__":

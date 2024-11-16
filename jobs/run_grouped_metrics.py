@@ -9,7 +9,7 @@ from sheerwater_benchmarking.utils import start_remote
 from jobs import parse_args, run_in_parallel
 
 (start_time, end_time, forecasts, metrics, variables, grids,
- regions, leads, time_groupings, baselines, parallelism,
+ regions, leads, time_groupings, parallelism,
  recompute, backend, remote_name, remote, remote_config) = parse_args()
 
 if remote:
