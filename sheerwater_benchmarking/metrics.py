@@ -90,7 +90,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     fcst = fcst_fn(start_time, end_time, variable, lead=lead,
                    prob_type=prob_type, grid=grid, mask=mask, region=region)
     if not spatial and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
-        # Forecast is not valid for this region, assuming not implemented
+        # If averaging over space, we must check if the forecast is valid
         print(f"Forecast {forecast} is not valid for region {region}.")
         return None
 
@@ -145,7 +145,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
            cache=True)
 def global_metric(start_time, end_time, variable, lead, forecast, truth,
                   metric, grid="global1_5", mask='lsm', region='global'):
-    """Compute a metric without aggregating space but not in time at a specific lead."""
+    """Compute a metric without aggregating in space or time at a specific lead."""
     if region != 'global':
         raise ValueError('Global metric must be run with region global.')
     m_ds = eval_metric(start_time, end_time, variable, lead, forecast, truth,
@@ -220,6 +220,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     else:
         called_metric = metric
         if metric == 'rmse':
+            # To evaluate RMSE, we call MSE and take the final square root average all averaging in sp/time
             called_metric = 'mse'
 
         # Get the unaggregated global metric
@@ -250,6 +251,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     ds = clip_region(ds, region)
 
     if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
+        # Check if forecast is valid before spatial averaging
         print("Metric is not valid for region.")
         return None
 
