@@ -89,7 +89,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     fcst_fn = get_datasource_fn(forecast)
     fcst = fcst_fn(start_time, end_time, variable, lead=lead,
                    prob_type=prob_type, grid=grid, mask=mask, region=region)
-    if not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
+    if not spatial and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
         # Forecast is not valid for this region, assuming not implemented
         print(f"Forecast {forecast} is not valid for region {region}.")
         return None
@@ -246,13 +246,12 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
             # Average in time
             ds = ds.mean(dim="time")
 
-    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
-        # Something has gone wrong in metric calculation
-        #raise RuntimeError("Metric output is invalid. This is likely due to a bug in the metric calculation.")
-        return None
-
     # Clip it to the region
     ds = clip_region(ds, region)
+
+    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
+        print("Metric is not valid for region.")
+        return None
 
     for coord in ds.coords:
         if coord not in ['time', 'lat', 'lon']:
@@ -262,6 +261,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     if not spatial:
         ds = _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
 
+    # Take the final square root of the MSE, after spatial averaging
     if metric == 'rmse':
         ds = ds ** 0.5
 
