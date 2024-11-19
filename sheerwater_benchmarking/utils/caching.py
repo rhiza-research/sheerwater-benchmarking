@@ -457,7 +457,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                        "not discovered as passed argument or default argument.")
 
             # Update chunking based on chunk_by_arg
-            chunking = merge_chunk_by_arg(chunking, chunk_by_arg, kwargs)
+            chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
 
             # Now that we have all the cacheable args values we can calculate whether
             # the cache should be disable from them
