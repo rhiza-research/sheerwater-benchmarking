@@ -9,7 +9,7 @@ from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
 CLIM_METRICS = ['acc']  # a list of metrics that use require a climatology input
-COUPLED_METRICS = ['acc', 'rmse']  # a list of metrics that are coupled in space and time
+COUPLED_METRICS = ['acc']  # a list of metrics that are coupled in space and time
 
 
 def get_datasource_fn(datasource):
@@ -81,10 +81,18 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     else:
         prob_type = "deterministic"
 
+    # Fail early for RMSE
+    if metric == 'rmse':
+        raise NotImplementedError("To take RMSE call eval_metric with MSE and take the square root.")
+
     # Get the forecast
     fcst_fn = get_datasource_fn(forecast)
     fcst = fcst_fn(start_time, end_time, variable, lead=lead,
                    prob_type=prob_type, grid=grid, mask=mask, region=region)
+    if not spatial and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
+        # If averaging over space, we must check if the forecast is valid
+        print(f"Forecast {forecast} is not valid for region {region}.")
+        return None
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
@@ -120,10 +128,6 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         if spatial:
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
-    if metric == 'rmse':
-        # Take the square root after aggregation
-        m_ds = m_ds ** 0.5
-
     return m_ds
 
 
@@ -141,7 +145,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
            cache=True)
 def global_metric(start_time, end_time, variable, lead, forecast, truth,
                   metric, grid="global1_5", mask='lsm', region='global'):
-    """Compute a metric without aggregating space but not in time at a specific lead."""
+    """Compute a metric without aggregating in space or time at a specific lead."""
     if region != 'global':
         raise ValueError('Global metric must be run with region global.')
     m_ds = eval_metric(start_time, end_time, variable, lead, forecast, truth,
@@ -196,6 +200,10 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         ds = eval_metric(start_time, end_time, variable, lead=lead,
                          forecast=forecast, truth=truth, spatial=False, avg_time=True,
                          metric=metric, grid=grid, mask=mask, region=region)
+
+        if ds is None:
+            return None
+
         for coord in ds.coords:
             if coord not in ['time']:
                 ds = ds.reset_coords(coord, drop=True)
@@ -206,11 +214,22 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
                                       forecast=forecast, truth=truth,
                                       metric=metric, grid=grid, mask=mask, region='global')
+
+        if ds is None:
+            return None
     else:
+        called_metric = metric
+        if metric == 'rmse':
+            # To evaluate RMSE, we call MSE and take the final square root average all averaging in sp/time
+            called_metric = 'mse'
+
         # Get the unaggregated global metric
         ds = global_metric(start_time, end_time, variable, lead=lead,
                            forecast=forecast, truth=truth,
-                           metric=metric, grid=grid, mask=mask, region='global')
+                           metric=called_metric, grid=grid, mask=mask, region='global')
+        if ds is None:
+            return None
+
         # Group the time column based on time grouping
         if time_grouping:
             if time_grouping == 'month_of_year':
@@ -228,22 +247,27 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
             # Average in time
             ds = ds.mean(dim="time")
 
-    # Perform regional clipping
-    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.95):
-        return None
-
     # Clip it to the region
     ds = clip_region(ds, region)
+
+    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
+        # Check if forecast is valid before spatial averaging
+        print("Metric is not valid for region.")
+        return None
 
     for coord in ds.coords:
         if coord not in ['time', 'lat', 'lon']:
             ds = ds.reset_coords(coord, drop=True)
 
     # Average in space
-    if spatial:
-        return ds
-    else:
-        return _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+    if not spatial:
+        ds = _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+
+    # Take the final square root of the MSE, after spatial averaging
+    if metric == 'rmse':
+        ds = ds ** 0.5
+
+    return ds
 
 
 @dask_remote
@@ -284,7 +308,7 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
 @dask_remote
 def _summary_metrics_table(start_time, end_time, variable,
                            truth, metric, leads, forecasts,
-                           baseline=None, time_grouping=None,
+                           time_grouping=None,
                            grid='global1_5', mask='lsm', region='global'):
     """Internal function to compute summary metrics table for flexible leads and forecasts."""
     # Turn the dict into a pandas dataframe with appropriate columns
@@ -312,21 +336,6 @@ def _summary_metrics_table(start_time, end_time, variable,
                 ds = ds.expand_dims({'forecast': [forecast]}, axis=0)
                 results_ds = xr.combine_by_coords([results_ds, ds])
 
-            # If there is a baseline get the skill
-            if baseline:
-                try:
-                    skill_ds = skill_metric(start_time, end_time, variable, lead, forecast, truth,
-                                            metric, baseline, time_grouping, spatial=False,
-                                            grid=grid, mask=mask, region=region)
-                except NotImplementedError:
-                    # IF we raise then return early - we can't do this baseline
-                    return None
-
-                if skill_ds:
-                    skill_ds = skill_ds.rename({variable: leads_skill[i]})
-                    skill_ds = skill_ds.expand_dims({'forecast': [forecast]}, axis=0)
-                    results_ds = xr.combine_by_coords([results_ds, skill_ds])
-
     if not time_grouping:
         results_ds = results_ds.reset_coords('time', drop=True)
 
@@ -339,18 +348,18 @@ def _summary_metrics_table(start_time, end_time, variable,
 
 @dask_remote
 @cacheable(data_type='tabular',
-           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
 def summary_metrics_table(start_time, end_time, variable,
-                          truth, metric, baseline=None, time_grouping=None,
+                          truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                  'climatology_trend_2015', 'climatology_rolling']
     leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
-                                baseline=baseline, time_grouping=time_grouping,
+                                time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)
 
     print(df)
@@ -359,18 +368,18 @@ def summary_metrics_table(start_time, end_time, variable,
 
 @dask_remote
 @cacheable(data_type='tabular',
-           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
 def biweekly_summary_metrics_table(start_time, end_time, variable,
-                                   truth, metric, baseline=None, time_grouping=None,
+                                   truth, metric, time_grouping=None,
                                    grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     forecasts = ['perpp', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                  'climatology_trend_2015', 'climatology_rolling']
     leads = ["weeks34", "weeks56"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
-                                baseline=baseline, time_grouping=time_grouping,
+                                time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)
 
     print(df)
