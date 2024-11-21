@@ -320,8 +320,10 @@ def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, 
         "weeks12": (14, 0),
         "weeks23": (14, 7),
         "weeks34": (14, 14),
+        "weeks34plus1": (14, 15),
         "weeks45": (14, 21),
         "weeks56": (14, 28),
+        "weeks56plus1": (14, 29),
     }
 
     agg, time_shift = lead_params.get(lead, (None, None))

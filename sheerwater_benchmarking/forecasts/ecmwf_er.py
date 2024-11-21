@@ -649,8 +649,10 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
         "weeks12": ('biweekly', 0),
         "weeks23": ('biweekly', 7),
         "weeks34": ('biweekly', 14),
+        "weeks34plus1": ('biweekly', 15),
         "weeks45": ('biweekly', 21),
         "weeks56": ('biweekly', 28),
+        "weeks56plus1": ('biweekly', 29),
     }
     time_group, lead_id = lead_params.get(lead, (None, None))
     if time_group is None:
@@ -864,8 +866,10 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
         "weeks12": ('biweekly', 0),
         "weeks23": ('biweekly', 7),
         "weeks34": ('biweekly', 14),
+        "weeks34plus1": ('biweekly', 15),
         "weeks45": ('biweekly', 21),
         "weeks56": ('biweekly', 28),
+        "weeks56plus1": ('biweekly', 29),
     }
     time_group, lead_id = lead_params.get(lead, (None, None))
     if time_group is None:
