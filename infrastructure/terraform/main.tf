@@ -138,6 +138,15 @@ resource "google_compute_disk" "sheerwater_benchmarking_db" {
   project = "rhiza-shared"
 }
 
+# Persistent disk
+resource "google_compute_disk" "sheerwater_benchmarking_terracotta" {
+  name  = "sheerwater-benchmarking-terracotta"
+  type  = "pd-ssd"
+  zone  = "us-central1-a"
+  size  = 50
+  project = "rhiza-shared"
+}
+
 resource "google_compute_resource_policy" "db_snapshot_policy" {
   name = "sheerwater-benchmarking-db-snapshot-policy"
   region = "us-central1"
@@ -261,6 +270,10 @@ locals {
       sql_password = "${random_password.postgres_read_password.result}"
       domain_name = "${trimsuffix(google_dns_record_set.terracotta_recordset.name, ".")}"
       ip_name = "${google_compute_global_address.terracotta_address.name}"
+      pv = {
+        name = "${google_compute_disk.sheerwater_benchmarking_terracotta.name}"
+        size = "${google_compute_disk.sheerwater_benchmarking_terracotta.size}"
+      }
     }
   }
 }

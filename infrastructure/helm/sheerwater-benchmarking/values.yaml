@@ -48,12 +48,11 @@ postgres:
 
 terracotta:
   image: 
-    repository: dhigras/terracotta
-    tag: "v0.8.5"
+    repository: adkinsjd/terracotta
+    tag: "v0.0.10"
 
   tailscale: true
 
-  raster_bucket: sheerwater-datalake
   driver_path: postgresql://postgres:5432/terracotta
 
   sql_user: read
@@ -61,6 +60,10 @@ terracotta:
 
   domain_name: domain.com
   ip_name: gcloud-ip
+
+  pv:
+    name: name
+    size: 50GiB
 
   resources:
     requests:
