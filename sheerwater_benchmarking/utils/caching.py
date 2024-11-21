@@ -57,7 +57,9 @@ def get_chunk_size(ds, size_in='MB'):
 def chunk_to_zarr(ds, cache_map, chunking):
     """Write a dataset to a zarr cache map and check the chunking."""
     ds = drop_encoded_chunks(ds)
-    chunking = prune_chunking_dimensions(ds, chunking)
+    if isinstance(chunking, dict):
+        # No need to prune if chunking is None or 'auto'
+        chunking = prune_chunking_dimensions(ds, chunking)
     ds = ds.chunk(chunks=chunking)
     chunk_size, chunk_with_labels = get_chunk_size(ds)
     if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
