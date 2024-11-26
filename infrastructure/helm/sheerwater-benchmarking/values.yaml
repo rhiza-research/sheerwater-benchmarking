@@ -11,8 +11,7 @@ grafana:
   smtp:
     user: apikey
     password: key
-    host: smtp.sendgrid.net
-    port: 587
+    host: smtp.sendgrid.net:587
     from_address: info@rhizaresearch.org
     from_name: Sheerwater Benchmarking Project
 

@@ -250,7 +250,9 @@ locals {
   chart_values = {
     grafana = {
       admin_password = "${random_password.grafana_admin_password.result}"
-      smtp_password = "${data.google_secret_manager_secret_version.sheerwater_sendgrid_api_key.secret_data}"
+      smtp = {
+        password = "${data.google_secret_manager_secret_version.sheerwater_sendgrid_api_key.secret_data}"
+      }
       pv = {
         name = "${google_compute_disk.sheerwater_benchmarking_grafana.name}"
         size = "${google_compute_disk.sheerwater_benchmarking_grafana.size}"
