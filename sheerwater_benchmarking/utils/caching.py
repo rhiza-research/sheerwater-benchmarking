@@ -158,17 +158,17 @@ def write_to_zarr(ds, cache_path, verify_path):
     except google.api_core.exceptions.PreconditionFailed:
         raise RuntimeError(f"Concurrent zarr write detected. If this is a mistake delete the lock file: {lock}")
 
+    fs.rm(lock)
     """
     fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
     if fs.exists(verify_path):
         fs.rm(verify_path)
 
-        cache_map = fs.get_mapper(cache_path)
+    cache_map = fs.get_mapper(cache_path)
     ds.to_zarr(store=cache_map, mode='w')
 
     fs.touch(verify_path)
-    #fs.rm(lock)
 
 
 def chunk_to_zarr(ds, cache_path, verify_path, chunking):
