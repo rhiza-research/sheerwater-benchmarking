@@ -163,7 +163,10 @@ def write_to_zarr(ds, cache_path, verify_path):
     fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
     if fs.exists(verify_path):
-        fs.rm(verify_path)
+        fs.rm(verify_path, recursive=True)
+
+    if fs.exists(cache_path):
+        fs.rm(cache_path, recursive=True)
 
     cache_map = fs.get_mapper(cache_path)
     ds.to_zarr(store=cache_map, mode='w')
@@ -622,15 +625,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     # writing to temp cache is necessary because if you overwrite
                                     # the original cache map it will write it before reading the
                                     # data leading to corruption.
+                                    temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
+                                    temp_verify_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.verify'
+                                    chunk_to_zarr(ds, temp_cache_path, temp_verify_path, chunking)
+
                                     if fs.exists(verify_path):
                                         fs.rm(verify_path, recursive=True)
 
                                     if fs.exists(cache_path):
                                         fs.rm(cache_path, recursive=True)
-
-                                    temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
-                                    temp_verify_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.verify'
-                                    chunk_to_zarr(ds, temp_cache_path, temp_verify_path, chunking)
 
                                     fs.mv(temp_cache_path, cache_path, recursive=True)
                                     fs.mv(temp_verify_path, verify_path, recursive=True)
