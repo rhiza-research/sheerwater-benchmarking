@@ -209,19 +209,17 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                 ds = ds.reset_coords(coord, drop=True)
         return ds
 
-    if metric in COUPLED_METRICS:
+    # To evaluate RMSE, we call MSE and take the final square root average all averaging in sp/time
+    called_metric = metric if metric != 'rmse' else 'mse'
+
+    if called_metric in COUPLED_METRICS:
         # Get the unaggregated global metric
         ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
                                       forecast=forecast, truth=truth,
-                                      metric=metric, grid=grid, mask=mask, region='global')
-
+                                      metric=called_metric, grid=grid, mask=mask, region='global')
         if ds is None:
             return None
     else:
-        called_metric = metric
-        if metric == 'rmse':
-            # To evaluate RMSE, we call MSE and take the final square root average all averaging in sp/time
-            called_metric = 'mse'
 
         # Get the unaggregated global metric
         ds = global_metric(start_time, end_time, variable, lead=lead,
