@@ -622,6 +622,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     # writing to temp cache is necessary because if you overwrite
                                     # the original cache map it will write it before reading the
                                     # data leading to corruption.
+                                    if fs.exists(verify_path):
+                                        fs.rm(verify_path, recursive=True)
+
+                                    if fs.exists(cache_path):
+                                        fs.rm(cache_path, recursive=True)
+
                                     temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
                                     temp_verify_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.verify'
                                     chunk_to_zarr(ds, temp_cache_path, temp_verify_path, chunking)
