@@ -311,9 +311,6 @@ def _summary_metrics_table(start_time, end_time, variable,
                            time_grouping=None,
                            grid='global1_5', mask='lsm', region='global'):
     """Internal function to compute summary metrics table for flexible leads and forecasts."""
-    # Turn the dict into a pandas dataframe with appropriate columns
-    leads_skill = [lead + '_skill' for lead in leads]
-
     # For the time grouping we are going to store it in an xarray with dimensions
     # forecast and time, which we instantiate
     results_ds = xr.Dataset(coords={'forecast': forecasts, 'time': None})

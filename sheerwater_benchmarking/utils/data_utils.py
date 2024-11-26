@@ -229,7 +229,7 @@ def is_valid(ds, var, mask, region, grid, valid_threshold=0.5):
         ds (xr.Dataset): Dataset to check.
         var (str): Variable to check.
         mask (str): The mask to apply. One of: 'lsm', None
-        region (str): The region to clip to. 
+        region (str): The region to clip to.
         grid (str): The grid resolution of the dataset.
         valid_threshold (float): The minimum fraction of valid data points
             required for the dataset to be considered valid.
