@@ -210,7 +210,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         return ds
 
     # To evaluate RMSE, we call MSE and take the final square root average all averaging in sp/time
-    called_metric = metric if metric != 'rmse' else 'mse'
+    called_metric = 'mse' if metric == 'rmse' else metric
 
     if called_metric in COUPLED_METRICS:
         # Get the unaggregated global metric
