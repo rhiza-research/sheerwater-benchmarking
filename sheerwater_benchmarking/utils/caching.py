@@ -57,18 +57,6 @@ def get_chunk_size(ds, size_in='MB'):
     return np.product(chunk_sizes) * 4 / div, chunk_groups
 
 
-def chunk_to_zarr(ds, cache_map, chunking):
-    """Write a dataset to a zarr cache map and check the chunking."""
-    ds = drop_encoded_chunks(ds)
-    if isinstance(chunking, dict):
-        # No need to prune if chunking is None or 'auto'
-        chunking = prune_chunking_dimensions(ds, chunking)
-    ds = ds.chunk(chunks=chunking)
-    chunk_size, chunk_with_labels = get_chunk_size(ds)
-    if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
-        print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
-        print(chunk_with_labels)
-    ds.to_zarr(store=cache_map, mode='w')
 
 
 def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
@@ -158,7 +146,8 @@ def write_to_delta(cache_path, df, overwrite=False):
     else:
         write_deltalake(cache_path, df)
 
-def write_to_zarr(ds, verify_path, cache_path):
+
+def write_to_zarr(ds, cache_path, verify_path):
     """Write to zarr with a temp write and move to make it more atomic."""
     fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
@@ -181,6 +170,23 @@ def write_to_zarr(ds, verify_path, cache_path):
     fs.touch(verify_path)
     #fs.rm(lock)
 
+
+def chunk_to_zarr(ds, cache_path, verify_path, chunking):
+    """Write a dataset to a zarr cache map and check the chunking."""
+    ds = drop_encoded_chunks(ds)
+
+    if isinstance(chunking, dict):
+        # No need to prune if chunking is None or 'auto'
+        chunking = prune_chunking_dimensions(ds, chunking)
+
+    ds = ds.chunk(chunks=chunking)
+    chunk_size, chunk_with_labels = get_chunk_size(ds)
+
+    if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
+        print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
+        print(chunk_with_labels)
+
+    write_to_zarr(ds, cache_path, verify_path)
 
 def postgres_table_name(table_name):
     """Return a qualified postgres table name."""
@@ -617,8 +623,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     # the original cache map it will write it before reading the
                                     # data leading to corruption.
                                     temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
-                                    temp_cache_map = fs.get_mapper(temp_cache_path)
-                                    chunk_to_zarr(ds, temp_cache_map, chunking)
+                                    temp_verify_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.verify'
+                                    chunk_to_zarr(ds, temp_cache_path, temp_verify_path, chunking)
+
+                                    fs.mv(temp_cache_path, cache_path, recursive=True)
+                                    fs.mv(temp_verify_path, verify_path, recursive=True)
 
                                     # Reopen the dataset
                                     ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
@@ -749,12 +758,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                                     if chunking:
                                         # If we aren't doing auto chunking delete the encoding chunks
-                                        chunk_to_zarr(ds, cache_map, chunking)
+                                        chunk_to_zarr(ds, cache_path, verify_path, chunking)
 
                                         # Reopen the dataset to truncate the computational path
                                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
                                     else:
-                                        chunk_to_zarr(ds, cache_map, 'auto')
+                                        chunk_to_zarr(ds, cache_path, verify_path, 'auto')
 
                                         # Reopen the dataset to truncate the computational path
                                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
