@@ -7,10 +7,10 @@ import logging
 import hashlib
 
 import gcsfs
-from google.cloud import storage
 from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
 from rasterio.enums import Resampling
+from google.cloud import storage
 import terracotta as tc
 import sqlalchemy
 import pickle
@@ -54,18 +54,6 @@ def get_chunk_size(ds, size_in='MB'):
     return np.product(chunk_sizes) * 4 / div, chunk_groups
 
 
-def chunk_to_zarr(ds, cache_map, chunking):
-    """Write a dataset to a zarr cache map and check the chunking."""
-    ds = drop_encoded_chunks(ds)
-    if isinstance(chunking, dict):
-        # No need to prune if chunking is None or 'auto'
-        chunking = prune_chunking_dimensions(ds, chunking)
-    ds = ds.chunk(chunks=chunking)
-    chunk_size, chunk_with_labels = get_chunk_size(ds)
-    if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
-        print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
-        print(chunk_with_labels)
-    ds.to_zarr(store=cache_map, mode='w')
 
 
 def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
@@ -155,6 +143,53 @@ def write_to_delta(cache_path, df, overwrite=False):
     else:
         write_deltalake(cache_path, df)
 
+
+def write_to_zarr(ds, cache_path, verify_path):
+    """Write to zarr with a temp write and move to make it more atomic.
+
+    # If you were to make this atomic this is what it would look like:
+    lock = verify_path + ".lock"
+
+    storage_client = storage.Client()
+    blob = Blob.from_string(lock, client=storage_client)
+
+    try:
+        blob.upload_from_string("lock", if_generation_match=0)
+    except google.api_core.exceptions.PreconditionFailed:
+        raise RuntimeError(f"Concurrent zarr write detected. If this is a mistake delete the lock file: {lock}")
+
+    fs.rm(lock)
+    """
+    fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+
+    if fs.exists(verify_path):
+        fs.rm(verify_path, recursive=True)
+
+    if fs.exists(cache_path):
+        fs.rm(cache_path, recursive=True)
+
+    cache_map = fs.get_mapper(cache_path)
+    ds.to_zarr(store=cache_map, mode='w')
+
+    fs.touch(verify_path)
+
+
+def chunk_to_zarr(ds, cache_path, verify_path, chunking):
+    """Write a dataset to a zarr cache map and check the chunking."""
+    ds = drop_encoded_chunks(ds)
+
+    if isinstance(chunking, dict):
+        # No need to prune if chunking is None or 'auto'
+        chunking = prune_chunking_dimensions(ds, chunking)
+
+    ds = ds.chunk(chunks=chunking)
+    chunk_size, chunk_with_labels = get_chunk_size(ds)
+
+    if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
+        print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
+        print(chunk_with_labels)
+
+    write_to_zarr(ds, cache_path, verify_path)
 
 def postgres_table_name(table_name):
     """Return a qualified postgres table name."""
@@ -328,12 +363,21 @@ def write_to_terracotta(cache_key, ds):
             write_individual_raster(driver, bucket, ds, cache_key)
 
 
-def cache_exists(backend, cache_path):
+def cache_exists(backend, cache_path, verify_path=None):
     """Check if a cache exists generically."""
     if backend == 'zarr' or backend == 'delta' or backend == 'pickle' or backend == 'terracotta':
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-        return fs.exists(cache_path)
+        if backend == 'zarr':
+            if not fs.exists(verify_path) and fs.exists(cache_path):
+                print("Found cache, but it appears to be corrupted. Recomputing.")
+                return False
+            elif fs.exists(verify_path) and fs.exists(cache_path):
+                return True
+            else:
+                return False
+        else:
+            return fs.exists(cache_path)
     elif backend == 'postgres':
         return check_exists_postgres(cache_path)
 
@@ -504,12 +548,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     flat_values.append(str(val))
 
             cache_key = func.__name__ + '/' + '_'.join(flat_values)
+            verify_path = None
             if data_type == 'array':
                 backend = "zarr" if backend is None else backend
                 if storage_backend is None:
                     storage_backend = backend
 
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
+                verify_path = "gs://sheerwater-datalake/caches/" + cache_key + '.verify'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
@@ -547,7 +593,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 fs.rm(null_path, recursive=True)
 
             if not recompute and cache:
-                if cache_exists(backend, cache_path):
+                if cache_exists(backend, cache_path, verify_path):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
                     if data_type == 'array':
@@ -580,16 +626,17 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     # the original cache map it will write it before reading the
                                     # data leading to corruption.
                                     temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
-                                    temp_cache_map = fs.get_mapper(temp_cache_path)
-                                    chunk_to_zarr(ds, temp_cache_map, chunking)
+                                    temp_verify_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.verify'
+                                    chunk_to_zarr(ds, temp_cache_path, temp_verify_path, chunking)
 
-                                    # move to a permanent cache map
+                                    if fs.exists(verify_path):
+                                        fs.rm(verify_path, recursive=True)
+
                                     if fs.exists(cache_path):
-                                        print(f"Deleting {cache_path} to replace.")
                                         fs.rm(cache_path, recursive=True)
-                                        print(f"Confirm deleted {cache_path} to replace.")
 
                                     fs.mv(temp_cache_path, cache_path, recursive=True)
+                                    fs.mv(temp_verify_path, verify_path, recursive=True)
 
                                     # Reopen the dataset
                                     ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
@@ -704,7 +751,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     if data_type == 'array':
                         if storage_backend == 'zarr':
                             write = False
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if cache_exists(storage_backend, cache_path, verify_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -714,18 +761,18 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
 
-                                print(f"Caching result for {cache_path}.")
+                                print(f"Caching result for {cache_path} as zarr.")
                                 if isinstance(ds, xr.Dataset):
                                     cache_map = fs.get_mapper(cache_path)
 
                                     if chunking:
                                         # If we aren't doing auto chunking delete the encoding chunks
-                                        chunk_to_zarr(ds, cache_map, chunking)
+                                        chunk_to_zarr(ds, cache_path, verify_path, chunking)
 
                                         # Reopen the dataset to truncate the computational path
                                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
                                     else:
-                                        chunk_to_zarr(ds, cache_map, 'auto')
+                                        chunk_to_zarr(ds, cache_path, verify_path, 'auto')
 
                                         # Reopen the dataset to truncate the computational path
                                         ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
@@ -754,12 +801,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path}.")
+                                print(f"Caching result for {cache_path} in delta.")
                                 write_to_delta(cache_path, ds, overwrite=True)
 
                         elif storage_backend == 'postgres':
-                            print(f"Caching result for {cache_key} in postgres.")
-
                             write = False
                             if check_exists_postgres(cache_key) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
@@ -770,7 +815,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path}.")
+                                print(f"Caching result for {cache_key} in postgres.")
                                 write_to_postgres(ds, cache_key, overwrite=True)
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")

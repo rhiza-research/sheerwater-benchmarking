@@ -16,7 +16,6 @@ def parse_args():
     parser.add_argument("--region", type=str, nargs='*')
     parser.add_argument("--lead", type=str, nargs='*')
     parser.add_argument("--time-grouping", type=str, nargs='*')
-    parser.add_argument("--baseline", type=str, nargs='*')
     parser.add_argument("--backend", type=str, default=None)
     parser.add_argument("--parallelism", type=int, default=1)
     parser.add_argument("--recompute", action=argparse.BooleanOptionalAction, default=False)
@@ -29,11 +28,6 @@ def parse_args():
                  "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
     if args.forecast:
         forecasts = args.forecast
-
-    baselines = ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
-                 "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
-    if args.baseline:
-        baselines = args.baseline
 
     metrics = ["mae", "crps", "acc", "rmse", "bias"]
     if args.metric:
@@ -65,7 +59,7 @@ def parse_args():
         remote_config = args.remote_config
 
     return (args.start_time, args.end_time, forecasts, metrics, variables, grids,
-            regions, leads, time_groupings, baselines, args.parallelism,
+            regions, leads, time_groupings, args.parallelism,
             args.recompute, args.backend, args.remote_name, args.remote, remote_config)
 
 def run_in_parallel(func, iterable, parallelism):

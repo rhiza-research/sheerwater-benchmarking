@@ -9,16 +9,10 @@ spec:
   accessModes:
   - ReadWriteMany
   capacity:
-    storage: 50Gi
-  storageClassName: bucket-class
-  mountOptions:
-    - implicit-dirs
-    - only-dir=rasters
-  csi:
-    driver: gcsfuse.csi.storage.gke.io
-    volumeHandle: {{ .Values.terracotta.raster_bucket }}
-    volumeAttributes:
-      gcsfuseLoggingSeverity: warning
+    storage: {{ .Values.terracotta.pv.size }}
+  gcePersistentDisk:
+    pdName: {{ .Values.terracotta.pv.name }}
+    fsType: ext4
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -28,11 +22,11 @@ metadata:
     app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
     release: {{ .Release.Name }}
 spec:
-  accessModes:
-  - ReadWriteMany
+  storageClassName: ""
   volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-{{ .Release.Namespace }}
-  storageClassName: bucket-class
+  accessModes:
+    - ReadWriteMany
   resources:
     requests:
-      storage: 50Gi
+      storage: {{ .Values.terracotta.pv.size }}
 

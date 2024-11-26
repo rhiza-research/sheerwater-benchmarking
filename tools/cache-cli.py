@@ -1,6 +1,6 @@
 """CLI for managing caches."""
 import click
-from .cache_utils import cache_delete, cache_list
+from cache_utils import cache_delete, cache_list
 
 
 @click.group()

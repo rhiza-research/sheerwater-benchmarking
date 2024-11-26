@@ -9,7 +9,7 @@ from sheerwater_benchmarking.utils import start_remote
 from jobs import parse_args, run_in_parallel
 
 (start_time, end_time, forecasts, metrics, variables, grids,
- regions, leads, time_groupings, baselines, parallelism,
+ regions, leads, time_groupings, parallelism,
  recompute, backend, remote_name, remote, remote_config) = parse_args()
 
 if remote:
@@ -27,6 +27,8 @@ def run_grouped(combo):
         grouped_metric(start_time, end_time, variable, lead, forecast, "era5", metric,
                        spatial=False, time_grouping=time_grouping, grid=grid, region=region,
                        force_overwrite=True, filepath_only=True, recompute=recompute)
+    except KeyboardInterrupt as e:
+        raise(e)
     except: # noqa:E722
         print(f"Failed to run global metric {forecast} {lead} {grid} {variable} {metric}: {traceback.format_exc()}")
 
