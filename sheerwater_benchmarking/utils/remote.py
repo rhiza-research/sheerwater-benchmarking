@@ -23,11 +23,17 @@ config_options = {
     'xxlarge_cluster': {
         'n_workers': [25, 26]
     },
+    'xxxlarge_cluster': {
+        'n_workers': [35, 36]
+    },
     'large_node': {
         'worker_vm_types': ['c2-standard-16', 'c3-standard-22']
     },
     'xlarge_node': {
-        'worker_vm_types': ['c2-standard-32', 'c3-standard-44']
+        'worker_vm_types': ['c2-standard-30', 'c3-standard-44']
+    },
+    'xxlarge_node': {
+        'worker_vm_types': ['c3-standard-88']
     },
 }
 

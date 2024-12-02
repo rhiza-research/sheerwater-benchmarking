@@ -83,7 +83,6 @@ dependencies = [
     "flox",
     "ruff",
     "pytest",
-    "salientsdk>=0.3.4",
     "scikit-learn",
     "terracotta",
     "sqlalchemy",
@@ -94,6 +93,8 @@ dependencies = [
     "jupyter-server-proxy",
     "xskillscore @ git+https://github.com/rhiza-research/xskillscore",
     "coiled>=1.58.1",
+    "opt-einsum>=3.4.0",
+    "salientsdk>=0.3.10",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

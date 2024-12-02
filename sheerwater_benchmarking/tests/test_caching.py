@@ -10,8 +10,8 @@ from sheerwater_benchmarking.utils import cacheable, get_dates
            cache_args=['name', 'species'])
 def simple_timeseries(start_time, end_time, name, species='coraciidae'):
     """Generate a simple timeseries dataset for testing."""
-    obs = np.random.randint(0, 10, size=(10,))
     times = get_dates(start_time, end_time, stride='day', return_string=False)
+    obs = np.random.randint(0, 10, size=(len(times),))
     ds = xr.Dataset({'obs': ('time', obs)}, coords={'time': times})
     ds.attrs['name'] = name
     ds.attrs['species'] = species

@@ -17,13 +17,10 @@ spec:
     metadata:
       annotations:
         timestamp: '{{ now | date "2006-01-02T15:04:05" }}'
-        gke-gcsfuse/volumes: "true"
       labels:
         app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
         release: {{ .Release.Name }}
     spec:
-      nodeSelector:
-        iam.gke.io/gke-metadata-server-enabled: "true"
       containers:
         - name: {{ .Chart.Name }}-terracotta
           image: {{ .Values.terracotta.image.repository }}:{{ .Values.terracotta.image.tag }}
@@ -47,6 +44,12 @@ spec:
           env:
           - name: TC_DRIVER_PATH
             value: {{ .Values.terracotta.driver_path }}
+          - name: TC_DEBUG
+            value: "true"
+          - name: TC_LOG_LEVEL
+            value: "debug"
+          - name: TC_FLASK_PROFILE
+            value: "true"
           - name: TC_RESAMPLING_METHOD
             value: "nearest"
           - name: TC_REPROJECTION_METHOD
@@ -59,10 +62,8 @@ spec:
           volumeMounts:
             - mountPath: /mnt/sheerwater-datalake
               name: terracotta-rasters
-              readOnly: true
       serviceAccountName: sheerwater-sa
       volumes:
         - name: terracotta-rasters
           persistentVolumeClaim:
             claimName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta 
-            readOnly: true

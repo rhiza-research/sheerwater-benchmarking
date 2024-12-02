@@ -51,30 +51,24 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
     return ds_agg
 
 
-def regrid(ds, output_grid, method='conservative', base="base180", grid_chunks=None):
+def regrid(ds, output_grid, method='conservative', base="base180", output_chunks=None):
     """Regrid a dataset to a new grid.
 
     Args:
         ds (xr.Dataset): Dataset to regrid.
         output_grid (str): The output grid resolution. One of valid named grids.
         method (str): The regridding method. One of:
-            - linear
-            - nearest
-            - cubic
-            - conservative
-            - most_common
-        base (str): The base of the longitudes. One of:
-            - base180
-            - base360
-        grid_chunks (dict): The chunking of the output grid.
-            If None, no chunking is applied.
+            'linear', 'nearest', 'cubic', 'conservative', 'most_common'.
+        base (str): The base of the longitudes. One of 'base180', 'base360'.
+        output_chunks (dict): Chunks for the output dataset (optional).
+            Only used for conservative regridding.
     """
     # Interpret the grid
     ds_out = get_grid_ds(output_grid, base=base)
-    if grid_chunks is not None:
-        ds_out = ds_out.chunk(grid_chunks)
+    # Output chunks only for conservative regridding
+    kwargs = {'output_chunks': output_chunks} if method == 'conservative' else {}
     regridder = getattr(ds.regrid, method)
-    ds = regridder(ds_out)
+    ds = regridder(ds_out, **kwargs)
     return ds
 
 
@@ -226,7 +220,20 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
 
 
 def is_valid(ds, var, mask, region, grid, valid_threshold=0.5):
-    """Check if the dataset is valid in the given region and mask."""
+    """Check if the dataset is valid in the given region and mask.
+
+    If there are dimensions other than lat and lon, the function will
+    check the minimum number of valid data points in the dataset.
+
+    Args:
+        ds (xr.Dataset): Dataset to check.
+        var (str): Variable to check.
+        mask (str): The mask to apply. One of: 'lsm', None
+        region (str): The region to clip to.
+        grid (str): The grid resolution of the dataset.
+        valid_threshold (float): The minimum fraction of valid data points
+            required for the dataset to be considered valid.
+    """
     if mask == 'lsm':
         # Import here to avoid circular imports
         from sheerwater_benchmarking.masks import land_sea_mask

@@ -145,12 +145,37 @@ resource postgresql_grant "write_public" {
   privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
 }
 
+resource postgresql_grant "write_public_terracotta" {
+  database    = "terracotta"
+  role        = postgresql_role.write.name
+  schema      = "public"
+  object_type = "table"
+  privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+}
+
+resource postgresql_grant "write_public_terracottads" {
+  database    = "terracotta"
+  role        = postgresql_role.write.name
+  schema      = "public"
+  object_type = "table"
+  objects = ["datasets"]
+  privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+}
+
 resource postgresql_grant "write_schema_public" {
   database    = "postgres"
   role        = postgresql_role.write.name
   schema      = "public"
   object_type = "schema"
   privileges  = ["CREATE"]
+}
+
+resource postgresql_grant "public_schema_public" {
+  database    = "postgres"
+  role        = "public"
+  schema      = "public"
+  object_type = "schema"
+  privileges  = ["CREATE", "USAGE"]
 }
 
 resource postgresql_grant "write_database_public" {
@@ -194,6 +219,10 @@ resource "grafana_organization_preferences" "light_preference" {
   theme      = "light"
   timezone   = "utc"
   week_start = "sunday"
+
+  lifecycle {
+    ignore_changes = [home_dashboard_uid,]
+  }
 }
 
 # Connect grafana to the read user with a datasource

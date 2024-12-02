@@ -496,6 +496,8 @@ numpy-groupies==0.11.2
 oauthlib==3.2.2
     # via kubernetes
     # via requests-oauthlib
+opt-einsum==3.4.0
+    # via sheerwater-benchmarking
 overrides==7.7.0
     # via jupyter-server
 packaging==24.1
@@ -714,7 +716,7 @@ s3fs==2024.10.0
     # via sheerwater-benchmarking
 s3transfer==0.10.3
     # via boto3
-salientsdk==0.3.7
+salientsdk==0.3.10
     # via sheerwater-benchmarking
 scikit-learn==1.5.2
     # via sheerwater-benchmarking
@@ -836,7 +838,7 @@ urllib3==2.2.3
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit
-weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@61017a100e7c244230c4c275339db172792170c6
+weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@a4389dbb115a07cfda7f11a779baf0e26003a17e
     # via sheerwater-benchmarking
 webcolors==24.8.0
     # via jsonschema

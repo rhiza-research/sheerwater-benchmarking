@@ -24,3 +24,15 @@ def start_era5():
 def end_era5():
     """The end date for the ECMWF ERA5 data."""
     return "2024-10-01"
+
+
+@pytest.fixture
+def start_eval():
+    """The start date for the SheerWater Benchmarking eval."""
+    return "2016-01-01"
+
+
+@pytest.fixture
+def end_eval():
+    """The end date for the SheerWater Benchmarking eval."""
+    return "2022-12-31"
