@@ -519,6 +519,7 @@ packaging==24.1
     # via matplotlib
     # via nbconvert
     # via pip-requirements-parser
+    # via plotly
     # via pyogrio
     # via pytest
     # via rioxarray
@@ -558,6 +559,8 @@ pip-requirements-parser==32.0.1
     # via coiled
 platformdirs==4.3.6
     # via jupyter-core
+plotly==5.24.1
+    # via sheerwater-benchmarking
 pluggy==1.5.0
     # via pytest
 prometheus-client==0.21.0
@@ -716,9 +719,10 @@ s3fs==2024.10.0
     # via sheerwater-benchmarking
 s3transfer==0.10.3
     # via boto3
-salientsdk==0.3.10
+salientsdk==0.3.12
     # via sheerwater-benchmarking
 scikit-learn==1.5.2
+    # via salientsdk
     # via sheerwater-benchmarking
     # via weatherbench2
 scipy==1.14.1
@@ -767,6 +771,8 @@ statsmodels==0.14.4
     # via xskillscore
 tblib==3.0.0
     # via distributed
+tenacity==9.0.0
+    # via plotly
 terminado==0.18.1
     # via jupyter-server
     # via jupyter-server-terminals

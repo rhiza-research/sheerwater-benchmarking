@@ -15,7 +15,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'first_year', 'last_year', 'grid'],
-           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 30},
            auto_rechunk=False)
 def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5'):
     """Compute the climatology of the ERA5 data. Years are inclusive."""
@@ -37,7 +37,7 @@ def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5')
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
-           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 30},
            cache=True)
 def climatology_abc(variable, first_year=1985, last_year=2014, grid="global1_5", mask='lsm', region='global'):
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
