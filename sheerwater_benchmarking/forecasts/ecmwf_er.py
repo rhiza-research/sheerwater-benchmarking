@@ -49,7 +49,6 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
 
     # Pull the google dataset
     ds = xr.open_zarr(filepath)
-    print(filepath)
 
     # Select the right variable
     var = get_variable(variable, 'ecmwf_ifs_er')
