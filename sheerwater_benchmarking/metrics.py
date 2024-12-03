@@ -270,41 +270,6 @@ def grouped_metric_salient(start_time, end_time, variable, lead, forecast, truth
 
 
 @dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
-                       'time_grouping', 'spatial', 'grid', 'mask', 'region'],
-           cache=False)
-def skill_metric_salient(start_time, end_time, variable, lead, forecast, truth,
-                         metric, baseline, time_grouping=None, spatial=False, grid="global1_5",
-                         mask='lsm', region='global'):
-    """Compute skill either spatially or as a region summary."""
-    try:
-        m_ds = grouped_metric_salient(start_time, end_time, variable, lead, forecast,
-                                      truth, metric, time_grouping, spatial=spatial,
-                                      grid=grid, mask=mask, region=region)
-    except NotImplementedError:
-        return None
-
-    if not m_ds:
-        return None
-
-    # Get the baseline if it exists and run its metric
-    base_ds = grouped_metric_salient(start_time, end_time, variable, lead, baseline,
-                                     truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
-
-    if not base_ds:
-        raise NotImplementedError("Cannot compute skill for null base")
-
-    print("Got metrics. Computing skill")
-
-    # Compute the skill
-    # TODO - think about base metric of 0
-    m_ds = (1 - (m_ds/base_ds))
-
-    return m_ds
-
-
-@dask_remote
 def _summary_metrics_table(start_time, end_time, variable,
                            truth, metric, leads, forecasts,
                            time_grouping=None,
@@ -348,13 +313,13 @@ def _summary_metrics_table(start_time, end_time, variable,
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
 def summary_metrics_table_salient(start_time, end_time, variable,
-                                  truth, metric, baseline=None, time_grouping=None,
+                                  truth, metric, time_grouping=None,
                                   grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     forecasts = ['salient']
     leads = ["week1", "week2", "week3", "week4", "week5"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
-                                baseline=baseline, time_grouping=time_grouping,
+                                time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)
 
     print(df)
@@ -363,7 +328,7 @@ def summary_metrics_table_salient(start_time, end_time, variable,
 
 @dask_remote
 @cacheable(data_type='tabular',
-           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric', 'baseline',
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
 def summary_metrics_table(start_time, end_time, variable,
