@@ -1,6 +1,6 @@
 """A climatology baseline forecast for benchmarking."""
 import dateparser
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import numpy as np
 import pandas as pd

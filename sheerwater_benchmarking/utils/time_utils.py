@@ -31,7 +31,7 @@ LEAD_OFFSETS = {
 
 
 def add_target_date_coord(ds, forecast_date_coord, lead):
-    """Creates a time coordinate from a forecast date coordinate and lead time"""
+    """Creates a time coordinate from a forecast date coordinate and lead time."""
     ds = ds.assign_coords(time=[np.datetime64(forecast_date_to_target_date(x, lead, return_string=False), 'ns')
                                 for x in ds[forecast_date_coord].values])
     return ds
