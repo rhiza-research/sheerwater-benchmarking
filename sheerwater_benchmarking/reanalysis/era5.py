@@ -115,9 +115,8 @@ def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
     # Need all lats / lons in a single chunk to be reasonable
     chunks = {'lat': 721, 'lon': 1440, 'time': 30}
     ds = ds.chunk(chunks)
-    method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method=method, output_chunks={"lat": 121, "lon": 240})
+    ds = regrid(ds, grid, base='base180', method='conservative', output_chunks={"lat": 121, "lon": 240})
     return ds
 
 
@@ -187,10 +186,11 @@ def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', re
         raise NotImplementedError(f"Lead {lead} not implemented for ERA5.")
 
     # Get daily data
-    new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    ds = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid)
-    ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
+    target_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
+    target_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
+    ds = era5_rolled(target_start, target_end, variable, agg=agg, grid=grid)
+    # Remove time shift - we want target date, instead of forecast date
+    # ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

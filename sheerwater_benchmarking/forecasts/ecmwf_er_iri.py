@@ -1,4 +1,8 @@
-"""Functions to fetch and process data from the ECMWF IRI dataset."""
+"""Functions to fetch and process data from the ECMWF IRI dataset.
+
+
+NOTE: these are legacy functions and no longer actively maintained.
+"""
 import sys
 import pandas as pd
 from datetime import datetime

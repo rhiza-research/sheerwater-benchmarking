@@ -1,6 +1,5 @@
 """Pulls Salient Predictions S2S forecasts from the Salient API."""
-
-
+import numpy as np
 import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
@@ -44,8 +43,7 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
     ds = ds.dropna('forecast_date', how='all')
 
     # Regrid the data
-    method = 'conservative' if variable == 'precip' else 'linear'
-    ds = regrid(ds, grid, base='base180', method=method)
+    ds = regrid(ds, grid, base='base180', method='conservative')
     return ds
 
 
@@ -76,11 +74,9 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
         raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
 
     ds = salient_blend(start_time, end_time, variable, timescale=timescale, grid=grid)
-    ds = ds.sel(lead=lead_id)
     if prob_type == 'deterministic':
         # Get the median forecast
         ds = ds.sel(quantiles=0.5)
-
         # drop the quantiles dimension
         ds = ds.reset_coords("quantiles", drop=True)
         ds = ds.assign_attrs(prob_type="deterministic")
@@ -91,18 +87,17 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     else:
         raise ValueError("Invalid probabilistic type")
 
+    # Get specific lead
+    lead_duration_days = {'sub-seasonal': 7, 'seasonal': 30, 'long-range': 120}[timescale]
+    lead_shift = np.timedelta64((lead_id-1)*lead_duration_days, 'D')
+    ds = ds.sel(lead_time=lead_id)
+    # Time shift - we want target date, instead of forecast date
+    ds = ds.assign_coords(time=ds['forecast_date']+lead_shift)
     ds = ds.rename({'forecast_date': 'time'})
 
     if variable == 'precip':
-        # Convert from mm/day to total precipitation
-        if timescale == "sub-seasonal":
-            ds[variable] *= 7  # weekly
-        elif timescale == "seasonal":
-            # TODO: correct for specific number of days in the months requested
-            ds[variable] *= 30  # monthly
-        elif timescale == "long-range":
-            # TODO: correct for specific number of days in the quarters requested
-            ds[variable] *= 120  # quarterly
+        # Convert daily precip to cumulative over the lead time
+        ds[variable] *= lead_duration_days
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

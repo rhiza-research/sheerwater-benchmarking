@@ -141,9 +141,8 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     else:
         chunks['start_date'] = 200
     ds = ds.chunk(chunks)
-    method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method=method,
+    ds = regrid(ds, grid, base='base180', method='conservative',
                 output_chunks={"lat": 721, "lon": 1440})
     return ds
 
@@ -183,7 +182,10 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
         ds = ds.assign_attrs(prob_type="ensemble")
 
     # Get specific lead
-    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D'))
+    lead_shift = np.timedelta64(lead_id, 'D')
+    ds = ds.sel(lead_time=lead_shift)
+    # Time shift - we want target date, instead of forecast date
+    ds = ds.assign_coords(time=ds['start_date']+lead_shift)
     ds = ds.rename({'start_date': 'time'})
 
     # Apply masking
@@ -398,7 +400,10 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
         ds = ds.assign_attrs(prob_type="ensemble")
 
     # Get specific lead
-    ds = ds.sel(lead_time=np.timedelta64(lead_id, 'D'))
+    lead_shift = np.timedelta64(lead_id, 'D')
+    ds = ds.sel(lead_time=lead_shift)
+    # Time shift - we want target date, instead of forecast date
+    ds = ds.assign_coords(time=ds['start_date']+lead_shift)
     ds = ds.rename({'start_date': 'time'})
 
     # Apply masking

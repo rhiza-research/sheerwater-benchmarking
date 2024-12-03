@@ -1,4 +1,7 @@
-"""Fetches ERA5 data from the CDS API."""
+"""Fetches ERA5 data from the CDS API.
+
+NOTE: these are legacy functions and no longer actively maintained.
+"""
 import dask
 import cdsapi
 import os
