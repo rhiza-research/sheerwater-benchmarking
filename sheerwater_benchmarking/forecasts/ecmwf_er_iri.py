@@ -1,6 +1,5 @@
 """Functions to fetch and process data from the ECMWF IRI dataset.
 
-
 NOTE: these are legacy functions and no longer actively maintained.
 """
 import sys
