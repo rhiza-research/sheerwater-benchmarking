@@ -121,12 +121,8 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
         ds = np.maximum(ds, 0)
-        if time_group == 'weekly':
-            ds = ds * 7
-        elif time_group == 'biweekly':
-            ds = ds * 14
-        else:
-            raise ValueError("Only weekly and biweekly aggregations are supported for precipitation.")
+    elif variable == 'ssrd':
+        ds = np.maximum(ds, 0)
 
     if grid == 'global1_5':
         return ds
@@ -327,7 +323,7 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
 
     ds = ds_f.groupby('start_date').map(bias_correct, margin_in_days)
     # Should not be below zero after bias correction
-    if variable == 'precip':
+    if variable in ['precip', 'ssrd']:
         ds = np.maximum(ds, 0)
     return ds
 

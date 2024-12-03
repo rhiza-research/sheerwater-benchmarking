@@ -429,7 +429,6 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
         ds = ds.chunk({'start_date': 29})
 
     # Roll and aggregate the data
-    agg_fn = "sum" if variable == "precip" else "mean"
-    ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn=agg_fn)
+    ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn="mean")
 
     return ds

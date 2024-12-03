@@ -142,8 +142,7 @@ def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
     """
     # Read and combine all the data into an array
     ds = era5_daily_regrid(start_time, end_time, variable, grid=grid)
-    agg_fn = "sum" if variable == "precip" else "mean"
-    ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn=agg_fn)
+    ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn="mean")
 
     return ds
 

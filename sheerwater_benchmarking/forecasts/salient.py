@@ -98,11 +98,6 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = add_target_date_coord(ds, 'forecast_date', lead)
     ds = ds.drop('forecast_date')
 
-    lead_duration_days = {'sub-seasonal': 7, 'seasonal': 30, 'long-range': 90}[timescale]
-    if variable == 'precip':
-        # Convert daily precip to cumulative over the lead time
-        ds[variable] *= lead_duration_days
-
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
     # Clip to specified region
