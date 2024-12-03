@@ -329,11 +329,13 @@ def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, 
         raise NotImplementedError(f"Lead {lead} not implemented for climatology.")
 
     # Get daily data
-    new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    ds = climatology_timeseries(new_start, new_end, variable, first_year=first_year, last_year=last_year,
+    target_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
+    target_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
+    ds = climatology_timeseries(target_start, target_end, variable, first_year=first_year, last_year=last_year,
                                 trend=trend, prob_type=prob_type, agg=agg, grid=grid)
-    ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
+
+    # Remove the time shift - we want target date, instead of forecast date
+    # ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
     if prob_type == 'deterministic':
         ds = ds.assign_attrs(prob_type="deterministic")
@@ -426,7 +428,9 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
     ds = climatology_rolling_agg(new_start, new_end, variable, clim_years=30, agg=agg, grid=grid)
 
     # Undo time-shifting
-    times = [x + pd.DateOffset(years=1) - pd.DateOffset(days=time_shift) for x in ds.time.values]
+    # times = [x + pd.DateOffset(years=1) - pd.DateOffset(days=time_shift) for x in ds.time.values]
+    # Undo yearly time shifting, but keep in terms of target dates
+    times = [x + pd.DateOffset(years=1) for x in ds.time.values]
     ds = ds.assign_coords(time=times)
 
     # Handle duplicate values due to leap years
