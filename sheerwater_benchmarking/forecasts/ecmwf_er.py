@@ -7,7 +7,9 @@ from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
-                                           regrid, get_variable)
+                                           regrid, get_variable,
+                                           target_date_to_forecast_date,
+                                           add_target_date_coord)
 
 
 @dask_remote
@@ -168,25 +170,30 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
         "weeks45": ('biweekly', 21),
         "weeks56": ('biweekly', 28),
     }
-    time_group, lead_id = lead_params.get(lead, (None, None))
+    time_group, lead_offset_days = lead_params.get(lead, (None, None))
     if time_group is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
 
+    # Convert start and end time to forecast start and end based on lead time
+    forecast_start = target_date_to_forecast_date(start_time, lead)
+    forecast_end = target_date_to_forecast_date(end_time, lead)
+
     if prob_type == 'deterministic':
-        ds = ifs_extended_range(start_time, end_time, variable, forecast_type="forecast",
+        ds = ifs_extended_range(forecast_start, forecast_end, variable, forecast_type="forecast",
                                 run_type='average', time_group=time_group, grid=grid)
         ds = ds.assign_attrs(prob_type="deterministic")
     else:  # probabilistic
-        ds = ifs_extended_range(start_time, end_time, variable, forecast_type="forecast",
+        ds = ifs_extended_range(forecast_start, forecast_end, variable, forecast_type="forecast",
                                 run_type='perturbed', time_group=time_group, grid=grid)
         ds = ds.assign_attrs(prob_type="ensemble")
 
     # Get specific lead
-    lead_shift = np.timedelta64(lead_id, 'D')
+    lead_shift = np.timedelta64(lead_offset_days, 'D')
     ds = ds.sel(lead_time=lead_shift)
+
     # Time shift - we want target date, instead of forecast date
-    ds = ds.assign_coords(time=ds['start_date']+lead_shift)
-    ds = ds.rename({'start_date': 'time'})
+    ds = add_target_date_coord(ds, 'start_date', lead)
+    ds = ds.drop('start_date')
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
@@ -358,9 +365,8 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
     else:
         chunks['start_date'] = 200
     ds = ds.chunk(chunks)
-    method = 'conservative' if variable == 'precip' else 'linear'
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method=method,
+    ds = regrid(ds, grid, base='base180', method='conservative',
                 output_chunks={"lat": 721, "lon": 1440})
     return ds
 
@@ -386,25 +392,30 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
         "weeks45": ('biweekly', 21),
         "weeks56": ('biweekly', 28),
     }
-    time_group, lead_id = lead_params.get(lead, (None, None))
+    time_group, lead_offset_days = lead_params.get(lead, (None, None))
     if time_group is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF debiased forecasts.")
 
+    # Convert start and end time to forecast start and end based on lead time
+    forecast_start = target_date_to_forecast_date(start_time, lead)
+    forecast_end = target_date_to_forecast_date(end_time, lead)
+
     if prob_type == 'deterministic':
-        ds = ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in_days=6,
+        ds = ifs_extended_range_debiased_regrid(forecast_start, forecast_end, variable, margin_in_days=6,
                                                 run_type='average', time_group=time_group, grid=grid)
         ds = ds.assign_attrs(prob_type="deterministic")
     else:  # probabilistic
-        ds = ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in_days=6,
+        ds = ifs_extended_range_debiased_regrid(forecast_start, forecast_end, variable, margin_in_days=6,
                                                 run_type='perturbed', time_group=time_group, grid=grid)
         ds = ds.assign_attrs(prob_type="ensemble")
 
     # Get specific lead
-    lead_shift = np.timedelta64(lead_id, 'D')
+    lead_shift = np.timedelta64(lead_offset_days, 'D')
     ds = ds.sel(lead_time=lead_shift)
+
     # Time shift - we want target date, instead of forecast date
-    ds = ds.assign_coords(time=ds['start_date']+lead_shift)
-    ds = ds.rename({'start_date': 'time'})
+    ds = add_target_date_coord(ds, 'start_date', lead)
+    ds = ds.drop('start_date')
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

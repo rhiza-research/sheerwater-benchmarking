@@ -1,8 +1,6 @@
 """Fetches ERA5 data from the Google ARCO Store."""
 import xarray as xr
-import dateparser
 import numpy as np
-from datetime import datetime, timedelta
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            get_variable, apply_mask, clip_region,
@@ -168,29 +166,25 @@ def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', re
         region (str): The region to clip the data to.
     """
     lead_params = {
-        "week1": (7, 0),
-        "week2": (7, 7),
-        "week3": (7, 14),
-        "week4": (7, 21),
-        "week5": (7, 28),
-        "week6": (7, 35),
-        "weeks12": (14, 0),
-        "weeks23": (14, 7),
-        "weeks34": (14, 14),
-        "weeks45": (14, 21),
-        "weeks56": (14, 28),
+        "week1": 7,
+        "week2": 7,
+        "week3": 7,
+        "week4": 7,
+        "week5": 7,
+        "week6": 7,
+        "weeks12": 14,
+        "weeks23": 14,
+        "weeks34": 14,
+        "weeks45": 14,
+        "weeks56": 14,
     }
 
-    agg, time_shift = lead_params.get(lead, (None, None))
-    if time_shift is None:
+    agg = lead_params.get(lead, None)
+    if agg is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ERA5.")
 
     # Get daily data
-    target_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    target_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    ds = era5_rolled(target_start, target_end, variable, agg=agg, grid=grid)
-    # Remove time shift - we want target date, instead of forecast date
-    # ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
+    ds = era5_rolled(start_time, end_time, variable, agg=agg, grid=grid)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

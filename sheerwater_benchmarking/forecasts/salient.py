@@ -1,9 +1,9 @@
 """Pulls Salient Predictions S2S forecasts from the Salient API."""
-import numpy as np
 import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
-                                           get_variable, apply_mask, clip_region, regrid)
+                                           get_variable, apply_mask, clip_region, regrid,
+                                           target_date_to_forecast_date, add_target_date_coord)
 
 
 @dask_remote
@@ -73,7 +73,11 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     if timescale is None:
         raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
 
-    ds = salient_blend(start_time, end_time, variable, timescale=timescale, grid=grid)
+    # Convert start and end time to forecast start and end based on lead time
+    forecast_start = target_date_to_forecast_date(start_time, lead)
+    forecast_end = target_date_to_forecast_date(end_time, lead)
+
+    ds = salient_blend(forecast_start, forecast_end, variable, timescale=timescale, grid=grid)
     if prob_type == 'deterministic':
         # Get the median forecast
         ds = ds.sel(quantiles=0.5)
@@ -88,13 +92,13 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
         raise ValueError("Invalid probabilistic type")
 
     # Get specific lead
-    lead_duration_days = {'sub-seasonal': 7, 'seasonal': 30, 'long-range': 120}[timescale]
-    lead_shift = np.timedelta64((lead_id-1)*lead_duration_days, 'D')
     ds = ds.sel(lead_time=lead_id)
-    # Time shift - we want target date, instead of forecast date
-    ds = ds.assign_coords(time=ds['forecast_date']+lead_shift)
-    ds = ds.rename({'forecast_date': 'time'})
 
+    # Time shift - we want target date, instead of forecast date
+    ds = add_target_date_coord(ds, 'forecast_date', lead)
+    ds = ds.drop('forecast_date')
+
+    lead_duration_days = {'sub-seasonal': 7, 'seasonal': 30, 'long-range': 90}[timescale]
     if variable == 'precip':
         # Convert daily precip to cumulative over the lead time
         ds[variable] *= lead_duration_days

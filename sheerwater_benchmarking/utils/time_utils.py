@@ -1,15 +1,67 @@
 """Time and date utility functions for all parts of the data pipeline."""
+from calendar import isleap
+import xarray as xr
+import pandas as pd
+import numpy as np
 import dateparser
 from datetime import datetime, timedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY, WEEKLY, YEARLY
-
-import numpy as np
-import pandas as pd
-import xarray as xr
-from calendar import isleap
-
+from dateutil.relativedelta import relativedelta
 
 DATETIME_FORMAT = "%Y-%m-%d"
+
+LEAD_OFFSETS = {
+    'week1': (0, 'days'),
+    'week2': (7, 'days'),
+    'week3': (14, 'days'),
+    'week4': (21, 'days'),
+    'week5': (28, 'days'),
+    'week6': (35, 'days'),
+    'weeks12': (0, 'days'),
+    'weeks34': (14, 'days'),
+    'weeks56': (28, 'days'),
+    'month1': (0, 'months'),
+    'month2': (1, 'months'),
+    'month3': (2, 'months'),
+    'quarter1': (0, 'months'),
+    'quarter2': (3, 'months'),
+    'quarter3': (6, 'months'),
+    'quarter4': (9, 'months'),
+}
+
+
+def add_target_date_coord(ds, forecast_date_coord, lead):
+    """Creates a time coordinate from a forecast date coordinate and lead time"""
+    ds = ds.assign_coords(time=[np.datetime64(forecast_date_to_target_date(x, lead, return_string=False), 'ns')
+                                for x in ds[forecast_date_coord].values])
+    return ds
+
+
+def target_date_to_forecast_date(target_date, lead, return_string=True):
+    """Converts a target date to a forecast date."""
+    return _date_shift(target_date, lead, add=False, return_string=return_string)
+
+
+def forecast_date_to_target_date(forecast_date, lead, return_string=True):
+    """Converts a forecast date to a target date."""
+    return _date_shift(forecast_date, lead, add=True, return_string=return_string)
+
+
+def _date_shift(date, lead, add=False, return_string=True):
+    """Converts a target date to a forecast date or visa versa."""
+    offset, offset_units = LEAD_OFFSETS[lead]
+    if isinstance(date, str):
+        date_obj = dateparser.parse(date)
+    else:
+        date_obj = date.astype('M8[D]').astype('O')
+    if add:
+        new_date = date_obj + relativedelta(**{offset_units: offset})
+    else:
+        new_date = date_obj - relativedelta(**{offset_units: offset})
+
+    if return_string:
+        new_date = datetime.strftime(new_date, "%Y-%m-%d")
+    return new_date
 
 
 def add_dayofyear(ds, time_dim="time"):

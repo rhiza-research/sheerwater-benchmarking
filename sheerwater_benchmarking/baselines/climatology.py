@@ -311,31 +311,26 @@ def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, 
                          trend=False, prob_type='deterministic', grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     lead_params = {
-        "week1": (7, 0),
-        "week2": (7, 7),
-        "week3": (7, 14),
-        "week4": (7, 21),
-        "week5": (7, 28),
-        "week6": (7, 35),
-        "weeks12": (14, 0),
-        "weeks23": (14, 7),
-        "weeks34": (14, 14),
-        "weeks45": (14, 21),
-        "weeks56": (14, 28),
+        "week1": 7,
+        "week2": 7,
+        "week3": 7,
+        "week4": 7,
+        "week5": 7,
+        "week6": 7,
+        "weeks12": 14,
+        "weeks23": 14,
+        "weeks34": 14,
+        "weeks45": 14,
+        "weeks56": 14,
     }
 
-    agg, time_shift = lead_params.get(lead, (None, None))
+    agg = lead_params.get(lead, None)
     if agg is None:
         raise NotImplementedError(f"Lead {lead} not implemented for climatology.")
 
     # Get daily data
-    target_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    target_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    ds = climatology_timeseries(target_start, target_end, variable, first_year=first_year, last_year=last_year,
+    ds = climatology_timeseries(start_time, end_time, variable, first_year=first_year, last_year=last_year,
                                 trend=trend, prob_type=prob_type, agg=agg, grid=grid)
-
-    # Remove the time shift - we want target date, instead of forecast date
-    # ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
     if prob_type == 'deterministic':
         ds = ds.assign_attrs(prob_type="deterministic")
@@ -394,20 +389,20 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
                         grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     lead_params = {
-        "week1": (7, 0),
-        "week2": (7, 7),
-        "week3": (7, 14),
-        "week4": (7, 21),
-        "week5": (7, 28),
-        "week6": (7, 35),
-        "weeks12": (14, 0),
-        "weeks23": (14, 7),
-        "weeks34": (14, 14),
-        "weeks45": (14, 21),
-        "weeks56": (14, 28),
+        "week1": 7,
+        "week2": 7,
+        "week3": 7,
+        "week4": 7,
+        "week5": 7,
+        "week6": 7,
+        "weeks12": 14,
+        "weeks23": 14,
+        "weeks34": 14,
+        "weeks45": 14,
+        "weeks56": 14,
     }
 
-    agg, time_shift = lead_params.get(lead, (None, None))
+    agg = lead_params.get(lead, None)
     if agg is None:
         raise NotImplementedError(f"Lead {lead} not implemented for rolling climatology.")
 
@@ -416,25 +411,21 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
 
     # Get daily data
     start_dt = dateparser.parse(start_time)
-    start_dt += timedelta(days=time_shift)  # we want climatology for 0, 7, 14, ... days ahead of the forecast time
     start_dt -= relativedelta(years=1)  # exclude the most recent year for operational forecasting (handles leap year)
     new_start = datetime.strftime(start_dt, "%Y-%m-%d")
 
     end_dt = dateparser.parse(end_time)
-    end_dt += timedelta(days=time_shift)  # we want climatology for 0, 7, 14, ... days ahead of the forecast time
     end_dt -= relativedelta(years=1)  # exclude the most recent year for operational forecasting (handles leap year)
     new_end = datetime.strftime(end_dt, "%Y-%m-%d")
 
     ds = climatology_rolling_agg(new_start, new_end, variable, clim_years=30, agg=agg, grid=grid)
 
-    # Undo time-shifting
-    # times = [x + pd.DateOffset(years=1) - pd.DateOffset(days=time_shift) for x in ds.time.values]
-    # Undo yearly time shifting, but keep in terms of target dates
+    # Undo yearly time shifting
     times = [x + pd.DateOffset(years=1) for x in ds.time.values]
     ds = ds.assign_coords(time=times)
 
     # Handle duplicate values due to leap years
-    ## TODO: handle this in a more general way ##
+    # TODO: handle this in a more general way
     ds = ds.drop_duplicates(dim='time')
 
     ds = ds.assign_attrs(prob_type="deterministic")
