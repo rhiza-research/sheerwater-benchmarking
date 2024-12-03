@@ -87,17 +87,17 @@ def ecmwf_secret():
     return val
 
 
-def tahmo_secret():
-    """Get the TAHMO API login from the secret manager."""
+def general_secret(secret_name):
+    """Get a secrete in our general format username:password from the secret manager."""
     # Check to see if the Salient secret exists
-    path = Path.home() / '.tahmorc'
+    path = Path.home() / f'.{secret_name}rc'
     if not os.path.exists(path):
         # Fetch the api key from google-secret-manager
         # Access the secret version.
         client = secretmanager.SecretManagerServiceClient()
 
         response = client.access_secret_version(
-            request={"name": "projects/750045969992/secrets/tahmo-api/versions/latest"})
+            request={"name": f"projects/750045969992/secrets/{secret_name}/versions/latest"})
         val = response.payload.data.decode("UTF-8")
         username, password = val.split(":")
 
@@ -110,37 +110,23 @@ def tahmo_secret():
 
     with open(path, mode='r') as f:
         lines = [line.strip() for line in f.readlines()]
-
     username, password = lines[0].split(":")
     return username, password
+
+
+def tahmo_secret():
+    """Get the TAHMO API login from the secret manager."""
+    return general_secret("tahmo-api")
+
+
+def gap_secret():
+    """Get the GAP API login from the secret manager."""
+    return general_secret("gap-api")
 
 
 def salient_secret():
     """Get the Salient API login from the secret manager."""
-    # Check to see if the Salient secret exists
-    path = Path.home() / '.salientrc'
-    if not os.path.exists(path):
-        # Fetch the api key from google-secret-manager
-        # Access the secret version.
-        client = secretmanager.SecretManagerServiceClient()
-
-        response = client.access_secret_version(
-            request={"name": "projects/750045969992/secrets/salient-api/versions/latest"})
-        val = response.payload.data.decode("UTF-8")
-        username, password = val.split(":")
-
-        # # Write it to a file
-        f = open(path, mode='w+')
-        f.write(val)
-        f.close()
-
-        return username, password
-
-    with open(path, mode='r') as f:
-        lines = [line.strip() for line in f.readlines()]
-
-    username, password = lines[0].split(":")
-    return username, password
+    return general_secret("salient-api")
 
 
 def salient_auth(func):
