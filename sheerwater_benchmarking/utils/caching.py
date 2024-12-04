@@ -17,6 +17,7 @@ import pickle
 
 import numpy as np
 import pandas as pd
+import dask.dataframe as dd
 import xarray as xr
 
 from sheerwater_benchmarking.utils.data_utils import lon_base_change
@@ -134,8 +135,28 @@ def read_from_delta(cache_path):
     return DeltaTable(cache_path).to_pandas()
 
 
+def read_from_parquet(cache_path):
+    """Read from a deltatable into a pandas dataframe."""
+    return dd.read_parquet(cache_path, engine='pyarrow')
+
+
+def write_to_parquet(cache_path, df, overwrite=False):
+    """Write a pandas or dask dataframe to a parquet."""
+    part = None
+    if hasattr(df, 'cache_partition'):
+        part = df.cache_partition
+
+    df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
+
+
 def write_to_delta(cache_path, df, overwrite=False):
     """Write a pandas dataframe to a delta table."""
+    if isinstance(df, dd.DataFrame):
+        print("""Warning: Dask datafame passed to delta backend. Will run `compute()`
+                  on the dataframe prior to storage. This will fail if the dataframe
+                  does not fit in memory. Use `backend=parquet` to handle parallel writing of dask dataframes.""")
+        df = df.compute()
+
     if overwrite:
         write_deltalake(cache_path, df, mode='overwrite', schema_mode='overwrite')
     else:
@@ -566,6 +587,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.delta'
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = True
+                if backend == 'parquet':
+                    cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.parquet'
+                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 elif backend == 'postgres':
                     cache_path = cache_key
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
@@ -687,6 +711,21 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                               for tabular datasets.""")
                                 else:
                                     compute_result = False
+                        elif backend == 'parquet':
+                            if filepath_only:
+                                cache_map = fs.get_mapper(cache_path)
+
+                                return cache_map
+                            else:
+                                print(f"Opening cache {cache_path}")
+                                ds = read_from_parquet(cache_path)
+
+                                if validate_cache_timeseries and timeseries is not None:
+                                    raise NotImplementedError("""Timeseries validation is not currently implemented
+                                                              for tabular datasets.""")
+                                else:
+                                    compute_result = False
+
                         elif backend == 'postgres':
                             ds = read_from_postgres(cache_key)
                             if validate_cache_timeseries and timeseries is not None:
@@ -695,7 +734,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             else:
                                 compute_result = False
                         else:
-                            raise ValueError("""Only delta, and postgres backends are
+                            raise ValueError("""Only delta, parquet, and postgres backends are
                                              supported for tabular data.""")
                     elif data_type == 'basic':
                         if backend == 'pickle':
@@ -784,7 +823,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             write_to_terracotta(cache_key, ds)
 
                     elif data_type == 'tabular':
-                        if not isinstance(ds, pd.DataFrame):
+                        if not (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
                             raise RuntimeError(f"""Tabular datatypes must return pandas dataframe
                                                or none instead of {type(ds)}""")
 
@@ -801,6 +840,19 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_path} in delta.")
                                 write_to_delta(cache_path, ds, overwrite=True)
+                        elif storage_backend == 'parquet':
+                            write = False
+                            if fs.exists(cache_path) and not force_overwrite:
+                                inp = input(f'A cache already exists at {
+                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write = True
+                            else:
+                                write = True
+
+                            if write:
+                                print(f"Caching result for {cache_path} in delta.")
+                                write_to_parquet(cache_path, ds, overwrite=True)
 
                         elif storage_backend == 'postgres':
                             write = False
@@ -841,20 +893,37 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             else:
                 # Do the time series filtering
                 if timeseries is not None:
-                    match_time = [t for t in tl if t in ds.dims]
-                    if len(match_time) == 0:
-                        raise RuntimeError(
-                            "Timeseries array must return a 'time' dimension for slicing.")
+                    if data_type == 'array' and isinstance(ds, xr.Dataset):
+                        match_time = [t for t in tl if t in ds.dims]
+                        if len(match_time) == 0:
+                            raise RuntimeError(
+                                "Timeseries array must return a 'time' dimension for slicing.")
 
-                    time_col = match_time[0]
+                        time_col = match_time[0]
 
-                    # Assign start and end times if None are passed
-                    if start_time is None:
-                        start_time = ds[time_col].min().values
-                    if end_time is None:
-                        end_time = ds[time_col].max().values
+                        # Assign start and end times if None are passed
+                        if start_time is None:
+                            start_time = ds[time_col].min().values
+                        if end_time is None:
+                            end_time = ds[time_col].max().values
 
-                    ds = ds.sel({time_col: slice(start_time, end_time)})
+                        ds = ds.sel({time_col: slice(start_time, end_time)})
+                    elif data_type == 'tabular' and (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
+                        match_time = [t for t in tl if t in ds.columns]
+
+                        if len(match_time) == 0:
+                            raise RuntimeError(
+                                "Timeseries dataframes must return a 'time' column for slicing.")
+
+                        time_col = match_time[0]
+
+                        # Assign start and end times if None are passed
+                        if start_time is None:
+                            start_time = ds[time_col].min().values
+                        if end_time is None:
+                            end_time = ds[time_col].max().values
+
+                        ds = ds[(ds[time_col] >= start_time) & (ds[time_col] <= end_time)]
 
                 return ds
 

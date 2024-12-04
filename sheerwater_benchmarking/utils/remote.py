@@ -14,6 +14,9 @@ config_options = {
         'scheduler_cpu': 16,
         'scheduler_memory': "64GiB"
     },
+    'on_demand': {
+        'spot_policy': 'on-demand'
+    },
     'large_cluster': {
         'n_workers': [10, 11]
     },

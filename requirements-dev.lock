@@ -148,6 +148,7 @@ cycler==0.12.1
     # via matplotlib
 dask==2024.10.0
     # via coiled
+    # via dask-deltatable
     # via dask-expr
     # via dask-kubernetes
     # via distributed
@@ -155,6 +156,8 @@ dask==2024.10.0
     # via sheerwater-benchmarking
     # via xhistogram
     # via xskillscore
+dask-deltatable==0.3.3
+    # via sheerwater-benchmarking
 dask-expr==1.1.16
     # via dask
 dask-kubernetes==2024.9.0
@@ -170,6 +173,7 @@ decorator==5.1.1
 defusedxml==0.7.1
     # via nbconvert
 deltalake==0.20.2
+    # via dask-deltatable
     # via sheerwater-benchmarking
 deprecated==1.2.14
     # via fabric
@@ -208,6 +212,7 @@ frozenlist==1.5.0
     # via aiosignal
 fsspec==2024.10.0
     # via dask
+    # via dask-deltatable
     # via gcsfs
     # via s3fs
 gcsfs==2024.10.0
@@ -597,6 +602,7 @@ pvlib==0.10.5
     # via salientsdk
 pyarrow==18.0.0
     # via dask
+    # via dask-deltatable
     # via dask-expr
     # via deltalake
 pyasn1==0.6.1
