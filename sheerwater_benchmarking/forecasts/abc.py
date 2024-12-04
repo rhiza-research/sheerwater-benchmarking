@@ -72,21 +72,25 @@ def perpp(start_time, end_time, variable, lead, prob_type='deterministic',
           grid='global1_5', mask='lsm', region='global'):
     """Standard format forecast data for Persistence++ Model."""
     lead_params = {
-        "week1": "week1",
-        "week2": "week2",
-        "week3": "week3",
-        "week4": "week4",
-        "week5": "week5",
-        "week6": "week6",
-        "weeks34": "weeks34",
-        "weeks56": "weeks56",
+        "week1": ("week1", 7),
+        "week2": ("week2", 7),
+        "week3": ("week3", 7),
+        "week4": ("week4", 7),
+        "week5": ("week5", 7),
+        "week6": ("week6", 7),
+        "weeks34": ("weeks34", 14),
+        "weeks56": ("weeks56", 14),
     }
-    lead_id = lead_params.get(lead, None)
+    lead_id, agg = lead_params.get(lead, (None, None))
     if lead_id is None:
         raise NotImplementedError(f"Lead {lead} not implemented for perpp.")
 
     # Perpp forecasts are already stored in terms of target dates, so no conversion needed
     ds = perpp_ecmwf(start_time, end_time, variable, lead=lead_id, grid=grid)
+    # Perpp predicts cumulative precipitation, so we need to convert to daily
+    if variable == 'precip':
+        ds[variable] /= agg
+
     ds = ds.rename({'start_date': 'time'})
 
     if prob_type != 'deterministic':

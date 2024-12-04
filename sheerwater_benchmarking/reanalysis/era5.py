@@ -93,7 +93,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'grid'],
+           cache_args=['variable', 'method', 'grid'],
            cache_disable_if={'grid': 'global0_25'},
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
@@ -102,7 +102,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
                }
            },
            auto_rechunk=False)
-def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
+def era5_daily_regrid(start_time, end_time, variable, method="conservative", grid="global0_25"):
     """ERA5 daily reanalysis with regridding."""
     ds = era5_daily(start_time, end_time, variable, grid='global0_25')
     ds = ds.sortby('lat')  # TODO: remove if we fix the era5 daily caches
@@ -114,36 +114,37 @@ def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
     chunks = {'lat': 721, 'lon': 1440, 'time': 30}
     ds = ds.chunk(chunks)
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method='conservative', output_chunks={"lat": 121, "lon": 240})
+    ds = regrid(ds, grid, base='base180', method=method, output_chunks={"lat": 121, "lon": 240})
     return ds
 
 
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'agg', 'grid'],
+           cache_args=['variable', 'time_group', 'method', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }
            })
-def era5_rolled(start_time, end_time, variable, agg=14, grid="global1_5"):
+def era5_rolled(start_time, end_time, variable, time_group='weekly', method='conservative', grid="global1_5"):
     """Aggregates the hourly ERA5 data into daily data and rolls.
 
     Args:
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
-        agg (str): The aggregation period to use, in days
+        time_group (str): The aggregation period. One of: 'weekly', 'biweekly', 'monthly', 'quarterly'.
+        method (str): The regridding method to use. One of: 'conservative', 'linear'
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
             - global0_25: 0.25 degree global grid
     """
     # Read and combine all the data into an array
-    ds = era5_daily_regrid(start_time, end_time, variable, grid=grid)
+    ds = era5_daily_regrid(start_time, end_time, variable, method=method, grid=grid)
+    agg = {'weekly': 7, 'biweekly': 14, 'monthly': 30, 'quarterly': 90}[time_group]
     ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn="mean")
-
     return ds
 
 
@@ -165,25 +166,32 @@ def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', re
         region (str): The region to clip the data to.
     """
     lead_params = {
-        "week1": 7,
-        "week2": 7,
-        "week3": 7,
-        "week4": 7,
-        "week5": 7,
-        "week6": 7,
-        "weeks12": 14,
-        "weeks23": 14,
-        "weeks34": 14,
-        "weeks45": 14,
-        "weeks56": 14,
+        "week1": "weekly",
+        "week2": "weekly",
+        "week3": "weekly",
+        "week4": "weekly",
+        "week5": "weekly",
+        "week6": "weekly",
+        "weeks12": "biweekly",
+        "weeks23": "biweekly",
+        "weeks34": "biweekly",
+        "weeks45": "biweekly",
+        "weeks56": "biweekly",
+        "month1": "monthly",
+        "month2": "monthly",
+        "month3": "monthly",
+        "quarter1": "quarterly",
+        "quarter2": "quarterly",
+        "quarter3": "quarterly",
+        "quarter4": "quarterly",
     }
 
-    agg = lead_params.get(lead, None)
-    if agg is None:
+    time_group = lead_params.get(lead, None)
+    if time_group is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ERA5.")
 
     # Get daily data
-    ds = era5_rolled(start_time, end_time, variable, agg=agg, grid=grid)
+    ds = era5_rolled(start_time, end_time, variable, time_group=time_group, method='conservative', grid=grid)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
