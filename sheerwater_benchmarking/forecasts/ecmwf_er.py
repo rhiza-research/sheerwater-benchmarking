@@ -9,7 +9,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lon_base_change,
                                            regrid, get_variable,
                                            target_date_to_forecast_date,
-                                           add_target_date_coord)
+                                           convert_to_target_date_dim)
 
 
 @dask_remote
@@ -187,8 +187,7 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
     ds = ds.sel(lead_time=lead_shift)
 
     # Time shift - we want target date, instead of forecast date
-    ds = add_target_date_coord(ds, 'start_date', lead)
-    ds = ds.drop('start_date')
+    ds = convert_to_target_date_dim(ds, 'start_date', lead)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
@@ -409,8 +408,7 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
     ds = ds.sel(lead_time=lead_shift)
 
     # Time shift - we want target date, instead of forecast date
-    ds = add_target_date_coord(ds, 'start_date', lead)
-    ds = ds.drop('start_date')
+    ds = convert_to_target_date_dim(ds, 'start_date', lead)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

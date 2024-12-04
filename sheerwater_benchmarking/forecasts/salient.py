@@ -3,7 +3,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            get_variable, apply_mask, clip_region, regrid,
-                                           target_date_to_forecast_date, add_target_date_coord)
+                                           target_date_to_forecast_date, convert_to_target_date_dim)
 
 
 @dask_remote
@@ -92,11 +92,10 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
         raise ValueError("Invalid probabilistic type")
 
     # Get specific lead
-    ds = ds.sel(lead_time=lead_id)
+    ds = ds.sel(lead=lead_id)
 
     # Time shift - we want target date, instead of forecast date
-    ds = add_target_date_coord(ds, 'forecast_date', lead)
-    ds = ds.drop('forecast_date')
+    ds = convert_to_target_date_dim(ds, 'forecast_date', lead)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
