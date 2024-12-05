@@ -189,6 +189,12 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
     # Time shift - we want target date, instead of forecast date
     ds = convert_to_target_date_dim(ds, 'start_date', lead)
 
+    # TODO: remove this once we update ECMWF caches
+    if variable == 'precip':
+        print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
+        agg = {'weekly': 7, 'biweekly': 14}[time_group]
+        ds['precip'] /= agg
+
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
     # Clip to specified region
@@ -409,6 +415,12 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
 
     # Time shift - we want target date, instead of forecast date
     ds = convert_to_target_date_dim(ds, 'start_date', lead)
+
+    # TODO: remove this once we update ECMWF caches
+    if variable == 'precip':
+        print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
+        agg = {'weekly': 7, 'biweekly': 14}[time_group]
+        ds['precip'] /= agg
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

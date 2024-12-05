@@ -54,20 +54,20 @@ def climatology_abc(variable, first_year=1985, last_year=2014, grid="global1_5",
 @dask_remote
 @cacheable(data_type='array',
            cache=True,
-           cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
-           chunking={"lat": 121, "lon": 240, "dayofyear": 30, "member": 30},
+           cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'time_group', 'grid'],
+           chunking={"lat": 121, "lon": 240, "dayofyear": 1000, "member": 1},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'dayofyear': 1}
+                   'global0_25': {"lat": 721, "lon": 1440, 'dayofyear': 30, 'member': 1}
                }
            },
            auto_rechunk=False)
 def climatology_agg_raw(variable, first_year=1985, last_year=2014,
-                        prob_type='deterministic', agg=14, grid="global1_5"):
+                        prob_type='deterministic', time_group="weekly", grid="global1_5"):
     """Generates aggregated climatology."""
     start_time = f"{first_year}-01-01"
     end_time = f"{last_year}-12-31"
-    ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
+    ds = era5_rolled(start_time, end_time, variable=variable, time_group=time_group, grid=grid)
 
     # Add day of year as a coordinate
     ds = add_dayofyear(ds)
