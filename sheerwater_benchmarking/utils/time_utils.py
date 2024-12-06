@@ -108,9 +108,15 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
         elif grp == 'quarter':
             coords.append(ds[time_dim].dt.quarter.values)
         elif grp == 'ea_rainy_season':
+            # East African rainy period is from March to May and October to December
             def month_to_period(month):
-                return 1 if 2 <= month <= 6 else 2
-            coords.append(ds[time_dim].dt.month.map(month_to_period))
+                if 3 <= month <= 5:
+                    return 1
+                elif (10 <= month <= 12) or (1 <= month < 2):
+                    return 2
+                else:
+                    return 3
+            coords.append([month_to_period(x) for x in ds[time_dim].dt.month.values])
         elif grp == 'year':
             coords.append(ds[time_dim].dt.year.values)
         else:
@@ -231,7 +237,14 @@ def convert_group_to_time(group, grouping):
             elif grp == 'quarter':
                 mm = f"{(int(val)-1)*3+1:02d}"
             elif grp == 'ea_rainy_season':
-                mm = f"{(int(val)-1)*6+1:02d}"
+                if val == '01':
+                    mm = '03'  # March rains
+                elif val == '02':
+                    mm = '10'  # October rains
+                elif val == '03':
+                    mm = '07'  # Default to July for dry season
+                else:
+                    raise ValueError("Invalid East African rainy season")
             elif grp == 'year':
                 yy = val
             else:

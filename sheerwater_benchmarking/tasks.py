@@ -89,8 +89,6 @@ def rainy_season_onset_truth(start_time, end_time,
                             time_dim='time',
                             return_timeseries=True)
     
-    import pdb; pdb.set_trace()
-
     return rainy_ds
 
 
