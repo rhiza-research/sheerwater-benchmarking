@@ -180,3 +180,6 @@ temp/
 
 scratch
 .vscode
+tahmo_scripts
+salient_scripts
+data

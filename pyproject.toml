@@ -94,7 +94,8 @@ dependencies = [
     "xskillscore @ git+https://github.com/rhiza-research/xskillscore",
     "coiled>=1.58.1",
     "opt-einsum>=3.4.0",
-    "salientsdk>=0.3.10",
+    "plotly>=5.24.1",
+    "salientsdk>=0.3.12",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

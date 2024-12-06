@@ -2,12 +2,13 @@
 from itertools import product
 from sheerwater_benchmarking.reanalysis import era5_agg
 from sheerwater_benchmarking.reanalysis.era5 import era5_rolled, era5_daily, era5_daily_regrid
+from sheerwater_benchmarking.utils import start_remote
 
 
 vars = ["tmp2m", "precip"]
 # grids = ['global0_25']
-grids = ['global1_5']
-# grids = ['global0_25', 'global1_5']
+# grids = ['global1_5']
+grids = ['global0_25', 'global1_5']
 regions = ['global']
 aggs = [14, 7]
 # aggs = [14, 7]
@@ -17,13 +18,15 @@ anoms = [True, False]
 clim_params = {'first_year': 1985, 'last_year': 2014}
 
 start_time = "1979-01-01"
-end_time = "2024-11-01"
+end_time = "2024-12-31"
 
 UPDATE_DAILY = False
-UPDATE_DAILY_REGRID = False
+UPDATE_DAILY_REGRID = True
 UPDATE_ROLLED = False
-UPDATE_AGG = True
+UPDATE_AGG = False
 FLAG = False
+
+start_remote(remote_config='xlarge_cluster')
 
 for var, grid in product(vars, grids):
     if UPDATE_DAILY:
@@ -31,9 +34,8 @@ for var, grid in product(vars, grids):
                         recompute=True, remote=True, force_overwrite=True,
                         remote_name='genevieve', remote_config='xlarge_cluster')
     if UPDATE_DAILY_REGRID:
-        ds = era5_daily_regrid(start_time, end_time, variable=var, grid=grid,
-                               recompute=True, remote=True, force_overwrite=True,
-                               remote_name='genevieve', remote_config='xlarge_cluster')
+        ds = era5_daily_regrid(start_time, end_time, variable=var, method='conservative', grid=grid,
+                               recompute=True, remote=True, force_overwrite=True)
 
     for agg, anom in product(aggs, anoms):
         if UPDATE_ROLLED:

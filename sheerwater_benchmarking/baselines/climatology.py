@@ -1,6 +1,6 @@
 """A climatology baseline forecast for benchmarking."""
 import dateparser
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import numpy as np
 import pandas as pd
@@ -15,7 +15,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'first_year', 'last_year', 'grid'],
-           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 30},
            auto_rechunk=False)
 def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5'):
     """Compute the climatology of the ERA5 data. Years are inclusive."""
@@ -37,7 +37,7 @@ def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5')
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
-           chunking={"lat": 721, "lon": 1440, "dayofyear": 366},
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 30},
            cache=True)
 def climatology_abc(variable, first_year=1985, last_year=2014, grid="global1_5", mask='lsm', region='global'):
     """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
@@ -54,20 +54,20 @@ def climatology_abc(variable, first_year=1985, last_year=2014, grid="global1_5",
 @dask_remote
 @cacheable(data_type='array',
            cache=True,
-           cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg', 'grid'],
-           chunking={"lat": 121, "lon": 240, "dayofyear": 30, "member": 30},
+           cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'time_group', 'grid'],
+           chunking={"lat": 121, "lon": 240, "dayofyear": 1000, "member": 1},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'dayofyear': 1}
+                   'global0_25': {"lat": 721, "lon": 1440, 'dayofyear': 30, 'member': 1}
                }
            },
            auto_rechunk=False)
 def climatology_agg_raw(variable, first_year=1985, last_year=2014,
-                        prob_type='deterministic', agg=14, grid="global1_5"):
+                        prob_type='deterministic', time_group="weekly", grid="global1_5"):
     """Generates aggregated climatology."""
     start_time = f"{first_year}-01-01"
     end_time = f"{last_year}-12-31"
-    ds = era5_rolled(start_time, end_time, variable=variable, agg=agg, grid=grid)
+    ds = era5_rolled(start_time, end_time, variable=variable, time_group=time_group, grid=grid)
 
     # Add day of year as a coordinate
     ds = add_dayofyear(ds)
@@ -311,29 +311,26 @@ def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, 
                          trend=False, prob_type='deterministic', grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     lead_params = {
-        "week1": (7, 0),
-        "week2": (7, 7),
-        "week3": (7, 14),
-        "week4": (7, 21),
-        "week5": (7, 28),
-        "week6": (7, 35),
-        "weeks12": (14, 0),
-        "weeks23": (14, 7),
-        "weeks34": (14, 14),
-        "weeks45": (14, 21),
-        "weeks56": (14, 28),
+        "week1": 7,
+        "week2": 7,
+        "week3": 7,
+        "week4": 7,
+        "week5": 7,
+        "week6": 7,
+        "weeks12": 14,
+        "weeks23": 14,
+        "weeks34": 14,
+        "weeks45": 14,
+        "weeks56": 14,
     }
 
-    agg, time_shift = lead_params.get(lead, (None, None))
+    agg = lead_params.get(lead, None)
     if agg is None:
         raise NotImplementedError(f"Lead {lead} not implemented for climatology.")
 
     # Get daily data
-    new_start = datetime.strftime(dateparser.parse(start_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    new_end = datetime.strftime(dateparser.parse(end_time)+timedelta(days=time_shift), "%Y-%m-%d")
-    ds = climatology_timeseries(new_start, new_end, variable, first_year=first_year, last_year=last_year,
+    ds = climatology_timeseries(start_time, end_time, variable, first_year=first_year, last_year=last_year,
                                 trend=trend, prob_type=prob_type, agg=agg, grid=grid)
-    ds = ds.assign_coords(time=ds['time']-np.timedelta64(time_shift, 'D'))
 
     if prob_type == 'deterministic':
         ds = ds.assign_attrs(prob_type="deterministic")
@@ -392,20 +389,20 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
                         grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     lead_params = {
-        "week1": (7, 0),
-        "week2": (7, 7),
-        "week3": (7, 14),
-        "week4": (7, 21),
-        "week5": (7, 28),
-        "week6": (7, 35),
-        "weeks12": (14, 0),
-        "weeks23": (14, 7),
-        "weeks34": (14, 14),
-        "weeks45": (14, 21),
-        "weeks56": (14, 28),
+        "week1": 7,
+        "week2": 7,
+        "week3": 7,
+        "week4": 7,
+        "week5": 7,
+        "week6": 7,
+        "weeks12": 14,
+        "weeks23": 14,
+        "weeks34": 14,
+        "weeks45": 14,
+        "weeks56": 14,
     }
 
-    agg, time_shift = lead_params.get(lead, (None, None))
+    agg = lead_params.get(lead, None)
     if agg is None:
         raise NotImplementedError(f"Lead {lead} not implemented for rolling climatology.")
 
@@ -414,23 +411,21 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
 
     # Get daily data
     start_dt = dateparser.parse(start_time)
-    start_dt += timedelta(days=time_shift)  # we want climatology for 0, 7, 14, ... days ahead of the forecast time
     start_dt -= relativedelta(years=1)  # exclude the most recent year for operational forecasting (handles leap year)
     new_start = datetime.strftime(start_dt, "%Y-%m-%d")
 
     end_dt = dateparser.parse(end_time)
-    end_dt += timedelta(days=time_shift)  # we want climatology for 0, 7, 14, ... days ahead of the forecast time
     end_dt -= relativedelta(years=1)  # exclude the most recent year for operational forecasting (handles leap year)
     new_end = datetime.strftime(end_dt, "%Y-%m-%d")
 
     ds = climatology_rolling_agg(new_start, new_end, variable, clim_years=30, agg=agg, grid=grid)
 
-    # Undo time-shifting
-    times = [x + pd.DateOffset(years=1) - pd.DateOffset(days=time_shift) for x in ds.time.values]
+    # Undo yearly time shifting
+    times = [x + pd.DateOffset(years=1) for x in ds.time.values]
     ds = ds.assign_coords(time=times)
 
     # Handle duplicate values due to leap years
-    ## TODO: handle this in a more general way ##
+    # TODO: handle this in a more general way
     ds = ds.drop_duplicates(dim='time')
 
     ds = ds.assign_attrs(prob_type="deterministic")
