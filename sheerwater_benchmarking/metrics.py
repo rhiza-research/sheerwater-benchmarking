@@ -4,7 +4,8 @@ from importlib import import_module
 import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_forecast
-from sheerwater_benchmarking.utils import cacheable, dask_remote, clip_region, is_valid
+from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
+                                           groupby_time, lead_to_time_group)
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
@@ -96,7 +97,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
-    obs = truth_fn(start_time, end_time, variable, lead=lead, grid=grid, mask=mask, region=region)
+    obs = truth_fn(start_time, end_time, variable, time_grouping=lead_to_time_group(lead),
+                   grid=grid, mask=mask, region=region)
 
     # Check to see the prob type attribute
     enhanced_prob_type = fcst.attrs['prob_type']
@@ -227,23 +229,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                            metric=called_metric, grid=grid, mask=mask, region='global')
         if ds is None:
             return None
-
-        # Group the time column based on time grouping
-        if time_grouping:
-            if time_grouping == 'month_of_year':
-                # TODO if you want this as a name: ds.coords["time"] = ds.time.dt.strftime("%B")
-                ds.coords["time"] = ds.time.dt.month
-            elif time_grouping == 'year':
-                ds.coords["time"] = ds.time.dt.year
-            elif time_grouping == 'quarter_of_year':
-                ds.coords["time"] = ds.time.dt.quarter
-            else:
-                raise ValueError("Invalid time grouping")
-
-            ds = ds.groupby("time").mean()
-        else:
-            # Average in time
-            ds = ds.mean(dim="time")
+        ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
 
     # Clip it to the region
     ds = clip_region(ds, region)
@@ -264,7 +250,6 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     # Take the final square root of the MSE, after spatial averaging
     if metric == 'rmse':
         ds = ds ** 0.5
-
     return ds
 
 

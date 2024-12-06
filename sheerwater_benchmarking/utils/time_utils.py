@@ -11,6 +11,52 @@ from dateutil.relativedelta import relativedelta
 DATETIME_FORMAT = "%Y-%m-%d"
 
 LEAD_OFFSETS = {
+    'day1': (0, 'days'),
+    'day2': (1, 'days'),
+    'day3': (2, 'days'),
+    'day4': (3, 'days'),
+    'day5': (4, 'days'),
+    'day6': (5, 'days'),
+    'day7': (6, 'days'),
+    'day8': (7, 'days'),
+    'day9': (8, 'days'),
+    'day10': (9, 'days'),
+    'day11': (10, 'days'),
+    'day12': (11, 'days'),
+    'day13': (12, 'days'),
+    'day14': (13, 'days'),
+    'day15': (14, 'days'),
+    'day16': (15, 'days'),
+    'day17': (16, 'days'),
+    'day18': (17, 'days'),
+    'day19': (18, 'days'),
+    'day20': (19, 'days'),
+    'day21': (20, 'days'),
+    'day22': (21, 'days'),
+    'day23': (22, 'days'),
+    'day24': (23, 'days'),
+    'day25': (24, 'days'),
+    'day26': (25, 'days'),
+    'day27': (26, 'days'),
+    'day28': (27, 'days'),
+    'day29': (28, 'days'),
+    'day30': (29, 'days'),
+    'day31': (30, 'days'),
+    'day32': (31, 'days'),
+    'day33': (32, 'days'),
+    'day34': (33, 'days'),
+    'day35': (34, 'days'),
+    'day36': (35, 'days'),
+    'day37': (36, 'days'),
+    'day38': (37, 'days'),
+    'day39': (38, 'days'),
+    'day40': (39, 'days'),
+    'day41': (40, 'days'),
+    'day42': (41, 'days'),
+    'day43': (42, 'days'),
+    'day44': (43, 'days'),
+    'day45': (44, 'days'),
+    'day46': (45, 'days'),
     'week1': (0, 'days'),
     'week2': (7, 'days'),
     'week3': (14, 'days'),
@@ -28,6 +74,81 @@ LEAD_OFFSETS = {
     'quarter3': (6, 'months'),
     'quarter4': (9, 'months'),
 }
+
+
+def lead_to_time_group(lead):
+    """Convert lead to time grouping."""
+    if 'weeks' in lead:
+        return 'biweekly'
+    elif 'week' in lead:
+        return 'weekly'
+    elif 'month' in lead:
+        return 'monthly'
+    elif 'quarter' in lead:
+        return 'quarterly'
+    else:
+        raise ValueError(f"Unknown lead {lead}")
+
+
+def groupby_time(ds, grouping, agg_fn, time_dim='time', return_timeseries=False, **kwargs):
+    """Aggregates data in groups along the time dimension according to time_grouping.
+
+    Args:
+        ds (xr.Dataset): The dataset to aggregate.
+        time_grouping (str): The time grouping to use. One of:
+            - 'month_of_year': Group by month of year.
+            - 'month': Group by month.
+            - 'year': Group by year.
+            - 'quarter_of_year': Group by quarter of year.
+            - 'quarter': Group by quarter.
+        agg_fn (object): The aggregation function to apply.
+        time_dim (str): The time dimension to group by.
+        return_timeseries (bool): If True, return a timeseries (the first date in each period). 
+             Otherwise, returns the label for the group (e.g., 'January-2020', 12, 4).
+    """
+    if grouping is None:
+        return ds.map(agg_fn, **kwargs)
+
+    if grouping == 'month_of_year':
+        ds = ds.assign_coords(group=("time", ds[time_dim].dt.month))
+    elif grouping == 'month':
+        ds = ds.assign_coords(group=("time",
+                                     [f"M{int(m.values)}-{int(y.values)}" for m, y in
+                                      zip(ds[time_dim].dt.month, ds[time_dim].dt.year)]))
+    elif grouping == 'year':
+        ds = ds.assign_coords(group=("time", ds[time_dim].dt.year))
+    elif grouping == 'quarter_of_year':
+        ds = ds.assign_coords(group=("time", ds[time_dim].dt.quarter))
+    elif grouping == 'quarter':
+        ds = ds.assign_coords(group=("time",
+                                     [f"Q{int(q.values)}-{int(y.values)}" for q, y in
+                                      zip(ds[time_dim].dt.quarter, ds[time_dim].dt.year)]))
+    else:
+        raise ValueError("Invalid time grouping")
+
+    ds = ds.groupby("group").map(agg_fn, **kwargs)
+    if return_timeseries:
+        ds = ds.assign_coords(time=("group", convert_group_to_time(ds['group'], grouping)))
+        ds = ds.swap_dims({'group': 'time'})
+        ds = ds.drop('group')
+        ds = ds.sortby('time')
+    return ds
+
+
+def convert_group_to_time(group, grouping):
+    """Converts a group label to a time coordinate."""
+    if grouping == 'month_of_year':
+        return [np.datetime64(f"1904-{int(x):02d}-01", 'ns') for x in group.values]
+    elif grouping == 'month':
+        return [np.datetime64(f"{x.split('-')[1]}-{int(x.split('-')[0][1:]):02d}-01", 'ns') for x in group.values]
+    elif grouping == 'year':
+        return [np.datetime64(f"{int(x)}-01-01", 'ns') for x in group.values]
+    elif grouping == 'quarter_of_year':
+        return [np.datetime64(f"1904-{(int(x)-1)*3+1:02d}-01", 'ns') for x in group.values]
+    elif grouping == 'quarter':
+        return [np.datetime64(f"{x.split('-')[1]}-{(int(x.split('-')[0][1:])-1)*3+1:02d}-01", 'ns') for x in group.values]
+    else:
+        raise ValueError("Invalid time grouping")
 
 
 def convert_to_target_date_dim(ds, forecast_date_dim, lead):

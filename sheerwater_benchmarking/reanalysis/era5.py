@@ -123,6 +123,7 @@ def era5_daily_regrid(start_time, end_time, variable, method="conservative", gri
            timeseries='time',
            cache_args=['variable', 'time_group', 'method', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
+           cache_disable_if={'time_group': 'daily'},
            chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
@@ -143,6 +144,9 @@ def era5_rolled(start_time, end_time, variable, time_group='weekly', method='con
     """
     # Read and combine all the data into an array
     ds = era5_daily_regrid(start_time, end_time, variable, method=method, grid=grid)
+    if time_group == 'daily':
+        return ds
+
     agg = {'weekly': 7, 'biweekly': 14, 'monthly': 30, 'quarterly': 90}[time_group]
     ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn="mean")
     return ds
@@ -152,8 +156,8 @@ def era5_rolled(start_time, end_time, variable, time_group='weekly', method='con
 @cacheable(data_type='array',
            timeseries='time',
            cache=False,
-           cache_args=['variable', 'lead', 'grid', 'mask', 'region'])
-def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', region='global'):
+           cache_args=['variable', 'time_group', 'grid', 'mask', 'region'])
+def era5(start_time, end_time, variable, time_group, grid='global0_25', mask='lsm', region='global'):
     """Standard format task data for ERA5 Reanalysis.
 
     Args:
@@ -165,34 +169,8 @@ def era5(start_time, end_time, variable, lead, grid='global0_25', mask='lsm', re
         mask (str): The mask to apply to the data.
         region (str): The region to clip the data to.
     """
-    lead_params = {
-        "week1": "weekly",
-        "week2": "weekly",
-        "week3": "weekly",
-        "week4": "weekly",
-        "week5": "weekly",
-        "week6": "weekly",
-        "weeks12": "biweekly",
-        "weeks23": "biweekly",
-        "weeks34": "biweekly",
-        "weeks45": "biweekly",
-        "weeks56": "biweekly",
-        "month1": "monthly",
-        "month2": "monthly",
-        "month3": "monthly",
-        "quarter1": "quarterly",
-        "quarter2": "quarterly",
-        "quarter3": "quarterly",
-        "quarter4": "quarterly",
-    }
-
-    time_group = lead_params.get(lead, None)
-    if time_group is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for ERA5.")
-
     # Get daily data
     ds = era5_rolled(start_time, end_time, variable, time_group=time_group, method='conservative', grid=grid)
-
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
     # Clip to specified region
