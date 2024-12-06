@@ -146,64 +146,6 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries='time',
-           cache=False,
-           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic',
-                 grid='global1_5', mask='lsm', region="global"):
-    """Standard format forecast data for ECMWF forecasts."""
-    lead_params = {
-        "week1": ('weekly', 0),
-        "week2": ('weekly', 7),
-        "week3": ('weekly', 14),
-        "week4": ('weekly', 21),
-        "week5": ('weekly', 28),
-        "week6": ('weekly', 35),
-        "weeks12": ('biweekly', 0),
-        "weeks23": ('biweekly', 7),
-        "weeks34": ('biweekly', 14),
-        "weeks45": ('biweekly', 21),
-        "weeks56": ('biweekly', 28),
-    }
-    time_group, lead_offset_days = lead_params.get(lead, (None, None))
-    if time_group is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
-
-    # Convert start and end time to forecast start and end based on lead time
-    forecast_start = target_date_to_forecast_date(start_time, lead)
-    forecast_end = target_date_to_forecast_date(end_time, lead)
-
-    if prob_type == 'deterministic':
-        ds = ifs_extended_range(forecast_start, forecast_end, variable, forecast_type="forecast",
-                                run_type='average', time_group=time_group, grid=grid)
-        ds = ds.assign_attrs(prob_type="deterministic")
-    else:  # probabilistic
-        ds = ifs_extended_range(forecast_start, forecast_end, variable, forecast_type="forecast",
-                                run_type='perturbed', time_group=time_group, grid=grid)
-        ds = ds.assign_attrs(prob_type="ensemble")
-
-    # Get specific lead
-    lead_shift = np.timedelta64(lead_offset_days, 'D')
-    ds = ds.sel(lead_time=lead_shift)
-
-    # Time shift - we want target date, instead of forecast date
-    ds = convert_to_target_date_dim(ds, 'start_date', lead)
-
-    # TODO: remove this once we update ECMWF caches
-    if variable == 'precip':
-        print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
-        agg = {'weekly': 7, 'biweekly': 14}[time_group]
-        ds['precip'] /= agg
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
            cache_args=['variable', 'lead', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
@@ -368,6 +310,64 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
     # Need all lats / lons in a single chunk for the output to be reasonable
     ds = regrid(ds, grid, base='base180', method='conservative',
                 output_chunks={"lat": 721, "lon": 1440})
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
+def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic',
+                 grid='global1_5', mask='lsm', region="global"):
+    """Standard format forecast data for ECMWF forecasts."""
+    lead_params = {
+        "week1": ('weekly', 0),
+        "week2": ('weekly', 7),
+        "week3": ('weekly', 14),
+        "week4": ('weekly', 21),
+        "week5": ('weekly', 28),
+        "week6": ('weekly', 35),
+        "weeks12": ('biweekly', 0),
+        "weeks23": ('biweekly', 7),
+        "weeks34": ('biweekly', 14),
+        "weeks45": ('biweekly', 21),
+        "weeks56": ('biweekly', 28),
+    }
+    time_group, lead_offset_days = lead_params.get(lead, (None, None))
+    if time_group is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
+
+    # Convert start and end time to forecast start and end based on lead time
+    forecast_start = target_date_to_forecast_date(start_time, lead)
+    forecast_end = target_date_to_forecast_date(end_time, lead)
+
+    if prob_type == 'deterministic':
+        ds = ifs_extended_range(forecast_start, forecast_end, variable, forecast_type="forecast",
+                                run_type='average', time_group=time_group, grid=grid)
+        ds = ds.assign_attrs(prob_type="deterministic")
+    else:  # probabilistic
+        ds = ifs_extended_range(forecast_start, forecast_end, variable, forecast_type="forecast",
+                                run_type='perturbed', time_group=time_group, grid=grid)
+        ds = ds.assign_attrs(prob_type="ensemble")
+
+    # Get specific lead
+    lead_shift = np.timedelta64(lead_offset_days, 'D')
+    ds = ds.sel(lead_time=lead_shift)
+
+    # Time shift - we want target date, instead of forecast date
+    ds = convert_to_target_date_dim(ds, 'start_date', lead)
+
+    # TODO: remove this once we update ECMWF caches
+    if variable == 'precip':
+        print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
+        agg = {'weekly': 7, 'biweekly': 14}[time_group]
+        ds['precip'] /= agg
+
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
     return ds
 
 
