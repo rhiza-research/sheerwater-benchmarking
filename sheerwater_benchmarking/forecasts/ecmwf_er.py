@@ -9,7 +9,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lon_base_change,
                                            regrid, get_variable,
                                            target_date_to_forecast_date,
-                                           convert_to_target_date_dim)
+                                           convert_to_target_date_dim, start_remote)
 
 
 @dask_remote
@@ -79,6 +79,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
+           #    cache_disable_if={'grid': 'global1_5'},
            chunking={"lat": 121, "lon": 240, "lead_time": 1,
                      "start_date": 1000,
                      "model_issuance_date": 1000, "start_year": 1,
@@ -427,3 +428,11 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
     # Clip to specified region
     ds = clip_region(ds, region=region)
     return ds
+
+
+if __name__ == '__main__':
+    start_time = "2015-05-14"
+    end_time = "2023-06-30"
+    start_remote(remote_config='xxlarge_cluster', remote_name='regrid')
+    ds = ifs_extended_range(start_time, end_time, 'precip', forecast_type='forecast',
+                            run_type='average', time_group='daily', grid='global0_25')

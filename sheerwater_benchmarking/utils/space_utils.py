@@ -87,6 +87,16 @@ def get_region(region):
                                                 'United Republic of Tanzania',
                                                 'Uganda'])).dropna(how='all')
         data = (lons, lats, gdf)
+    elif region == "kenya":
+        # Get the countries of Africa shapefile
+        lons = np.array([33.5, 42.0])
+        lats = np.array([-5.0, 5.2])
+        filepath = 'gs://sheerwater-datalake/regions/africa.geojson'
+        gdf = gpd.read_file(load_object(filepath))
+
+        # Filter the gdf
+        gdf = gdf.where(gdf['sovereignt'].isin(['Kenya'])).dropna(how='all')
+        data = (lons, lats, gdf)
     elif region == "conus":
         lons = np.array([-125.0, -67.0])
         lats = np.array([25.0, 50.0])

@@ -149,7 +149,7 @@ def lon_base_change(ds, to_base="base180", lon_dim='lon'):
     return ds
 
 
-def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
+def clip_region(ds, region, lon_dim='lon', lat_dim='lat', drop=False):
     """Clip a dataset to a region.
 
     Args:
@@ -173,7 +173,7 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
         ds = ds.rio.set_spatial_dims(lon_dim, lat_dim)
 
         # Clip the grid to the boundary of Shapefile
-        ds = ds.rio.clip(gdf.geometry, gdf.crs, drop=False)
+        ds = ds.rio.clip(gdf.geometry, gdf.crs, drop=drop)
 
     # Slice the globe
     ds = get_globe_slice(ds, lon_slice, lat_slice, lon_dim=lon_dim, lat_dim=lat_dim, base='base180')

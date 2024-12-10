@@ -110,9 +110,9 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
         elif grp == 'ea_rainy_season':
             # East African rainy period is from March to May and October to December
             def month_to_period(month):
-                if 3 <= month <= 5:
+                if 2 <= month <= 5:
                     return 1
-                elif (10 <= month <= 12) or (1 <= month < 2):
+                elif 8 <= month <= 12:
                     return 2
                 else:
                     return 3
@@ -155,7 +155,7 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
     #         #                              zip(ds[time_dim].dt.month, ds[time_dim].dt.year)]))
 
 
-def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, **kwargs):
+def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, only_schema=False, **kwargs):
     """Aggregates data in groups along the time dimension according to time_grouping.
 
     Args:
@@ -185,17 +185,25 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
     for grp, agg in zip(groupby, agg_fn):
         # If no grouping is specified, apply the aggregation function directly
         if grp is None:
+            if only_schema:
+                continue
             ds = agg(ds, **kwargs)
         else:
             ds = assign_grouping_coordinates(ds, grp, time_dim)
-            ds = ds.groupby("group").map(agg, **kwargs)
+            if only_schema:
+                # Get the first element of each group to create a schema
+                ds = ds.groupby("group").first()
+            else:
+                ds = ds.groupby("group").map(agg, **kwargs)
+            if 'group' not in ds.dims:
+                raise ValueError("Aggregation function must compress dataset along the group dimension.")
 
         # Convert group to time
         if (return_timeseries or len(groupby) > 1) and 'group' in ds.coords:
             ds = ds.assign_coords(time=("group", convert_group_to_time(ds['group'], grp)))
             ds = ds.swap_dims({'group': 'time'})
-            ds = ds.drop('group')
             ds = ds.sortby('time')
+            ds = ds.drop('group')
 
     # If we are aggregating across multiple periods, take the mean
     # if average_over is not None:
