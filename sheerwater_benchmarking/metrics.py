@@ -229,7 +229,23 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                            metric=called_metric, grid=grid, mask=mask, region='global')
         if ds is None:
             return None
-        ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
+
+        # Group the time column based on time grouping
+        if time_grouping:
+            if time_grouping == 'month_of_year':
+                # TODO if you want this as a name: ds.coords["time"] = ds.time.dt.strftime("%B")
+                ds.coords["time"] = ds.time.dt.month
+            elif time_grouping == 'year':
+                ds.coords["time"] = ds.time.dt.year
+            elif time_grouping == 'quarter_of_year':
+                ds.coords["time"] = ds.time.dt.quarter
+            else:
+                raise ValueError("Invalid time grouping")
+
+            ds = ds.groupby("time").mean()
+        else:
+            # Average in time
+            ds = ds.mean(dim="time")
 
     # Clip it to the region
     ds = clip_region(ds, region)
