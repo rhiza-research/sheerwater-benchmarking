@@ -16,7 +16,7 @@ from .space_utils import (get_grid_ds,
 from .time_utils import add_dayofyear
 
 
-def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
+def roll_and_agg(ds, agg, agg_col, agg_fn="mean", agg_thresh=None):
     """Rolling aggregation of the dataset.
 
     Applies rolling and then corrects rolling window labels to be left aligned.
@@ -30,7 +30,7 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
     """
     agg_kwargs = {
         f"{agg_col}": agg,
-        "min_periods": agg,
+        "min_periods": agg_thresh,
         "center": False
     }
     # Apply n-day rolling aggregation
