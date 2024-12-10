@@ -427,11 +427,3 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
     # Clip to specified region
     ds = clip_region(ds, region=region)
     return ds
-
-
-if __name__ == '__main__':
-    start_time = "2015-05-14"
-    end_time = "2023-06-30"
-    start_remote(remote_config='xxlarge_cluster', remote_name='regrid')
-    ds = ifs_extended_range(start_time, end_time, 'precip', forecast_type='forecast',
-                            run_type='average', time_group='daily', grid='global0_25')
