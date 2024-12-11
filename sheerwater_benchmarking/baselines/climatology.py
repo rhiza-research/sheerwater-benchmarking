@@ -91,7 +91,6 @@ def climatology_agg_raw(variable, first_year=1985, last_year=2014,
             doys.append(
                 sample_members(ds.isel(time=(ds.dayofyear.values == doy))))
         ds = xr.concat(doys, dim='dayofyear')
-        ds = ds.chunk({'dayofyear': 1, 'member': 30})
         return ds
     else:
         raise ValueError(f"Unsupported prob_type: {prob_type}")

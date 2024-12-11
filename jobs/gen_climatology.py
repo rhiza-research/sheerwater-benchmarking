@@ -16,7 +16,7 @@ grids = ["global0_25", "global1_5"]
 time_groups = ["weekly", "biweekly"]
 
 start_time = "1979-01-01"
-end_time = "2024-01-01"
+end_time = "2024-12-31"
 forecast_start_time = "2015-05-14"
 forecast_end_time = "2023-06-30"
 prob_types = ["deterministic", "probabilistic"]
@@ -78,6 +78,5 @@ for var, grid in product(vars, grids):
         for prob_type in prob_types:
             if UPDATE_CLIM_AGG:
                 ds = climatology_agg_raw(variable=var,
-                                         first_year=first_val_year, last_year=last_val_year,
-                                         prob_type=prob_type, time_group=time_group, grid=grid,
-                                         recompute=True, force_overwrite=True)
+                                         first_year=first_year, last_year=last_year,
+                                         prob_type=prob_type, time_group=time_group, grid=grid)

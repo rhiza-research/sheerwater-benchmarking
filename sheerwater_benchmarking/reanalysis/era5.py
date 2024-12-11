@@ -136,7 +136,7 @@ def era5_rolled(start_time, end_time, variable, time_group='weekly', method='con
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
-        time_group (str): The aggregation period. One of: 'weekly', 'biweekly', 'monthly', 'quarterly'.
+        time_group (str): The aggregation period. One of: 'daily', 'weekly', 'biweekly', 'monthly', 'quarterly'.
         method (str): The regridding method to use. One of: 'conservative', 'linear'
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
