@@ -5,7 +5,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_forecast
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
-                                           groupby_time, lead_to_time_group)
+                                           lead_to_time_group)
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics

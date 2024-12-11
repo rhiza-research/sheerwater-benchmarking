@@ -99,8 +99,9 @@ def dayofyear_to_datetime(x):
 
 def convert_to_target_date_dim(ds, forecast_date_dim, lead):
     """Creates a target date dimension `time` from a forecast date coordinate and lead time."""
-    ds = ds.assign_coords(time=(forecast_date_dim, [np.datetime64(forecast_date_to_target_date(x, lead, return_string=False), 'ns')
-                                for x in ds[forecast_date_dim].values]))
+    ds = ds.assign_coords(time=(forecast_date_dim,
+                                [np.datetime64(forecast_date_to_target_date(x, lead, return_string=False), 'ns')
+                                 for x in ds[forecast_date_dim].values]))
     ds = ds.swap_dims({forecast_date_dim: 'time'})
     ds = ds.drop(forecast_date_dim)
     return ds

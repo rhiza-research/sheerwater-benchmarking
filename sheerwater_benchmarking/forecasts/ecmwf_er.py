@@ -9,7 +9,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lon_base_change,
                                            regrid, get_variable,
                                            target_date_to_forecast_date,
-                                           convert_to_target_date_dim, start_remote)
+                                           convert_to_target_date_dim)
 
 
 @dask_remote
