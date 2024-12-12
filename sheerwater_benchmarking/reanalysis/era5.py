@@ -123,7 +123,7 @@ def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
            timeseries='time',
            cache_args=['variable', 'agg_days', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           cache_disable_if={'agg_days': 'daily'},
+           cache_disable_if={'agg_days': 1},
            chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
@@ -143,7 +143,7 @@ def era5_rolled(start_time, end_time, variable, agg_days=7, grid="global1_5"):
     """
     # Read and combine all the data into an array
     ds = era5_daily_regrid(start_time, end_time, variable, grid=grid)
-    if agg_days == 'daily':
+    if agg_days == 1:
         return ds
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn="mean")
     return ds
@@ -161,7 +161,7 @@ def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
-        agg_days (str): The aggregation period. One of: 'daily', 'weekly', 'biweekly', 'monthly', 'quarterly'.
+        agg_days (int): The aggregation period, in days. 
         grid (str): The grid resolution to fetch the data at.
         mask (str): The mask to apply to the data.
         region (str): The region to clip the data to.
