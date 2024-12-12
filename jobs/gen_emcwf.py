@@ -11,10 +11,10 @@ if __name__ == "__main__":
     # vars = ["tmp2m"]
     # aggs = [14, 7]
     aggs = [14]
-    # time_groups = ['weekly', 'biweekly']
-    time_groups = []
-    # time_groups = ['weekly']
-    # time_groups = ['biweekly']
+    # agg_dayss = ['weekly', 'biweekly']
+    agg_dayss = []
+    # agg_dayss = ['weekly']
+    # agg_dayss = ['biweekly']
     # grids = ["global1_5", "global0_25"]
     # grids = ["global0_25"]
     grids = ["global1_5"]
@@ -40,7 +40,7 @@ if __name__ == "__main__":
             if grid != "global0_25" or (grid == 'global0_25' and ft == "reforecast"):
                 continue
             ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
-                                    run_type=rt, time_group=time,
+                                    run_type=rt, agg_days=time,
                                     grid=grid,
                                     remote=True,
                                     remote_config={'name': 'ecmwf-regrid2',
@@ -49,7 +49,7 @@ if __name__ == "__main__":
                                                    'idle_timeout': '240 minutes'})
         if UPDATE_BIAS:
             ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
-                                             run_type=rt, time_group=time,
+                                             run_type=rt, agg_days=time,
                                              grid=grid,
                                              #  recompute=True, force_overwrite=True,
                                              remote=True,

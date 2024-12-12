@@ -93,7 +93,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'method', 'grid'],
+           cache_args=['variable', 'grid'],
            cache_disable_if={'grid': 'global0_25'},
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
@@ -102,7 +102,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
                }
            },
            auto_rechunk=False)
-def era5_daily_regrid(start_time, end_time, variable, method="conservative", grid="global0_25"):
+def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
     """ERA5 daily reanalysis with regridding."""
     ds = era5_daily(start_time, end_time, variable, grid='global0_25')
     ds = ds.sortby('lat')  # TODO: remove if we fix the era5 daily caches
@@ -114,14 +114,14 @@ def era5_daily_regrid(start_time, end_time, variable, method="conservative", gri
     chunks = {'lat': 721, 'lon': 1440, 'time': 30}
     ds = ds.chunk(chunks)
     # Need all lats / lons in a single chunk for the output to be reasonable
-    ds = regrid(ds, grid, base='base180', method=method, output_chunks={"lat": 121, "lon": 240})
+    ds = regrid(ds, grid, base='base180', method='conservative', output_chunks={"lat": 121, "lon": 240})
     return ds
 
 
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'agg_days', 'method', 'grid'],
+           cache_args=['variable', 'agg_days', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            cache_disable_if={'agg_days': 'daily'},
            chunk_by_arg={
@@ -129,7 +129,7 @@ def era5_daily_regrid(start_time, end_time, variable, method="conservative", gri
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }
            })
-def era5_rolled(start_time, end_time, variable, agg_days=7, method='conservative', grid="global1_5"):
+def era5_rolled(start_time, end_time, variable, agg_days=7, grid="global1_5"):
     """Aggregates the hourly ERA5 data into daily data and rolls.
 
     Args:
@@ -137,13 +137,12 @@ def era5_rolled(start_time, end_time, variable, agg_days=7, method='conservative
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
         agg_days (int): The aggregation period, in days.
-        method (str): The regridding method to use. One of: 'conservative', 'linear'
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
             - global0_25: 0.25 degree global grid
     """
     # Read and combine all the data into an array
-    ds = era5_daily_regrid(start_time, end_time, variable, method=method, grid=grid)
+    ds = era5_daily_regrid(start_time, end_time, variable, grid=grid)
     if agg_days == 'daily':
         return ds
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn="mean")
@@ -168,7 +167,7 @@ def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
         region (str): The region to clip the data to.
     """
     # Get daily data
-    ds = era5_rolled(start_time, end_time, variable, agg_days=agg_days, method='conservative', grid=grid)
+    ds = era5_rolled(start_time, end_time, variable, agg_days=agg_days, grid=grid)
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
     # Clip to specified region
