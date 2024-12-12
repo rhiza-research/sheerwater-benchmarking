@@ -81,7 +81,7 @@ def lead_to_agg_days(lead):
     if 'day' in lead:
         return 1
     elif 'weeks' in lead:
-        return 7
+        return 14
     elif 'week' in lead:
         return 7
     elif 'month' in lead:

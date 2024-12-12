@@ -14,14 +14,14 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'forecast_type', 'run_type', 'agg_days', 'grid'],
+           cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
            cache=False,
            timeseries=['start_date', 'model_issuance_date'],
            chunking={"lat": 121, "lon": 240, "lead_time": 46,
                      "start_date": 29, "start_year": 29,
                      "model_issuance_date": 1})
 def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noqa ARG001
-                           run_type='average', agg_days=7, grid="global1_5"):
+                           run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast data from the WeatherBench2 dataset.
 
     Args:
@@ -33,7 +33,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
             - average: to download the averaged of the perturbed runs
             - perturbed: to download all perturbed runs
             - [int 0-50]: to download a specific  perturbed run
-        agg_days (int): The time grouping to use. One of: "daily", "weekly", "biweekly"
+        time_group (str): The time grouping to use. One of: "daily", "weekly", "biweekly"
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
     """
@@ -42,10 +42,10 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
 
     forecast_str = "-reforecast" if forecast_type == "reforecast" else ""
     run_str = "_ens_mean" if run_type == "average" else ""
-    avg_str = "-avg" if agg_days == "daily" else "_avg"  # different naming for daily
-    time_str = "" if agg_days == "daily" else "-weekly" if agg_days == "weekly" else "-biweekly"
+    avg_str = "-avg" if time_group == "daily" else "_avg"  # different naming for daily
+    time_str = "" if time_group == "daily" else "-weekly" if time_group == "weekly" else "-biweekly"
     file_str = f'ifs-ext{forecast_str}-full-single-level{time_str}{avg_str}{run_str}.zarr'
-    filepath = f'gs://weatherbench2/datasets/ifs_extended_range/{agg_days}/{file_str}'
+    filepath = f'gs://weatherbench2/datasets/ifs_extended_range/{time_group}/{file_str}'
 
     # Pull the google dataset
     ds = xr.open_zarr(filepath)
@@ -76,7 +76,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'forecast_type', 'run_type', 'agg_days', 'grid'],
+           cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
            chunking={"lat": 121, "lon": 240, "lead_time": 1,
@@ -92,7 +92,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            },
            auto_rechunk=False)
 def ifs_extended_range(start_time, end_time, variable, forecast_type,
-                       run_type='average', agg_days='weekly', grid="global1_5"):
+                       run_type='average', time_group='weekly', grid="global1_5"):
     """Fetches IFS extended range forecast and reforecast data from the WeatherBench2 dataset.
 
     Args:
@@ -104,13 +104,13 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
             - average: to download the averaged of the perturbed runs
             - perturbed: to download all perturbed runs
             - [int 0-50]: to download a specific  perturbed run
-        agg_days (str): The time grouping to use. One of: "daily", "weekly", "biweekly"
+        time_group (str): The time grouping to use. One of: "daily", "weekly", "biweekly"
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
     """
     """IRI ECMWF average forecast with regridding."""
     ds = ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
-                                run_type, agg_days, grid='global1_5')
+                                run_type, time_group=time_group, grid='global1_5')
     # Convert to base180 longitude
     ds = lon_base_change(ds, to_base="base180")
 
@@ -147,16 +147,16 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'lead', 'run_type', 'agg_days', 'grid'],
+           cache_args=['variable', 'lead', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
            chunking={"lat": 121, "lon": 240, "lead_time": 1, "model_issuance_date": 1000})
 def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type='average',
-                                agg_days='weekly', grid="global1_5"):
+                                time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead."""
     # Fetch the reforecast data; get's the past 20 years associated with each start date
     ds_deb = ifs_extended_range(start_time, end_time, variable, forecast_type="reforecast",
-                                run_type=run_type, agg_days=agg_days, grid=grid)
+                                run_type=run_type, time_group=time_group, grid=grid)
 
     # Get the appropriate lead
     n_leads = len(ds_deb.lead_time)
@@ -175,8 +175,8 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
                - relativedelta(years=1)).strftime("%Y-%m-%d")
 
     # Get the pre-aggregated ERA5 data
-    agg = {'daily': 1, 'weekly': 7, 'biweekly': 14}[agg_days]
-    ds_truth = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid)
+    agg = {'daily': 1, 'weekly': 7, 'biweekly': 14}[time_group]
+    ds_truth = era5_rolled(new_start, new_end, variable, agg_days=agg, grid=grid)
 
     def get_bias(ds_sub):
         """Get the 20-year estimated bias of the reforecast data."""
@@ -203,14 +203,14 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'run_type', 'agg_days', 'grid'],
+           cache_args=['variable', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
            chunking={"lat": 121, "lon": 240, "lead_time": 1, "model_issuance_date": 1000})
-def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', agg_days='weekly', grid="global1_5"):
+def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for all leads."""
     # Fetch the reforecast data to calculate how many leads we need
-    if agg_days == 'weekly':
+    if time_group == 'weekly':
         leads = [0, 7, 14, 21, 28, 35]
     else:
         leads = [0, 7, 14, 21, 28]
@@ -219,7 +219,7 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', a
     biases = []
     for i in leads:
         biases.append(ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=i,
-                                                  run_type=run_type, agg_days=agg_days, grid=grid))
+                                                  run_type=run_type, time_group=time_group, grid=grid))
     # Concatenate leads and unstack
     ds_biases = xr.concat(biases, dim='lead_time')
     return ds_biases
@@ -227,7 +227,7 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', a
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'margin_in_days', 'run_type', 'agg_days', 'grid'],
+           cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date'],
            chunking={"lat": 121, "lon": 240, "lead_time": 1,
@@ -242,16 +242,16 @@ def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', a
                },
            })
 def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6,
-                                run_type='average', agg_days='weekly', grid="global1_5"):
+                                run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts."""
     # Get bias data from reforecast; for now, debias with deterministic bias
     ds_b = ifs_er_reforecast_bias(start_time, end_time, variable,
-                                  run_type='average', agg_days=agg_days, grid=grid)
+                                  run_type='average', time_group=time_group, grid=grid)
 
     # Get forecast data
     ds_f = ifs_extended_range(start_time, end_time, variable, forecast_type='forecast',
-                              run_type=run_type, agg_days=agg_days, grid=grid)
-    if agg_days == 'weekly':
+                              run_type=run_type, time_group=time_group, grid=grid)
+    if time_group == 'weekly':
         leads = [np.timedelta64(x, 'D') for x in [0, 7, 14, 21, 28, 35]]
     else:
         leads = [np.timedelta64(x, 'D') for x in [0, 7, 14, 21, 28]]
@@ -278,7 +278,7 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'margin_in_days', 'run_type', 'agg_days', 'grid'],
+           cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date'],
            chunking={"lat": 121, "lon": 240, "lead_time": 1,
@@ -293,10 +293,10 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
                },
            })
 def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in_days=6,
-                                       run_type='average', agg_days='weekly', grid="global1_5"):
+                                       run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts."""
     ds = ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=margin_in_days,
-                                     run_type=run_type, agg_days=agg_days, grid='global1_5')
+                                     run_type=run_type, time_group=time_group, grid='global1_5')
     if grid == 'global1_5':
         return ds
 
@@ -335,8 +335,8 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
         "weeks45": ('biweekly', 21),
         "weeks56": ('biweekly', 28),
     }
-    agg_days, lead_offset_days = lead_params.get(lead, (None, None))
-    if agg_days is None:
+    time_group, lead_offset_days = lead_params.get(lead, (None, None))
+    if time_group is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
 
     # Convert start and end time to forecast start and end based on lead time
@@ -345,11 +345,11 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
 
     if prob_type == 'deterministic':
         ds = ifs_extended_range(forecast_start, forecast_end, variable, forecast_type="forecast",
-                                run_type='average', agg_days=agg_days, grid=grid)
+                                run_type='average', time_group=time_group, grid=grid)
         ds = ds.assign_attrs(prob_type="deterministic")
     else:  # probabilistic
         ds = ifs_extended_range(forecast_start, forecast_end, variable, forecast_type="forecast",
-                                run_type='perturbed', agg_days=agg_days, grid=grid)
+                                run_type='perturbed', time_group=time_group, grid=grid)
         ds = ds.assign_attrs(prob_type="ensemble")
 
     # Get specific lead
@@ -362,7 +362,7 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip':
         print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
-        agg = {'weekly': 7, 'biweekly': 14}[agg_days]
+        agg = {'weekly': 7, 'biweekly': 14}[time_group]
         ds['precip'] /= agg
 
     # Apply masking
@@ -393,8 +393,8 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
         "weeks45": ('biweekly', 21),
         "weeks56": ('biweekly', 28),
     }
-    agg_days, lead_offset_days = lead_params.get(lead, (None, None))
-    if agg_days is None:
+    time_group, lead_offset_days = lead_params.get(lead, (None, None))
+    if time_group is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF debiased forecasts.")
 
     # Convert start and end time to forecast start and end based on lead time
@@ -403,11 +403,11 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
 
     if prob_type == 'deterministic':
         ds = ifs_extended_range_debiased_regrid(forecast_start, forecast_end, variable, margin_in_days=6,
-                                                run_type='average', agg_days=agg_days, grid=grid)
+                                                run_type='average', time_group=time_group, grid=grid)
         ds = ds.assign_attrs(prob_type="deterministic")
     else:  # probabilistic
         ds = ifs_extended_range_debiased_regrid(forecast_start, forecast_end, variable, margin_in_days=6,
-                                                run_type='perturbed', agg_days=agg_days, grid=grid)
+                                                run_type='perturbed', time_group=time_group, grid=grid)
         ds = ds.assign_attrs(prob_type="ensemble")
 
     # Get specific lead
@@ -420,7 +420,7 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip':
         print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
-        agg = {'weekly': 7, 'biweekly': 14}[agg_days]
+        agg = {'weekly': 7, 'biweekly': 14}[time_group]
         ds['precip'] /= agg
 
     # Apply masking

@@ -13,7 +13,7 @@ grids = ["global0_25", "global1_5"]
 # grids = ["global0_25"]
 # aggs = [7, 14]
 # aggs = [7]
-agg_dayss = ["weekly", "biweekly"]
+agg_days = [7, 14]
 
 start_time = "1979-01-01"
 end_time = "2024-12-31"
