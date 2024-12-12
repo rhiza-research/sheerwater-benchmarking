@@ -10,86 +10,23 @@ from dateutil.relativedelta import relativedelta
 
 DATETIME_FORMAT = "%Y-%m-%d"
 
+# Lead aggregation period in days and offset
 LEAD_OFFSETS = {
-    'day1': (0, 'days'),
-    'day2': (1, 'days'),
-    'day3': (2, 'days'),
-    'day4': (3, 'days'),
-    'day5': (4, 'days'),
-    'day6': (5, 'days'),
-    'day7': (6, 'days'),
-    'day8': (7, 'days'),
-    'day9': (8, 'days'),
-    'day10': (9, 'days'),
-    'day11': (10, 'days'),
-    'day12': (11, 'days'),
-    'day13': (12, 'days'),
-    'day14': (13, 'days'),
-    'day15': (14, 'days'),
-    'day16': (15, 'days'),
-    'day17': (16, 'days'),
-    'day18': (17, 'days'),
-    'day19': (18, 'days'),
-    'day20': (19, 'days'),
-    'day21': (20, 'days'),
-    'day22': (21, 'days'),
-    'day23': (22, 'days'),
-    'day24': (23, 'days'),
-    'day25': (24, 'days'),
-    'day26': (25, 'days'),
-    'day27': (26, 'days'),
-    'day28': (27, 'days'),
-    'day29': (28, 'days'),
-    'day30': (29, 'days'),
-    'day31': (30, 'days'),
-    'day32': (31, 'days'),
-    'day33': (32, 'days'),
-    'day34': (33, 'days'),
-    'day35': (34, 'days'),
-    'day36': (35, 'days'),
-    'day37': (36, 'days'),
-    'day38': (37, 'days'),
-    'day39': (38, 'days'),
-    'day40': (39, 'days'),
-    'day41': (40, 'days'),
-    'day42': (41, 'days'),
-    'day43': (42, 'days'),
-    'day44': (43, 'days'),
-    'day45': (44, 'days'),
-    'day46': (45, 'days'),
-    'week1': (0, 'days'),
-    'week2': (7, 'days'),
-    'week3': (14, 'days'),
-    'week4': (21, 'days'),
-    'week5': (28, 'days'),
-    'week6': (35, 'days'),
-    'weeks12': (0, 'days'),
-    'weeks34': (14, 'days'),
-    'weeks56': (28, 'days'),
-    'month1': (0, 'months'),
-    'month2': (1, 'months'),
-    'month3': (2, 'months'),
-    'quarter1': (0, 'months'),
-    'quarter2': (3, 'months'),
-    'quarter3': (6, 'months'),
-    'quarter4': (9, 'months'),
+    'week1': (7, (0, 'days')),
+    'week2': (7, (7, 'days')),
+    'week3': (7, (14, 'days')),
+    'week4': (7, (21, 'days')),
+    'week5': (7, (28, 'days')),
+    'week6': (7, (35, 'days')),
+    'weeks12': (14, (0, 'days')),
+    'weeks34': (14, (14, 'days')),
+    'weeks56': (14, (28, 'days')),
 }
 
 
 def lead_to_agg_days(lead):
     """Convert lead to time grouping."""
-    if 'day' in lead:
-        return 1
-    elif 'weeks' in lead:
-        return 14
-    elif 'week' in lead:
-        return 7
-    elif 'month' in lead:
-        return 30
-    elif 'quarter' in lead:
-        return 90
-    else:
-        raise ValueError(f"Unknown lead {lead}")
+    return LEAD_OFFSETS[lead][0]
 
 
 def dayofyear_to_datetime(x):
@@ -101,36 +38,49 @@ def dayofyear_to_datetime(x):
 
 def shift_forecast_date_to_target_date(ds, forecast_date_dim, lead):
     """Shift a forecast date dimension to a target date coordinate from a lead time."""
-    ds = ds.assign_coords(forecast_date_dim=[np.datetime64(
-        forecast_date_to_target_date(x, lead, return_string=False), 'ns')
-        for x in ds[forecast_date_dim].values])
+    ds = ds.assign_coords(forecast_date_dim=[
+        forecast_date_to_target_date(x, lead) for x in ds[forecast_date_dim].values])
     return ds
 
 
-def target_date_to_forecast_date(target_date, lead, return_string=True):
+def target_date_to_forecast_date(target_date, lead):
     """Converts a target date to a forecast date."""
-    return _date_shift(target_date, lead, add=False, return_string=return_string)
+    return _date_shift(target_date, lead, shift='backward')
 
 
-def forecast_date_to_target_date(forecast_date, lead, return_string=True):
+def forecast_date_to_target_date(forecast_date, lead):
     """Converts a forecast date to a target date."""
-    return _date_shift(forecast_date, lead, add=True, return_string=return_string)
+    return _date_shift(forecast_date, lead, shift='forward')
 
 
-def _date_shift(date, lead, add=False, return_string=True):
+def _date_shift(date, lead, shift='forward'):
     """Converts a target date to a forecast date or visa versa."""
-    offset, offset_units = LEAD_OFFSETS[lead]
+    offset, offset_units = LEAD_OFFSETS[lead][1]
+    input_type = type(date)
+
+    # Convert input time to datetime object  for relative delta
     if isinstance(date, str):
         date_obj = dateparser.parse(date)
+    elif isinstance(date, np.datetime64):
+        date_obj = date.astype(datetime)
+    elif isinstance(date, datetime):
+        date_obj = date
     else:
-        date_obj = date.astype('M8[D]').astype('O')
-    if add:
-        new_date = date_obj + relativedelta(**{offset_units: offset})
-    else:
-        new_date = date_obj - relativedelta(**{offset_units: offset})
+        raise ValueError(f"Date type {type(date)} not supported.")
 
-    if return_string:
+    # Shift the date
+    if shift == 'forward':
+        new_date = date_obj + relativedelta(**{offset_units: offset})
+    elif shift == 'backward':
+        new_date = date_obj - relativedelta(**{offset_units: offset})
+    else:
+        raise ValueError(f"Shift direction {shift} not supported")
+
+    # Convert back to original type
+    if np.issubdtype(input_type, str):
         new_date = datetime.strftime(new_date, "%Y-%m-%d")
+    elif np.issubdtype(input_type, np.datetime64):
+        new_date = np.datetime64(new_date, 'ns')
     return new_date
 
 
