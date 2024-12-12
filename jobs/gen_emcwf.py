@@ -10,7 +10,7 @@ if __name__ == "__main__":
     # vars = ["precip"]
     # vars = ["tmp2m"]
     # aggs = [14, 7]
-    agg_days = [7, 14]
+    time_groups = ["weekly", "biweekly"]
     # grids = ["global1_5", "global0_25"]
     # grids = ["global0_25"]
     grids = ["global1_5"]
@@ -31,12 +31,12 @@ if __name__ == "__main__":
     UPDATE_BIAS = False
     UPDATE_AGG = True
 
-    for var, ft, grid, time, rt in product(vars, forecast_type, grids, agg_days, run_types):
+    for var, ft, grid, time, rt in product(vars, forecast_type, grids, time_groups, run_types):
         if UPDATE_IFS_ER_GRID:
             if grid != "global0_25" or (grid == 'global0_25' and ft == "reforecast"):
                 continue
             ds = ifs_extended_range(start_time, end_time, variable=var, forecast_type=ft,
-                                    run_type=rt, agg_days=time,
+                                    run_type=rt, time_group=time,
                                     grid=grid,
                                     remote=True,
                                     remote_config={'name': 'ecmwf-regrid2',
@@ -45,7 +45,7 @@ if __name__ == "__main__":
                                                    'idle_timeout': '240 minutes'})
         if UPDATE_BIAS:
             ds = ifs_extended_range_debiased(start_time, end_time, variable=var,
-                                             run_type=rt, agg_days=time,
+                                             run_type=rt, time_group=time,
                                              grid=grid,
                                              #  recompute=True, force_overwrite=True,
                                              remote=True,
