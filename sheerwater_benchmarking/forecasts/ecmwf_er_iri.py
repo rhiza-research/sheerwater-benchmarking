@@ -416,9 +416,9 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
         forecast_type (str): The type of forecast to fetch. One of "forecast" or "hindcast".
+        agg_days (int): The aggregation period, in days.
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
-        agg (str): The aggregation period to use, in days
     """
     # Read and combine all the data into an array
     ds = ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid=grid)

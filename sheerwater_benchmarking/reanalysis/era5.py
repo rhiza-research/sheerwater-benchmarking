@@ -161,7 +161,7 @@ def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
-        agg_days (int): The aggregation period, in days. 
+        agg_days (int): The aggregation period, in days.
         grid (str): The grid resolution to fetch the data at.
         mask (str): The mask to apply to the data.
         region (str): The region to clip the data to.
