@@ -93,7 +93,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'grid'],
+           cache_args=['variable', 'method', 'grid'],
            cache_disable_if={'grid': 'global0_25'},
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
@@ -102,7 +102,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
                }
            },
            auto_rechunk=False)
-def era5_daily_regrid(start_time, end_time, variable, grid="global0_25"):
+def era5_daily_regrid(start_time, end_time, variable, method="conservative", grid="global0_25"):
     """ERA5 daily reanalysis with regridding."""
     ds = era5_daily(start_time, end_time, variable, grid='global0_25')
     ds = ds.sortby('lat')  # TODO: remove if we fix the era5 daily caches
