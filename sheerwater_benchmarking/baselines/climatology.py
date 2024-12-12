@@ -74,6 +74,7 @@ def climatology_agg_raw(variable, first_year=1985, last_year=2014,
             doys.append(
                 sample_members(ds.isel(time=(ds.dayofyear.values == doy))))
         ds = xr.concat(doys, dim='dayofyear')
+        ds = ds.chunk(member=1)
         return ds
     else:
         raise ValueError(f"Unsupported prob_type: {prob_type}")
@@ -158,7 +159,7 @@ def _era5_rolled_for_clim(start_time, end_time, variable, agg_days=7, grid="glob
            cache=True,
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'dayofyear': 10}
+                   'global0_25': {"lat": 721, "lon": 1440, 'dayofyear': 30}
                }
            },
            auto_rechunk=False)
