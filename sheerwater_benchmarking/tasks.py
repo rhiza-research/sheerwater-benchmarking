@@ -217,7 +217,8 @@ def rainy_season_onset_error(start_time, end_time,
     # Compute derived metrics
     ds['error'] = (ds['forecast'] - ds['truth']).dt.days
     ds['look_ahead'] = (ds['truth'] - ds['start_date']).dt.days
-    ds['lead'] = (ds['truth'] - ds['forecast']).dt.days
+    ds['lead'] = (ds['forecast'] - ds['start_date']).dt.days
+
     return ds
 
 
