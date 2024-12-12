@@ -9,7 +9,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lon_base_change,
                                            regrid, get_variable,
                                            target_date_to_forecast_date,
-                                           convert_to_target_date_dim)
+                                           shift_forecast_date_to_target_date)
 
 
 @dask_remote
@@ -357,7 +357,7 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
     ds = ds.sel(lead_time=lead_shift)
 
     # Time shift - we want target date, instead of forecast date
-    ds = convert_to_target_date_dim(ds, 'start_date', lead)
+    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
 
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip':
@@ -415,7 +415,7 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
     ds = ds.sel(lead_time=lead_shift)
 
     # Time shift - we want target date, instead of forecast date
-    ds = convert_to_target_date_dim(ds, 'start_date', lead)
+    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
 
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip':

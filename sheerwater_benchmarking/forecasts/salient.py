@@ -3,7 +3,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            get_variable, apply_mask, clip_region, regrid,
-                                           target_date_to_forecast_date, convert_to_target_date_dim)
+                                           target_date_to_forecast_date, shift_forecast_date_to_target_date)
 
 
 @dask_remote
@@ -95,7 +95,7 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = ds.sel(lead=lead_id)
 
     # Time shift - we want target date, instead of forecast date
-    ds = convert_to_target_date_dim(ds, 'forecast_date', lead)
+    ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

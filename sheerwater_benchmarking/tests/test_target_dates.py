@@ -1,7 +1,7 @@
 """Test lead-based target date fetching."""
 import numpy as np
 
-from sheerwater_benchmarking.utils import target_date_to_forecast_date, convert_to_target_date_dim
+from sheerwater_benchmarking.utils import target_date_to_forecast_date, shift_forecast_date_to_target_date
 from sheerwater_benchmarking.reanalysis import era5_rolled, era5
 from sheerwater_benchmarking.forecasts import salient
 from sheerwater_benchmarking.forecasts.salient import salient_blend
@@ -65,5 +65,5 @@ def test_target_date_conversion():
     lead_shift = np.timedelta64(7, 'D')
     ds = ds.sel(lead_time=lead_shift)
     target_times = ds.start_date.values + ds.lead_time.values
-    ds = convert_to_target_date_dim(ds, 'start_date', lead='week2')
+    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead='week2')
     assert (ds.time.values == target_times).all()
