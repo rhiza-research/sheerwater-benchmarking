@@ -408,7 +408,7 @@ def ecmwf_averaged_regrid(start_time, end_time, variable, forecast_type, grid='g
            },
            auto_rechunk=False)
 def ecmwf_rolled(start_time, end_time, variable, forecast_type,
-                 agg=14, grid="global1_5"):
+                 agg_days=14, grid="global1_5"):
     """Fetches forecast data from the ECMWF IRI dataset.
 
     Args:
@@ -429,6 +429,6 @@ def ecmwf_rolled(start_time, end_time, variable, forecast_type,
         ds = ds.chunk({'start_date': 29})
 
     # Roll and aggregate the data
-    ds = roll_and_agg(ds, agg=agg, agg_col="lead_time", agg_fn="mean")
+    ds = roll_and_agg(ds, agg=agg_days, agg_col="lead_time", agg_fn="mean")
 
     return ds

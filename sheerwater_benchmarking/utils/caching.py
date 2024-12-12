@@ -54,8 +54,6 @@ def get_chunk_size(ds, size_in='MB'):
     return np.product(chunk_sizes) * 4 / div, chunk_groups
 
 
-
-
 def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
     """Merge chunking and chunking modifiers into a single chunking dict.
 
@@ -190,6 +188,7 @@ def chunk_to_zarr(ds, cache_path, verify_path, chunking):
         print(chunk_with_labels)
 
     write_to_zarr(ds, cache_path, verify_path)
+
 
 def postgres_table_name(table_name):
     """Return a qualified postgres table name."""
@@ -503,6 +502,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                        "not discovered as passed argument or default argument.")
 
             # Update chunking based on chunk_by_arg
+            import pdb
+            pdb.set_trace()
             chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
 
             # Now that we have all the cacheable args values we can calculate whether

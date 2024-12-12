@@ -76,16 +76,18 @@ LEAD_OFFSETS = {
 }
 
 
-def lead_to_time_group(lead):
+def lead_to_agg_days(lead):
     """Convert lead to time grouping."""
-    if 'weeks' in lead:
-        return 'biweekly'
+    if 'day' in lead:
+        return 1
+    elif 'weeks' in lead:
+        return 7
     elif 'week' in lead:
-        return 'weekly'
+        return 7
     elif 'month' in lead:
-        return 'monthly'
+        return 30
     elif 'quarter' in lead:
-        return 'quarterly'
+        return 90
     else:
         raise ValueError(f"Unknown lead {lead}")
 
