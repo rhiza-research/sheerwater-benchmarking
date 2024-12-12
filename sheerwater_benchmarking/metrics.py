@@ -1,11 +1,12 @@
 """Verification metrics for forecasts."""
 from importlib import import_module
+from inspect import signature
 
 import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_forecast
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
-                                           lead_to_agg_days)
+                                           lead_to_agg_days, lead_or_agg)
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
@@ -27,7 +28,11 @@ def get_datasource_fn(datasource):
                 mod = import_module("sheerwater_benchmarking.baselines")
                 fn = getattr(mod, datasource)
             except (ImportError, AttributeError):
-                raise ImportError(f"Could not find datasource {datasource}.")
+                try:
+                    mod = import_module("sheerwater_benchmarking.data")
+                    fn = getattr(mod, datasource)
+                except (ImportError, AttributeError):
+                    raise ImportError(f"Could not find datasource {datasource}.")
 
     return fn
 
@@ -88,20 +93,49 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the forecast
     fcst_fn = get_datasource_fn(forecast)
-    fcst = fcst_fn(start_time, end_time, variable, lead=lead,
-                   prob_type=prob_type, grid=grid, mask=mask, region=region)
-    if not spatial and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
-        # If averaging over space, we must check if the forecast is valid
-        print(f"Forecast {forecast} is not valid for region {region}.")
-        return None
+
+    # Decide if this is a forecast with a lead or direct datasource with just an agg
+    sparse = False
+    if 'lead' in signature(fcst_fn).parameters:
+        if lead_or_agg(lead) == 'agg':
+            raise ValueError("Evaluating the function {forecast} must be called with a specific lead, not an aggregation")
+
+        fcst = fcst_fn(start_time, end_time, variable, lead=lead,
+                       prob_type=prob_type, grid=grid, mask=mask, region=region)
+        if not spatial and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
+            # If averaging over space, we must check if the forecast is valid
+            print(f"Forecast {forecast} is not valid for region {region}.")
+            return None
+
+        # Check to see the prob type attribute
+        enhanced_prob_type = fcst.attrs['prob_type']
+
+        # assign sparsity if it exists
+        if 'sparse' in fcst.attrs:
+            sparse = fcst.attrs['sparse']
+    else:
+        if lead_or_agg(lead) == 'lead':
+            raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
+
+        enhanced_prob_type = "deterministic"
+
+        fcst = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
+                       grid=grid, mask=mask, region=region)
+
+        # assign sparsity if it exists
+        if 'sparse' in fcst.attrs:
+            sparse = fcst.attrs['sparse']
+
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
-    obs = truth_fn(start_time, end_time, variable, time_grouping=lead_to_agg_days(lead),
+    obs = truth_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
                    grid=grid, mask=mask, region=region)
 
-    # Check to see the prob type attribute
-    enhanced_prob_type = fcst.attrs['prob_type']
+    # assign sparsity if it exists
+    if 'sparse' in obs.attrs:
+        sparse |= obs.attrs['sparse']
+
 
     if metric in CLIM_METRICS:
         # Get the appropriate climatology dataframe for metric calculation
@@ -130,6 +164,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         if spatial:
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
+    m_ds = m_ds.assign_attrs(sparse=sparse)
     return m_ds
 
 
@@ -203,6 +238,8 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                          forecast=forecast, truth=truth, spatial=False, avg_time=True,
                          metric=metric, grid=grid, mask=mask, region=region)
 
+        sparse = ds.attrs['sparse']
+
         if ds is None:
             return None
 
@@ -219,6 +256,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
                                       forecast=forecast, truth=truth,
                                       metric=called_metric, grid=grid, mask=mask, region='global')
+        sparse = ds.attrs['sparse']
         if ds is None:
             return None
     else:
@@ -227,6 +265,8 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         ds = global_metric(start_time, end_time, variable, lead=lead,
                            forecast=forecast, truth=truth,
                            metric=called_metric, grid=grid, mask=mask, region='global')
+
+        sparse = ds.attrs['sparse']
         if ds is None:
             return None
 
@@ -250,7 +290,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     # Clip it to the region
     ds = clip_region(ds, region)
 
-    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
+    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98) and not sparse:
         # Check if forecast is valid before spatial averaging
         print("Metric is not valid for region.")
         return None

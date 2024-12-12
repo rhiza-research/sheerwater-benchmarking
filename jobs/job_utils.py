@@ -4,7 +4,7 @@ import dask
 import itertools
 
 
-def parse_args():
+def parse_args(agg_only=False):
     """Parses arguments for jobs."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-time", default="2016-01-01", type=str)
@@ -45,7 +45,10 @@ def parse_args():
     if args.region:
         regions = args.region
 
-    leads = ["week1", "week2", "week3", "week4", "week5", "week6", "weeks34", "weeks56"]
+    if agg_only
+        leads = ["weekly", "biweekly"]
+    else:
+        leads = ["week1", "week2", "week3", "week4", "week5", "week6", "weeks34", "weeks56"]
     if args.lead:
         leads = args.lead
 

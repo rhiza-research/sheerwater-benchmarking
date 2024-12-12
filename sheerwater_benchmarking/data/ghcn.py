@@ -275,36 +275,42 @@ def ghcnd(start_time, end_time, grid="global0_25"):
 @dask_remote
 @cacheable(data_type='array',
            timeseries=['time'],
-           cache_args=['grid', 'variable', 'time_grouping', 'region', 'mask'],
+           cache_args=['grid', 'agg_days', 'missing_thresh'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
-def ghcn(start_time, end_time, variable, time_grouping='weekly', grid='global0_25', region='global', mask='lsm', missing_thresh=0.5):
-    """Standard interface for ghcn data"""
-
-
-    agg = None
-    if time_grouping == 'weekly':
-        agg = 7
-    elif time_grouping == 'daily':
-        agg = 1
-    elif time_grouping == 'biweekly':
-        agg = 14
-    else:
-        raise ValueError("Invalid time grouping")
-
+def ghcnd_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thresh=0.5):
     # Get the data
     ds = ghcnd(start_time, end_time, grid)
 
-    # Get the variable
-    variable = get_variable(variable, 'ghcn')
-    ds = ds[variable].to_dataset()
-
     # Roll and agg
-    ds = roll_and_agg(ds, agg=agg, agg_col="time", agg_fn='mean', agg_thresh=int(agg*missing_thresh))
+    ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean', agg_thresh=int(agg_days*missing_thresh))
+
+    return ds
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries=['time'],
+           cache_args=['grid', 'variable', 'agg_days', 'region', 'mask', 'missing_thresh'],
+           chunking={'lat': 300, 'lon': 300, 'time': 365},
+           cache=False)
+def ghcn(start_time, end_time, variable, agg_days, grid='global0_25', region='global', mask='lsm', missing_thresh=0.5):
+    """Standard interface for ghcn data"""
+    ds = ghcnd_rolled(start_time, end_time, agg_days, grid, missing_thresh)
+
+    # Get the variable
+    variable_ghcn = get_variable(variable, 'ghcn')
+    variable_sheerwater = get_variable(variable, 'sheerwater')
+    ds = ds[variable_ghcn].to_dataset()
 
     # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    ds = apply_mask(ds, mask, var=variable_ghcn, grid=grid)
 
     # Clip to specified region
     ds = clip_region(ds, region=region)
+
+    # Rename
+    ds = ds.rename({variable_ghcn: variable_sheerwater})
+
+    # Note that this is sparse
+    ds = ds.assign_attrs(sparse=True)
 
     return ds
