@@ -214,17 +214,10 @@ def rainy_season_onset_error(start_time, end_time,
     truth_expanded = truth_da.sel(time=forecast_da['time'])
     ds = xr.Dataset({'truth': truth_expanded, 'forecast': forecast_da})
 
-    # # Calculate the MAE error in days
-    # def mae_days(group):
-    #     error = (np.abs(group['truth'] - group['forecast']).dt.days)
-    #     lead = (np.abs(group['truth'] - group['start-date']).dt.days)
-    #     return xr.Dataset({'error': error, 'lead': lead})
-    #     # return (np.abs(group['truth'] - group['forecast']).dt.days).mean(dim='start_date', skipna=True)
-
-    # # Add grouping timeseries to forecast
-    # ds = groupby_time(ds, groupby=groupby, agg_fn=mae_days,
-    #                   time_dim='start_date', return_timeseries=True)
-
+    # Compute derived metrics
+    ds['error'] = (ds['forecast'] - ds['truth']).dt.days
+    ds['look_ahead'] = (ds['truth'] - ds['start_date']).dt.days
+    ds['lead'] = (ds['truth'] - ds['forecast']).dt.days
     return ds
 
 
@@ -237,7 +230,7 @@ if __name__ == '__main__':
     start_date = "2020-01-01"
     end_date = "2022-01-01"
 
-    start_remote(remote_config='xlarge_cluster')
+    start_remote(remote_config='xlarge_cluster', remote_name='genevieve2')
     # ds = rainy_season_onset_forecast(start_date, end_date, forecast='ecmwf_ifs_er', prob_type='probabilistic',
     #                                  grid='global1_5', mask='lsm', region='africa')
     ds = rainy_season_onset_error(start_date, end_date, truth='era5', forecast='ecmwf_ifs_er',
