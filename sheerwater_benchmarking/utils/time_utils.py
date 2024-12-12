@@ -62,7 +62,7 @@ def _date_shift(date, lead, shift='forward'):
     if isinstance(date, str):
         date_obj = dateparser.parse(date)
     elif isinstance(date, np.datetime64):
-        date_obj = date.astype(datetime)
+        date_obj = pd.Timestamp(date)
     elif isinstance(date, datetime):
         date_obj = date
     else:
