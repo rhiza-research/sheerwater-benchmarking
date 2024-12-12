@@ -49,22 +49,6 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries='forecast_date',
-           cache_args=['variable', 'timescale', 'grid'],
-           chunking={"lat": 721, "lon": 1440, "forecast_date": 30, 'lead': 1, 'quantiles': 1},
-           auto_rechunk=False)
-def salient_daily(start_time, end_time, variable, timescale="sub-seasonal", grid="global0_25"):  # noqa: ARG001
-    """Processed Salient forecast files."""
-    ds = salient_blend_raw(variable, timescale=timescale)
-    ds = ds.dropna('forecast_date', how='all')
-
-    # Regrid the data
-    ds = regrid(ds, grid, base='base180', method='conservative')
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])

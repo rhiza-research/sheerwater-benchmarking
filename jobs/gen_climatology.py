@@ -13,7 +13,7 @@ grids = ["global0_25", "global1_5"]
 # grids = ["global0_25"]
 # aggs = [7, 14]
 # aggs = [7]
-time_groups = ["weekly", "biweekly"]
+agg_dayss = ["weekly", "biweekly"]
 
 start_time = "1979-01-01"
 end_time = "2024-12-31"
@@ -54,24 +54,24 @@ for var, grid in product(vars, grids):
                                  mask=mask, region=region,
                                  remote=True,  recompute=True, force_overwrite=True)
 
-    for time_group in time_groups:
+    for agg_days in agg_days:
         if UPDATE_CLIM_ROLLING:
             ds = climatology_rolling_agg(rolling_start_time, end_time, variable=var,
-                                         clim_years=clim_years, time_group=time_group, grid=grid,
+                                         clim_years=clim_years, agg_days=agg_days, grid=grid,
                                          remote=True, recompute=True, force_overwrite=True
                                          )
 
         if UPDATE_CLIM_ROLLING_ABC:
             for mask, region in product(masks, regions):
                 ds = climatology_rolling_abc(rolling_start_time, end_time, variable=var,
-                                             clim_years=clim_years, time_group=time_group, grid=grid,
+                                             clim_years=clim_years, agg_days=agg_days, grid=grid,
                                              mask=mask, region=region,
                                              remote=True,  recompute=True, force_overwrite=True
                                              )
 
         if UPDATE_CLIM_TREND:
             ds = climatology_linear_weights(var, first_year=first_year, last_year=last_year,
-                                            time_group=time_group, grid=grid,
+                                            agg_days=agg_days, grid=grid,
                                             remote=True, recompute=True, force_overwrite=True
                                             )
 
@@ -79,4 +79,4 @@ for var, grid in product(vars, grids):
             if UPDATE_CLIM_AGG:
                 ds = climatology_agg_raw(variable=var,
                                          first_year=first_year, last_year=last_year,
-                                         prob_type=prob_type, time_group=time_group, grid=grid)
+                                         prob_type=prob_type, agg_days=agg_days, grid=grid)
