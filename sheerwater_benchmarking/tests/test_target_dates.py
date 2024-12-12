@@ -66,4 +66,5 @@ def test_target_date_conversion():
     ds = ds.sel(lead_time=lead_shift)
     target_times = ds.start_date.values + ds.lead_time.values
     ds = shift_forecast_date_to_target_date(ds, 'start_date', lead='week2')
+    ds = ds.rename({'start_date': 'time'})
     assert (ds.time.values == target_times).all()

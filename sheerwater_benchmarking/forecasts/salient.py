@@ -96,6 +96,7 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
 
     # Time shift - we want target date, instead of forecast date
     ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
+    ds = ds.rename({'forecast_date': 'time'})
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

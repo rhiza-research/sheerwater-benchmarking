@@ -358,6 +358,7 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
 
     # Time shift - we want target date, instead of forecast date
     ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+    ds = ds.rename({'start_date': 'time'})
 
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip':
@@ -416,6 +417,7 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
 
     # Time shift - we want target date, instead of forecast date
     ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+    ds = ds.rename({'start_date': 'time'})
 
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip':
