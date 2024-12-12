@@ -36,23 +36,6 @@ def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5')
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'first_year', 'last_year', 'grid', 'mask', 'region'],
-           chunking={"lat": 721, "lon": 1440, "dayofyear": 30},
-           cache=True)
-def climatology_abc(variable, first_year=1985, last_year=2014, grid="global1_5", mask='lsm', region='global'):
-    """Compute the standard 30-year climatology of ERA5 data from 1991-2020."""
-    # Get single day, masked data between start and end years
-    ds = climatology_raw(variable, first_year, last_year, grid=grid)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
            cache=True,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg_days', 'grid'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 1000, "member": 1},
@@ -63,7 +46,7 @@ def climatology_abc(variable, first_year=1985, last_year=2014, grid="global1_5",
            },
            auto_rechunk=False)
 def climatology_agg_raw(variable, first_year=1985, last_year=2014,
-                        prob_type='deterministic', agg_days="weekly", grid="global1_5"):
+                        prob_type='deterministic', agg_days=7, grid="global1_5"):
     """Generates aggregated climatology."""
     start_time = f"{first_year}-01-01"
     end_time = f"{last_year}-12-31"
@@ -107,7 +90,7 @@ def climatology_agg_raw(variable, first_year=1985, last_year=2014,
                }
            },
            cache=True)
-def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg_days=14, grid="global1_5"):
+def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg_days=7, grid="global1_5"):
     """Compute a rolling {clim_years}-yr climatology of the ERA5 data.
 
     Args:
@@ -115,7 +98,7 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg_d
         end_time: Last time of the forecast period.
         variable: Variable to compute climatology for.
         clim_years: Number of years to compute climatology over.
-        agg_days: Aggregation period in days.
+        agg_days (int): Aggregation period in days.
         grid: Grid resolution of the data.
     """
     #  Get reanalysis data for the appropriate look back period
@@ -143,51 +126,16 @@ def climatology_rolling_agg(start_time, end_time, variable, clim_years=30, agg_d
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'clim_years', 'agg_days', 'grid', 'mask', 'region'],
-           chunking={"lat": 121, "lon": 240, "time": 1000},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
-               }
-           },
-           cache=True)
-def climatology_rolling_abc(start_time, end_time, variable, clim_years=30, agg_days=14,
-                            grid="global1_5", mask='lsm', region='global'):
-    """Compute a rolling {clim_years}-yr climatology of the ERA5 data.
-
-    Args:
-        start_time: First time of the forecast period.
-        end_time: Last time of the forecast period.
-        variable: Variable to compute climatology for.
-        clim_years: Number of years to compute climatology over.
-        agg_days: Aggregation period in days.
-        grid: Grid resolution of the data.
-        mask: Mask to apply to the data.
-        region: Region to clip the data to.
-    """
-    ds = climatology_rolling_agg(start_time, end_time, variable, clim_years=clim_years,
-                                 agg_days=agg_days, grid=grid)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
-           timeseries='time',
            cache_args=['variable', 'agg_days', 'grid'],
            chunking={"lat": 300, "lon": 300, "time": 366})
-def _era5_rolled_for_clim(start_time, end_time, variable, agg_days=14, grid="global1_5"):
+def _era5_rolled_for_clim(start_time, end_time, variable, agg_days=7, grid="global1_5"):
     """Aggregates the hourly ERA5 data into daily data and rolls.
 
     Args:
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
-        agg_days (str): The aggregation period to use, in days
+        agg_days (int): The aggregation period to use, in days
         grid (str): The grid resolution to fetch the data at. One of:
             - global1_5: 1.5 degree global grid
             - global0_25: 0.25 degree global grid
@@ -214,7 +162,7 @@ def _era5_rolled_for_clim(start_time, end_time, variable, agg_days=14, grid="glo
                }
            },
            auto_rechunk=False)
-def climatology_linear_weights(variable, first_year=1985, last_year=2014, agg_days=14, grid='global1_5'):
+def climatology_linear_weights(variable, first_year=1985, last_year=2014, agg_days=7, grid='global1_5'):
     """Fit the climatological trend for a specific day of year.
 
     Args:
@@ -250,7 +198,7 @@ def climatology_linear_weights(variable, first_year=1985, last_year=2014, agg_da
                }
            })
 def climatology_timeseries(start_time, end_time, variable, first_year=1985, last_year=2014,
-                           trend=False, prob_type='deterministic', agg_days=14, grid="global1_5"):
+                           trend=False, prob_type='deterministic', agg_days=7, grid="global1_5"):
     """Generates a forecast timeseries of climatology.
 
     Args:
@@ -261,7 +209,7 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
         last_year (int): The last year to use for the climatology.
         trend (bool): Whether to include a trend in the forecast.
         prob_type (str): The type of forecast to generate.
-        agg_days (str): The aggregation period to use, in days
+        agg_days (int): The aggregation period to use, in days
         grid (str): The grid to produce the forecast on.
     """
     # Create a target date dataset
