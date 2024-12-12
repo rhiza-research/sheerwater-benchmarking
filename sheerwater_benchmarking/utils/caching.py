@@ -54,8 +54,6 @@ def get_chunk_size(ds, size_in='MB'):
     return np.product(chunk_sizes) * 4 / div, chunk_groups
 
 
-
-
 def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
     """Merge chunking and chunking modifiers into a single chunking dict.
 
@@ -190,6 +188,7 @@ def chunk_to_zarr(ds, cache_path, verify_path, chunking):
         print(chunk_with_labels)
 
     write_to_zarr(ds, cache_path, verify_path)
+
 
 def postgres_table_name(table_name):
     """Return a qualified postgres table name."""
@@ -446,13 +445,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, backend, \
-                storage_backend, pass_auto_rechunk = get_cache_args(
-                    kwargs, cache_kwargs)
+                storage_backend, passed_auto_rechunk = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
-            if pass_auto_rechunk is not None:
-                auto_rechunk = pass_auto_rechunk
+            if passed_auto_rechunk is not None:
+                auto_rechunk = passed_auto_rechunk
 
             params = signature(func).parameters
 

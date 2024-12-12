@@ -3,7 +3,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            get_variable, apply_mask, clip_region, regrid,
-                                           target_date_to_forecast_date, convert_to_target_date_dim)
+                                           target_date_to_forecast_date, shift_forecast_date_to_target_date)
 
 
 @dask_remote
@@ -38,22 +38,6 @@ def salient_blend_raw(variable, timescale="sub-seasonal"):
            chunking={"lat": 721, "lon": 1440, "forecast_date": 30, 'lead': 1, 'quantiles': 1},
            auto_rechunk=False)
 def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid="global0_25"):  # noqa: ARG001
-    """Processed Salient forecast files."""
-    ds = salient_blend_raw(variable, timescale=timescale)
-    ds = ds.dropna('forecast_date', how='all')
-
-    # Regrid the data
-    ds = regrid(ds, grid, base='base180', method='conservative')
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
-           timeseries='forecast_date',
-           cache_args=['variable', 'timescale', 'grid'],
-           chunking={"lat": 721, "lon": 1440, "forecast_date": 30, 'lead': 1, 'quantiles': 1},
-           auto_rechunk=False)
-def salient_daily(start_time, end_time, variable, timescale="sub-seasonal", grid="global0_25"):  # noqa: ARG001
     """Processed Salient forecast files."""
     ds = salient_blend_raw(variable, timescale=timescale)
     ds = ds.dropna('forecast_date', how='all')
@@ -111,7 +95,8 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = ds.sel(lead=lead_id)
 
     # Time shift - we want target date, instead of forecast date
-    ds = convert_to_target_date_dim(ds, 'forecast_date', lead)
+    ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
+    ds = ds.rename({'forecast_date': 'time'})
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

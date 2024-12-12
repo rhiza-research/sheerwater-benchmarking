@@ -5,7 +5,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_forecast
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
-                                           groupby_time, lead_to_time_group)
+                                           groupby_time, lead_to_agg_days)
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
@@ -97,7 +97,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
-    obs = truth_fn(start_time, end_time, variable, time_grouping=lead_to_time_group(lead),
+    obs = truth_fn(start_time, end_time, variable, time_grouping=lead_to_agg_days(lead),
                    grid=grid, mask=mask, region=region)
 
     # Check to see the prob type attribute

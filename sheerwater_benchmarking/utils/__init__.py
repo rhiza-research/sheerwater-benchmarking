@@ -11,8 +11,8 @@ from .space_utils import (get_grid, get_grid_ds, is_wrapped, get_region,
 
 from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_dates,
                          pad_with_leapdays, add_dayofyear, forecast_date_to_target_date,
-                         target_date_to_forecast_date, convert_to_target_date_dim,
-                         groupby_time, lead_to_time_group, assign_grouping_coordinates,
+                         target_date_to_forecast_date, shift_forecast_date_to_target_date,
+                         groupby_time, lead_to_agg_days, assign_grouping_coordinates,
                          convert_group_to_time)
 
 from .weather_utils import get_variable
@@ -55,11 +55,11 @@ __all__ = [
     "add_dayofyear",
     "forecast_date_to_target_date",
     "target_date_to_forecast_date",
-    "convert_to_target_date_dim",
     "groupby_time",
-    "lead_to_time_group",
     "start_remote",
     "plot_ds",
     "assign_grouping_coordinates",
     "convert_group_to_time"
+    "shift_forecast_date_to_target_date",
+    "lead_to_agg_days",
 ]

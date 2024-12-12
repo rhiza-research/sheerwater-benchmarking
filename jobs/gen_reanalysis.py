@@ -41,14 +41,14 @@ for var, grid in product(vars, grids):
         if UPDATE_ROLLED:
             # Update the rolled data for global grids
             ds = era5_rolled(start_time, end_time, variable=var,
-                             agg=agg, grid=grid,
+                             agg_days=agg, grid=grid,
                              recompute=True, remote=True, force_overwrite=True,
                              remote_name='genevieve', remote_config='xlarge_cluster')
 
         for mask, region in product(masks, regions):
             if UPDATE_AGG:
                 ds = era5_agg(start_time, end_time, variable=var,
-                              agg=agg, anom=anom, clim_params=clim_params,
+                              agg_days=agg, anom=anom, clim_params=clim_params,
                               grid=grid, mask=mask, region=region,
                               remote=True, remote_config='xlarge_cluster', remote_name='lead-bias',
                               force_overwrite=True,

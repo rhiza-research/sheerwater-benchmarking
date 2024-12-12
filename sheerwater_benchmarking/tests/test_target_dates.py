@@ -1,7 +1,7 @@
 """Test lead-based target date fetching."""
 import numpy as np
 
-from sheerwater_benchmarking.utils import target_date_to_forecast_date, convert_to_target_date_dim
+from sheerwater_benchmarking.utils import target_date_to_forecast_date, shift_forecast_date_to_target_date
 from sheerwater_benchmarking.reanalysis import era5_rolled, era5
 from sheerwater_benchmarking.forecasts import salient
 from sheerwater_benchmarking.forecasts.salient import salient_blend
@@ -34,13 +34,13 @@ def test_target_date_conversion():
 
     # Ground truth data is already in "target date" format
     ds = era5(start_date, end_date, "tmp2m", "week3", grid="global1_5", mask=None, region='global')
-    dsr = era5_rolled(start_date, end_date, "tmp2m", agg=7, grid="global1_5")
+    dsr = era5_rolled(start_date, end_date, "tmp2m", agg_days=7, grid="global1_5")
     assert ds.equals(dsr)
 
     # Climatology data is already in "target date" format
     ds = climatology_2015(start_date, end_date, "tmp2m", "week3", grid="global1_5", mask=None, region='global')
     ds = ds.sel(time="2020-01-14")
-    dsr = climatology_agg_raw("tmp2m", 1985, 2014, agg=7, grid="global1_5")
+    dsr = climatology_agg_raw("tmp2m", 1985, 2014, agg_days=7, grid="global1_5")
     dsr = dsr.sel(dayofyear="1904-01-14")
     # Align coordinates for comparison
     dsr = dsr.rename({"dayofyear": "time"})
@@ -65,5 +65,6 @@ def test_target_date_conversion():
     lead_shift = np.timedelta64(7, 'D')
     ds = ds.sel(lead_time=lead_shift)
     target_times = ds.start_date.values + ds.lead_time.values
-    ds = convert_to_target_date_dim(ds, 'start_date', lead='week2')
+    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead='week2')
+    ds = ds.rename({'start_date': 'time'})
     assert (ds.time.values == target_times).all()

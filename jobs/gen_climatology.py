@@ -13,10 +13,10 @@ grids = ["global0_25", "global1_5"]
 # grids = ["global0_25"]
 # aggs = [7, 14]
 # aggs = [7]
-time_groups = ["weekly", "biweekly"]
+agg_days = [7, 14]
 
 start_time = "1979-01-01"
-end_time = "2024-01-01"
+end_time = "2024-12-31"
 forecast_start_time = "2015-05-14"
 forecast_end_time = "2023-06-30"
 prob_types = ["deterministic", "probabilistic"]
@@ -54,30 +54,29 @@ for var, grid in product(vars, grids):
                                  mask=mask, region=region,
                                  remote=True,  recompute=True, force_overwrite=True)
 
-    for time_group in time_groups:
+    for agg_days in agg_days:
         if UPDATE_CLIM_ROLLING:
             ds = climatology_rolling_agg(rolling_start_time, end_time, variable=var,
-                                         clim_years=clim_years, time_group=time_group, grid=grid,
+                                         clim_years=clim_years, agg_days=agg_days, grid=grid,
                                          remote=True, recompute=True, force_overwrite=True
                                          )
 
         if UPDATE_CLIM_ROLLING_ABC:
             for mask, region in product(masks, regions):
                 ds = climatology_rolling_abc(rolling_start_time, end_time, variable=var,
-                                             clim_years=clim_years, time_group=time_group, grid=grid,
+                                             clim_years=clim_years, agg_days=agg_days, grid=grid,
                                              mask=mask, region=region,
                                              remote=True,  recompute=True, force_overwrite=True
                                              )
 
         if UPDATE_CLIM_TREND:
             ds = climatology_linear_weights(var, first_year=first_year, last_year=last_year,
-                                            time_group=time_group, grid=grid,
+                                            agg_days=agg_days, grid=grid,
                                             remote=True, recompute=True, force_overwrite=True
                                             )
 
         for prob_type in prob_types:
             if UPDATE_CLIM_AGG:
                 ds = climatology_agg_raw(variable=var,
-                                         first_year=first_val_year, last_year=last_val_year,
-                                         prob_type=prob_type, time_group=time_group, grid=grid,
-                                         recompute=True, force_overwrite=True)
+                                         first_year=first_year, last_year=last_year,
+                                         prob_type=prob_type, agg_days=agg_days, grid=grid)

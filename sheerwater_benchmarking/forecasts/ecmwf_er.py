@@ -9,7 +9,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lon_base_change,
                                            regrid, get_variable,
                                            target_date_to_forecast_date,
-                                           convert_to_target_date_dim, start_remote)
+                                           shift_forecast_date_to_target_date)
 
 
 @dask_remote
@@ -111,7 +111,7 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     """
     """IRI ECMWF average forecast with regridding."""
     ds = ifs_extended_range_raw(start_time, end_time, variable, forecast_type,
-                                run_type, time_group, grid='global1_5')
+                                run_type, time_group=time_group, grid='global1_5')
     # Convert to base180 longitude
     ds = lon_base_change(ds, to_base="base180")
 
@@ -123,6 +123,7 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
         ds.attrs.update(units='mm')
         ds = np.maximum(ds, 0)
     elif variable == 'ssrd':
+        ds.attrs.update(units='Joules/m^2')
         ds = np.maximum(ds, 0)
 
     if grid == 'global1_5':
@@ -176,7 +177,7 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
 
     # Get the pre-aggregated ERA5 data
     agg = {'daily': 1, 'weekly': 7, 'biweekly': 14}[time_group]
-    ds_truth = era5_rolled(new_start, new_end, variable, agg=agg, grid=grid)
+    ds_truth = era5_rolled(new_start, new_end, variable, agg_days=agg, grid=grid)
 
     def get_bias(ds_sub):
         """Get the 20-year estimated bias of the reforecast data."""
@@ -357,7 +358,8 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
     ds = ds.sel(lead_time=lead_shift)
 
     # Time shift - we want target date, instead of forecast date
-    ds = convert_to_target_date_dim(ds, 'start_date', lead)
+    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+    ds = ds.rename({'start_date': 'time'})
 
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip':
@@ -415,7 +417,8 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
     ds = ds.sel(lead_time=lead_shift)
 
     # Time shift - we want target date, instead of forecast date
-    ds = convert_to_target_date_dim(ds, 'start_date', lead)
+    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+    ds = ds.rename({'start_date': 'time'})
 
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip':

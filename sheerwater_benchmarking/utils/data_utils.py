@@ -158,6 +158,7 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat', drop=False):
             - africa, conus, global
         lon_dim (str): The name of the longitude dimension.
         lat_dim (str): The name of the latitude dimension.
+        drop (bool): Whether to drop the original coordinates that are NaN'd by clipping.
     """
     # No clipping needed
     if region == 'global':
