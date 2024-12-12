@@ -1,15 +1,87 @@
 """Time and date utility functions for all parts of the data pipeline."""
+from calendar import isleap
+import xarray as xr
+import pandas as pd
+import numpy as np
 import dateparser
 from datetime import datetime, timedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY, WEEKLY, YEARLY
-
-import numpy as np
-import pandas as pd
-import xarray as xr
-from calendar import isleap
-
+from dateutil.relativedelta import relativedelta
 
 DATETIME_FORMAT = "%Y-%m-%d"
+
+# Lead aggregation period in days and offset
+LEAD_OFFSETS = {
+    'week1': (7, (0, 'days')),
+    'week2': (7, (7, 'days')),
+    'week3': (7, (14, 'days')),
+    'week4': (7, (21, 'days')),
+    'week5': (7, (28, 'days')),
+    'week6': (7, (35, 'days')),
+    'weeks12': (14, (0, 'days')),
+    'weeks34': (14, (14, 'days')),
+    'weeks56': (14, (28, 'days')),
+}
+
+
+def lead_to_agg_days(lead):
+    """Convert lead to time grouping."""
+    return LEAD_OFFSETS[lead][0]
+
+
+def dayofyear_to_datetime(x):
+    """Converts day of year to datetime."""
+    if np.isnan(x):
+        return np.datetime64('NaT', 'ns')
+    return np.datetime64("1904-01-01", 'ns') + np.timedelta64(int(x), 'D')
+
+
+def shift_forecast_date_to_target_date(ds, forecast_date_dim, lead):
+    """Shift a forecast date dimension to a target date coordinate from a lead time."""
+    ds = ds.assign_coords(forecast_date_dim=[
+        forecast_date_to_target_date(x, lead) for x in ds[forecast_date_dim].values])
+    return ds
+
+
+def target_date_to_forecast_date(target_date, lead):
+    """Converts a target date to a forecast date."""
+    return _date_shift(target_date, lead, shift='backward')
+
+
+def forecast_date_to_target_date(forecast_date, lead):
+    """Converts a forecast date to a target date."""
+    return _date_shift(forecast_date, lead, shift='forward')
+
+
+def _date_shift(date, lead, shift='forward'):
+    """Converts a target date to a forecast date or visa versa."""
+    offset, offset_units = LEAD_OFFSETS[lead][1]
+    input_type = type(date)
+
+    # Convert input time to datetime object  for relative delta
+    if isinstance(date, str):
+        date_obj = dateparser.parse(date)
+    elif isinstance(date, np.datetime64):
+        date_obj = pd.Timestamp(date)
+    elif isinstance(date, datetime):
+        date_obj = date
+    else:
+        raise ValueError(f"Date type {type(date)} not supported.")
+
+    # Shift the date
+    if shift == 'forward':
+        new_date = date_obj + relativedelta(**{offset_units: offset})
+    elif shift == 'backward':
+        new_date = date_obj - relativedelta(**{offset_units: offset})
+    else:
+        raise ValueError(f"Shift direction {shift} not supported")
+
+    # Convert back to original type
+    if np.issubdtype(input_type, str):
+        new_date = datetime.strftime(new_date, "%Y-%m-%d")
+    elif np.issubdtype(input_type, np.datetime64):
+        new_date = np.datetime64(new_date, 'ns')
+    return new_date
 
 
 def add_dayofyear(ds, time_dim="time"):

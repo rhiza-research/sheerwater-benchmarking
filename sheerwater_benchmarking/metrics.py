@@ -4,7 +4,8 @@ from importlib import import_module
 import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_forecast
-from sheerwater_benchmarking.utils import cacheable, dask_remote, clip_region, is_valid
+from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
+                                           lead_to_agg_days)
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
@@ -96,7 +97,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
-    obs = truth_fn(start_time, end_time, variable, lead=lead, grid=grid, mask=mask, region=region)
+    obs = truth_fn(start_time, end_time, variable, time_grouping=lead_to_agg_days(lead),
+                   grid=grid, mask=mask, region=region)
 
     # Check to see the prob type attribute
     enhanced_prob_type = fcst.attrs['prob_type']
@@ -264,7 +266,6 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     # Take the final square root of the MSE, after spatial averaging
     if metric == 'rmse':
         ds = ds ** 0.5
-
     return ds
 
 

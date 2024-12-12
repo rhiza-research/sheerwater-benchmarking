@@ -1,10 +1,9 @@
 """Pulls Salient Predictions S2S forecasts from the Salient API."""
-
-
 import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
-                                           get_variable, apply_mask, clip_region, regrid)
+                                           get_variable, apply_mask, clip_region, regrid,
+                                           target_date_to_forecast_date, shift_forecast_date_to_target_date)
 
 
 @dask_remote
@@ -36,7 +35,7 @@ def salient_blend_raw(variable, timescale="sub-seasonal"):
 @cacheable(data_type='array',
            timeseries='forecast_date',
            cache_args=['variable', 'timescale', 'grid'],
-           chunking={"lat": 300, "lon": 400, "forecast_date": 300, 'lead': 1, 'quantiles': 1},
+           chunking={"lat": 721, "lon": 1440, "forecast_date": 30, 'lead': 1, 'quantiles': 1},
            auto_rechunk=False)
 def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid="global0_25"):  # noqa: ARG001
     """Processed Salient forecast files."""
@@ -44,8 +43,7 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
     ds = ds.dropna('forecast_date', how='all')
 
     # Regrid the data
-    method = 'conservative' if variable == 'precip' else 'linear'
-    ds = regrid(ds, grid, base='base180', method=method)
+    ds = regrid(ds, grid, base='base180', method='conservative')
     return ds
 
 
@@ -75,12 +73,14 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     if timescale is None:
         raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
 
-    ds = salient_blend(start_time, end_time, variable, timescale=timescale, grid=grid)
-    ds = ds.sel(lead=lead_id)
+    # Convert start and end time to forecast start and end based on lead time
+    forecast_start = target_date_to_forecast_date(start_time, lead)
+    forecast_end = target_date_to_forecast_date(end_time, lead)
+
+    ds = salient_blend(forecast_start, forecast_end, variable, timescale=timescale, grid=grid)
     if prob_type == 'deterministic':
         # Get the median forecast
         ds = ds.sel(quantiles=0.5)
-
         # drop the quantiles dimension
         ds = ds.reset_coords("quantiles", drop=True)
         ds = ds.assign_attrs(prob_type="deterministic")
@@ -91,18 +91,12 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     else:
         raise ValueError("Invalid probabilistic type")
 
-    ds = ds.rename({'forecast_date': 'time'})
+    # Get specific lead
+    ds = ds.sel(lead=lead_id)
 
-    if variable == 'precip':
-        # Convert from mm/day to total precipitation
-        if timescale == "sub-seasonal":
-            ds[variable] *= 7  # weekly
-        elif timescale == "seasonal":
-            # TODO: correct for specific number of days in the months requested
-            ds[variable] *= 30  # monthly
-        elif timescale == "long-range":
-            # TODO: correct for specific number of days in the quarters requested
-            ds[variable] *= 120  # quarterly
+    # Time shift - we want target date, instead of forecast date
+    ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
+    ds = ds.rename({'forecast_date': 'time'})
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

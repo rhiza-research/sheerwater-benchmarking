@@ -10,11 +10,7 @@ if __name__ == "__main__":
     # vars = ["precip"]
     # vars = ["tmp2m"]
     # aggs = [14, 7]
-    aggs = [14]
-    # time_groups = ['weekly', 'biweekly']
-    time_groups = []
-    # time_groups = ['weekly']
-    # time_groups = ['biweekly']
+    time_groups = ["weekly", "biweekly"]
     # grids = ["global1_5", "global0_25"]
     # grids = ["global0_25"]
     grids = ["global1_5"]
@@ -35,7 +31,7 @@ if __name__ == "__main__":
     UPDATE_BIAS = False
     UPDATE_AGG = True
 
-    for var, ft, grid, time, rt in product(vars, forecast_type, grids, aggs, run_types):
+    for var, ft, grid, time, rt in product(vars, forecast_type, grids, time_groups, run_types):
         if UPDATE_IFS_ER_GRID:
             if grid != "global0_25" or (grid == 'global0_25' and ft == "reforecast"):
                 continue
