@@ -54,44 +54,17 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
                 elif 8 <= month <= 12:
                     return 2
                 else:
-                    return 3
+                    return None
             coords.append([month_to_period(x) for x in ds[time_dim].dt.month.values])
         elif grp == 'year':
             coords.append(ds[time_dim].dt.year.values)
         else:
             raise ValueError("Invalid time grouping.")
-    ds = ds.assign_coords(group=(time_dim, ["-".join([f"{y:02d}" for y in x]) for x in zip(*coords)]))
+    # Drop elements that can't be grouped
+    has_group = [None not in x for x in zip(*coords)]
+    ds = ds.isel({time_dim: has_group})
+    ds = ds.assign_coords(group=(time_dim, ["-".join([f"{y:02d}" for y in x]) for x in zip(*coords) if None not in x]))
     return ds
-    #     ds = ds.assign_coords(group=(time_dim,
-    #                                  [f"E{month_to_period(m)}-{int(y.values)}" for m, y in
-    #                                      zip(ds[time_dim].dt.month, ds[time_dim].dt.year)]))
-    #     # East African rainy period is from March to May and October to December
-
-    # elif group == 'quarter':
-    #     ds = ds.assign_coords(group=(time_dim,
-    #                                  [f"Q{int(q.values)}-{int(y.values)}" for q, y in
-    #                                      zip(ds[time_dim].dt.quarter, ds[time_dim].dt.year)]))
-    # elif group == 'ea_rainy_season':
-    #     # East African rainy period is from March to May and October to December
-    #     ds = ds.assign_coords(month=(time_dim, ds[time_dim].dt.month.values))
-    #     # Drop values outside of the rainy seasons
-    #     ds = ds.where((ds['month'] >= 2) & (ds['month'] <= 6) | (
-    #         ds['month'] >= 9) & (ds['month'] <= 12), drop=True)
-    #     ds = ds.drop('month')
-
-    #     def month_to_period(month):
-    #         return 1 if 2 <= month <= 6 else 2
-    #     ds = ds.assign_coords(group=(time_dim,
-    #                                  [f"E{month_to_period(m)}-{int(y.values)}" for m, y in
-    #                                      zip(ds[time_dim].dt.month, ds[time_dim].dt.year)]))
-    # elif group == 'year':
-    #     ds = ds.assign_coords(group=(time_dim, ds[time_dim].dt.year.values))
-    # else:
-    #     raise ValueError("Invalid time grouping.")
-
-    #         # ds.assign_coords(group=(time_dim,
-    #         #                          [f"M{int(m.values)}-{int(y.values)}" for m, y in
-    #         #                              zip(ds[time_dim].dt.month, ds[time_dim].dt.year)]))
 
 
 def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, only_schema=False, **kwargs):
@@ -144,30 +117,6 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
             ds = ds.sortby('time')
             ds = ds.drop('group')
 
-    # If we are aggregating across multiple periods, take the mean
-    # if average_over is not None:
-        # Convert to day of year to enable yearly averaging
-        # ds = ds.rename({'group': 'subgroup'})
-        # ds = ds.assign_coords(group=("subgroup", [x.split('-')[0][1:] for x in ds['subgroup'].values]))
-        # ds = ds.groupby('group').mean(dim='subgroup', skipna=True)
-
-        # Convert dayofyear back to datetime
-        # TODO: couldn't get this to work with dask array (ValueError: cannot convert float NaN to integer
-        # For now, compute and operate on the underlying np.array elementwise
-        # ds = ds.dt.dayofyear
-        # ds = xr.apply_ufunc(
-        #     dayofyear_to_datetime,  # Function to apply
-        #     ds.compute(),
-        #     vectorize=True,  # Ensures element-wise operation
-        #     output_dtypes=[np.datetime64]  # Specify output dtype
-        # )
-
-    # Convert group to time
-    # if return_timeseries:
-    #     ds = ds.assign_coords(time=("group", convert_group_to_time(ds['group'], group_by)))
-    #     ds = ds.swap_dims({'group': 'time'})
-    #     ds = ds.drop('group')
-    #     ds = ds.sortby('time')
     return ds
 
 
@@ -188,8 +137,6 @@ def convert_group_to_time(group, grouping):
                     mm = '03'  # March rains
                 elif val == '02':
                     mm = '10'  # October rains
-                elif val == '03':
-                    mm = '07'  # Default to July for dry season
                 else:
                     raise ValueError("Invalid East African rainy season")
             elif grp == 'year':
@@ -200,25 +147,6 @@ def convert_group_to_time(group, grouping):
     if not isinstance(grouping, list):
         grouping = [grouping]
     return [convert_to_datetime(x, grouping) for x in group.values]
-
-    # if grouping == 'month_of_year':
-    #     return [np.datetime64(f"1904-{int(x):02d}-01", 'ns') for x in group.values]
-    # elif grouping == 'month':
-    #     return [np.datetime64(f"{x.split('-')[1]}-{int(x.split('-')[0][1:]):02d}-01", 'ns') for x in group.values]
-    # elif grouping == 'year':
-    #     return [np.datetime64(f"{int(x)}-01-01", 'ns') for x in group.values]
-    # elif grouping == 'quarter_of_year':
-    #     return [np.datetime64(f"1904-{(int(x)-1)*3+1:02d}-01", 'ns') for x in group.values]
-    # elif grouping == 'quarter':
-    #     return [np.datetime64(f"{x.split('-')[1]}-{(int(x.split('-')[0][1:])-1)*3+1:02d}-01", 'ns') for x in group.values]
-    # elif grouping == 'ea_rainy_season_of_year':
-    #     return [np.datetime64(f"1904-{(int(x)-1)*6+1:02d}-01", 'ns') for x in group.values]
-    # elif grouping == 'ea_rainy_season':
-    #     import pdb
-    #     pdb.set_trace()
-    #     return [np.datetime64(f"{x.split('-')[1]}-{(int(x.split('-')[0][1:])-1)*6+1:02d}-01", 'ns') for x in group.values]
-    # else:
-    #     raise ValueError("Invalid time grouping")
 
 
 def shift_forecast_date_to_target_date(ds, forecast_date_dim, lead):

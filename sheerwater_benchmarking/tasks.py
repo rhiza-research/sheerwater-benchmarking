@@ -109,7 +109,7 @@ def convert_to_datetime(data):
                    'global0_25': {"lat": 721, "lon": 1440, "time": 30}
                },
            },
-           cache=False)
+           cache=True)
 def rainy_season_onset_truth(start_time, end_time,
                              truth='era5',
                              groupby=[['quarter', 'year']],
@@ -117,7 +117,7 @@ def rainy_season_onset_truth(start_time, end_time,
     """Get the rainy reason onset from a given forecast."""
     # Get the ground truth data
     truth_fn = get_datasource_fn(truth)
-    ds = truth_fn(start_time, end_time, 'precip', time_group='daily',
+    ds = truth_fn(start_time, end_time, 'precip', agg_days=1,
                   grid=grid, mask=mask, region=region)
 
     agg_fn = [partial(first_rain, time_dim='time')]
@@ -128,12 +128,14 @@ def rainy_season_onset_truth(start_time, end_time,
         groupby += [None]
 
     # Add time groups
-    rainy_ds = groupby_time(ds,
+    rainy_da = groupby_time(ds,
                             groupby=groupby,
                             agg_fn=agg_fn,
                             time_dim='time',
                             return_timeseries=True)
 
+    rainy_ds = rainy_da.to_dataset(name='rainy_onset')
+    rainy_ds = rainy_ds.chunk({'lat': 121, 'lon': 240, 'time': 1000})
     return rainy_ds
 
 
@@ -146,26 +148,29 @@ def rainy_season_onset_truth(start_time, end_time,
                    'global0_25': {"lat": 721, "lon": 1440, "time": 30}
                },
            },
-           cache=False)
+           cache=True)
 def rainy_season_onset_forecast(start_time, end_time,
                                 forecast, prob_type='probabilistic',
                                 grid='global0_25', mask='lsm', region='global'):
     """Get the rainy reason onset from a given forecast."""
-    # Get the ground truth data
-    # forecast_fn = get_datasource_fn(forecast)
-    # ds = forecast_fn(start_time, end_time, 'precip', time_group='daily',
-    #                  grid=grid, mask=mask, region=region)
-
-    if prob_type == 'deterministic':
-        ds = ifs_extended_range(start_time, end_time, 'precip', forecast_type='forecast',
-                                run_type='average', time_group='daily', grid=grid)
+    if forecast == "ecmwf_ifs_er":
+        if prob_type == 'deterministic':
+            ds = ifs_extended_range(start_time, end_time, 'precip', forecast_type='forecast',
+                                    run_type='average', time_group='daily', grid=grid)
+        else:
+            ds = ifs_extended_range(start_time, end_time, 'precip', forecast_type='forecast',
+                                    run_type='perturbed', time_group='daily', grid=grid)
+        # Apply masking
+        ds = apply_mask(ds, mask, var='precip', grid=grid)
+        # Clip to specified region
+        ds = clip_region(ds, region=region)
     else:
-        ds = ifs_extended_range(start_time, end_time, 'precip', forecast_type='forecast',
-                                run_type='perturbed', time_group='daily', grid=grid)
-    # Apply masking
-    ds = apply_mask(ds, mask, var='precip', grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
+        # Get the ground truth data
+        # forecast_fn = get_datasource_fn(forecast)
+        # ds = forecast_fn(start_time, end_time, 'precip', time_group='daily',
+        #                  grid=grid, mask=mask, region=region)
+
+        raise ValueError("Only ECMWF IFS Extended Range forecasts are supported.")
 
     if prob_type == 'deterministic':
         agg_fn = partial(first_rain, time_dim='lead_time', time_offset='start_date')
@@ -173,12 +178,15 @@ def rainy_season_onset_forecast(start_time, end_time,
         agg_fn = partial(first_rain, time_dim='lead_time', time_offset='start_date',
                          prob_dim='member', prob_threshold=0.25)
     # Add time groups
-    rainy_ds = groupby_time(ds,
+    rainy_da = groupby_time(ds,
                             groupby=None,
                             agg_fn=agg_fn,
                             time_dim='start_date',
                             return_timeseries=True)
 
+    rainy_ds = rainy_da.to_dataset(name='rainy_forecast')
+    # TODO: why is chunking not working?
+    rainy_ds = rainy_ds.chunk({'lat': 121, 'lon': 240, 'start_date': 1000})
     return rainy_ds
 
 
@@ -201,23 +209,26 @@ def rainy_season_onset_error(start_time, end_time,
     # if any([isinstance(x, list) for x in grouping]):
     #     raise ValueError("Only flat grouping is supported for error calculation.")
 
-    truth_da = rainy_season_onset_truth(
+    truth_ds = rainy_season_onset_truth(
         start_time, end_time, truth=truth, groupby=groupby, grid=grid, mask=mask, region=region)
-    forecast_da = rainy_season_onset_forecast(
+    forecast_ds = rainy_season_onset_forecast(
         start_time, end_time, forecast, prob_type, grid=grid, mask=mask, region=region)
 
     # Assign grouping coordinates to forecast and merge with truth
-    forecast_da = assign_grouping_coordinates(forecast_da, groupby[0], time_dim='start_date')
-    forecast_da = forecast_da.assign_coords(
-        time=("start_date", convert_group_to_time(forecast_da['group'], groupby[0])))
-    forecast_da = forecast_da.drop_vars('group')
-    truth_expanded = truth_da.sel(time=forecast_da['time'])
-    ds = xr.Dataset({'truth': truth_expanded, 'forecast': forecast_da})
+    forecast_ds = assign_grouping_coordinates(forecast_ds, groupby[0], time_dim='start_date')
+    forecast_ds = forecast_ds.assign_coords(
+        time=("start_date", convert_group_to_time(forecast_ds['group'], groupby[0])))
+    forecast_ds = forecast_ds.drop_vars('group')
+    truth_expanded = truth_ds.sel(time=forecast_ds['time'])
+    ds = xr.merge([truth_expanded, forecast_ds])
 
     # Compute derived metrics
-    ds['error'] = (ds['forecast'] - ds['truth']).dt.days
-    ds['look_ahead'] = (ds['truth'] - ds['start_date']).dt.days
-    ds['lead'] = (ds['forecast'] - ds['start_date']).dt.days
+    # How does the model perform in terms of days of error per start date?
+    ds['error'] = (ds['rainy_forecast'] - ds['rainy_onset']).dt.days
+    # How does the model perform as we approach the rainy reason?
+    ds['look_ahead'] = (ds['start_date'] - ds['rainy_onset']).dt.days
+    # What lead (in days) was the forecast made at?
+    ds['lead'] = (ds['rainy_forecast'] - ds['start_date']).dt.days
 
     return ds
 

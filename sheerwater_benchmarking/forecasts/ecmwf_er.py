@@ -79,7 +79,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
            cache_args=['variable', 'forecast_type', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date', 'model_issuance_date'],
-           #    cache_disable_if={'grid': 'global1_5'},
+           cache_disable_if={'grid': 'global1_5'},
            chunking={"lat": 121, "lon": 240, "lead_time": 1,
                      "start_date": 1000,
                      "model_issuance_date": 1000, "start_year": 1,

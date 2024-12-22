@@ -28,6 +28,33 @@ CHUNK_SIZE_UPPER_LIMIT_MB = 300
 CHUNK_SIZE_LOWER_LIMIT_MB = 30
 
 
+def flatten_nested(data):
+    """
+    Flattens a nested iterable into a single iterable. 
+
+    Args:
+        data (list, tuple, dict, set, ...): An iterable that may contain nested iterables.
+    """
+    if isinstance(data, (list, tuple, set)):
+        for item in data:
+            sub_vals = []
+            for sub_item in flatten_nested(item):
+                sub_vals.append(sub_item)
+            sub_vals.sort()
+            for sub_item in sub_vals:
+                yield sub_item
+    elif isinstance(data, dict):
+        for k, v in data.items():
+            sub_vals = []
+            for sub_item in flatten_nested(v):
+                sub_vals.append(sub_item)
+            sub_vals.sort()
+            for sub_item in sub_vals:
+                yield f"{k}-{sub_item}"
+    else:
+        yield data
+
+
 def get_cache_args(kwargs, cache_kwargs):
     """Extract the cache arguments from the kwargs and return them."""
     cache_args = []
@@ -531,20 +558,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             imkeys = list(cache_arg_values.keys())
             imkeys.sort()
-            sorted_values = [cache_arg_values[i] for i in imkeys]
-            flat_values = []
-            for val in sorted_values:
-                if isinstance(val, list):
-                    sub_vals = [str(v) for v in val]
-                    sub_vals.sort()
-                    flat_values += sub_vals
-                elif isinstance(val, dict):
-                    sub_vals = [f"{k}-{v}" for k, v in val.items()]
-                    sub_vals.sort()
-                    flat_values += sub_vals
-                else:
-                    flat_values.append(str(val))
-
+            cache_values = [cache_arg_values[i] for i in imkeys]
+            flat_values = [str(val) for val in flatten_nested(cache_values)]
             cache_key = func.__name__ + '/' + '_'.join(flat_values)
             verify_path = None
             if data_type == 'array':
