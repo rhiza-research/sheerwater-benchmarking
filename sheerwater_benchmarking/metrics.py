@@ -401,6 +401,25 @@ def summary_metrics_table(start_time, end_time, variable,
     print(df)
     return df
 
+@dask_remote
+@cacheable(data_type='tabular',
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
+                       'time_grouping', 'grid', 'mask', 'region'],
+           cache=True)
+def ground_truth_metrics_table(start_time, end_time, variable,
+                          truth, metric, time_grouping=None,
+                          grid='global1_5', mask='lsm', region='global'):
+    """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
+    forecasts = ['era5']
+    leads = ["weekly", "biweekly"]
+    df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
+                                time_grouping=time_grouping,
+                                grid=grid, mask=mask, region=region)
+
+    print(df)
+    return df
+
+
 
 @dask_remote
 @cacheable(data_type='tabular',
@@ -420,6 +439,7 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
+
 
 
 __all__ = ['eval_metric', 'global_metric', 'aggregated_global_metric',

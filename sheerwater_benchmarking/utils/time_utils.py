@@ -12,6 +12,7 @@ DATETIME_FORMAT = "%Y-%m-%d"
 
 # Lead aggregation period in days and offset
 LEAD_OFFSETS = {
+    'daily': (1, (0, 'days')),
     'weekly': (7, (0, 'days')),
     'week1': (7, (0, 'days')),
     'week2': (7, (7, 'days')),
@@ -23,6 +24,7 @@ LEAD_OFFSETS = {
     'weeks12': (14, (0, 'days')),
     'weeks34': (14, (14, 'days')),
     'weeks56': (14, (28, 'days')),
+    'monthly': (30, (0, 'days')),
 }
 
 

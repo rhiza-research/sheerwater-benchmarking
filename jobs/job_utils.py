@@ -4,12 +4,13 @@ import dask
 import itertools
 
 
-def parse_args(agg_only=False):
+def parse_args():
     """Parses arguments for jobs."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-time", default="2016-01-01", type=str)
     parser.add_argument("--end-time", default="2022-12-31", type=str)
     parser.add_argument("--forecast", type=str, nargs='*')
+    parser.add_argument("--truth", type=str, default="era5")
     parser.add_argument("--variable", type=str, nargs='*')
     parser.add_argument("--metric", type=str, nargs='*')
     parser.add_argument("--grid", type=str, nargs='*')
@@ -20,16 +21,28 @@ def parse_args(agg_only=False):
     parser.add_argument("--parallelism", type=int, default=1)
     parser.add_argument("--recompute", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--remote", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--ground-truth", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--remote-name", type=str, default=None)
     parser.add_argument("--remote-config", type=str, nargs='*')
     args = parser.parse_args()
 
-    forecasts = ["perpp", "salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
-                 "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
+    if args.ground_truth:
+        forecasts = ["era5"]
+    else:
+        forecasts = ["perpp", "salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
+                     "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
     if args.forecast:
         forecasts = args.forecast
 
-    metrics = ["mae", "crps", "acc", "rmse", "bias"]
+    if args.ground_truth:
+        truth = "ghcn"
+    else:
+        truth = args.truth
+
+    if args.ground_truth:
+        metrics = ["mae", "rmse", "bias"]
+    else:
+        metrics = ["mae", "crps", "acc", "rmse", "bias"]
     if args.metric:
         metrics = args.metric
 
@@ -45,10 +58,11 @@ def parse_args(agg_only=False):
     if args.region:
         regions = args.region
 
-    if agg_only
-        leads = ["weekly", "biweekly"]
+    if args.ground_truth:
+        leads = ["daily", "weekly", "biweekly", "monthly"]
     else:
         leads = ["week1", "week2", "week3", "week4", "week5", "week6", "weeks34", "weeks56"]
+
     if args.lead:
         leads = args.lead
 
@@ -61,7 +75,7 @@ def parse_args(agg_only=False):
     if args.remote_config:
         remote_config = args.remote_config
 
-    return (args.start_time, args.end_time, forecasts, metrics, variables, grids,
+    return (args.start_time, args.end_time, forecasts, truth, metrics, variables, grids,
             regions, leads, time_groupings, args.parallelism,
             args.recompute, args.backend, args.remote_name, args.remote, remote_config)
 

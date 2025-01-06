@@ -130,13 +130,13 @@ def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global
     return obs
 
 @dask_remote
-@cacheable(data_type='array', cache_args=['year', 'grid'],
+@cacheable(data_type='array', cache_args=['year', 'grid', 'cell_aggregation'],
            chunking={
                'time': 365,
                'lat': 300,
                'lat': 300,
            })
-def ghcnd_yearly(year, grid='global0_25'):
+def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
     """Get a by year station data and save it as a zarr"""
     obs = dd.read_csv(f"s3://noaa-ghcn-pds/csv/by_year/{year}.csv",
                                     names=['ghcn_id', 'date', 'variable', 'value', 'mflag', 'qflag', 'sflag', 'otime'],
@@ -217,11 +217,24 @@ def ghcnd_yearly(year, grid='global0_25'):
     stat = stat.set_index('ghcn_id')
     obs = obs.join(stat, on='ghcn_id', how='inner')
 
-    # Group by lat/lon/time
-    obs = obs.groupby(by=['lat', 'lon', 'time']).agg(temp=('temp','mean'),
-                                                     precip=('precip','mean'),
-                                                     tmin=('tmin','min'),
-                                                     tmax=('tmax','max'))
+    if cell_aggregation == 'first':
+        stations_to_use = obs.groupby(['lat', 'lon']).agg(ghcn_id=('ghcn_id', 'first'))
+        stations_to_use = stations_to_use['ghcn_id'].unique()
+
+        obs = obs[obs['ghcn_id'].isin(stations_to_use)]
+
+        # This really shouldn't be necessary, but we will run it just to garuantee uniqueness
+        obs = obs.groupby(by=['lat', 'lon', 'time']).agg(temp=('temp','mean'),
+                                                         precip=('precip','mean'),
+                                                         tmin=('tmin','min'),
+                                                         tmax=('tmax','max'))
+
+    elif cell_aggregation == 'mean':
+        # Group by lat/lon/time
+        obs = obs.groupby(by=['lat', 'lon', 'time']).agg(temp=('temp','mean'),
+                                                         precip=('precip','mean'),
+                                                         tmin=('tmin','min'),
+                                                         tmax=('tmax','max'))
 
     obs.temp = obs.temp.astype(np.float32)
     obs.tmax = obs.tmax.astype(np.float32)
@@ -246,9 +259,9 @@ def ghcnd_yearly(year, grid='global0_25'):
 @dask_remote
 @cacheable(data_type='array',
            timeseries=['time'],
-           cache_args=['grid'],
+           cache_args=['grid', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
-def ghcnd(start_time, end_time, grid="global0_25"):
+def ghcnd(start_time, end_time, grid="global0_25", cell_aggregation='first'):
 
     # Get years between start time and end time
     years = []
@@ -260,7 +273,7 @@ def ghcnd(start_time, end_time, grid="global0_25"):
 
     datasets = []
     for year in years:
-        ds = dask.delayed(ghcnd_yearly)(year, grid, filepath_only=True)
+        ds = dask.delayed(ghcnd_yearly)(year, grid, cell_aggregation, filepath_only=True)
         datasets.append(ds)
 
     datasets = dask.compute(*datasets)
@@ -275,26 +288,30 @@ def ghcnd(start_time, end_time, grid="global0_25"):
 @dask_remote
 @cacheable(data_type='array',
            timeseries=['time'],
-           cache_args=['grid', 'agg_days', 'missing_thresh'],
+           cache_args=['grid', 'agg_days', 'missing_thresh', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
-def ghcnd_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thresh=0.5):
+def ghcnd_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thresh=0.5, cell_aggregation='first'):
     # Get the data
-    ds = ghcnd(start_time, end_time, grid)
+    ds = ghcnd(start_time, end_time, grid, cell_aggregation)
 
     # Roll and agg
-    ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean', agg_thresh=int(agg_days*missing_thresh))
+    agg_thresh = int(agg_days*missing_thresh)
+    if agg_thresh == 0:
+        agg_thresh = 1
+
+    ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean', agg_thresh=agg_thresh)
 
     return ds
 
 @dask_remote
 @cacheable(data_type='array',
            timeseries=['time'],
-           cache_args=['grid', 'variable', 'agg_days', 'region', 'mask', 'missing_thresh'],
+           cache_args=['grid', 'variable', 'agg_days', 'region', 'mask', 'missing_thresh', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365},
            cache=False)
-def ghcn(start_time, end_time, variable, agg_days, grid='global0_25', region='global', mask='lsm', missing_thresh=0.5):
+def ghcn(start_time, end_time, variable, agg_days, grid='global0_25', region='global', mask='lsm', missing_thresh=0.5, cell_aggregation='first'):
     """Standard interface for ghcn data"""
-    ds = ghcnd_rolled(start_time, end_time, agg_days, grid, missing_thresh)
+    ds = ghcnd_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation)
 
     # Get the variable
     variable_ghcn = get_variable(variable, 'ghcn')
