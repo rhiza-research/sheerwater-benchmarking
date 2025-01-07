@@ -1,7 +1,7 @@
 import xarray as xr
 import gcsfs
 
-from sheerwater_benchmarking.utils import cacheable, dask_remote, regrid
+from sheerwater_benchmarking.utils import cacheable, dask_remote, regrid, roll_and_agg, apply_mask, clip_region
 from dateutil import parser
 
 @dask_remote
