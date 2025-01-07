@@ -60,6 +60,10 @@ def chirps_rolled(start_time, end_time, agg_days, grid):
            cache_args=[],
            cache=False)
 def chirps(start_time, end_time, variable, agg_days, grid='global0_25', region='global', mask='lsm'):
+
+    if variable != 'precip':
+        raise NotImplementedError("Only precip provided by chirps.")
+
     ds = chirps_rolled(start_time, end_time, agg_days, grid)
 
     # Apply masking

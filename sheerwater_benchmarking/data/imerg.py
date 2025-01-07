@@ -65,6 +65,9 @@ def imerg_rolled(start_time, end_time, agg_days, grid):
            cache_args=[],
            cache=False)
 def imerg(start_time, end_time, variable, agg_days, grid='global0_25', region='global', mask='lsm'):
+    if variable != 'precip':
+        raise NotImplementedError("Only precip provided by imerg.")
+
     ds = imerg_rolled(start_time, end_time, agg_days, grid)
 
     # Apply masking

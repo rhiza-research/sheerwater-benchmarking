@@ -15,13 +15,20 @@ from jobs import parse_args, run_in_parallel
 if remote:
     start_remote(remote_config=remote_config, remote_name=remote_name)
 
-combos = itertools.product(metrics, variables, grids, regions, time_groupings)
 
 filepath_only = True
 if backend is not None:
     filepath_only = False
 
 truth = "ghcn"
+
+if 'crps' in metrics:
+    metrics.remove('crps')
+
+if 'acc' in metrics:
+    metrics.remove('acc')
+
+combos = itertools.product(metrics, variables, grids, regions, time_groupings)
 
 def run_metrics_table(combo):
     """Run table metrics."""

@@ -377,6 +377,9 @@ def _summary_metrics_table(start_time, end_time, variable,
 
     df = results_ds.to_dataframe()
 
+    # Reorder the columns if necessary
+    df = df[leads]
+
     # Rename the index
     df = df.reset_index().rename(columns={'index': 'forecast'})
     return df
@@ -410,8 +413,8 @@ def ground_truth_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    forecasts = ['era5']
-    leads = ["weekly", "biweekly"]
+    forecasts = ['era5', 'chirps', 'imerg']
+    leads = ["daily", "weekly", "biweekly", "monthly"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)

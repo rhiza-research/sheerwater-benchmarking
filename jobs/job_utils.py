@@ -27,7 +27,7 @@ def parse_args():
     args = parser.parse_args()
 
     if args.ground_truth:
-        forecasts = ["era5", "chiprs", "imerg"]
+        forecasts = ["era5", "chirps", "imerg"]
     else:
         forecasts = ["perpp", "salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
                      "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
