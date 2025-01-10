@@ -97,7 +97,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
-    obs = truth_fn(start_time, end_time, variable, time_grouping=lead_to_agg_days(lead),
+    obs = truth_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
                    grid=grid, mask=mask, region=region)
 
     # Check to see the prob type attribute

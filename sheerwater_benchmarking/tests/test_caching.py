@@ -3,6 +3,40 @@ import pytest
 import numpy as np
 import xarray as xr
 from sheerwater_benchmarking.utils import cacheable, get_dates
+from sheerwater_benchmarking.utils.caching import cacheable
+
+
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['name', 'species'],
+           cache=False)
+def simple_timeseries2(start_time, end_time, name, species='coraciidae'):
+    """Generate a simple timeseries dataset for testing."""
+    return None
+
+
+def test_cacheable_arg_override():
+    """Test the cacheable decorator with overridden arguments."""
+    start_time = '2020-01-01'
+    end_time = '2020-01-10'
+    name = 'lilac-breasted roller'
+
+    # Run once to ensure simple timeseries is cached
+    ds1 = simple_timeseries2(start_time, end_time, name, cache=True,
+                             recompute=True, dont_recompute='simple_timeseries2')
+
+    # Run again with overridden arguments
+    ds2 = simple_timeseries2(start_time, end_time, name, species='corvidae')
+
+    # Test without caching
+    name = 'indian roller'
+    with pytest.raises(ValueError):
+        ds1 = simple_timeseries2(start_time, end_time, name)
+
+
+if __name__ == "__main__":
+    test_cacheable_arg_override()
+    print("All tests passed")
 
 
 @cacheable(data_type='array',
