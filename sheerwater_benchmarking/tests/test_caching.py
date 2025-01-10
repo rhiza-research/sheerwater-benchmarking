@@ -3,10 +3,10 @@ import pytest
 import numpy as np
 import xarray as xr
 from sheerwater_benchmarking.utils import cacheable, get_dates
-from sheerwater_benchmarking.utils.caching import Cacheable
+from sheerwater_benchmarking.utils.caching import cacheable
 
 
-@Cacheable(data_type='array',
+@cacheable(data_type='array',
            timeseries='time',
            cache_args=['name', 'species'],
            cache=False)

@@ -27,17 +27,9 @@ from sheerwater_benchmarking.utils.secrets import postgres_write_password, postg
 
 logger = logging.getLogger(__name__)
 
+# Chunk size limits
 CHUNK_SIZE_UPPER_LIMIT_MB = 300
 CHUNK_SIZE_LOWER_LIMIT_MB = 30
-
-
-def merge_cache_args_from_scope(kwargs, scope, cache_kwargs):
-    """Extract the cache arguments from the scope and return them."""
-    for k in cache_kwargs:
-        if k in scope:
-            # Get the cache arg from the scope
-            kwargs[k] = scope[k]
-    return kwargs
 
 
 def get_chunk_size(ds, size_in='MB'):
@@ -106,240 +98,12 @@ def drop_encoded_chunks(ds):
     return ds
 
 
-def read_from_delta(cache_path):
-    """Read from a deltatable into a pandas dataframe."""
-    return DeltaTable(cache_path).to_pandas()
-
-
-def write_to_delta(cache_path, df, overwrite=False):
-    """Write a pandas dataframe to a delta table."""
-    if overwrite:
-        write_deltalake(cache_path, df, mode='overwrite', schema_mode='overwrite')
-    else:
-        write_deltalake(cache_path, df)
-
-
-def write_to_zarr(ds, cache_path, verify_path):
-    """Write to zarr with a temp write and move to make it more atomic.
-
-    # If you were to make this atomic this is what it would look like:
-    lock = verify_path + ".lock"
-
-    storage_client = storage.Client()
-    blob = Blob.from_string(lock, client=storage_client)
-
-    try:
-        blob.upload_from_string("lock", if_generation_match=0)
-    except google.api_core.exceptions.PreconditionFailed:
-        raise RuntimeError(f"Concurrent zarr write detected. If this is a mistake delete the lock file: {lock}")
-
-    fs.rm(lock)
-    """
-    fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-
-    if fs.exists(verify_path):
-        fs.rm(verify_path, recursive=True)
-
-    if fs.exists(cache_path):
-        fs.rm(cache_path, recursive=True)
-
-    cache_map = fs.get_mapper(cache_path)
-    ds.to_zarr(store=cache_map, mode='w')
-
-    fs.touch(verify_path)
-
-
-def chunk_to_zarr(ds, cache_path, verify_path, chunking):
-    """Write a dataset to a zarr cache map and check the chunking."""
-    ds = drop_encoded_chunks(ds)
-
-    if isinstance(chunking, dict):
-        # No need to prune if chunking is None or 'auto'
-        chunking = prune_chunking_dimensions(ds, chunking)
-
-    ds = ds.chunk(chunks=chunking)
-    chunk_size, chunk_with_labels = get_chunk_size(ds)
-
-    if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
-        print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
-        print(chunk_with_labels)
-
-    write_to_zarr(ds, cache_path, verify_path)
-
-
 def postgres_table_name(table_name):
     """Return a qualified postgres table name."""
     return hashlib.md5(table_name.encode()).hexdigest()
 
 
-def read_from_postgres(table_name, hash_table_name=True):
-    """Read a pandas df from a table in the sheerwater postgres.
-
-    Backends should eventually be flexibly specified, but for now
-    we'll just hard code a connection to the running sheerwater database.
-
-    Args:
-        table_name (str): The table name to read from
-        hash_table_name (bool): whether to hash the table name. Default true
-    """
-    # Get the postgres write secret
-    pgread_pass = postgres_read_password()
-
-    if hash_table_name:
-        table_name = postgres_table_name(table_name)
-
-    try:
-        engine = sqlalchemy.create_engine(
-            f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
-        df = pd.read_sql_query(f'select * from "{table_name}"', con=engine)
-        return df
-    except sqlalchemy.exc.InterfaceError:
-        raise RuntimeError("""Error connecting to database. Make sure you are on the
-                           tailnet and can see sheerwater-benchmarking-postgres.""")
-
-
-def check_exists_postgres(table_name):
-    """Check if table exists in postgres.
-
-    Args:
-        table_name: The table name to check
-    """
-    # Get the postgres write secret
-    pgread_pass = postgres_read_password()
-
-    table_name = postgres_table_name(table_name)
-
-    try:
-        engine = sqlalchemy.create_engine(
-            f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
-        insp = sqlalchemy.inspect(engine)
-        return insp.has_table(table_name)
-    except sqlalchemy.exc.InterfaceError:
-        raise RuntimeError("""Error connecting to database. Make sure you are on
-                           the tailnet and can see sheerwater-benchmarking-postgres.""")
-
-
-def write_to_postgres(pandas_df, table_name, overwrite=False):
-    """Writes a pandas df as a table in the sheerwater postgres.
-
-    Backends should eventually be flexibly specified, but for now
-    we'll just hard code a connection to the running sheerwater database.
-
-    Args:
-        pandas_df: A pandas dataframe
-        table_name: The table name to write to
-        overwrite (bool): whether to overwrite an existing table
-    """
-    # Get the postgres write secret
-    pgwrite_pass = postgres_write_password()
-
-    new_table_name = postgres_table_name(table_name)
-
-    try:
-        engine = sqlalchemy.create_engine(
-            f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
-        if overwrite:
-            pandas_df.to_sql(new_table_name, engine, if_exists='replace')
-        else:
-            pandas_df.to_sql(new_table_name, engine)
-
-        # Also log the table name in the tables table
-        pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
-        pd_name = pd.DataFrame(pd_name)
-        pd_name.to_sql('cache_tables', engine, if_exists='append')
-
-    except sqlalchemy.exc.InterfaceError:
-        raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
-                           and can see sheerwater-benchmarking-postgres.""")
-
-
-def write_to_terracotta(cache_key, ds):
-    """Write geospatial array to terracotta.
-
-    Args:
-        cache_key(str): The unique key to store the data in terracotta
-        ds (xr.Dataset): Dataset which holds raster
-        clip_extreme_quantile(float): The quantile to clip the data at
-    """
-    # Check to make sure this is geospatial data
-    lats = ['lat', 'y', 'latitude']
-    lons = ['lon', 'x', 'longitude']
-    if len(ds.dims) != 2:
-        if len(ds.dims) != 3 or 'time' not in ds.dims:
-            raise RuntimeError("Can only store two dimensional geospatial data to terracotta")
-
-    foundx = False
-    foundy = False
-    for y in lats:
-        if y in ds.dims:
-            ds = ds.rename({y: 'y'})
-            foundy = True
-    for x in lons:
-        if x in ds.dims:
-            ds = ds.rename({x: 'x'})
-            foundx = True
-
-    if not foundx or not foundy:
-        raise RuntimeError("Can only store two or three dimensional (with time) geospatial data to terracotta")
-
-    # Adjust coordinates
-    if (ds['x'] > 180.0).any():
-        lon_base_change(ds, lon_dim='x')
-        ds = ds.sortby(['x'])
-
-    # Adapt the CRS
-    ds.rio.write_crs("epsg:4326", inplace=True)
-    ds = ds.rio.reproject('EPSG:3857', resampling=Resampling.nearest, nodata=np.nan)
-    ds.rio.write_crs("epsg:3857", inplace=True)
-
-    def write_individual_raster(driver, bucket, ds, cache_key):
-        # Write the raster
-        with MemoryFile() as mem_dst:
-            ds.rio.to_raster(mem_dst.name, driver="COG")
-
-            blob = bucket.blob(f'rasters/{cache_key}.tif')
-            blob.upload_from_file(mem_dst)
-
-            driver.insert({'key': cache_key.replace('/', '_')}, mem_dst,
-                          override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif', skip_metadata=False)
-
-            print(f"Inserted {cache_key.replace('/', '_')} into the terracotta database.")
-
-    storage_client = storage.Client()
-    bucket = storage_client.bucket("sheerwater-datalake")
-
-    # Register with terracotta
-    tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
-    if not hasattr(write_to_terracotta, 'driver'):
-        driver = tc.get_driver("postgresql://sheerwater-benchmarking-postgres:5432/terracotta")
-        write_to_terracotta.driver = driver
-    else:
-        driver = write_to_terracotta.driver
-
-    try:
-        driver.get_keys()
-    except sqlalchemy.exc.DatabaseError:
-        # Create a metastore
-        print("Creating new terracotta metastore")
-        driver.create(['key'])
-
-    # Insert the parameters.
-    with driver.connect():
-        if 'time' in ds.dims:
-            for t in ds.time:
-                # Select just this time and squeeze the dimension
-                sub_ds = ds.sel(time=t)
-                sub_ds = sub_ds.reset_coords('time', drop=True)
-
-                # add the time to the cache_key
-                sub_cache_key = cache_key + '_' + str(t.values)
-
-                write_individual_raster(driver, bucket, sub_ds, sub_cache_key)
-        else:
-            write_individual_raster(driver, bucket, ds, cache_key)
-
-
-class Cacheable(ABC):
+class cacheable(ABC):
     """Decorator for handling typed data loading, storing, and composable computation.
 
     Args:
@@ -433,6 +197,232 @@ class Cacheable(ABC):
             'backend': backend,
             'storage_backend': storage_backend
         }
+
+    def merge_cache_args_from_scope(self, kwargs, scope, cache_kwargs):
+        """Extract the cache arguments from the scope and return them."""
+        for k in cache_kwargs:
+            if k in scope:
+                # Get the cache arg from the scope
+                kwargs[k] = scope[k]
+        return kwargs
+
+    def read_from_delta(self, cache_path):
+        """Read from a deltatable into a pandas dataframe."""
+        return DeltaTable(cache_path).to_pandas()
+
+    def write_to_delta(self, cache_path, df, overwrite=False):
+        """Write a pandas dataframe to a delta table."""
+        if overwrite:
+            write_deltalake(cache_path, df, mode='overwrite', schema_mode='overwrite')
+        else:
+            write_deltalake(cache_path, df)
+
+    def write_to_zarr(self, ds, cache_path, verify_path):
+        """Write to zarr with a temp write and move to make it more atomic.
+
+        # If you were to make this atomic this is what it would look like:
+        lock = verify_path + ".lock"
+
+        storage_client = storage.Client()
+        blob = Blob.from_string(lock, client=storage_client)
+
+        try:
+            blob.upload_from_string("lock", if_generation_match=0)
+        except google.api_core.exceptions.PreconditionFailed:
+            raise RuntimeError(f"Concurrent zarr write detected. If this is a mistake delete the lock file: {lock}")
+
+        fs.rm(lock)
+        """
+        if self.fs.exists(verify_path):
+            self.fs.rm(verify_path, recursive=True)
+
+        if self.fs.exists(cache_path):
+            self.fs.rm(cache_path, recursive=True)
+
+        cache_map = self.fs.get_mapper(cache_path)
+        ds.to_zarr(store=cache_map, mode='w')
+
+        self.fs.touch(verify_path)
+
+    def chunk_to_zarr(self, ds, cache_path, verify_path, chunking):
+        """Write a dataset to a zarr cache map and check the chunking."""
+        ds = drop_encoded_chunks(ds)
+
+        if isinstance(chunking, dict):
+            # No need to prune if chunking is None or 'auto'
+            chunking = prune_chunking_dimensions(ds, chunking)
+
+        ds = ds.chunk(chunks=chunking)
+        chunk_size, chunk_with_labels = get_chunk_size(ds)
+
+        if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
+            print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
+            print(chunk_with_labels)
+
+        self.write_to_zarr(ds, cache_path, verify_path)
+
+    def read_from_postgres(self, table_name, hash_table_name=True):
+        """Read a pandas df from a table in the sheerwater postgres.
+
+        Backends should eventually be flexibly specified, but for now
+        we'll just hard code a connection to the running sheerwater database.
+
+        Args:
+            table_name (str): The table name to read from
+            hash_table_name (bool): whether to hash the table name. Default true
+        """
+        # Get the postgres write secret
+        pgread_pass = postgres_read_password()
+
+        if hash_table_name:
+            table_name = postgres_table_name(table_name)
+
+        try:
+            engine = sqlalchemy.create_engine(
+                f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+            df = pd.read_sql_query(f'select * from "{table_name}"', con=engine)
+            return df
+        except sqlalchemy.exc.InterfaceError:
+            raise RuntimeError("""Error connecting to database. Make sure you are on the
+                            tailnet and can see sheerwater-benchmarking-postgres.""")
+
+    def check_exists_postgres(self, table_name):
+        """Check if table exists in postgres.
+
+        Args:
+            table_name: The table name to check
+        """
+        # Get the postgres write secret
+        pgread_pass = postgres_read_password()
+
+        table_name = postgres_table_name(table_name)
+
+        try:
+            engine = sqlalchemy.create_engine(
+                f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+            insp = sqlalchemy.inspect(engine)
+            return insp.has_table(table_name)
+        except sqlalchemy.exc.InterfaceError:
+            raise RuntimeError("""Error connecting to database. Make sure you are on
+                            the tailnet and can see sheerwater-benchmarking-postgres.""")
+
+    def write_to_postgres(self, pandas_df, table_name, overwrite=False):
+        """Writes a pandas df as a table in the sheerwater postgres.
+
+        Backends should eventually be flexibly specified, but for now
+        we'll just hard code a connection to the running sheerwater database.
+
+        Args:
+            pandas_df: A pandas dataframe
+            table_name: The table name to write to
+            overwrite (bool): whether to overwrite an existing table
+        """
+        # Get the postgres write secret
+        pgwrite_pass = postgres_write_password()
+
+        new_table_name = postgres_table_name(table_name)
+
+        try:
+            engine = sqlalchemy.create_engine(
+                f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+            if overwrite:
+                pandas_df.to_sql(new_table_name, engine, if_exists='replace')
+            else:
+                pandas_df.to_sql(new_table_name, engine)
+
+            # Also log the table name in the tables table
+            pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
+            pd_name = pd.DataFrame(pd_name)
+            pd_name.to_sql('cache_tables', engine, if_exists='append')
+
+        except sqlalchemy.exc.InterfaceError:
+            raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
+                            and can see sheerwater-benchmarking-postgres.""")
+
+    def write_to_terracotta(self, cache_key, ds):
+        """Write geospatial array to terracotta.
+
+        Args:
+            cache_key(str): The unique key to store the data in terracotta
+            ds (xr.Dataset): Dataset which holds raster
+            clip_extreme_quantile(float): The quantile to clip the data at
+        """
+        # Check to make sure this is geospatial data
+        lats = ['lat', 'y', 'latitude']
+        lons = ['lon', 'x', 'longitude']
+        if len(ds.dims) != 2:
+            if len(ds.dims) != 3 or 'time' not in ds.dims:
+                raise RuntimeError("Can only store two dimensional geospatial data to terracotta")
+
+        foundx = False
+        foundy = False
+        for y in lats:
+            if y in ds.dims:
+                ds = ds.rename({y: 'y'})
+                foundy = True
+        for x in lons:
+            if x in ds.dims:
+                ds = ds.rename({x: 'x'})
+                foundx = True
+
+        if not foundx or not foundy:
+            raise RuntimeError("Can only store two or three dimensional (with time) geospatial data to terracotta")
+
+        # Adjust coordinates
+        if (ds['x'] > 180.0).any():
+            lon_base_change(ds, lon_dim='x')
+            ds = ds.sortby(['x'])
+
+        # Adapt the CRS
+        ds.rio.write_crs("epsg:4326", inplace=True)
+        ds = ds.rio.reproject('EPSG:3857', resampling=Resampling.nearest, nodata=np.nan)
+        ds.rio.write_crs("epsg:3857", inplace=True)
+
+        def write_individual_raster(driver, bucket, ds, cache_key):
+            # Write the raster
+            with MemoryFile() as mem_dst:
+                ds.rio.to_raster(mem_dst.name, driver="COG")
+
+                blob = bucket.blob(f'rasters/{cache_key}.tif')
+                blob.upload_from_file(mem_dst)
+
+                driver.insert({'key': cache_key.replace('/', '_')}, mem_dst,
+                              override_path=f'/mnt/sheerwater-datalake/{cache_key}.tif', skip_metadata=False)
+
+                print(f"Inserted {cache_key.replace('/', '_')} into the terracotta database.")
+
+        storage_client = storage.Client()
+        bucket = storage_client.bucket("sheerwater-datalake")
+
+        # Register with terracotta
+        tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
+        if not hasattr(self.write_to_terracotta, 'driver'):
+            driver = tc.get_driver("postgresql://sheerwater-benchmarking-postgres:5432/terracotta")
+            self.write_to_terracotta.driver = driver
+        else:
+            driver = self.write_to_terracotta.driver
+
+        try:
+            driver.get_keys()
+        except sqlalchemy.exc.DatabaseError:
+            # Create a metastore
+            print("Creating new terracotta metastore")
+            driver.create(['key'])
+
+        # Insert the parameters.
+        with driver.connect():
+            if 'time' in ds.dims:
+                for t in ds.time:
+                    # Select just this time and squeeze the dimension
+                    sub_ds = ds.sel(time=t)
+                    sub_ds = sub_ds.reset_coords('time', drop=True)
+
+                    # add the time to the cache_key
+                    sub_cache_key = cache_key + '_' + str(t.values)
+
+                    write_individual_raster(driver, bucket, sub_ds, sub_cache_key)
+            else:
+                write_individual_raster(driver, bucket, ds, cache_key)
 
     def get_cache_config(self, kwargs, func):
         """Get the final cache configuration from the passed kwargs."""
@@ -665,7 +655,7 @@ class Cacheable(ABC):
             else:
                 return self.fs.exists(cache_path)
         elif backend == 'postgres':
-            return check_exists_postgres(cache_path)
+            return self.check_exists_postgres(cache_path)
 
     def load_cache(self, config):
         """Load the cache generically.
@@ -711,7 +701,7 @@ class Cacheable(ABC):
                     # data leading to corruption.
                     temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + config['cache_key'] + '.temp'
                     temp_verify_path = 'gs://sheerwater-datalake/caches/temp/' + config['cache_key'] + '.verify'
-                    chunk_to_zarr(ds, temp_cache_path, temp_verify_path, config['chunking'])
+                    self.chunk_to_zarr(ds, temp_cache_path, temp_verify_path, config['chunking'])
 
                     if self.fs.exists(verify_path):
                         self.fs.rm(verify_path, recursive=True)
@@ -768,10 +758,10 @@ class Cacheable(ABC):
                     return cache_map
                 else:
                     print(f"Opening cache {cache_path}")
-                    ds = read_from_delta(cache_path)
+                    ds = self.read_from_delta(cache_path)
                     return ds
             elif backend == 'postgres':
-                ds = read_from_postgres(config['cache_key'])
+                ds = self.read_from_postgres(config['cache_key'])
                 return ds
             else:
                 raise ValueError("Tabular data type only supports delta and postgres backends.")
@@ -822,12 +812,12 @@ class Cacheable(ABC):
 
                         if config['chunking']:
                             # If we aren't doing auto chunking delete the encoding chunks
-                            chunk_to_zarr(ds, cache_path, verify_path, config['chunking'])
+                            self.chunk_to_zarr(ds, cache_path, verify_path, config['chunking'])
 
                             # Reopen the dataset to truncate the computational path
                             ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
                         else:
-                            chunk_to_zarr(ds, cache_path, verify_path, 'auto')
+                            self.chunk_to_zarr(ds, cache_path, verify_path, 'auto')
 
                             # Reopen the dataset to truncate the computational path
                             ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
@@ -838,7 +828,7 @@ class Cacheable(ABC):
             # If terracotta is specified as a backend try to write the result array to terracotta
             elif storage_backend == 'terracotta':
                 print(f"Also caching {config['cache_key']} to terracotta.")
-                write_to_terracotta(config['cache_key'], ds)
+                self.write_to_terracotta(config['cache_key'], ds)
 
         elif data_type == 'tabular':
             if not isinstance(ds, pd.DataFrame):
@@ -857,11 +847,11 @@ class Cacheable(ABC):
 
                 if write:
                     print(f"Caching result for {cache_path} in delta.")
-                    write_to_delta(cache_path, ds, overwrite=True)
+                    self.write_to_delta(cache_path, ds, overwrite=True)
 
             elif storage_backend == 'postgres':
                 write = False
-                if check_exists_postgres(config['cache_key']) and not config['force_overwrite']:
+                if self.check_exists_postgres(config['cache_key']) and not config['force_overwrite']:
                     inp = input(f'A cache already exists at {
                                 cache_path}. Are you sure you want to overwrite it? (y/n)')
                     if inp == 'y' or inp == 'Y':
@@ -871,7 +861,7 @@ class Cacheable(ABC):
 
                 if write:
                     print(f"Caching result for {config['cache_key']} in postgres.")
-                    write_to_postgres(ds, config['cache_key'], overwrite=True)
+                    self.write_to_postgres(ds, config['cache_key'], overwrite=True)
             else:
                 raise ValueError("Only delta and postgres backends are implemented for tabular data")
         elif data_type == 'basic':
@@ -897,7 +887,7 @@ class Cacheable(ABC):
         if config['data_type'] == 'array':
             # Perform any necessary time series slicing
             if config['timeseries'] is not None:
-                match_time = [time for time in config['timeseries'] if time in ds.dims]
+                match_time = [time for time in config['timeseries'] if time in ret.dims]
                 if len(match_time) == 0:
                     raise RuntimeError(
                         "Timeseries array must return a 'time' dimension for slicing.")
@@ -993,16 +983,17 @@ class Cacheable(ABC):
                 return cache_map
 
             # Process the return value
-            ret = self.process_ret(ret, config)
+            if ret is not None:
+                ret = self.process_ret(ret, config)
 
             # Return the final result
             return ret
         return cacheable_wrapper
 
 
-def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
-              auto_rechunk=False, cache=True, cache_disable_if=None,
-              backend=None, storage_backend=None):
+def cacheable_hold(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
+                   auto_rechunk=False, cache=True, cache_disable_if=None,
+                   backend=None, storage_backend=None):
     """Decorator for caching function results."""
     # Valid configuration kwargs for the cacheable decorator
 
