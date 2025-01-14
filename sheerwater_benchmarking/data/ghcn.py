@@ -105,7 +105,12 @@ def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global
     obs = obs.drop(['date'], axis=1)
 
     # Round the coordinates to the nearest grid
-    _, _, grid_size = get_grid(grid)
+    lats, lons, grid_size = get_grid(grid)
+
+    # This rounding only works for divisible, uniform grids
+    assert(lats[0] % grid_size == 0)
+    assert(lons[0] % grid_size == 0)
+
     def custom_round(x, base):
         return base * round(float(x)/base)
 
@@ -210,7 +215,12 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
     obs = obs.drop(['date'], axis=1)
 
     # Round the coordinates to the nearest grid
-    _, _, grid_size = get_grid(grid)
+    lats, lons, grid_size = get_grid(grid)
+
+    # This rounding only works for divisible, uniform grids
+    assert(lats[0] % grid_size == 0)
+    assert(lons[0] % grid_size == 0)
+
     def custom_round(x, base):
         return base * round(float(x)/base)
 
