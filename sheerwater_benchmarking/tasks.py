@@ -23,7 +23,9 @@ def rainy_onset_condition(da, prob_dim='member', prob_threshold=0.5):
     if prob_dim in da.dims:
         # If the probability dimension is present
         cond = cond.mean(dim=prob_dim)
-        cond = cond > prob_threshold
+        if prob_threshold is not None:
+            # Convert to a boolean based on the probability threshold
+            cond = cond > prob_threshold
     return cond
 
 
@@ -33,6 +35,14 @@ def first_satisfied_date(ds, condition, time_dim='time', base_time=None, prob_di
     If the time dimension is a timedelta object, a base time must be specified. 
     If a prob_dim is specified, find the first date that the condition is met with 
     a probability greater than prob_threshold.
+
+    Args:
+        ds (xr.Dataset): Dataset to apply the condition to.
+        condition (callable): Condition to apply to the dataset.
+        time_dim (str): Name of the time dimension.
+        base_time (str): Base time for timedelta objects (optional).
+        prob_dim (str): Name of the ensemble dimension.
+        prob_threshold (float): Threshold for the probability dimension.
     """
     # Apply the rainy reason onset condition to the grouped dataframe
     ds['condition'] = condition(ds, prob_dim, prob_threshold)
@@ -74,9 +84,25 @@ def first_rain(data, time_dim='time', time_offset=None, prob_dim='member', prob_
     dsp['precip_11d'] = dsp['precip'].rolling({time_dim: 11}).sum()
     dsp['precip_8d'] = dsp['precip_8d'].shift({time_dim: -7})
     dsp['precip_11d'] = dsp['precip_11d'].shift({time_dim: -10})
-    fsd = first_satisfied_date(dsp, rainy_onset_condition, time_dim=time_dim, base_time=time_offset,
-                               prob_dim=prob_dim, prob_threshold=prob_threshold)
+    if prob_threshold is not None:
+        fsd = first_satisfied_date(dsp, rainy_onset_condition, time_dim=time_dim, base_time=time_offset,
+                                   prob_dim=prob_dim, prob_threshold=prob_threshold)
     return fsd
+
+
+def rainy_season_fcst(data, time_dim='time', time_offset=None, prob_dim='member', prob_threshold=0.5):
+    # Add the relevant rolling values and left-align the rolling windows
+    dsp = data.copy()
+    dsp['precip_8d'] = dsp['precip'].rolling({time_dim: 8}).sum()
+    dsp['precip_11d'] = dsp['precip'].rolling({time_dim: 11}).sum()
+    dsp['precip_8d'] = dsp['precip_8d'].shift({time_dim: -7})
+    dsp['precip_11d'] = dsp['precip_11d'].shift({time_dim: -10})
+    if prob_threshold is not None:
+        fcst = first_satisfied_date(dsp, rainy_onset_condition, time_dim=time_dim, base_time=time_offset,
+                                    prob_dim=prob_dim, prob_threshold=prob_threshold)
+    else:
+        fcst = rainy_onset_condition(dsp, prob_dim=prob_dim, prob_threshold=prob_threshold)
+    return fcst
 
 
 def average_time(data, avg_over='time'):
@@ -148,7 +174,7 @@ def rainy_season_onset_truth(start_time, end_time,
                    'global0_25': {"lat": 721, "lon": 1440, "time": 30}
                },
            },
-           cache=True)
+           cache=False)
 def rainy_season_onset_forecast(start_time, end_time,
                                 forecast, prob_type='probabilistic',
                                 grid='global0_25', mask='lsm', region='global'):
@@ -175,8 +201,10 @@ def rainy_season_onset_forecast(start_time, end_time,
     if prob_type == 'deterministic':
         agg_fn = partial(first_rain, time_dim='lead_time', time_offset='start_date')
     else:
-        agg_fn = partial(first_rain, time_dim='lead_time', time_offset='start_date',
-                         prob_dim='member', prob_threshold=0.25)
+        # agg_fn = partial(first_rain, time_dim='lead_time', time_offset='start_date',
+        #                  prob_dim='member', prob_threshold=0.25)
+        agg_fn = partial(rainy_season_fcst, time_dim='lead_time', time_offset='start_date',
+                         prob_dim='member', prob_threshold=None)
     # Add time groups
     rainy_da = groupby_time(ds,
                             groupby=None,
@@ -184,6 +212,8 @@ def rainy_season_onset_forecast(start_time, end_time,
                             time_dim='start_date',
                             return_timeseries=True)
 
+    import pdb
+    pdb.set_trace()
     rainy_ds = rainy_da.to_dataset(name='rainy_forecast')
     # TODO: why is chunking not working?
     rainy_ds = rainy_ds.chunk({'lat': 121, 'lon': 240, 'start_date': 1000})
