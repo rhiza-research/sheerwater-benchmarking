@@ -236,8 +236,6 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                          forecast=forecast, truth=truth, spatial=False, avg_time=True,
                          metric=metric, grid=grid, mask=mask, region=region)
 
-        sparse = ds.attrs['sparse']
-
         if ds is None:
             return None
 
@@ -254,9 +252,10 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
                                       forecast=forecast, truth=truth,
                                       metric=called_metric, grid=grid, mask=mask, region='global')
-        sparse = ds.attrs['sparse']
         if ds is None:
             return None
+
+        sparse = ds.attrs['sparse']
     else:
 
         # Get the unaggregated global metric
@@ -264,9 +263,10 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                            forecast=forecast, truth=truth,
                            metric=called_metric, grid=grid, mask=mask, region='global')
 
-        sparse = ds.attrs['sparse']
         if ds is None:
             return None
+
+        sparse = ds.attrs['sparse']
 
         # Group the time column based on time grouping
         if time_grouping:
@@ -288,7 +288,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     # Clip it to the region
     ds = clip_region(ds, region)
 
-    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98) and not sparse:
+    if not sparse and not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
         # Check if forecast is valid before spatial averaging
         print("Metric is not valid for region.")
         return None
