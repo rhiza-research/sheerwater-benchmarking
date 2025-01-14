@@ -1,4 +1,4 @@
-
+"""Copies imerge data on your computer to the cloud."""
 import glob
 import gcsfs
 
