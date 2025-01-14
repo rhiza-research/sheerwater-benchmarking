@@ -587,9 +587,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.delta'
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = True
-                if backend == 'parquet':
+                elif backend == 'parquet':
                     cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.parquet'
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    supports_filepath = True
                 elif backend == 'postgres':
                     cache_path = cache_key
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
@@ -894,36 +895,22 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             else:
                 # Do the time series filtering
                 if timeseries is not None:
+                    match_time = [t for t in tl if t in ds.dims]
+                    if len(match_time) == 0:
+                        raise RuntimeError(
+                            "Timeseries array must return a 'time' dimension for slicing.")
+
+                    time_col = match_time[0]
+
+                    # Assign start and end times if None are passed
+                    if start_time is None:
+                        start_time = ds[time_col].min().values
+                    if end_time is None:
+                        end_time = ds[time_col].max().values
+
                     if data_type == 'array' and isinstance(ds, xr.Dataset):
-                        match_time = [t for t in tl if t in ds.dims]
-                        if len(match_time) == 0:
-                            raise RuntimeError(
-                                "Timeseries array must return a 'time' dimension for slicing.")
-
-                        time_col = match_time[0]
-
-                        # Assign start and end times if None are passed
-                        if start_time is None:
-                            start_time = ds[time_col].min().values
-                        if end_time is None:
-                            end_time = ds[time_col].max().values
-
                         ds = ds.sel({time_col: slice(start_time, end_time)})
                     elif data_type == 'tabular' and (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
-                        match_time = [t for t in tl if t in ds.columns]
-
-                        if len(match_time) == 0:
-                            raise RuntimeError(
-                                "Timeseries dataframes must return a 'time' column for slicing.")
-
-                        time_col = match_time[0]
-
-                        # Assign start and end times if None are passed
-                        if start_time is None:
-                            start_time = ds[time_col].min().values
-                        if end_time is None:
-                            end_time = ds[time_col].max().values
-
                         ds = ds[(ds[time_col] >= start_time) & (ds[time_col] <= end_time)]
 
                 return ds
