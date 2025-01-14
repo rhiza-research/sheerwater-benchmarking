@@ -121,9 +121,9 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         sparse = fcst.attrs['sparse']
 
     if not spatial and not sparse and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
-            # If averaging over space, we must check if the forecast is valid
-            print(f"Forecast {forecast} is not valid for region {region}.")
-            return None
+        # If averaging over space, we must check if the forecast is valid
+        print(f"Forecast {forecast} is not valid for region {region}.")
+        return None
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
@@ -133,7 +133,6 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     # assign sparsity if it exists
     if 'sparse' in obs.attrs:
         sparse |= obs.attrs['sparse']
-
 
     if metric in CLIM_METRICS:
         # Get the appropriate climatology dataframe for metric calculation
@@ -402,6 +401,7 @@ def summary_metrics_table(start_time, end_time, variable,
     print(df)
     return df
 
+
 @dask_remote
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
@@ -419,7 +419,6 @@ def station_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
-
 
 
 @dask_remote
@@ -440,7 +439,6 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
-
 
 
 __all__ = ['eval_metric', 'global_metric', 'aggregated_global_metric',

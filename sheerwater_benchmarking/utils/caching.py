@@ -684,7 +684,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     et = dateparser.parse(end_time) if end_time is not None \
                                         else pd.Timestamp(ds[time_col].max().values)
 
-
                                     # Check if within 1 year at least
                                     if (pd.Timestamp(ds[time_col].min().values) <
                                         st + datetime.timedelta(days=365) and

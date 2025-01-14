@@ -4,6 +4,7 @@ import xarray as xr
 from sheerwater_benchmarking.utils import regrid, dask_remote, cacheable, roll_and_agg, apply_mask, clip_region
 from dateutil import parser
 
+
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['year', 'grid'],
@@ -44,13 +45,14 @@ def chirps_rolled(start_time, end_time, agg_days, grid):
         datasets.append(ds)
 
     ds = xr.open_mfdataset(datasets,
-                          engine='zarr',
-                          parallel=True,
-                          chunks={'lat': 300, 'lon': 300, 'time': 365})
+                           engine='zarr',
+                           parallel=True,
+                           chunks={'lat': 300, 'lon': 300, 'time': 365})
 
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean')
 
     return ds
+
 
 @dask_remote
 @cacheable(data_type='array',
@@ -71,6 +73,3 @@ def chirps(start_time, end_time, variable, agg_days, grid='global0_25', mask='ls
     ds = clip_region(ds, region=region)
 
     return ds
-
-
-

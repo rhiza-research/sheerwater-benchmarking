@@ -23,8 +23,9 @@ def station_list():
 
     return df
 
+
 @cacheable(data_type='array', cache_args=['ghcn_id', 'drop_flagged'], cache=True, timeseries='time')
-def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global0_25'): # noqa:  ARG001
+def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global0_25'):  # noqa:  ARG001
     """Get GHCNd observed data timeseries for a single station.
 
     Global Historical Climatology Network - Daily.
@@ -45,12 +46,12 @@ def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global
                       names=['ghcn_id', 'date', 'variable', 'value', 'mflag', 'qflag', 'sflag', 'otime'],
                       dtype={'ghcn_id': str,
                              'date': str,
-                             'variable':str,
-                             'value':int,
-                             'mflag':str,
-                             'qflag':str,
-                             'sflag':str,
-                             'otime':str},
+                             'variable': str,
+                             'value': int,
+                             'mflag': str,
+                             'qflag': str,
+                             'sflag': str,
+                             'otime': str},
                       storage_options={'anon': True})
 
     # Drop rows we don't care about
@@ -62,7 +63,6 @@ def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global
     # Rplace any invalid data
     INVALID_NUMBER = 9999
     obs.replace(INVALID_NUMBER, pd.NA, inplace=True)
-
 
     # Divide by 10 because data is represented in 10ths
     obs['value'] = obs['value'] / 10.0
@@ -108,8 +108,8 @@ def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global
     lats, lons, grid_size = get_grid(grid)
 
     # This rounding only works for divisible, uniform grids
-    assert(lats[0] % grid_size == 0)
-    assert(lons[0] % grid_size == 0)
+    assert (lats[0] % grid_size == 0)
+    assert (lons[0] % grid_size == 0)
 
     def custom_round(x, base):
         return base * round(float(x)/base)
@@ -137,29 +137,30 @@ def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global
 
     return obs
 
+
 @dask_remote
 @cacheable(data_type='array', cache_args=['year', 'grid', 'cell_aggregation'],
            chunking={
                'time': 365,
                'lat': 300,
                'lon': 300,
-           })
+})
 def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
     """Get a by year station data and save it as a zarr."""
     obs = dd.read_csv(f"s3://noaa-ghcn-pds/csv/by_year/{year}.csv",
-                                    names=['ghcn_id', 'date', 'variable', 'value', 'mflag', 'qflag', 'sflag', 'otime'],
-                                    header=0,
-                                    blocksize="32MB",
-                                    dtype={'ghcn_id': str,
-                                           'date': str,
-                                           'variable':str,
-                                           'value':int,
-                                           'mflag':str,
-                                           'qflag':str,
-                                           'sflag':str,
-                                           'otime':str},
-                                    storage_options={'anon': True},
-                                    on_bad_lines="skip")
+                      names=['ghcn_id', 'date', 'variable', 'value', 'mflag', 'qflag', 'sflag', 'otime'],
+                      header=0,
+                      blocksize="32MB",
+                      dtype={'ghcn_id': str,
+                             'date': str,
+                             'variable': str,
+                             'value': int,
+                             'mflag': str,
+                             'qflag': str,
+                             'sflag': str,
+                             'otime': str},
+                      storage_options={'anon': True},
+                      on_bad_lines="skip")
 
     # Drop rows we don't care about
     obs = obs[obs['variable'].isin(['TMAX', 'TMIN', 'TAVG', 'PRCP'])]
@@ -202,12 +203,11 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
     lats, lons, grid_size = get_grid(grid)
 
     # This rounding only works for divisible, uniform grids
-    assert(lats[0] % grid_size == 0)
-    assert(lons[0] % grid_size == 0)
+    assert (lats[0] % grid_size == 0)
+    assert (lons[0] % grid_size == 0)
 
     def custom_round(x, base):
         return base * round(float(x)/base)
-
 
     stat = station_list()
     stat['lat'] = stat['lat'].apply(lambda x: custom_round(x, base=grid_size))
@@ -223,10 +223,10 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
         obs = obs[obs['ghcn_id'].isin(stations_to_use)]
     elif cell_aggregation == 'mean':
         # Group by lat/lon/time
-        obs = obs.groupby(by=['lat', 'lon', 'time']).agg(temp=('temp','mean'),
-                                                         precip=('precip','mean'),
-                                                         tmin=('tmin','min'),
-                                                         tmax=('tmax','max'))
+        obs = obs.groupby(by=['lat', 'lon', 'time']).agg(temp=('temp', 'mean'),
+                                                         precip=('precip', 'mean'),
+                                                         tmin=('tmin', 'min'),
+                                                         tmax=('tmax', 'max'))
 
     obs.temp = obs.temp.astype(np.float32)
     obs.tmax = obs.tmax.astype(np.float32)
@@ -242,6 +242,7 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
 
     # Return the xarray
     return obs
+
 
 @dask_remote
 @cacheable(data_type='array',
@@ -267,6 +268,7 @@ def ghcnd(start_time, end_time, grid="global0_25", cell_aggregation='first'):
 
     return x
 
+
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
@@ -283,6 +285,7 @@ def ghcnd_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thre
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean', agg_thresh=agg_thresh)
 
     return ds
+
 
 @dask_remote
 @cacheable(data_type='array',
