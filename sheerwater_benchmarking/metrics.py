@@ -102,30 +102,28 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
         fcst = fcst_fn(start_time, end_time, variable, lead=lead,
                        prob_type=prob_type, grid=grid, mask=mask, region=region)
-        if not spatial and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
-            # If averaging over space, we must check if the forecast is valid
-            print(f"Forecast {forecast} is not valid for region {region}.")
-            return None
 
         # Check to see the prob type attribute
         enhanced_prob_type = fcst.attrs['prob_type']
 
-        # assign sparsity if it exists
-        if 'sparse' in fcst.attrs:
-            sparse = fcst.attrs['sparse']
     else:
         if lead_or_agg(lead) == 'lead':
             raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
 
-        enhanced_prob_type = "deterministic"
-
         fcst = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
                        grid=grid, mask=mask, region=region)
 
-        # assign sparsity if it exists
-        if 'sparse' in fcst.attrs:
-            sparse = fcst.attrs['sparse']
+        # Prob type is always deterministic for truth sources
+        enhanced_prob_type = "deterministic"
 
+    # assign sparsity if it exists
+    if 'sparse' in fcst.attrs:
+        sparse = fcst.attrs['sparse']
+
+    if not spatial and not sparse and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
+            # If averaging over space, we must check if the forecast is valid
+            print(f"Forecast {forecast} is not valid for region {region}.")
+            return None
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
