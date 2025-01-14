@@ -409,7 +409,7 @@ def summary_metrics_table(start_time, end_time, variable,
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
-def ground_truth_metrics_table(start_time, end_time, variable,
+def station_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""

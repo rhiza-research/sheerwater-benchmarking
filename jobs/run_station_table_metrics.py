@@ -3,7 +3,7 @@
 import itertools
 import traceback
 
-from sheerwater_benchmarking.metrics import ground_truth_metrics_table
+from sheerwater_benchmarking.metrics import station_metrics_table
 from sheerwater_benchmarking.utils import start_remote
 from jobs import parse_args, run_in_parallel
 
@@ -39,7 +39,7 @@ def run_metrics_table(combo):
         return
 
     try:
-        ground_truth_metrics_table(start_time, end_time, variable, truth, metric,
+        station_metrics_table(start_time, end_time, variable, truth, metric,
                               time_grouping=time_grouping, grid=grid, region=region,
                               force_overwrite=True, filepath_only=filepath_only,
                               recompute=recompute, storage_backend=backend)
