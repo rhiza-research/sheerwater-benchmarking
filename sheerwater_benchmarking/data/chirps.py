@@ -55,9 +55,9 @@ def chirps_rolled(start_time, end_time, agg_days, grid):
 @dask_remote
 @cacheable(data_type='array',
            timeseries=['time'],
-           cache_args=[],
+           cache_args=['variable', 'agg_days', 'grid', 'mask', 'region'],
            cache=False)
-def chirps(start_time, end_time, variable, agg_days, grid='global0_25', region='global', mask='lsm'):
+def chirps(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global'):
     """Final access function for chirps."""
     if variable != 'precip':
         raise NotImplementedError("Only precip provided by chirps.")
