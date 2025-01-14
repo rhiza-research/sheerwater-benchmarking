@@ -24,12 +24,7 @@ def imerg_raw(year):
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def imerg_gridded(start_time, end_time, grid):
     """Regridded version of whole imerg dataset."""
-    years = []
-    current_year = parser.parse(start_time).year
-
-    while current_year <= parser.parse(end_time).year:
-        years.append(current_year)
-        current_year += 1
+    years = range(parser.parse(start_time).year, parser.parse(end_time).year + 1)
 
     datasets = []
     for year in years:

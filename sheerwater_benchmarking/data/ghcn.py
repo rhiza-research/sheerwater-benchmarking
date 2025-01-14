@@ -265,12 +265,7 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
 def ghcnd(start_time, end_time, grid="global0_25", cell_aggregation='first'):
     """Final gridded station data before aggregation."""
     # Get years between start time and end time
-    years = []
-    current_year = parser.parse(start_time).year
-
-    while current_year <= parser.parse(end_time).year:
-        years.append(current_year)
-        current_year += 1
+    years = range(parser.parse(start_time).year, parser.parse(end_time).year + 1)
 
     datasets = []
     for year in years:
