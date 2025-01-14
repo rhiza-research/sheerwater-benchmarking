@@ -63,8 +63,10 @@ def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global
     INVALID_NUMBER = 9999
     obs.replace(INVALID_NUMBER, pd.NA, inplace=True)
 
-    # Assign to new column based on variable values
+
+    # Divide by 10 because data is represented in 10ths
     obs['value'] = obs['value'] / 10.0
+    # Assign to new column based on variable values
     obs['tmax'] = obs.apply(lambda x: x.value if x['variable'] == 'TMAX' else pd.NA, axis=1)
     obs['tmin'] = obs.apply(lambda x: x.value if x['variable'] == 'TMIN' else pd.NA, axis=1)
     obs['temp'] = obs.apply(lambda x: x.value if x['variable'] == 'TAVG' else pd.NA, axis=1)
@@ -164,8 +166,10 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
     INVALID_NUMBER = 9999
     obs = obs.replace(INVALID_NUMBER, pd.NA)
 
-    # Assign to new column based on variable values
+    # Divide by 10 because data is represented in 10ths
     obs['value'] = obs['value'] / 10.0
+
+    # Assign to new column based on variable values
     obs['tmax'] = obs.apply(lambda x: x.value if x['variable'] == 'TMAX' else pd.NA,
                             axis=1, meta=('tmax', 'f8'))
     obs['tmin'] = obs.apply(lambda x: x.value if x['variable'] == 'TMIN' else pd.NA,
