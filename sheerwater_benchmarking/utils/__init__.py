@@ -55,13 +55,10 @@ __all__ = [
     "add_dayofyear",
     "forecast_date_to_target_date",
     "target_date_to_forecast_date",
-    << << << < HEAD
     "groupby_time",
-    == == == =
     "shift_forecast_date_to_target_date",
     "lead_to_agg_days",
     "lead_or_agg",
-    >>>>>> > main
     "start_remote",
     "plot_ds",
     "assign_grouping_coordinates",
