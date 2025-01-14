@@ -120,7 +120,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     if 'sparse' in fcst.attrs:
         sparse = fcst.attrs['sparse']
 
-    if not spatial and not sparse and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
+    if not spatial and not sparse and \
+            not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
         # If averaging over space, we must check if the forecast is valid
         print(f"Forecast {forecast} is not valid for region {region}.")
         return None
