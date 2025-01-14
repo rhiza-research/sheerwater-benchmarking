@@ -21,12 +21,12 @@ def parse_args():
     parser.add_argument("--parallelism", type=int, default=1)
     parser.add_argument("--recompute", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--remote", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--ground-truth", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--station-evaluation", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--remote-name", type=str, default=None)
     parser.add_argument("--remote-config", type=str, nargs='*')
     args = parser.parse_args()
 
-    if args.ground_truth:
+    if args.station_evaluation:
         forecasts = ["era5", "chirps", "imerg"]
     else:
         forecasts = ["perpp", "salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
@@ -34,12 +34,13 @@ def parse_args():
     if args.forecast:
         forecasts = args.forecast
 
-    if args.ground_truth:
+    if args.station_evaluation:
         truth = "ghcn"
-    else:
+
+    if args.truth:
         truth = args.truth
 
-    if args.ground_truth:
+    if args.station_evaluation:
         metrics = ["mae", "rmse", "bias"]
     else:
         metrics = ["mae", "crps", "acc", "rmse", "bias"]
@@ -58,7 +59,7 @@ def parse_args():
     if args.region:
         regions = args.region
 
-    if args.ground_truth:
+    if args.station_evaluation:
         leads = ["daily", "weekly", "biweekly", "monthly"]
     else:
         leads = ["week1", "week2", "week3", "week4", "week5", "week6", "weeks34", "weeks56"]
