@@ -34,6 +34,7 @@ def lead_to_agg_days(lead):
 
 
 def lead_or_agg(lead):
+    """Return whether argument is a lead or an agg."""
     if any(i.isdigit() for i in lead):
         return 'lead'
     else:

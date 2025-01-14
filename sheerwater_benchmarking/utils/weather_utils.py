@@ -12,7 +12,8 @@ def get_variable(variable_name, variable_type='era5'):
 
         # Surface variables (6):
         ('tmp2m', '2m_temperature', '2m_temperature', '2m_temperature', 'temp', 'tmp2m', 'temp'),
-        ('precip', 'total_precipitation', 'total_precipitation_6hr', 'total_precipitation_24hr', 'precip', 'precip', 'precip'),
+        ('precip', 'total_precipitation', 'total_precipitation_6hr', 'total_precipitation_24hr',
+         'precip', 'precip', 'precip'),
         ("vwind10m", "10m_v_component_of_wind", "10m_v_component_of_wind", None, None, None, None),
         ("uwind10m", "10m_u_component_of_wind", "10m_u_component_of_wind", None, None, None, None),
         ("msl", "mean_sea_level_pressure", "mean_sea_level_pressure", None, None, None, None),

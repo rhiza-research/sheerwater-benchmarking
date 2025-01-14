@@ -27,6 +27,7 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean", agg_thresh=None):
         agg (int): Aggregation period in days.
         agg_col (str): Column to aggregate over.
         agg_fn (str): Aggregation function. One of mean or sum.
+        agg_thresh(int): number of data required to agg.
     """
     agg_kwargs = {
         f"{agg_col}": agg,

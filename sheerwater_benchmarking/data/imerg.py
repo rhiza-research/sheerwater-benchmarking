@@ -1,3 +1,4 @@
+"""Imerg data product."""
 import xarray as xr
 import gcsfs
 
@@ -9,6 +10,7 @@ from dateutil import parser
            cache_args=['year'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def imerg_raw(year):
+    """Concatted imerge netcdf files by year."""
     fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
     gsf = [fs.open(x) for x in fs.glob(f'gs://sheerwater-datalake/imerg/{year}*.nc')]
 
@@ -21,6 +23,7 @@ def imerg_raw(year):
            cache_args=['grid'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def imerg_gridded(start_time, end_time, grid):
+    """Regridded version of whole imerg dataset."""
     years = []
     current_year = parser.parse(start_time).year
 
@@ -53,7 +56,7 @@ def imerg_gridded(start_time, end_time, grid):
            cache_args=['grid', 'agg_days'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def imerg_rolled(start_time, end_time, agg_days, grid):
-
+    """Imerg rolled and agged."""
     ds = imerg_gridded(start_time, end_time, grid)
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean')
     return ds
@@ -65,6 +68,7 @@ def imerg_rolled(start_time, end_time, agg_days, grid):
            cache_args=[],
            cache=False)
 def imerg(start_time, end_time, variable, agg_days, grid='global0_25', region='global', mask='lsm'):
+    """Final imerg product."""
     if variable != 'precip':
         raise NotImplementedError("Only precip provided by imerg.")
 

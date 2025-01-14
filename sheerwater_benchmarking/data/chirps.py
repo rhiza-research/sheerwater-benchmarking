@@ -1,3 +1,4 @@
+"""CHIRPS data product."""
 import xarray as xr
 
 from sheerwater_benchmarking.utils import regrid, dask_remote, cacheable, roll_and_agg, apply_mask, clip_region
@@ -8,6 +9,7 @@ from dateutil import parser
            cache_args=['year', 'grid'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def chirps_gridded(year, grid):
+    """CHIRPS regridded by year."""
     # Open the datastore
     store = 'https://nyu1.osn.mghpcc.org/leap-pangeo-pipeline/chirps_feedstock/chirps-global-daily.zarr'
     ds = xr.open_dataset(store, engine='zarr', chunks={})
@@ -33,6 +35,7 @@ def chirps_gridded(year, grid):
            cache_args=['grid', 'agg_days'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def chirps_rolled(start_time, end_time, agg_days, grid):
+    """CHIRPS rolled and aggregated."""
     years = []
     current_year = parser.parse(start_time).year
 
@@ -60,7 +63,7 @@ def chirps_rolled(start_time, end_time, agg_days, grid):
            cache_args=[],
            cache=False)
 def chirps(start_time, end_time, variable, agg_days, grid='global0_25', region='global', mask='lsm'):
-
+    """Final access function for chirps."""
     if variable != 'precip':
         raise NotImplementedError("Only precip provided by chirps.")
 

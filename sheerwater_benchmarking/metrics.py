@@ -98,7 +98,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     sparse = False
     if 'lead' in signature(fcst_fn).parameters:
         if lead_or_agg(lead) == 'agg':
-            raise ValueError("Evaluating the function {forecast} must be called with a specific lead, not an aggregation")
+            raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
 
         fcst = fcst_fn(start_time, end_time, variable, lead=lead,
                        prob_type=prob_type, grid=grid, mask=mask, region=region)

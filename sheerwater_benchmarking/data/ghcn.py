@@ -33,6 +33,7 @@ def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global
         start_time (str): omit data before this date
         end_time (str): omit data after this date
         drop_flagged (bool): drops all flagged data
+        grid (str): Grid to put the station on
         ghcn_id (str): GHCND station ID
 
     Returns:
@@ -134,10 +135,10 @@ def ghcnd_station(start_time, end_time, ghcn_id, drop_flagged=True, grid='global
            chunking={
                'time': 365,
                'lat': 300,
-               'lat': 300,
+               'lon': 300,
            })
 def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
-    """Get a by year station data and save it as a zarr"""
+    """Get a by year station data and save it as a zarr."""
     obs = dd.read_csv(f"s3://noaa-ghcn-pds/csv/by_year/{year}.csv",
                                     names=['ghcn_id', 'date', 'variable', 'value', 'mflag', 'qflag', 'sflag', 'otime'],
                                     header=0,
@@ -262,7 +263,7 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
            cache_args=['grid', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def ghcnd(start_time, end_time, grid="global0_25", cell_aggregation='first'):
-
+    """Final gridded station data before aggregation."""
     # Get years between start time and end time
     years = []
     current_year = parser.parse(start_time).year
@@ -291,6 +292,7 @@ def ghcnd(start_time, end_time, grid="global0_25", cell_aggregation='first'):
            cache_args=['grid', 'agg_days', 'missing_thresh', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def ghcnd_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thresh=0.5, cell_aggregation='first'):
+    """GHCND rolled and aggregated."""
     # Get the data
     ds = ghcnd(start_time, end_time, grid, cell_aggregation)
 
@@ -309,8 +311,9 @@ def ghcnd_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thre
            cache_args=['grid', 'variable', 'agg_days', 'region', 'mask', 'missing_thresh', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365},
            cache=False)
-def ghcn(start_time, end_time, variable, agg_days, grid='global0_25', region='global', mask='lsm', missing_thresh=0.5, cell_aggregation='first'):
-    """Standard interface for ghcn data"""
+def ghcn(start_time, end_time, variable, agg_days, grid='global0_25', region='global', mask='lsm',
+         missing_thresh=0.5, cell_aggregation='first'):
+    """Standard interface for ghcn data."""
     ds = ghcnd_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation)
 
     # Get the variable
