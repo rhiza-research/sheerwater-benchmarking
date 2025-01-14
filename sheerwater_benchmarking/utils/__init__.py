@@ -12,7 +12,7 @@ from .space_utils import (get_grid, get_grid_ds, is_wrapped, get_region,
 from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_dates,
                          pad_with_leapdays, add_dayofyear, forecast_date_to_target_date,
                          target_date_to_forecast_date, shift_forecast_date_to_target_date,
-                         lead_to_agg_days)
+                         lead_to_agg_days, lead_or_agg)
 
 from .weather_utils import get_variable
 
@@ -56,6 +56,7 @@ __all__ = [
     "target_date_to_forecast_date",
     "shift_forecast_date_to_target_date",
     "lead_to_agg_days",
+    "lead_or_agg",
     "start_remote",
     "plot_ds",
 ]

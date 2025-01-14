@@ -1,11 +1,12 @@
 """Verification metrics for forecasts."""
 from importlib import import_module
+from inspect import signature
 
 import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_forecast
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
-                                           lead_to_agg_days)
+                                           lead_to_agg_days, lead_or_agg)
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
@@ -27,7 +28,11 @@ def get_datasource_fn(datasource):
                 mod = import_module("sheerwater_benchmarking.baselines")
                 fn = getattr(mod, datasource)
             except (ImportError, AttributeError):
-                raise ImportError(f"Could not find datasource {datasource}.")
+                try:
+                    mod = import_module("sheerwater_benchmarking.data")
+                    fn = getattr(mod, datasource)
+                except (ImportError, AttributeError):
+                    raise ImportError(f"Could not find datasource {datasource}.")
 
     return fn
 
@@ -88,9 +93,35 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the forecast
     fcst_fn = get_datasource_fn(forecast)
-    fcst = fcst_fn(start_time, end_time, variable, lead=lead,
-                   prob_type=prob_type, grid=grid, mask=mask, region=region)
-    if not spatial and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
+
+    # Decide if this is a forecast with a lead or direct datasource with just an agg
+    sparse = False
+    if 'lead' in signature(fcst_fn).parameters:
+        if lead_or_agg(lead) == 'agg':
+            raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
+
+        fcst = fcst_fn(start_time, end_time, variable, lead=lead,
+                       prob_type=prob_type, grid=grid, mask=mask, region=region)
+
+        # Check to see the prob type attribute
+        enhanced_prob_type = fcst.attrs['prob_type']
+
+    else:
+        if lead_or_agg(lead) == 'lead':
+            raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
+
+        fcst = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
+                       grid=grid, mask=mask, region=region)
+
+        # Prob type is always deterministic for truth sources
+        enhanced_prob_type = "deterministic"
+
+    # assign sparsity if it exists
+    if 'sparse' in fcst.attrs:
+        sparse = fcst.attrs['sparse']
+
+    if not spatial and not sparse and \
+            not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
         # If averaging over space, we must check if the forecast is valid
         print(f"Forecast {forecast} is not valid for region {region}.")
         return None
@@ -100,8 +131,9 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     obs = truth_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
                    grid=grid, mask=mask, region=region)
 
-    # Check to see the prob type attribute
-    enhanced_prob_type = fcst.attrs['prob_type']
+    # assign sparsity if it exists
+    if 'sparse' in obs.attrs:
+        sparse |= obs.attrs['sparse']
 
     if metric in CLIM_METRICS:
         # Get the appropriate climatology dataframe for metric calculation
@@ -130,6 +162,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         if spatial:
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
+    m_ds = m_ds.assign_attrs(sparse=sparse)
     return m_ds
 
 
@@ -221,14 +254,19 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                                       metric=called_metric, grid=grid, mask=mask, region='global')
         if ds is None:
             return None
+
+        sparse = ds.attrs['sparse']
     else:
 
         # Get the unaggregated global metric
         ds = global_metric(start_time, end_time, variable, lead=lead,
                            forecast=forecast, truth=truth,
                            metric=called_metric, grid=grid, mask=mask, region='global')
+
         if ds is None:
             return None
+
+        sparse = ds.attrs['sparse']
 
         # Group the time column based on time grouping
         if time_grouping:
@@ -250,7 +288,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     # Clip it to the region
     ds = clip_region(ds, region)
 
-    if not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
+    if not sparse and not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
         # Check if forecast is valid before spatial averaging
         print("Metric is not valid for region.")
         return None
@@ -337,6 +375,9 @@ def _summary_metrics_table(start_time, end_time, variable,
 
     df = results_ds.to_dataframe()
 
+    # Reorder the columns if necessary
+    df = df[leads]
+
     # Rename the index
     df = df.reset_index().rename(columns={'index': 'forecast'})
     return df
@@ -354,6 +395,25 @@ def summary_metrics_table(start_time, end_time, variable,
     forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                  'climatology_trend_2015', 'climatology_rolling']
     leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
+    df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
+                                time_grouping=time_grouping,
+                                grid=grid, mask=mask, region=region)
+
+    print(df)
+    return df
+
+
+@dask_remote
+@cacheable(data_type='tabular',
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
+                       'time_grouping', 'grid', 'mask', 'region'],
+           cache=True)
+def station_metrics_table(start_time, end_time, variable,
+                          truth, metric, time_grouping=None,
+                          grid='global1_5', mask='lsm', region='global'):
+    """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
+    forecasts = ['era5', 'chirps', 'imerg']
+    leads = ["daily", "weekly", "biweekly", "monthly"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)

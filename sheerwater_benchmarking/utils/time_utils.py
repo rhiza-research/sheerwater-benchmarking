@@ -12,21 +12,33 @@ DATETIME_FORMAT = "%Y-%m-%d"
 
 # Lead aggregation period in days and offset
 LEAD_OFFSETS = {
+    'daily': (1, (0, 'days')),
+    'weekly': (7, (0, 'days')),
     'week1': (7, (0, 'days')),
     'week2': (7, (7, 'days')),
     'week3': (7, (14, 'days')),
     'week4': (7, (21, 'days')),
     'week5': (7, (28, 'days')),
     'week6': (7, (35, 'days')),
+    'biweekly': (14, (0, 'days')),
     'weeks12': (14, (0, 'days')),
     'weeks34': (14, (14, 'days')),
     'weeks56': (14, (28, 'days')),
+    'monthly': (30, (0, 'days')),
 }
 
 
 def lead_to_agg_days(lead):
     """Convert lead to time grouping."""
     return LEAD_OFFSETS[lead][0]
+
+
+def lead_or_agg(lead):
+    """Return whether argument is a lead or an agg."""
+    if any(i.isdigit() for i in lead):
+        return 'lead'
+    else:
+        return 'agg'
 
 
 def dayofyear_to_datetime(x):
