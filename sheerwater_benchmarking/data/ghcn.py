@@ -184,15 +184,6 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
     obs['precip'] = obs.apply(lambda x: x.value if x['variable'] == 'PRCP' else pd.NA,
                               axis=1, meta=('precip', 'f8'))
 
-    #obs['tmax_q'] = obs.apply(lambda x: x.qflag if x['variable'] == 'TMAX' else pd.NA,
-    #                          axis=1, meta=('tmax_q', 'str'))
-    #obs['tmin_q'] = obs.apply(lambda x: x.qflag if x['variable'] == 'TMIN' else pd.NA,
-    #                          axis=1, meta=('tmin_q', 'str'))
-    #obs['temp_q'] = obs.apply(lambda x: x.qflag if x['variable'] == 'TAVG' else pd.NA,
-    #                          axis=1, meta=('temp_q', 'str'))
-    #obs['precip_q'] = obs.apply(lambda x: x.qflag if x['variable'] == 'PRCP' else pd.NA,
-    #                            axis=1, meta=('precip_q', 'str'))
-
     obs = obs.drop(['variable', 'value', 'qflag'], axis=1)
 
     # Group by date and merge columns
@@ -202,13 +193,6 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
     # If temp is none avrage the two
     atemp = (obs['tmin'] + obs['tmax'])/2
     obs['temp'] = obs['temp'].astype(float).fillna(atemp.astype(float))
-
-    # Set all variables to floats
-
-    #obs.temp_q = obs.temp_q.astype(str)
-    #obs.tmax_q = obs.tmax_q.astype(str)
-    #obs.tmin_q = obs.tmin_q.astype(str)
-    #obs.precip_q = obs.precip_q.astype(str)
 
     # Convert date into a datetime
     obs["time"] = dd.to_datetime(obs["date"])
@@ -237,13 +221,6 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
         stations_to_use = stations_to_use['ghcn_id'].unique()
 
         obs = obs[obs['ghcn_id'].isin(stations_to_use)]
-
-        # This really shouldn't be necessary, but we will run it just to garuantee uniqueness
-        obs = obs.groupby(by=['lat', 'lon', 'time']).agg(temp=('temp','mean'),
-                                                         precip=('precip','mean'),
-                                                         tmin=('tmin','min'),
-                                                         tmax=('tmax','max'))
-
     elif cell_aggregation == 'mean':
         # Group by lat/lon/time
         obs = obs.groupby(by=['lat', 'lon', 'time']).agg(temp=('temp','mean'),
@@ -256,12 +233,7 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
     obs.tmin = obs.tmin.astype(np.float32)
     obs.precip = obs.precip.astype(np.float32)
 
-    #obs.n_temp = obs.n_temp.astype(np.int32)
-    #obs.n_tmax = obs.n_tmax.astype(np.int32)
-    #obs.n_tmin = obs.n_tmin.astype(np.int32)
-    #obs.n_precip = obs.n_precip.astype(np.int32)
-
-    # Convert to xarray
+    # Convert to xarray - for this to succeed obs must be a pandas dataframe
     obs = xr.Dataset.from_dataframe(obs.compute())
 
     # Reindex to fill out the lat/lon
@@ -273,7 +245,7 @@ def ghcnd_yearly(year, grid='global0_25', cell_aggregation='first'):
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries=['time'],
+           timeseries='time',
            cache_args=['grid', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def ghcnd(start_time, end_time, grid="global0_25", cell_aggregation='first'):
@@ -297,7 +269,7 @@ def ghcnd(start_time, end_time, grid="global0_25", cell_aggregation='first'):
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries=['time'],
+           timeseries='time',
            cache_args=['grid', 'agg_days', 'missing_thresh', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def ghcnd_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thresh=0.5, cell_aggregation='first'):
@@ -306,9 +278,7 @@ def ghcnd_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thre
     ds = ghcnd(start_time, end_time, grid, cell_aggregation)
 
     # Roll and agg
-    agg_thresh = int(agg_days*missing_thresh)
-    if agg_thresh == 0:
-        agg_thresh = 1
+    agg_thresh = max(int(agg_days*missing_thresh), 1)
 
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean', agg_thresh=agg_thresh)
 
@@ -316,8 +286,8 @@ def ghcnd_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thre
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries=['time'],
-           cache_args=['grid', 'variable', 'agg_days', 'region', 'mask', 'missing_thresh', 'cell_aggregation'],
+           timeseries='time',
+           cache_args=['variable', 'agg_days', 'grid', 'mask', 'region', 'missing_thresh', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365},
            cache=False)
 def ghcn(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global',
