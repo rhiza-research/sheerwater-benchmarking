@@ -10,6 +10,7 @@ def test_summary_metrics_table():
     ds = summary_metrics_table(start_time, end_time, "precip", "era5", "mae",
                                grid=grid, region='africa', mask='lsm')
     ds = ds.fillna(-1)  # handle NaN values
+    import pdb; pdb.set_trace()
 
     assert ds['week1'].to_list() == [6.424058138394581, 6.3054370804901305, 6.534232560218257,
                                      4.639284610748291, 3.9791030883789062, 3.602036444751744]
