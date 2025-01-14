@@ -5,7 +5,7 @@ from .imerg import imerg
 
 # Use __all__ to define what is part of the public API.
 __all__ = [
-    ghcn,
-    chirps,
-    imerg
+    "ghcn",
+    "chirps",
+    "imerg"
 ]
