@@ -6,7 +6,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_forecast
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
-                                           lead_to_agg_days, lead_or_agg)
+                                           groupby_time, lead_to_agg_days, lead_or_agg)
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
@@ -267,23 +267,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
             return None
 
         sparse = ds.attrs['sparse']
-
-        # Group the time column based on time grouping
-        if time_grouping:
-            if time_grouping == 'month_of_year':
-                # TODO if you want this as a name: ds.coords["time"] = ds.time.dt.strftime("%B")
-                ds.coords["time"] = ds.time.dt.month
-            elif time_grouping == 'year':
-                ds.coords["time"] = ds.time.dt.year
-            elif time_grouping == 'quarter_of_year':
-                ds.coords["time"] = ds.time.dt.quarter
-            else:
-                raise ValueError("Invalid time grouping")
-
-            ds = ds.groupby("time").mean()
-        else:
-            # Average in time
-            ds = ds.mean(dim="time")
+        ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
 
     # Clip it to the region
     ds = clip_region(ds, region)

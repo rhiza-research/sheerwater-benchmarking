@@ -1,6 +1,11 @@
 """General utility functions for all parts of the data pipeline."""
+import numpy as np
 import matplotlib.pyplot as plt
 import gcsfs
+import xarray as xr
+
+import plotly.express as px
+import plotly.graph_objects as go
 import xarray as xr
 
 
@@ -40,6 +45,7 @@ def load_zarr(filename):
 def plot_ds(ds, sel=None, variable=None):
     """Plot the first variable in a dataset."""
     # Select the first variable
+
     if variable is None and isinstance(ds, xr.Dataset):
         variable = list(ds.data_vars)[0]
 
@@ -53,3 +59,60 @@ def plot_ds(ds, sel=None, variable=None):
     else:  # Assume it is a DataArray
         ds.sel(sel).plot()
     plt.show()
+
+
+def plot_ds_map(ds, sel=None, variable=None, zoom=3, center_lat=None, center_lon=None):
+    """Plot gridded data from an xarray Dataset on top of a Plotly map."""
+
+
+def plot_ds_map(ds, sel=None, variable=None, zoom=3, center_lat=None, center_lon=None):
+    """Plot a variable from an xarray dataset on a Plotly map."""
+    # Select the first variable
+    if variable is None and isinstance(ds, xr.Dataset):
+        variable = list(ds.data_vars)[0]
+
+    # Select the first dim value in all dims except lat and lon
+    if sel is None:
+        sel = {dim: ds[dim][0].values for dim in ds.dims if dim not in ['lat', 'lon']}
+
+    # Plot the data
+    if isinstance(ds, xr.Dataset):
+        data = ds[variable].sel(sel)
+    else:  # Assume it is a DataArray
+        data = ds.sel(sel)
+
+    # Convert to pandas DataFrame for easier manipulation with Plotly
+    df = data.to_dataframe().reset_index()
+
+    # Set center coordinates (optional, if not provided)
+    if center_lat is None:
+        center_lat = df['lat'].mean()
+    if center_lon is None:
+        center_lon = df['lon'].mean()
+
+    # Create a Plotly map figure
+    fig = go.Figure(go.Scattermapbox(
+        lat=df['lat'],
+        lon=df['lon'],
+        mode='markers',
+        marker=dict(
+            size=8,
+            color=df[variable],  # Color based on the variable
+            colorscale='Viridis',  # Use a predefined colorscale
+            colorbar=dict(title=variable)
+        ),
+        text=df[variable],  # Show values when hovering over points
+        hoverinfo='text'
+    ))
+
+    # Update layout for the map
+    fig.update_layout(
+        title=f'{variable} on Map',
+        mapbox_style="open-street-map",
+        mapbox_zoom=zoom,
+        mapbox_center={"lat": center_lat, "lon": center_lon},
+        margin={"r": 0, "t": 30, "l": 0, "b": 0},
+    )
+
+    # Show the map
+    fig.show()
