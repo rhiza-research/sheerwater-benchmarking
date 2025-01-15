@@ -1,5 +1,6 @@
 """Functions to fetch and process data from the ECMWF WeatherBench dataset."""
 import numpy as np
+import pandas as pd
 from dateutil.relativedelta import relativedelta
 import xarray as xr
 
@@ -151,7 +152,7 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
            cache_args=['variable', 'lead', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, "model_issuance_date": 1000})
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "model_issuance_date": 200, "member": 50})
 def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type='average',
                                 time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for a specific lead."""
@@ -166,14 +167,12 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
         return None
     ds_deb = ds_deb.sel(lead_time=np.timedelta64(lead, 'D'))
 
-    # We need ERA5 data from the start_time to 20 years before the first date
     first_date = ds_deb.model_issuance_date.min().values
     last_date = ds_deb.model_issuance_date.max().values
-    new_start = (first_date.astype('M8[D]').astype('O')
-                 - relativedelta(years=20)).strftime("%Y-%m-%d")
+    # We need ERA5 data from the start_time to 20 years before the first date
+    new_start = (pd.Timestamp(first_date) - relativedelta(years=20)).strftime("%Y-%m-%d")
     # We need ERA5 data from the end time to the end time plus last lead in days
-    new_end = ((last_date + ds_deb.lead_time.values).astype('M8[D]').astype('O')
-               - relativedelta(years=1)).strftime("%Y-%m-%d")
+    new_end = (pd.Timestamp(last_date + ds_deb.lead_time.values) - relativedelta(years=1)).strftime("%Y-%m-%d")
 
     # Get the pre-aggregated ERA5 data
     agg = {'daily': 1, 'weekly': 7, 'biweekly': 14}[time_group]
@@ -182,8 +181,7 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
     def get_bias(ds_sub):
         """Get the 20-year estimated bias of the reforecast data."""
         # The the corresponding forecast dates for the reforecast data
-        dates = [np.datetime64((ds_sub['model_issuance_date'].values[0].astype('M8[D]').astype('O')
-                                + relativedelta(years=x)))
+        dates = [np.datetime64(pd.Timestamp(ds_sub['model_issuance_date'].values[0] + relativedelta(years=x)))
                  for x in ds_sub.start_year]
 
         # Adjust each forecast date by the lead time (0, 1, 2, ... days)

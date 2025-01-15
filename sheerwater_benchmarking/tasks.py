@@ -84,6 +84,7 @@ def first_rain(data, time_dim='time', time_offset=None, prob_dim='member', prob_
     dsp['precip_11d'] = dsp['precip'].rolling({time_dim: 11}).sum()
     dsp['precip_8d'] = dsp['precip_8d'].shift({time_dim: -7})
     dsp['precip_11d'] = dsp['precip_11d'].shift({time_dim: -10})
+    # TODO: need to drop NaN values
     if prob_threshold is not None:
         fsd = first_satisfied_date(dsp, rainy_onset_condition, time_dim=time_dim, base_time=time_offset,
                                    prob_dim=prob_dim, prob_threshold=prob_threshold)
@@ -97,6 +98,7 @@ def rainy_season_fcst(data, time_dim='time', time_offset=None, prob_dim='member'
     dsp['precip_11d'] = dsp['precip'].rolling({time_dim: 11}).sum()
     dsp['precip_8d'] = dsp['precip_8d'].shift({time_dim: -7})
     dsp['precip_11d'] = dsp['precip_11d'].shift({time_dim: -10})
+    dsp = dsp.dropna(time_dim, how='all')
     if prob_threshold is not None:
         fcst = first_satisfied_date(dsp, rainy_onset_condition, time_dim=time_dim, base_time=time_offset,
                                     prob_dim=prob_dim, prob_threshold=prob_threshold)
@@ -174,7 +176,7 @@ def rainy_season_onset_truth(start_time, end_time,
                    'global0_25': {"lat": 721, "lon": 1440, "time": 30}
                },
            },
-           cache=False)
+           cache=True)
 def rainy_season_onset_forecast(start_time, end_time,
                                 forecast, prob_type='probabilistic',
                                 grid='global0_25', mask='lsm', region='global'):
@@ -212,11 +214,13 @@ def rainy_season_onset_forecast(start_time, end_time,
                             time_dim='start_date',
                             return_timeseries=True)
 
-    import pdb
-    pdb.set_trace()
     rainy_ds = rainy_da.to_dataset(name='rainy_forecast')
     # TODO: why is chunking not working?
     rainy_ds = rainy_ds.chunk({'lat': 121, 'lon': 240, 'start_date': 1000})
+    # Apply masking
+    rainy_ds = apply_mask(rainy_ds, mask, var='rainy_forecast', grid=grid)
+    # Clip to specified region
+    rainy_ds = clip_region(rainy_ds, region=region)
     return rainy_ds
 
 
