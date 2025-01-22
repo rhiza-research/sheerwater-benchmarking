@@ -496,8 +496,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         "Time series functions must have the parameters 'start_time' and 'end_time'")
                 else:
                     keys = [item for item in params]
-                    start_time = args[keys.index('start_time')]
-                    end_time = args[keys.index('end_time')]
+                    try:
+                        start_time = args[keys.index('start_time')]
+                        end_time = args[keys.index('end_time')]
+                    except IndexError:
+                        raise ValueError("'start_time' and 'end_time' must be passed as positional arguments, not keyword arguments")
 
             # Handle keying based on cache arguments
             cache_arg_values = {}
