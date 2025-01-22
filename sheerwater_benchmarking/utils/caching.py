@@ -52,7 +52,7 @@ def get_chunk_size(ds, size_in='MB'):
     chunk_groups = [(dim, np.median(chunks)) for dim, chunks in ds.chunks.items()]
     div = {'KB': 10**3, 'MB': 10**6, 'GB': 10**9, 'TB': 10**12}[size_in]
     chunk_sizes = [x[1] for x in chunk_groups]
-    return np.product(chunk_sizes) * 4 / div, chunk_groups
+    return np.prod(chunk_sizes) * 4 / div, chunk_groups
 
 
 def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
