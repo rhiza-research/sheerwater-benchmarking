@@ -771,7 +771,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     print(f"Found null cache for {null_path}. Skipping computation.")
                     return None
 
-            if compute_result or (backend != storage_backend):
+            if compute_result or backend != storage_backend:
                 if compute_result:
                     if recompute:
                         print(f"Recompute for {cache_key} requested. Not checking for cached result.")
