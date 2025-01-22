@@ -605,6 +605,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     supports_filepath = False
             elif data_type == 'basic':
                 backend = "pickle" if backend is None else backend
+                if storage_backend is None:
+                    storage_backend = backend
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.pkl'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
@@ -769,7 +771,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     print(f"Found null cache for {null_path}. Skipping computation.")
                     return None
 
-            if compute_result or ((storage_backend is not None) and (backend != storage_backend)):
+            if compute_result or (backend != storage_backend):
                 if compute_result:
                     if recompute:
                         print(f"Recompute for {cache_key} requested. Not checking for cached result.")
