@@ -142,6 +142,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Decide if this is a forecast with a lead or direct datasource with just an agg
     sparse = False
+    metric_sparse = False
     if 'lead' in signature(fcst_fn).parameters:
         if lead_or_agg(lead) == 'agg':
             raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
@@ -255,7 +256,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             'max_p1': 0.93,
         }
 
-        sparse = True
+        metric_sparse = True
 
         metric_lib = 'weatherbench2'
     else:
@@ -287,6 +288,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
     m_ds = m_ds.assign_attrs(sparse=sparse)
+    m_ds = m_ds.assign_attrs(metric_sparse=metric_sparse)
     return m_ds
 
 
@@ -392,6 +394,10 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 
         sparse = ds.attrs['sparse']
 
+        metric_sparse = False
+        if 'metric_sparse' in ds.attrs:
+            metric_sparse = ds.attrs['metric_sparse']
+
         # Group the time column based on time grouping
         if time_grouping:
             if time_grouping == 'month_of_year':
@@ -412,10 +418,24 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     # Clip it to the region
     ds = clip_region(ds, region)
 
+    # Check if forecast is valid before spatial averaging
     if not sparse and not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
-        # Check if forecast is valid before spatial averaging
-        print("Metric is not valid for region.")
-        return None
+        if metric_sparse:
+            print("Metric is sparse, checking if forecast is valid directly")
+            if metric in PROB_METRICS:
+                prob_type = 'probabilistic'
+            else:
+                prob_type = 'deterministic'
+
+            fcst = get_datasource_fn(forecast)(start_time, end_time, variable, lead=lead,
+                                               prob_type=prob_type, grid=grid, mask=mask, region=region)
+
+            if not is_valid(fcst, variable, mask, region, grid, valid_threshold=0.98):
+                print("Metric is not valid for region.")
+                return None
+        else:
+            print("Metric is not valid for region.")
+            return None
 
     for coord in ds.coords:
         if coord not in ['time', 'lat', 'lon']:
