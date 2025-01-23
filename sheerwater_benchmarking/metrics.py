@@ -1,4 +1,7 @@
 """Verification metrics for forecasts."""
+
+import sys
+import numpy as np
 from importlib import import_module
 from inspect import signature
 
@@ -11,8 +14,29 @@ from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
 CLIM_METRICS = ['acc']  # a list of metrics that use require a climatology input
-COUPLED_METRICS = ['acc']  # a list of metrics that are coupled in space and time
+COUPLED_METRICS = ['acc', 'pearson']  # a list of metrics that are coupled in space and time
 
+def spatial_mape(fcst, truth, avg_time=False, skipna=True):
+    ds = abs(fcst - truth) / np.maximum(abs(truth), 1e-10)
+    if avg_time:
+        ds = ds.mean(dim="time", skipna=skipna)
+    return ds
+
+def mape(fcst, truth, avg_time=False, skipna=True):
+    ds = spatial_mape(fcst, truth, avg_time=avg_time, skipna=skipna)
+    ds = ds.mean(skipna=skipna)
+    return ds
+
+def spatial_smape(fcst, truth, avg_time=False, skipna=True):
+    ds = abs(fcst - truth) / (abs(fcst) + abs(truth))
+    if avg_time:
+        ds = ds.mean(dim="time", skipna=skipna)
+    return ds
+
+def smape(fcst, truth, avg_time=False, skipna=True):
+    ds = spatial_smape(fcst, truth, avg_time=avg_time, skipna=skipna)
+    ds = ds.mean(skipna=skipna)
+    return ds
 
 def get_datasource_fn(datasource):
     """Import the datasource function from any available source."""
@@ -52,6 +76,12 @@ def get_metric_fn(prob_type, metric, spatial=True):
         'spatial-crps-q': ('weatherbench2.metrics', 'SpatialQuantileCRPS', {'quantile_dim': 'member'}),
         'mae': ('weatherbench2.metrics', 'MAE', {}),
         'spatial-mae': ('weatherbench2.metrics', 'SpatialMAE', {}),
+        'mape': ('sheerwater', 'mape', {}),
+        'spatial-mape': ('sheerwater', 'spatial_mape', {}),
+        'smape': ('sheerwater', 'smape', {}),
+        'spatial-smape': ('sheerwater', 'spatial_smape', {}),
+        'pearson': ('xskillscore', 'pearson_r', {'skipna': True}),
+        'spatial-pearson': ('xskillscore', 'pearson_r', {'dim': 'time', 'skipna': True}),
         'acc': ('weatherbench2.metrics', 'ACC', {}),
         'spatial-acc': ('weatherbench2.metrics', 'SpatialACC', {}),
         'mse': ('weatherbench2.metrics', 'MSE', {}),
@@ -70,8 +100,14 @@ def get_metric_fn(prob_type, metric, spatial=True):
 
     try:
         metric_lib, metric_mod, metric_kwargs = wb_metrics[metric]
-        mod = import_module(metric_lib)
-        metric_fn = getattr(mod, metric_mod)
+
+        if metric_lib == 'sheerwater':
+            current_module = sys.modules[__name__]
+            metric_fn = getattr(current_module, metric_mod)
+        else:
+            mod = import_module(metric_lib)
+            metric_fn = getattr(mod, metric_mod)
+
         return metric_fn, metric_kwargs, metric_lib
     except (ImportError, AttributeError):
         raise ImportError(f"Did not find implementation for metric {metric}")
@@ -120,11 +156,10 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     if 'sparse' in fcst.attrs:
         sparse = fcst.attrs['sparse']
 
-    if not spatial and not sparse and \
-            not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
-        # If averaging over space, we must check if the forecast is valid
-        print(f"Forecast {forecast} is not valid for region {region}.")
-        return None
+    if not spatial and not sparse and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
+            # If averaging over space, we must check if the forecast is valid
+            print(f"Forecast {forecast} is not valid for region {region}.")
+            return None
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
@@ -135,29 +170,36 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     if 'sparse' in obs.attrs:
         sparse |= obs.attrs['sparse']
 
+
     if metric in CLIM_METRICS:
         # Get the appropriate climatology dataframe for metric calculation
         clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
                                        trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
 
+        fcst = fcst - clim_ds
+        obs = obs - clim_ds
+
     metric_fn, metric_kwargs, metric_lib = get_metric_fn(
         enhanced_prob_type, metric, spatial=spatial)
 
-    # Run the metric without aggregating in time or space
+    # Do any per metric modifications or assertions
+    if metric in COUPLED_METRICS:
+        assert "Coupled metrics must be averaged in time"
+
+    # drop all times not in fcst
     obs = obs.sel(time=fcst.time)
     if metric_lib == 'xskillscore':
         # drop all times not in fcst
         if metric == 'crps':
             fcst = fcst.chunk(member=-1, time=1, lat=250, lon=250)  # member must be -1 to succeed
-            # drop all times not in fcst
+
             m_ds = metric_fn(observations=obs, forecasts=fcst, mean=avg_time, **metric_kwargs)
         else:
-            raise NotImplementedError("Only CRPS is implemented for xskillscore.")
+            m_ds = metric_fn(a=obs, b=fcst, **metric_kwargs)
+
+    elif metric_lib == 'sheerwater':
+        m_ds = metric_fn(fcst=fcst, truth=obs, avg_time=avg_time, skipna=True)
     else:
-        if metric == 'acc':
-            assert avg_time, "ACC must be averaged in time"
-            fcst = fcst - clim_ds
-            obs = obs - clim_ds
         m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
         if spatial:
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
@@ -402,7 +444,6 @@ def summary_metrics_table(start_time, end_time, variable,
     print(df)
     return df
 
-
 @dask_remote
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
@@ -420,6 +461,7 @@ def station_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
+
 
 
 @dask_remote
@@ -440,6 +482,7 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
+
 
 
 __all__ = ['eval_metric', 'global_metric', 'aggregated_global_metric',
