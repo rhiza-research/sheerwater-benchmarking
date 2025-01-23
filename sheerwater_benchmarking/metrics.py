@@ -5,16 +5,17 @@ import numpy as np
 from importlib import import_module
 from inspect import signature
 import xskillscore
+import weatherbench2
 
 import xarray as xr
 
-from sheerwater_benchmarking.baselines import climatology_forecast
+from sheerwater_benchmarking.baselines import climatology_forecast, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
                                            lead_to_agg_days, lead_or_agg)
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
-CLIM_METRICS = ['acc']  # a list of metrics that use require a climatology input
+CLIM_METRICS = ['acc', 'seeps']  # a list of metrics that use require a climatology input
 COUPLED_METRICS = ['acc', 'pearson']  # a list of metrics that are coupled in space and time
 CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of contingency metrics
 CATEGORICAL_CONTINGENCY_METRICS = ['heidke']  # a list of contingency metrics
@@ -181,11 +182,17 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     if metric in CLIM_METRICS:
         # Get the appropriate climatology dataframe for metric calculation
-        clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
-                                       trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
+        if metric == 'seeps':
+            wet_threshold = seeps_wet_threshold(agg_days=lead_to_agg_days(lead))
+            dry_fraction = seeps_dry_fraction(agg_days=lead_to_agg_days(lead))
 
-        fcst = fcst - clim_ds
-        obs = obs - clim_ds
+            clim_ds = xr.merge([wet_threshold, dry_fraction])
+        else:
+            clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
+                                        trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
+
+            fcst = fcst - clim_ds
+            obs = obs - clim_ds
 
     if '-' in metric and metric.split('-')[0] in CONTINGENCY_METRICS or metric.split('-')[0] in CATEGORICAL_CONTINGENCY_METRICS:
 
@@ -229,6 +236,26 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         metric_fn = getattr(contingency_table, metric_func)
         metric_lib = 'contingency'
         metric_kwargs = {}
+    elif metric == 'seeps':
+        if variable != 'precip':
+            raise ValueError("SEEPS metric only works with precipitation.")
+
+        if spatial:
+            metric_fn = weatherbench2.metrics.SpatialSEEPS
+        else:
+            metric_fn = weatherbench2.metrics.SEEPS
+        
+        metric_kwargs = {
+            'climatology': clim_ds,
+            'dry_threshold_mm': 0.25,
+            'precip_name': 'precip',
+            'min_p1': 0.03,
+            'max_p1': 0.93,
+        }
+
+        sparse = True
+
+        metric_lib = 'weatherbench2'
     else:
         metric_fn, metric_kwargs, metric_lib = get_metric_fn(
             enhanced_prob_type, metric, spatial=spatial)
