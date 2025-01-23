@@ -20,11 +20,21 @@ COUPLED_METRICS = ['acc', 'pearson']  # a list of metrics that are coupled in sp
 CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of contingency metrics
 CATEGORICAL_CONTINGENCY_METRICS = ['heidke']  # a list of contingency metrics
 
-def is_coupled(metric):
+def is_categorical(metric):
     if '-' in metric:
         metric = metric.split('-')[0]
 
-    return (metric in COUPLED_METRICS or metric in CONTINGENCY_METRICS or metric in CATEGORICAL_CONTINGENCY_METRICS)
+    return metric in CATEGORICAL_CONTINGENCY_METRICS
+
+def is_contingency(metric):
+    if '-' in metric:
+        metric = metric.split('-')[0]
+
+    return metric in CONTINGENCY_METRICS or metric in CATEGORICAL_CONTINGENCY_METRICS
+
+def is_coupled(metric):
+    return is_contingency(metric) or metric in COUPLED_METRICS
+
 
 def spatial_mape(fcst, truth, avg_time=False, skipna=True):
     ds = abs(fcst - truth) / np.maximum(abs(truth), 1e-10)
@@ -196,10 +206,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             fcst = fcst - clim_ds
             obs = obs - clim_ds
 
-    if '-' in metric and (metric.split('-')[0] in CONTINGENCY_METRICS or
-                          metric.split('-')[0] in CATEGORICAL_CONTINGENCY_METRICS):
-
-        if metric.split('-')[0] in CATEGORICAL_CONTINGENCY_METRICS:
+    if is_contingency(metric):
+        if is_categorical(metric):
             if len(metric.split('-')) <= 2:
                 raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge-edge...'")
 
@@ -219,7 +227,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             except IndexError:
                 raise ValueError(f"Contingency metric {metric} must be in the format 'metric-edge'")
 
-        metric_names = {
+        metric_func_names = {
             'pod': 'hit_rate',
             'far': 'false_alarm_rate',
             'ets': 'equit_threat_score',
@@ -227,7 +235,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             'heidke': 'heidke_score',
         }
 
-        metric_func = metric_names[metric]
+        metric_func = metric_func_names[metric]
 
         if spatial:
             dims = ['time']
