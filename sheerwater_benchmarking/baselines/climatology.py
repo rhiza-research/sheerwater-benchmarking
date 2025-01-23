@@ -87,7 +87,7 @@ def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5')
     ds = pad_with_leapdays(ds)
 
     # Take average over the period to produce climatology that includes leap years
-    ds = ds.groupby('dayofyear').mean(dim="time")
+    ds = ds.groupby('dayofyear').mean(dim='time')
 
     return ds
 
