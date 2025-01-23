@@ -4,6 +4,7 @@ import sys
 import numpy as np
 from importlib import import_module
 from inspect import signature
+import xskillscore
 
 import xarray as xr
 
@@ -15,6 +16,14 @@ from weatherbench2.metrics import _spatial_average
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
 CLIM_METRICS = ['acc']  # a list of metrics that use require a climatology input
 COUPLED_METRICS = ['acc', 'pearson']  # a list of metrics that are coupled in space and time
+CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of contingency metrics
+CATEGORICAL_CONTINGENCY_METRICS = ['heidke']  # a list of contingency metrics
+
+def is_coupled(metric):
+    if '-' in metric:
+        metric = metric.split('-')[0]
+
+    return (metric in COUPLED_METRICS or metric in CONTINGENCY_METRICS or metric in CATEGORICAL_CONTINGENCY_METRICS)
 
 def spatial_mape(fcst, truth, avg_time=False, skipna=True):
     ds = abs(fcst - truth) / np.maximum(abs(truth), 1e-10)
@@ -170,7 +179,6 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     if 'sparse' in obs.attrs:
         sparse |= obs.attrs['sparse']
 
-
     if metric in CLIM_METRICS:
         # Get the appropriate climatology dataframe for metric calculation
         clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
@@ -179,11 +187,54 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         fcst = fcst - clim_ds
         obs = obs - clim_ds
 
-    metric_fn, metric_kwargs, metric_lib = get_metric_fn(
-        enhanced_prob_type, metric, spatial=spatial)
+    if '-' in metric and metric.split('-')[0] in CONTINGENCY_METRICS or metric.split('-')[0] in CATEGORICAL_CONTINGENCY_METRICS:
+
+        if metric.split('-')[0] in CATEGORICAL_CONTINGENCY_METRICS:
+            if len(metric.split('-')) <= 2:
+                raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge-edge...'")
+
+            bins = [int(x) for x in metric.split('-')[1:]]
+            bins = [-np.inf] + bins + [np.inf]
+            bins = np.array(bins)
+
+            metric = metric.split('-')[0]
+        else:
+            try:
+                if len(metric.split('-')) != 2:
+                    raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge'")
+
+                lbin = int(metric.split('-')[1])
+                bins = np.array([-np.inf, lbin, np.inf])
+                metric = metric.split('-')[0]
+            except:
+                raise ValueError(f"Contingency metric {metric} must be in the format 'metric-edge'")
+
+        metric_names = {
+            'pod': 'hit_rate',
+            'far': 'false_alarm_rate',
+            'ets': 'equit_threat_score',
+            'bias_score': 'bias_score',
+            'heidke': 'heidke_score',
+        }
+
+        metric_func = metric_names[metric]
+
+        if spatial:
+            dims = ['time']
+        else:
+            dims = ['time', 'lat', 'lon']
+
+        obs = obs.sel(time=fcst.time)
+        contingency_table = xskillscore.Contingency(obs, fcst, bins, bins, dim=dims)
+        metric_fn = getattr(contingency_table, metric_func)
+        metric_lib = 'contingency'
+        metric_kwargs = {}
+    else:
+        metric_fn, metric_kwargs, metric_lib = get_metric_fn(
+            enhanced_prob_type, metric, spatial=spatial)
 
     # Do any per metric modifications or assertions
-    if metric in COUPLED_METRICS:
+    if is_coupled(metric) and not avg_time:
         assert "Coupled metrics must be averaged in time"
 
     # drop all times not in fcst
@@ -199,6 +250,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     elif metric_lib == 'sheerwater':
         m_ds = metric_fn(fcst=fcst, truth=obs, avg_time=avg_time, skipna=True)
+    elif metric_lib == 'contingency':
+        m_ds = metric_fn(**metric_kwargs)
     else:
         m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
         if spatial:
@@ -269,11 +322,11 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, time_grouping=None, spatial=False, grid="global1_5",
                    mask='lsm', region='africa'):
     """Compute a grouped metric for a forecast at a specific lead."""
-    if metric in COUPLED_METRICS and time_grouping is not None:
+    if is_coupled(metric) and time_grouping is not None:
         raise NotImplementedError("Cannot run time grouping for coupled metrics.")
 
     # Get the completely aggregated metric
-    if metric in COUPLED_METRICS and not spatial:
+    if is_coupled(metric) and not spatial:
         ds = eval_metric(start_time, end_time, variable, lead=lead,
                          forecast=forecast, truth=truth, spatial=False, avg_time=True,
                          metric=metric, grid=grid, mask=mask, region=region)
@@ -289,7 +342,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     # To evaluate RMSE, we call MSE and take the final square root average all averaging in sp/time
     called_metric = 'mse' if metric == 'rmse' else metric
 
-    if called_metric in COUPLED_METRICS:
+    if is_coupled(called_metric):
         # Get the unaggregated global metric
         ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
                                       forecast=forecast, truth=truth,
