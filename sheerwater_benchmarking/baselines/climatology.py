@@ -86,25 +86,7 @@ def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5')
     ds = add_dayofyear(ds)
     ds = pad_with_leapdays(ds)
 
-    def seeps_threshold(ds):
-        ds = ds['precip']
-        is_dry = ds < 0.25
-        dry_fraction = is_dry.mean()
-        not_dry = ds.where(~is_dry)
-        heavy_threshold = not_dry
-        heavy_threshold = heavy_threshold.quantile(2 / 3)
-        ds['precip_seeps_threshold'] = heavy_threshold
-        ds['precip_seeps_dry_fraction'] = dry_fraction
-        return ds
-
-    if variable == 'precip':
-        print("Also compute seeps")
-        ds = xr.merge([
-            ds.groupby('dayofyear').mean(dim="time"),
-            ds.groupby('dayofyear').map(seeps_threshold),
-        ])
-    else:
-        ds.groupby('dayofyear').mean(dim="time"),
+    ds = ds.groupby('dayofyear').mean(dim="time"),
 
     return ds
 
