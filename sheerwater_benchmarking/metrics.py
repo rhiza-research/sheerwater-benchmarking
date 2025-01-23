@@ -166,7 +166,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     if 'sparse' in fcst.attrs:
         sparse = fcst.attrs['sparse']
 
-    if not spatial and not sparse and not is_valid(fcst, variable, mask=mask, region=region, grid=grid, valid_threshold=0.98):
+    if not spatial and not sparse and not is_valid(fcst, variable, mask=mask,
+                                                   region=region, grid=grid, valid_threshold=0.98):
             # If averaging over space, we must check if the forecast is valid
             print(f"Forecast {forecast} is not valid for region {region}.")
             return None
@@ -194,7 +195,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             fcst = fcst - clim_ds
             obs = obs - clim_ds
 
-    if '-' in metric and metric.split('-')[0] in CONTINGENCY_METRICS or metric.split('-')[0] in CATEGORICAL_CONTINGENCY_METRICS:
+    if '-' in metric and (metric.split('-')[0] in CONTINGENCY_METRICS or
+                          metric.split('-')[0] in CATEGORICAL_CONTINGENCY_METRICS):
 
         if metric.split('-')[0] in CATEGORICAL_CONTINGENCY_METRICS:
             if len(metric.split('-')) <= 2:
@@ -213,7 +215,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
                 lbin = int(metric.split('-')[1])
                 bins = np.array([-np.inf, lbin, np.inf])
                 metric = metric.split('-')[0]
-            except:
+            except IndexError:
                 raise ValueError(f"Contingency metric {metric} must be in the format 'metric-edge'")
 
         metric_names = {
@@ -244,7 +246,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             metric_fn = weatherbench2.metrics.SpatialSEEPS
         else:
             metric_fn = weatherbench2.metrics.SEEPS
-        
+
         metric_kwargs = {
             'climatology': clim_ds,
             'dry_threshold_mm': 0.25,

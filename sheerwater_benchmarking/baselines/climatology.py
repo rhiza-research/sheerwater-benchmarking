@@ -101,7 +101,7 @@ def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5')
         print("Also compute seeps")
         ds = xr.merge([
             ds.groupby('dayofyear').mean(dim="time"),
-            ds.groupby('dayofyear').map(seeps_threshold),  
+            ds.groupby('dayofyear').map(seeps_threshold),
         ])
     else:
         ds.groupby('dayofyear').mean(dim="time"),
