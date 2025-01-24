@@ -413,10 +413,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
     """Decorator for caching function results.
 
     Args:
-        data_type(str): The type of data being cached. Currently only 'array' is supported.
+        data_type(str): The type of data being cached. One of 'array', 'tabular', or 'basic'.
         cache_args(list): The arguments to use as the cache key.
-        timeseries(str, list): The name of the time series dimension in the cached array. If not a
-            time series, set to None (default). If a list, will use the first matching coordinate in the list.
+        timeseries(str, list): The name of the time series dimension (for array data) or column (for tabular data) in
+            the cached array. For tabular data, if the name of the index is in 'timeseries', then the index will be
+            used. If not a time series, set to None (default). If a list, will use the first matching coordinate in the
+            list. If 'timeseries' is set, the function must have arguments 'start_time' and 'end_time', and they must be
+            passed as positional arguments.
         chunking(dict): Specifies chunking if that coordinate exists. If coordinate does not exist
             the chunking specified will be dropped.
         chunk_by_arg(dict): Specifies chunking modifiers based on the passed cached arguments,
@@ -612,7 +615,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
             else:
-                raise ValueError("Caching currently only supports the 'array' and 'tabular' datatypes")
+                raise ValueError("Caching currently only supports the 'array', 'tabular', and 'basic' datatypes")
 
             if filepath_only and not supports_filepath:
                 raise ValueError(f"{backend} backend does not support filepath_only flag")
@@ -919,6 +922,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             raise RuntimeError(
                                 f"Timeseries must have index or a column named {tl} for slicing."
                             )
+                    else:
+                        raise ValueError("Timeseries is only supported for array and tabular data")
 
                     time_col = match_time[0]
 
