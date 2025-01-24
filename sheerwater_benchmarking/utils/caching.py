@@ -52,7 +52,7 @@ def get_chunk_size(ds, size_in='MB'):
     chunk_groups = [(dim, np.median(chunks)) for dim, chunks in ds.chunks.items()]
     div = {'KB': 10**3, 'MB': 10**6, 'GB': 10**9, 'TB': 10**12}[size_in]
     chunk_sizes = [x[1] for x in chunk_groups]
-    return np.product(chunk_sizes) * 4 / div, chunk_groups
+    return np.prod(chunk_sizes) * 4 / div, chunk_groups
 
 
 def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
@@ -408,10 +408,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
     """Decorator for caching function results.
 
     Args:
-        data_type(str): The type of data being cached. Currently only 'array' is supported.
+        data_type(str): The type of data being cached. One of 'array', 'tabular', or 'basic'.
         cache_args(list): The arguments to use as the cache key.
-        timeseries(str, list): The name of the time series dimension in the cached array. If not a
-            time series, set to None (default). If a list, will use the first matching coordinate in the list.
+        timeseries(str, list): The name of the time series dimension (for array data) or column (for
+            tabular data) in the cached array. For tabular data, if the name of the index is in
+            'timeseries', then the index will be used. If not a time series, set to None (default).
+            If a list, will use the first matching coordinate in the list. If 'timeseries' is set,
+            the function must have arguments 'start_time' and 'end_time', and they must be passed as
+            positional arguments.
         chunking(dict): Specifies chunking if that coordinate exists. If coordinate does not exist
             the chunking specified will be dropped.
         chunk_by_arg(dict): Specifies chunking modifiers based on the passed cached arguments,
@@ -491,8 +495,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         "Time series functions must have the parameters 'start_time' and 'end_time'")
                 else:
                     keys = [item for item in params]
-                    start_time = args[keys.index('start_time')]
-                    end_time = args[keys.index('end_time')]
+                    try:
+                        start_time = args[keys.index('start_time')]
+                        end_time = args[keys.index('end_time')]
+                    except IndexError:
+                        raise ValueError("'start_time' and 'end_time' must be passed as positional arguments, not "
+                                         "keyword arguments")
 
             # Handle keying based on cache arguments
             cache_arg_values = {}
@@ -597,11 +605,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     supports_filepath = False
             elif data_type == 'basic':
                 backend = "pickle" if backend is None else backend
+                if storage_backend is None:
+                    storage_backend = backend
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.pkl'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
             else:
-                raise ValueError("Caching currently only supports the 'array' and 'tabular' datatypes")
+                raise ValueError("Caching currently only supports the 'array', 'tabular', and 'basic' datatypes")
 
             if filepath_only and not supports_filepath:
                 raise ValueError(f"{backend} backend does not support filepath_only flag")
@@ -894,10 +904,22 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             else:
                 # Do the time series filtering
                 if timeseries is not None:
-                    match_time = [t for t in tl if t in ds.dims]
-                    if len(match_time) == 0:
-                        raise RuntimeError(
-                            "Timeseries array must return a 'time' dimension for slicing.")
+                    if data_type == "array":
+                        match_time = [t for t in tl if t in ds.dims]
+                        if len(match_time) == 0:
+                            raise RuntimeError(
+                                f"Timeseries array must return a dimension named {tl} for slicing."
+                            )
+                    elif data_type == "tabular":
+                        if ds.index.name in tl: # If the index has a name that's in tl (e.g. "time"), slice by that.
+                            return ds[start_time:end_time]
+                        match_time = [t for t in tl if t in ds.columns]
+                        if len(match_time) == 0:
+                            raise RuntimeError(
+                                f"Timeseries must have index or a column named {tl} for slicing."
+                            )
+                    else:
+                        raise ValueError("Timeseries is only supported for array and tabular data")
 
                     time_col = match_time[0]
 
