@@ -164,7 +164,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Check to verify we aren't averaging inappropriately
     if is_coupled(metric) and not avg_time:
-        assert "Coupled metrics must be averaged in time"
+        raise ValueError("Coupled metrics must be averaged in time")
 
     # drop all times not in fcst
     obs = obs.sel(time=fcst.time)
@@ -273,24 +273,24 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     elif metric == 'mae':
         if spatial:
-            m_ds = weatherbench2.metrics.MAE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = weatherbench2.metrics.SpatialMAE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
         else:
-            m_ds = weatherbench2.metrics.SpatialMAE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = weatherbench2.metrics.MAE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
 
     elif metric == 'mse' or metric == 'rmse':
         if spatial:
-            m_ds = weatherbench2.metrics.MSE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = weatherbench2.metrics.SpatialMSE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
         else:
-            m_ds = weatherbench2.metrics.SpatialMSE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = weatherbench2.metrics.MSE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
 
     elif metric == 'bias':
         if spatial:
-            m_ds = weatherbench2.metrics.Bias().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = weatherbench2.metrics.SpatialBias().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
         else:
-            m_ds = weatherbench2.metrics.SpatialBias().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = weatherbench2.metrics.Bias().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
 
     else:
         raise ValueError(f"Metric {metric} not implemented")
