@@ -1,6 +1,5 @@
 """Verification metrics for forecasts."""
 
-import sys
 import numpy as np
 from importlib import import_module
 from inspect import signature
@@ -194,10 +193,12 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         metric_sparse = True
 
         if spatial:
-            m_ds = weatherbench2.metrics.SpatialSEEPS(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = weatherbench2.metrics.SpatialSEEPS(**metric_kwargs) \
+                                .compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
         else:
-            m_ds = weatherbench2.metrics.SEEPS(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = weatherbench2.metrics.SEEPS(**metric_kwargs) \
+                                .compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
 
     elif metric == 'acc':
         clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
@@ -215,7 +216,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     elif is_contingency(metric):
         bins = get_bins(metric)
         metric = metric.split('-')[0]
-            
+
         metric_func_names = {
             'pod': 'hit_rate',
             'far': 'false_alarm_rate',
@@ -251,12 +252,14 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     elif metric == 'crps' and enhanced_prob_type == 'quantile':
         if spatial:
-            m_ds = weatherbench2.metrics.SpatialQuantileCRPS(quantile_dim='member').compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = weatherbench2.metrics.SpatialQuantileCRPS(quantile_dim='member') \
+                                .compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
         else:
-            m_ds = weatherbench2.metrics.QuantileCRPS(quantile_dim='member').compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = weatherbench2.metrics.QuantileCRPS(quantile_dim='member') \
+                                .compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
 
-    elif metric == 'mape'
+    elif metric == 'mape':
         if spatial:
             m_ds = spatial_mape(fcst, obs, avg_time=avg_time, skipna=True)
         else:
@@ -268,7 +271,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         else:
             m_ds = smape(fcst, obs, avg_time=avg_time, skipna=True)
 
-    elif metric == 'mae': 
+    elif metric == 'mae':
         if spatial:
             m_ds = weatherbench2.metrics.MAE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
