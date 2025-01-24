@@ -15,9 +15,8 @@ from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, 
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
-CLIM_METRICS = ['acc', 'seeps']  # a list of metrics that use require a climatology input
 COUPLED_METRICS = ['acc', 'pearson']  # a list of metrics that are coupled in space and time
-CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of contingency metrics
+CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of dichotomous contingency metrics
 CATEGORICAL_CONTINGENCY_METRICS = ['heidke']  # a list of contingency metrics
 
 def is_categorical(metric):
@@ -32,6 +31,25 @@ def is_contingency(metric):
 
     return metric in CONTINGENCY_METRICS or metric in CATEGORICAL_CONTINGENCY_METRICS
 
+def get_categorical_bins(metric):
+    if len(metric.split('-')) <= 2:
+        raise ValueError(f"Categorical contingency metric {metric} must be in the format 'metric-edge-edge...'")
+
+    bins = [int(x) for x in metric.split('-')[1:]]
+    bins = [-np.inf] + bins + [np.inf]
+    bins = np.array(bins)
+    return bins
+
+
+def get_contingency_bins(metric):
+    if len(metric.split('-')) != 2:
+        raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge'")
+
+    lbin = int(metric.split('-')[1])
+    bins = np.array([-np.inf, lbin, np.inf])
+    return bins
+
+
 def is_coupled(metric):
     return is_contingency(metric) or metric in COUPLED_METRICS
 
@@ -44,7 +62,10 @@ def spatial_mape(fcst, truth, avg_time=False, skipna=True):
 
 def mape(fcst, truth, avg_time=False, skipna=True):
     ds = spatial_mape(fcst, truth, avg_time=avg_time, skipna=skipna)
-    ds = ds.mean(skipna=skipna)
+    if avg_time:
+        ds = ds.mean(skipna=skipna)
+    else:
+        ds = ds.mean(dim=['lat', 'lon'], skipna=skipna)
     return ds
 
 def spatial_smape(fcst, truth, avg_time=False, skipna=True):
@@ -55,7 +76,10 @@ def spatial_smape(fcst, truth, avg_time=False, skipna=True):
 
 def smape(fcst, truth, avg_time=False, skipna=True):
     ds = spatial_smape(fcst, truth, avg_time=avg_time, skipna=skipna)
-    ds = ds.mean(skipna=skipna)
+    if avg_time:
+        ds = ds.mean(skipna=skipna)
+    else:
+        ds = ds.mean(dim=['lat', 'lon'], skipna=skipna)
     return ds
 
 def get_datasource_fn(datasource):
@@ -122,11 +146,11 @@ def get_metric_fn(prob_type, metric, spatial=True):
         metric_lib, metric_mod, metric_kwargs = wb_metrics[metric]
 
         if metric_lib == 'sheerwater':
-            current_module = sys.modules[__name__]
-            metric_fn = getattr(current_module, metric_mod)
+            mod = sys.modules[__name__]
         else:
             mod = import_module(metric_lib)
-            metric_fn = getattr(mod, metric_mod)
+
+        metric_fn = getattr(mod, metric_mod)
 
         return metric_fn, metric_kwargs, metric_lib
     except (ImportError, AttributeError):
@@ -151,8 +175,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     fcst_fn = get_datasource_fn(forecast)
 
     # Decide if this is a forecast with a lead or direct datasource with just an agg
-    sparse = False
-    metric_sparse = False
+    sparse = False # A variable used to indicate whether the data sources themselves are sparse
+    metric_sparse = False # A variable used to indicate whether the metric induces sparsity
     if 'lead' in signature(fcst_fn).parameters:
         if lead_or_agg(lead) == 'agg':
             raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
@@ -177,6 +201,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     if 'sparse' in fcst.attrs:
         sparse = fcst.attrs['sparse']
 
+    # This checks if the forecast is valid for non-spatial metrics (which in practice is only coupled metrics)
     if not spatial and not sparse and not is_valid(fcst, variable, mask=mask,
                                                    region=region, grid=grid, valid_threshold=0.98):
             # If averaging over space, we must check if the forecast is valid
@@ -192,41 +217,27 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     if 'sparse' in obs.attrs:
         sparse |= obs.attrs['sparse']
 
-    if metric in CLIM_METRICS:
-        # Get the appropriate climatology dataframe for metric calculation
-        if metric == 'seeps':
-            wet_threshold = seeps_wet_threshold(agg_days=lead_to_agg_days(lead))
-            dry_fraction = seeps_dry_fraction(agg_days=lead_to_agg_days(lead))
+    # Get the appropriate climatology dataframe for metric calculation
+    if metric == 'seeps':
+        wet_threshold = seeps_wet_threshold(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead))
+        dry_fraction = seeps_dry_fraction(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead))
 
-            clim_ds = xr.merge([wet_threshold, dry_fraction])
-        else:
-            clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
-                                        trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
+        clim_ds = xr.merge([wet_threshold, dry_fraction])
+    elif metric == 'acc':
+        clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
+                                    trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
 
-            fcst = fcst - clim_ds
-            obs = obs - clim_ds
+        fcst = fcst - clim_ds
+        obs = obs - clim_ds
 
     if is_contingency(metric):
         if is_categorical(metric):
-            if len(metric.split('-')) <= 2:
-                raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge-edge...'")
-
-            bins = [int(x) for x in metric.split('-')[1:]]
-            bins = [-np.inf] + bins + [np.inf]
-            bins = np.array(bins)
-
+            bins = get_categorical_bins(metric)
             metric = metric.split('-')[0]
         else:
-            try:
-                if len(metric.split('-')) != 2:
-                    raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge'")
-
-                lbin = int(metric.split('-')[1])
-                bins = np.array([-np.inf, lbin, np.inf])
-                metric = metric.split('-')[0]
-            except IndexError:
-                raise ValueError(f"Contingency metric {metric} must be in the format 'metric-edge'")
-
+            bins = get_contingency_bins(metric)
+            metric = metric.split('-')[0]
+            
         metric_func_names = {
             'pod': 'hit_rate',
             'far': 'false_alarm_rate',
