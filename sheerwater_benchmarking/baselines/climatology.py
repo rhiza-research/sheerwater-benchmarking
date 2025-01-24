@@ -13,7 +13,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['first_year', 'last_year', 'grid'],
+           cache_args=['first_year', 'last_year', 'agg_days', 'grid'],
            chunking={"lat": 721, "lon": 1440, "dayofyear": 30},
            auto_rechunk=False)
 def seeps_dry_fraction(first_year=1985, last_year=2014, agg_days=7, grid='global1_5'):
