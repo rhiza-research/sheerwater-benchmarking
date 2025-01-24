@@ -97,58 +97,6 @@ def get_datasource_fn(datasource):
     return fn
 
 
-def get_metric_fn(prob_type, metric, spatial=True):
-    """Import the correct metrics function from weatherbench."""
-    # Make sure things are consistent
-    if prob_type == 'deterministic' and metric in PROB_METRICS:
-        raise ValueError("Cannot run probabilistic metric on deterministic forecasts.")
-    elif (prob_type == 'ensemble' or prob_type == 'quantile') and metric not in PROB_METRICS:
-        raise ValueError("Cannot run deterministic metric on probabilistic forecasts.")
-
-    wb_metrics = {
-        'crps': ('xskillscore', 'crps_ensemble', {}),
-        'crps-q': ('weatherbench2.metrics', 'QuantileCRPS', {'quantile_dim': 'member'}),
-        'spatial-crps': ('xskillscore', 'crps_ensemble', {'dim': 'time'}),
-        'spatial-crps-q': ('weatherbench2.metrics', 'SpatialQuantileCRPS', {'quantile_dim': 'member'}),
-        'mae': ('weatherbench2.metrics', 'MAE', {}),
-        'spatial-mae': ('weatherbench2.metrics', 'SpatialMAE', {}),
-        'mape': ('sheerwater', 'mape', {}),
-        'spatial-mape': ('sheerwater', 'spatial_mape', {}),
-        'smape': ('sheerwater', 'smape', {}),
-        'spatial-smape': ('sheerwater', 'spatial_smape', {}),
-        'pearson': ('xskillscore', 'pearson_r', {'skipna': True}),
-        'spatial-pearson': ('xskillscore', 'pearson_r', {'dim': 'time', 'skipna': True}),
-        'acc': ('weatherbench2.metrics', 'ACC', {}),
-        'spatial-acc': ('weatherbench2.metrics', 'SpatialACC', {}),
-        'mse': ('weatherbench2.metrics', 'MSE', {}),
-        'spatial-mse': ('weatherbench2.metrics', 'SpatialMSE', {}),
-        'rmse': ('weatherbench2.metrics', 'MSE', {}),
-        'spatial-rmse': ('weatherbench2.metrics', 'SpatialMSE', {}),
-        'bias': ('weatherbench2.metrics', 'Bias', {}),
-        'spatial-bias': ('weatherbench2.metrics', 'SpatialBias', {}),
-    }
-
-    if spatial:
-        metric = 'spatial-' + metric
-
-    if prob_type == 'quantile':
-        metric = metric + '-q'
-
-    try:
-        metric_lib, metric_mod, metric_kwargs = wb_metrics[metric]
-
-        if metric_lib == 'sheerwater':
-            mod = sys.modules[__name__]
-        else:
-            mod = import_module(metric_lib)
-
-        metric_fn = getattr(mod, metric_mod)
-
-        return metric_fn, metric_kwargs, metric_lib
-    except (ImportError, AttributeError):
-        raise ImportError(f"Did not find implementation for metric {metric}")
-
-
 @dask_remote
 def eval_metric(start_time, end_time, variable, lead, forecast, truth,
                 metric, spatial=True, avg_time=False,
@@ -209,12 +157,48 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     if 'sparse' in obs.attrs:
         sparse |= obs.attrs['sparse']
 
+    # Make sure the prob type is consistent
+    if enhanced_prob_type == 'deterministic' and metric in PROB_METRICS:
+        raise ValueError("Cannot run probabilistic metric on deterministic forecasts.")
+    elif (enhanced_prob_type == 'ensemble' or enhanced_prob_type == 'quantile') and metric not in PROB_METRICS:
+        raise ValueError("Cannot run deterministic metric on probabilistic forecasts.")
+
+    # Check to verify we aren't averaging inappropriately
+    if is_coupled(metric) and not avg_time:
+        assert "Coupled metrics must be averaged in time"
+
+    # drop all times not in fcst
+    obs = obs.sel(time=fcst.time)
+
+    ############################################################
+    #### Call the metrics with their various libraries
+    ############################################################
+
     # Get the appropriate climatology dataframe for metric calculation
     if metric == 'seeps':
+        if variable != 'precip':
+            raise ValueError("SEEPS metric only works with precipitation.")
+
         wet_threshold = seeps_wet_threshold(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead))
         dry_fraction = seeps_dry_fraction(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead))
-
         clim_ds = xr.merge([wet_threshold, dry_fraction])
+
+        metric_kwargs = {
+            'climatology': clim_ds,
+            'dry_threshold_mm': 0.25,
+            'precip_name': 'precip',
+            'min_p1': 0.03,
+            'max_p1': 0.93,
+        }
+
+        metric_sparse = True
+
+        if spatial:
+            m_ds = weatherbench2.metrics.SpatialSEEPS(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+        else:
+            m_ds = weatherbench2.metrics.SEEPS(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+
     elif metric == 'acc':
         clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
                                     trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
@@ -222,8 +206,14 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         fcst = fcst - clim_ds
         obs = obs - clim_ds
 
-    if is_contingency(metric):
-        bins = get_categorical_bins(metric)
+        if spatial:
+            m_ds = weatherbench2.metrics.SpatialACC().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+        else:
+            m_ds = weatherbench2.metrics.ACC().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+
+    elif is_contingency(metric):
+        bins = get_bins(metric)
         metric = metric.split('-')[0]
             
         metric_func_names = {
@@ -244,55 +234,63 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         obs = obs.sel(time=fcst.time)
         contingency_table = xskillscore.Contingency(obs, fcst, bins, bins, dim=dims)
         metric_fn = getattr(contingency_table, metric_func)
-        metric_lib = 'contingency'
-        metric_kwargs = {}
-    elif metric == 'seeps':
-        if variable != 'precip':
-            raise ValueError("SEEPS metric only works with precipitation.")
+        m_ds = metric_fn()
 
+    elif metric == 'pearson':
         if spatial:
-            metric_fn = weatherbench2.metrics.SpatialSEEPS
+            m_ds = xskillscore.pearson_r(a=obs, b=fcst, dim='time', skipna=True)
         else:
-            metric_fn = weatherbench2.metrics.SEEPS
+            m_ds = xskillscore.pearson_r(a=obs, b=fcst, skipna=True)
 
-        metric_kwargs = {
-            'climatology': clim_ds,
-            'dry_threshold_mm': 0.25,
-            'precip_name': 'precip',
-            'min_p1': 0.03,
-            'max_p1': 0.93,
-        }
-
-        metric_sparse = True
-
-        metric_lib = 'weatherbench2'
-    else:
-        metric_fn, metric_kwargs, metric_lib = get_metric_fn(
-            enhanced_prob_type, metric, spatial=spatial)
-
-    # Do any per metric modifications or assertions
-    if is_coupled(metric) and not avg_time:
-        assert "Coupled metrics must be averaged in time"
-
-    # drop all times not in fcst
-    obs = obs.sel(time=fcst.time)
-    if metric_lib == 'xskillscore':
-        # drop all times not in fcst
-        if metric == 'crps':
-            fcst = fcst.chunk(member=-1, time=1, lat=250, lon=250)  # member must be -1 to succeed
-
-            m_ds = metric_fn(observations=obs, forecasts=fcst, mean=avg_time, **metric_kwargs)
-        else:
-            m_ds = metric_fn(a=obs, b=fcst, **metric_kwargs)
-
-    elif metric_lib == 'sheerwater':
-        m_ds = metric_fn(fcst=fcst, truth=obs, avg_time=avg_time, skipna=True)
-    elif metric_lib == 'contingency':
-        m_ds = metric_fn(**metric_kwargs)
-    else:
-        m_ds = metric_fn(**metric_kwargs).compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+    elif metric == 'crps' and enhanced_prob_type == 'ensemble':
+        fcst = fcst.chunk(member=-1, time=1, lat=250, lon=250)  # member must be -1 to succeed
         if spatial:
+            m_ds = xskillscore.crps_ensemble(observations=obs, forecasts=fcst, mean=avg_time, dim='time')
+        else:
+            m_ds = xskillscore.crps_ensemble(observations=obs, forecasts=fcst, mean=avg_time)
+
+    elif metric == 'crps' and enhanced_prob_type == 'quantile':
+        if spatial:
+            m_ds = weatherbench2.metrics.SpatialQuantileCRPS(quantile_dim='member').compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
             m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+        else:
+            m_ds = weatherbench2.metrics.QuantileCRPS(quantile_dim='member').compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+
+    elif metric == 'mape'
+        if spatial:
+            m_ds = spatial_mape(fcst, obs, avg_time=avg_time, skipna=True)
+        else:
+            m_ds = mape(fcst, obs, avg_time=avg_time, skipna=True)
+
+    elif metric == 'smape':
+        if spatial:
+            m_ds = spatial_smape(fcst, obs, avg_time=avg_time, skipna=True)
+        else:
+            m_ds = smape(fcst, obs, avg_time=avg_time, skipna=True)
+
+    elif metric == 'mae': 
+        if spatial:
+            m_ds = weatherbench2.metrics.MAE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+        else:
+            m_ds = weatherbench2.metrics.SpatialMAE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+
+    elif metric == 'mse' or metric == 'rmse':
+        if spatial:
+            m_ds = weatherbench2.metrics.MSE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+        else:
+            m_ds = weatherbench2.metrics.SpatialMSE().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+
+    elif metric == 'bias':
+        if spatial:
+            m_ds = weatherbench2.metrics.Bias().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+        else:
+            m_ds = weatherbench2.metrics.SpatialBias().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+
+    else:
+        raise ValueError(f"Metric {metric} not implemented")
 
     m_ds = m_ds.assign_attrs(sparse=sparse)
     m_ds = m_ds.assign_attrs(metric_sparse=metric_sparse)
