@@ -11,6 +11,63 @@ from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
                                            apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
 
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['first_year', 'last_year', 'agg_days', 'grid'],
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 30},
+           auto_rechunk=False)
+def seeps_dry_fraction(first_year=1985, last_year=2014, agg_days=7, grid='global1_5'):
+    """Compute the climatology of the ERA5 data. Years are inclusive."""
+    start_time = f"{first_year}-01-01"
+    end_time = f"{last_year}-12-31"
+
+    # Get the rolled era5 data
+    ds = era5_rolled(start_time, end_time, variable='precip', agg_days=agg_days, grid=grid)
+
+    # Add day of year as a coordinate
+    ds = add_dayofyear(ds)
+    ds = pad_with_leapdays(ds)
+
+    ds['is_dry'] = ds['precip'] < 0.25
+    ds = ds.groupby('dayofyear').mean(dim='time')
+    ds = ds.drop_vars(['precip'])
+    ds = ds.rename({
+        'is_dry': 'dry_fraction',
+    })
+
+    # Convert to true day of year
+    ds['dayofyear'] = ds.dayofyear.dt.dayofyear
+
+    return ds
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['first_year', 'last_year', 'agg_days', 'grid'],
+           chunking={"lat": 721, "lon": 1440, "dayofyear": 30},
+           auto_rechunk=False)
+def seeps_wet_threshold(first_year=1985, last_year=2014, agg_days=7, grid='global1_5'):
+    """Compute the climatology of the ERA5 data. Years are inclusive."""
+    start_time = f"{first_year}-01-01"
+    end_time = f"{last_year}-12-31"
+
+    # Get the rolled era5 data
+    ds = era5_rolled(start_time, end_time, variable='precip', agg_days=agg_days, grid=grid)
+
+    # Add day of year as a coordinate
+    ds = add_dayofyear(ds)
+    ds = pad_with_leapdays(ds)
+
+    ds = ds.groupby('dayofyear').quantile(2/3, method='nearest', dim='time')
+
+    ds = ds.rename({
+        'precip': 'wet_threshold',
+    })
+
+    # Convert to true day of year
+    ds['dayofyear'] = ds.dayofyear.dt.dayofyear
+
+    return ds
+
 
 @dask_remote
 @cacheable(data_type='array',
@@ -31,6 +88,7 @@ def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5')
 
     # Take average over the period to produce climatology that includes leap years
     ds = ds.groupby('dayofyear').mean(dim='time')
+
     return ds
 
 
