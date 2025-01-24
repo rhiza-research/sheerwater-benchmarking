@@ -237,7 +237,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         else:
             bins = get_contingency_bins(metric)
             metric = metric.split('-')[0]
-            
+
         metric_func_names = {
             'pod': 'hit_rate',
             'far': 'false_alarm_rate',
