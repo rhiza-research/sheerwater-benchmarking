@@ -31,24 +31,16 @@ def is_contingency(metric):
 
     return metric in CONTINGENCY_METRICS or metric in CATEGORICAL_CONTINGENCY_METRICS
 
-def get_categorical_bins(metric):
-    if len(metric.split('-')) <= 2:
+def get_bins(metric):
+    if is_categorical(metric) and len(metric.split('-')) <= 2:
         raise ValueError(f"Categorical contingency metric {metric} must be in the format 'metric-edge-edge...'")
+    elif is_contingency(metric) and len(metric.split('-')) != 2:
+        raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge'")
 
     bins = [int(x) for x in metric.split('-')[1:]]
     bins = [-np.inf] + bins + [np.inf]
     bins = np.array(bins)
     return bins
-
-
-def get_contingency_bins(metric):
-    if len(metric.split('-')) != 2:
-        raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge'")
-
-    lbin = int(metric.split('-')[1])
-    bins = np.array([-np.inf, lbin, np.inf])
-    return bins
-
 
 def is_coupled(metric):
     return is_contingency(metric) or metric in COUPLED_METRICS
@@ -231,13 +223,9 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         obs = obs - clim_ds
 
     if is_contingency(metric):
-        if is_categorical(metric):
-            bins = get_categorical_bins(metric)
-            metric = metric.split('-')[0]
-        else:
-            bins = get_contingency_bins(metric)
-            metric = metric.split('-')[0]
-
+        bins = get_categorical_bins(metric)
+        metric = metric.split('-')[0]
+            
         metric_func_names = {
             'pod': 'hit_rate',
             'far': 'false_alarm_rate',
@@ -412,10 +400,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
             return None
 
         sparse = ds.attrs['sparse']
-
-        metric_sparse = False
-        if 'metric_sparse' in ds.attrs:
-            metric_sparse = ds.attrs['metric_sparse']
+        metric_sparse = ds.attrs['metric_sparse']
 
         # Group the time column based on time grouping
         if time_grouping:
@@ -437,24 +422,23 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     # Clip it to the region
     ds = clip_region(ds, region)
 
-    # Check if forecast is valid before spatial averaging
-    if not sparse and not is_valid(ds, variable, mask, region, grid, valid_threshold=0.98):
-        if metric_sparse:
-            print("Metric is sparse, checking if forecast is valid directly")
-            if metric in PROB_METRICS:
-                prob_type = 'probabilistic'
-            else:
-                prob_type = 'deterministic'
 
-            fcst = get_datasource_fn(forecast)(start_time, end_time, variable, lead=lead,
-                                               prob_type=prob_type, grid=grid, mask=mask, region=region)
-
-            if not is_valid(fcst, variable, mask, region, grid, valid_threshold=0.98):
-                print("Metric is not valid for region.")
-                return None
+    if metric_sparse:
+        print("Metric is sparse, checking if forecast is valid directly")
+        if metric in PROB_METRICS:
+            prob_type = 'probabilistic'
         else:
-            print("Metric is not valid for region.")
-            return None
+            prob_type = 'deterministic'
+
+        check_ds =  get_datasource_fn(forecast)(start_time, end_time, variable, lead=lead,
+                                          prob_type=prob_type, grid=grid, mask=mask, region=region)
+    else:
+        check_ds = ds
+
+    # Check if forecast is valid before spatial averaging
+    if not sparse and not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
+        print("Metric is not valid for region.")
+        return None
 
     for coord in ds.coords:
         if coord not in ['time', 'lat', 'lon']:
