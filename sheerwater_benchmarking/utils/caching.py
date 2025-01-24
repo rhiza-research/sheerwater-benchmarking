@@ -905,10 +905,20 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             else:
                 # Do the time series filtering
                 if timeseries is not None:
-                    match_time = [t for t in tl if t in ds.dims]
-                    if len(match_time) == 0:
-                        raise RuntimeError(
-                            "Timeseries array must return a 'time' dimension for slicing.")
+                    if data_type == "array":
+                        match_time = [t for t in tl if t in ds.dims]
+                        if len(match_time) == 0:
+                            raise RuntimeError(
+                                f"Timeseries array must return a dimension named {tl} for slicing."
+                            )
+                    elif data_type == "tabular":
+                        if ds.index.name in tl: # If the index has a name that's in tl (e.g. "time"), slice by that.
+                            return ds[start_time:end_time]
+                        match_time = [t for t in tl if t in ds.columns]
+                        if len(match_time) == 0:
+                            raise RuntimeError(
+                                f"Timeseries must have index or a column named {tl} for slicing."
+                            )
 
                     time_col = match_time[0]
 
