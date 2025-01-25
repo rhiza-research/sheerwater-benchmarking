@@ -205,14 +205,18 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
            cache_args=['variable', 'run_type', 'time_group', 'grid'],
            timeseries=['model_issuance_date'],
            cache=True,
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, "model_issuance_date": 1000})
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "model_issuance_date": 1000, "member": 1})
 def ifs_er_reforecast_bias(start_time, end_time, variable, run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the bias of ECMWF reforecasts for all leads."""
     # Fetch the reforecast data to calculate how many leads we need
     if time_group == 'weekly':
         leads = [0, 7, 14, 21, 28, 35]
-    else:
+    elif time_group == 'biweekly':
         leads = [0, 7, 14, 21, 28]
+    elif time_group == 'daily':
+        leads = list(range(46))
+    else:
+        raise NotImplementedError(f"Time group {time_group} not implemented for ECMWF reforecasts.")
 
     # Accumulate all the per lead biases
     biases = []
@@ -252,13 +256,17 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
                               run_type=run_type, time_group=time_group, grid=grid)
     if time_group == 'weekly':
         leads = [np.timedelta64(x, 'D') for x in [0, 7, 14, 21, 28, 35]]
-    else:
+    elif time_group == 'biweekly':
         leads = [np.timedelta64(x, 'D') for x in [0, 7, 14, 21, 28]]
+    elif time_group == 'daily':
+        leads = [np.timedelta64(x, 'D') for x in range(46)]
+    else:
+        raise NotImplementedError(f"Time group {time_group} not implemented for ECMWF reforecasts.")
     ds_f = ds_f.sel(lead_time=leads)
 
-    def bias_correct(ds_sub, margin_in_days=6):
+    def bias_correct(ds_sub, mid=6):
         date = ds_sub.start_date.values
-        dt = np.timedelta64(margin_in_days, 'D')
+        dt = np.timedelta64(mid, 'D')
         nbhd = (ds_b.model_issuance_date.values >= date - dt) & \
             (ds_b.model_issuance_date.values <= date + dt)
         if nbhd.sum() == 0:  # No data to debias
@@ -268,7 +276,7 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
         dsp = ds_sub + nbhd_df
         return dsp
 
-    ds = ds_f.groupby('start_date').map(bias_correct, margin_in_days)
+    ds = ds_f.groupby('start_date').map(bias_correct, mid=margin_in_days)
     # Should not be below zero after bias correction
     if variable in ['precip', 'ssrd']:
         ds = np.maximum(ds, 0)
@@ -321,19 +329,14 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
 def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic',
                  grid='global1_5', mask='lsm', region="global"):
     """Standard format forecast data for ECMWF forecasts."""
-    lead_params = {
-        "week1": ('weekly', 0),
-        "week2": ('weekly', 7),
-        "week3": ('weekly', 14),
-        "week4": ('weekly', 21),
-        "week5": ('weekly', 28),
-        "week6": ('weekly', 35),
-        "weeks12": ('biweekly', 0),
-        "weeks23": ('biweekly', 7),
-        "weeks34": ('biweekly', 14),
-        "weeks45": ('biweekly', 21),
-        "weeks56": ('biweekly', 28),
-    }
+    lead_params = {}
+    for i in range(46):
+        lead_params[f"day{i+1}"] = ('daily', i)
+    for i in [0, 7, 14, 21, 28, 35]:
+        lead_params[f"week{i//7+1}"] = ('weekly', i)
+    for i in [0, 7, 14, 21, 28]:
+        lead_params[f"weeks{(i//7)+1}{(i//7)+2}"] = ('biweekly', i)
+
     time_group, lead_offset_days = lead_params.get(lead, (None, None))
     if time_group is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
@@ -362,7 +365,7 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip':
         print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
-        agg = {'weekly': 7, 'biweekly': 14}[time_group]
+        agg = {'daily': 1, 'weekly': 7, 'biweekly': 14}[time_group]
         ds['precip'] /= agg
 
     # Apply masking
@@ -380,19 +383,14 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
 def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deterministic',
                           grid='global1_5', mask='lsm', region="global"):
     """Standard format forecast data for ECMWF forecasts."""
-    lead_params = {
-        "week1": ('weekly', 0),
-        "week2": ('weekly', 7),
-        "week3": ('weekly', 14),
-        "week4": ('weekly', 21),
-        "week5": ('weekly', 28),
-        "week6": ('weekly', 35),
-        "weeks12": ('biweekly', 0),
-        "weeks23": ('biweekly', 7),
-        "weeks34": ('biweekly', 14),
-        "weeks45": ('biweekly', 21),
-        "weeks56": ('biweekly', 28),
-    }
+    lead_params = {}
+    for i in range(46):
+        lead_params[f"day{i+1}"] = ('daily', i)
+    for i in [0, 7, 14, 21, 28, 35]:
+        lead_params[f"week{i//7+1}"] = ('weekly', i)
+    for i in [0, 7, 14, 21, 28]:
+        lead_params[f"weeks{(i//7)+1}{(i//7)+2}"] = ('biweekly', i)
+
     time_group, lead_offset_days = lead_params.get(lead, (None, None))
     if time_group is None:
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF debiased forecasts.")
@@ -419,7 +417,7 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
     ds = ds.rename({'start_date': 'time'})
 
     # TODO: remove this once we update ECMWF caches
-    if variable == 'precip':
+    if variable == 'precip' and time_group != 'daily':
         print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
         agg = {'weekly': 7, 'biweekly': 14}[time_group]
         ds['precip'] /= agg

@@ -4,11 +4,14 @@ import xarray as xr
 
 from functools import partial
 
-from sheerwater_benchmarking.utils import cacheable, dask_remote, groupby_time, start_remote
+from sheerwater_benchmarking.utils import cacheable, dask_remote, groupby_time, start_remote, roll_and_agg
 from sheerwater_benchmarking.utils.time_utils import dayofyear_to_datetime
 from sheerwater_benchmarking.metrics import get_datasource_fn
 
-from sheerwater_benchmarking.forecasts.ecmwf_er import ifs_extended_range
+from sheerwater_benchmarking.forecasts.ecmwf_er import (
+    ifs_extended_range, ifs_extended_range_debiased, ifs_extended_range_debiased_regrid,
+)
+from sheerwater_benchmarking.forecasts.salient import salient_daily_gap
 
 from sheerwater_benchmarking.utils import (plot_ds, apply_mask, clip_region,
                                            assign_grouping_coordinates, convert_group_to_time)
@@ -80,14 +83,16 @@ def first_satisfied_date(ds, condition, time_dim='time', base_time=None, prob_di
 def first_rain(data, time_dim='time', time_offset=None, prob_dim='member', prob_threshold=0.5):
     # Add the relevant rolling values and left-align the rolling windows
     dsp = data.copy()
-    dsp['precip_8d'] = dsp['precip'].rolling({time_dim: 8}).sum()
-    dsp['precip_11d'] = dsp['precip'].rolling({time_dim: 11}).sum()
-    dsp['precip_8d'] = dsp['precip_8d'].shift({time_dim: -7})
-    dsp['precip_11d'] = dsp['precip_11d'].shift({time_dim: -10})
-    # TODO: need to drop NaN values
-    if prob_threshold is not None:
-        fsd = first_satisfied_date(dsp, rainy_onset_condition, time_dim=time_dim, base_time=time_offset,
-                                   prob_dim=prob_dim, prob_threshold=prob_threshold)
+    # Roll and agg
+    missing_thresh = 0.5
+    agg_days = 8
+    agg_thresh = max(int(agg_days*missing_thresh), 1)
+    dsp['precip_8d'] = roll_and_agg(dsp['precip'], agg=agg_days, agg_col=time_dim, agg_fn='sum', agg_thresh=agg_thresh)
+    agg_days = 11
+    agg_thresh = max(int(agg_days*missing_thresh), 1)
+    dsp['precip_11d'] = roll_and_agg(dsp['precip'], agg=agg_days, agg_col=time_dim, agg_fn='sum', agg_thresh=agg_thresh)
+    fsd = first_satisfied_date(dsp, rainy_onset_condition, time_dim=time_dim, base_time=time_offset,
+                               prob_dim=prob_dim, prob_threshold=prob_threshold)
     return fsd
 
 
@@ -95,8 +100,8 @@ def rainy_season_fcst(data, time_dim='time', time_offset=None, prob_dim='member'
     # Add the relevant rolling values and left-align the rolling windows
     dsp = data.copy()
     dsp['precip_8d'] = dsp['precip'].rolling({time_dim: 8}).sum()
-    dsp['precip_11d'] = dsp['precip'].rolling({time_dim: 11}).sum()
     dsp['precip_8d'] = dsp['precip_8d'].shift({time_dim: -7})
+    dsp['precip_11d'] = dsp['precip'].rolling({time_dim: 11}).sum()
     dsp['precip_11d'] = dsp['precip_11d'].shift({time_dim: -10})
     dsp = dsp.dropna(time_dim, how='all')
     if prob_threshold is not None:
@@ -146,7 +151,7 @@ def rainy_season_onset_truth(start_time, end_time,
     # Get the ground truth data
     truth_fn = get_datasource_fn(truth)
     ds = truth_fn(start_time, end_time, 'precip', agg_days=1,
-                  grid=grid, mask=mask, region=region)
+                  grid=grid, mask=mask, region=region, cell_aggregation='mean')
 
     agg_fn = [partial(first_rain, time_dim='time')]
     if len(groupby) > 1:
@@ -181,24 +186,26 @@ def rainy_season_onset_forecast(start_time, end_time,
                                 forecast, prob_type='probabilistic',
                                 grid='global0_25', mask='lsm', region='global'):
     """Get the rainy reason onset from a given forecast."""
+    run_type = 'average' if prob_type == 'deterministic' else 'perturbed'
     if forecast == "ecmwf_ifs_er":
-        if prob_type == 'deterministic':
-            ds = ifs_extended_range(start_time, end_time, 'precip', forecast_type='forecast',
-                                    run_type='average', time_group='daily', grid=grid)
-        else:
-            ds = ifs_extended_range(start_time, end_time, 'precip', forecast_type='forecast',
-                                    run_type='perturbed', time_group='daily', grid=grid)
-        # Apply masking
-        ds = apply_mask(ds, mask, var='precip', grid=grid)
-        # Clip to specified region
-        ds = clip_region(ds, region=region)
+        ds = ifs_extended_range(start_time, end_time, 'precip', forecast_type='forecast',
+                                run_type=run_type, time_group='daily', grid=grid)
+    elif forecast == "ecmwf_ifs_er_debiased":
+        ds = ifs_extended_range_debiased_regrid(start_time, end_time, 'precip',
+                                                run_type=run_type, time_group='daily', grid=grid)
+    elif forecast == 'salient':
+        ds = salient_daily_gap(start_time, end_time, 'precip', grid=grid)
     else:
         # Get the ground truth data
         # forecast_fn = get_datasource_fn(forecast)
         # ds = forecast_fn(start_time, end_time, 'precip', time_group='daily',
         #                  grid=grid, mask=mask, region=region)
+        raise ValueError("Only ECMWF IFS Extended Range and debiased forecasts are supported.")
 
-        raise ValueError("Only ECMWF IFS Extended Range forecasts are supported.")
+    # Apply masking
+    ds = apply_mask(ds, mask, var='precip', grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
 
     if prob_type == 'deterministic':
         agg_fn = partial(first_rain, time_dim='lead_time', time_offset='start_date')
@@ -216,7 +223,8 @@ def rainy_season_onset_forecast(start_time, end_time,
 
     rainy_ds = rainy_da.to_dataset(name='rainy_forecast')
     # TODO: why is chunking not working?
-    rainy_ds = rainy_ds.chunk({'lat': 121, 'lon': 240, 'start_date': 1000})
+    # rainy_ds = rainy_ds.chunk({'lat': 121, 'lon': 240, 'start_date': 1000})
+    rainy_ds = rainy_ds.chunk(-1)
     # Apply masking
     rainy_ds = apply_mask(rainy_ds, mask, var='rainy_forecast', grid=grid)
     # Clip to specified region
@@ -272,6 +280,124 @@ def growing_days():
     pass
 
 
+@dask_remote
+@cacheable(data_type='tabular',
+           cache_args=['truth', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, "time": 30}
+               },
+           },
+           cache=True)
+def rain_windowed_spw(start_time, end_time,
+                      truth='era5',
+                      grid='global1_5', mask='lsm', region='global'):
+    """Get a rolling window of precipitation from a rainfall datasource."""
+    # Get the ground truth data
+    source_fn = get_datasource_fn(truth)
+    try:
+        ds = source_fn(start_time, end_time, 'precip', agg_days=1,
+                       grid=grid, mask=mask, region=region, cell_aggregation='mean')
+    except TypeError:
+        # Run without GHCN specific cell aggregation flag
+        ds = source_fn(start_time, end_time, 'precip', agg_days=1,
+                       grid=grid, mask=mask, region=region)
+    missing_thresh = 0.5
+    agg_days = 8
+    agg_thresh = max(int(agg_days*missing_thresh), 1)
+    ds['precip_8d'] = roll_and_agg(ds['precip'], agg=agg_days, agg_col='time', agg_fn='sum', agg_thresh=agg_thresh)
+    agg_days = 11
+    agg_thresh = max(int(agg_days*missing_thresh), 1)
+    ds['precip_11d'] = roll_and_agg(ds['precip'], agg=agg_days, agg_col='time', agg_fn='sum', agg_thresh=agg_thresh)
+
+    ds = ds.drop_vars('spatial_ref')
+    ds = ds.to_dataframe()
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='tabular',
+           cache_args=['truth', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, "time": 30}
+               },
+           },
+           cache=True)
+def rainy_onset_spw(start_time, end_time,
+                    truth='era5',
+                    grid='global1_5', mask='lsm', region='global'):
+    """Get the rainy reason onset from a given truth source, according to the SPW method."""
+    ds = rainy_season_onset_truth(start_time, end_time, truth=truth,
+                                  groupby=[['ea_rainy_season', 'year']],
+                                  region=region, mask=mask, grid=grid)
+    ds = ds.drop_vars('spatial_ref')
+    df = ds.to_dataframe()
+    df = df.dropna(subset='rainy_onset')
+    return df
+
+
+@dask_remote
+@cacheable(data_type='tabular',
+           cache_args=['start_time', 'end_time', 'forecast', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, "time": 30}
+               },
+           },
+           cache=True)
+def rainy_onset_spw_forecast(start_time, end_time,
+                             forecast='ecmwf_ifs_er_debiased',
+                             grid='global1_5', mask='lsm', region='global'):
+    """Get the rainy reason onset from a given truth source, according to the SPW method."""
+    # Get the forecast for rainy season onset
+    ds = rainy_season_onset_forecast(start_time, end_time,
+                                     forecast=forecast,
+                                     region=region, grid=grid, mask=mask)
+    ds = ds.drop_vars('spatial_ref')
+    df = ds.to_dataframe()
+    df = df.dropna(subset='rainy_forecast')
+    return df
+
+
+@dask_remote
+@cacheable(data_type='tabular',
+           cache_args=['agg_days', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, "time": 30}
+               },
+           },
+           cache=True)
+def rainfall_data(start_time, end_time, agg_days=1,
+                  grid='global1_5', mask='lsm', region='global'):
+    """Get rainfall values from all data sources."""
+    # Get the ground truth data
+    datasets = []
+    for truth in ['era5', 'chirps', 'imerg', 'ghcn']:
+        source_fn = get_datasource_fn(truth)
+        try:
+            ds = source_fn(start_time, end_time, 'precip', agg_days=agg_days,
+                           grid=grid, mask=mask, region=region, cell_aggregation='mean')
+        except:
+            ds = source_fn(start_time, end_time, 'precip', agg_days=agg_days,
+                           grid=grid, mask=mask, region=region)
+        ds = ds.rename({'precip': f'{truth}_precip'})
+        datasets.append(ds)
+
+    # Merge datasets
+    ds = xr.merge(datasets, join='outer')
+    ds = ds.drop_vars('spatial_ref')
+
+    # Convert to dataframe
+    ds = ds.to_dataframe()
+    return ds
+
+
 if __name__ == '__main__':
     start_date = "2020-01-01"
     end_date = "2022-01-01"
@@ -283,5 +409,3 @@ if __name__ == '__main__':
                                   groupby=[['ea_rainy_season', 'year']],
                                   prob_type='probabilistic',
                                   grid='global1_5', mask='lsm', region='kenya')
-    import pdb
-    pdb.set_trace()

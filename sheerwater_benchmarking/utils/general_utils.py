@@ -57,7 +57,7 @@ def plot_ds(ds, sel=None, variable=None):
     if isinstance(ds, xr.Dataset):
         ds[variable].sel(sel).plot(x='lon')
     else:  # Assume it is a DataArray
-        ds.sel(sel).plot()
+        ds.sel(sel).plot(x='lon')
     plt.show()
 
 
