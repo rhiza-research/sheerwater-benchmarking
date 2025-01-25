@@ -10,7 +10,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_forecast, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
-                                           lead_to_agg_days, lead_or_agg)
+                                           groupby_time, lead_to_agg_days, lead_or_agg)
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
@@ -18,17 +18,20 @@ COUPLED_METRICS = ['acc', 'pearson']  # a list of metrics that are coupled in sp
 CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of dichotomous contingency metrics
 CATEGORICAL_CONTINGENCY_METRICS = ['heidke']  # a list of contingency metrics
 
+
 def is_categorical(metric):
     if '-' in metric:
         metric = metric.split('-')[0]
 
     return metric in CATEGORICAL_CONTINGENCY_METRICS
 
+
 def is_contingency(metric):
     if '-' in metric:
         metric = metric.split('-')[0]
 
     return metric in CONTINGENCY_METRICS or metric in CATEGORICAL_CONTINGENCY_METRICS
+
 
 def get_bins(metric):
     if is_categorical(metric) and len(metric.split('-')) <= 2:
@@ -41,6 +44,7 @@ def get_bins(metric):
     bins = np.array(bins)
     return bins
 
+
 def is_coupled(metric):
     return is_contingency(metric) or metric in COUPLED_METRICS
 
@@ -51,6 +55,7 @@ def spatial_mape(fcst, truth, avg_time=False, skipna=True):
         ds = ds.mean(dim="time", skipna=skipna)
     return ds
 
+
 def mape(fcst, truth, avg_time=False, skipna=True):
     ds = spatial_mape(fcst, truth, avg_time=avg_time, skipna=skipna)
     if avg_time:
@@ -59,11 +64,13 @@ def mape(fcst, truth, avg_time=False, skipna=True):
         ds = ds.mean(dim=['lat', 'lon'], skipna=skipna)
     return ds
 
+
 def spatial_smape(fcst, truth, avg_time=False, skipna=True):
     ds = abs(fcst - truth) / (abs(fcst) + abs(truth))
     if avg_time:
         ds = ds.mean(dim="time", skipna=skipna)
     return ds
+
 
 def smape(fcst, truth, avg_time=False, skipna=True):
     ds = spatial_smape(fcst, truth, avg_time=avg_time, skipna=skipna)
@@ -72,6 +79,7 @@ def smape(fcst, truth, avg_time=False, skipna=True):
     else:
         ds = ds.mean(dim=['lat', 'lon'], skipna=skipna)
     return ds
+
 
 def get_datasource_fn(datasource):
     """Import the datasource function from any available source."""
@@ -114,8 +122,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     fcst_fn = get_datasource_fn(forecast)
 
     # Decide if this is a forecast with a lead or direct datasource with just an agg
-    sparse = False # A variable used to indicate whether the data sources themselves are sparse
-    metric_sparse = False # A variable used to indicate whether the metric induces sparsity
+    sparse = False  # A variable used to indicate whether the data sources themselves are sparse
+    metric_sparse = False  # A variable used to indicate whether the metric induces sparsity
     if 'lead' in signature(fcst_fn).parameters:
         if lead_or_agg(lead) == 'agg':
             raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
@@ -143,9 +151,9 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     # This checks if the forecast is valid for non-spatial metrics (which in practice is only coupled metrics)
     if not spatial and not sparse and not is_valid(fcst, variable, mask=mask,
                                                    region=region, grid=grid, valid_threshold=0.98):
-            # If averaging over space, we must check if the forecast is valid
-            print(f"Forecast {forecast} is not valid for region {region}.")
-            return None
+        # If averaging over space, we must check if the forecast is valid
+        print(f"Forecast {forecast} is not valid for region {region}.")
+        return None
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
@@ -170,7 +178,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     obs = obs.sel(time=fcst.time)
 
     ############################################################
-    #### Call the metrics with their various libraries
+    # Call the metrics with their various libraries
     ############################################################
 
     # Get the appropriate climatology dataframe for metric calculation
@@ -202,7 +210,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     elif metric == 'acc':
         clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
-                                    trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
+                                       trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
 
         fcst = fcst - clim_ds
         obs = obs - clim_ds
@@ -404,25 +412,10 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         metric_sparse = ds.attrs['metric_sparse']
 
         # Group the time column based on time grouping
-        if time_grouping:
-            if time_grouping == 'month_of_year':
-                # TODO if you want this as a name: ds.coords["time"] = ds.time.dt.strftime("%B")
-                ds.coords["time"] = ds.time.dt.month
-            elif time_grouping == 'year':
-                ds.coords["time"] = ds.time.dt.year
-            elif time_grouping == 'quarter_of_year':
-                ds.coords["time"] = ds.time.dt.quarter
-            else:
-                raise ValueError("Invalid time grouping")
-
-            ds = ds.groupby("time").mean()
-        else:
-            # Average in time
-            ds = ds.mean(dim="time")
+        ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
 
     # Clip it to the region
     ds = clip_region(ds, region)
-
 
     if metric_sparse:
         print("Metric is sparse, checking if forecast is valid directly")
@@ -431,8 +424,8 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         else:
             prob_type = 'deterministic'
 
-        check_ds =  get_datasource_fn(forecast)(start_time, end_time, variable, lead=lead,
-                                          prob_type=prob_type, grid=grid, mask=mask, region=region)
+        check_ds = get_datasource_fn(forecast)(start_time, end_time, variable, lead=lead,
+                                               prob_type=prob_type, grid=grid, mask=mask, region=region)
     else:
         check_ds = ds
 
@@ -550,6 +543,7 @@ def summary_metrics_table(start_time, end_time, variable,
     print(df)
     return df
 
+
 @dask_remote
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
@@ -567,7 +561,6 @@ def station_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
-
 
 
 @dask_remote
@@ -588,7 +581,6 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
-
 
 
 __all__ = ['eval_metric', 'global_metric', 'aggregated_global_metric',

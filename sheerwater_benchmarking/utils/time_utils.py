@@ -48,6 +48,132 @@ def dayofyear_to_datetime(x):
     return np.datetime64("1904-01-01", 'ns') + np.timedelta64(int(x), 'D')
 
 
+def assign_grouping_coordinates(ds, group, time_dim='time'):
+    """Assigns time-based grouping coordinates to the time dimension.
+
+    Args:
+        ds (xr.Dataset): The dataset to add grouping to.
+        group (str, list): The time grouping label to add. One of:
+            - 'month': Group by month.
+            - 'quarter': Group by quarter.
+            - 'ea_rainy_season': Group by East African rainy season.
+            - 'year': Group by year.
+        time_dim (str): The time dimension to add the grouping based on.
+    """
+    coords = []
+    if not isinstance(group, list):
+        group = [group]
+
+    for grp in group:
+        if grp == 'month':
+            coords.append(ds[time_dim].dt.month.values)
+        elif grp == 'quarter':
+            coords.append(ds[time_dim].dt.quarter.values)
+        elif grp == 'ea_rainy_season':
+            # East African rainy period is from March to May and October to December
+            def month_to_period(month):
+                if 2 <= month <= 5:
+                    return 1
+                elif 8 <= month <= 12:
+                    return 2
+                else:
+                    return None
+            coords.append([month_to_period(x) for x in ds[time_dim].dt.month.values])
+        elif grp == 'year':
+            coords.append(ds[time_dim].dt.year.values)
+        else:
+            raise ValueError("Invalid time grouping.")
+    # Drop elements that can't be grouped
+    has_group = [None not in x for x in zip(*coords)]
+    ds = ds.isel({time_dim: has_group})
+    ds = ds.assign_coords(group=(time_dim, ["-".join([f"{y:02d}" for y in x]) for x in zip(*coords) if None not in x]))
+    return ds
+
+
+def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, only_schema=False, **kwargs):
+    """Aggregates data in groups along the time dimension according to time_grouping.
+
+    Args:
+        ds (xr.Dataset): The dataset to aggregate.
+        groupby (str, list): The time grouping to use. One of:
+            - 'month': Group by month.
+            - 'year': Group by year.
+            - 'quarter': Group by quarter.
+            - 'african_rainy_season': Group by African rainy season.
+        agg_fn (object, list): The aggregation function to apply.
+        time_dim (str): The time dimension to group by.
+        return_timeseries (bool): If True, return a timeseries (the first date in each period).
+             Otherwise, returns the label for the group (e.g., 'January-2020', 12, 4).
+        only_schema (bool): If True, return only the schema of the would-be grouped dataset.
+        kwargs: Additional keyword arguments to pass to the aggregation function.
+    """
+    # Input validation
+    if isinstance(groupby, list) and not isinstance(agg_fn, list):
+        agg_fn = [agg_fn] * len(groupby)
+    elif not isinstance(groupby, list) and not isinstance(agg_fn, list):
+        groupby = [groupby]
+        agg_fn = [agg_fn]
+    elif not isinstance(groupby, list) and isinstance(agg_fn, list):
+        raise ValueError("Cannot apply multiple aggregation functions to a single group.")
+    if len(groupby) != len(agg_fn):
+        raise ValueError("Length of group_by and agg_fn must be the same.")
+
+    # Run multiple grouping steps
+    for grp, agg in zip(groupby, agg_fn):
+        # If no grouping is specified, apply the aggregation function directly
+        if grp is None:
+            if only_schema:
+                continue
+            ds = agg(ds, **kwargs)
+        else:
+            ds = assign_grouping_coordinates(ds, grp, time_dim)
+            if only_schema:
+                # Get the first element of each group to create a schema
+                ds = ds.groupby("group").first()
+            else:
+                ds = ds.groupby("group").map(agg, **kwargs)
+            if 'group' not in ds.dims:
+                raise ValueError("Aggregation function must compress dataset along the group dimension.")
+
+        # Convert group to time
+        if (return_timeseries or len(groupby) > 1) and 'group' in ds.coords:
+            ds = ds.assign_coords(time=("group", convert_group_to_time(ds['group'], grp)))
+            ds = ds.swap_dims({'group': 'time'})
+            ds = ds.sortby('time')
+            ds = ds.drop('group')
+
+    return ds
+
+
+def convert_group_to_time(group, grouping):
+    """Converts a group label to a time coordinate."""
+    def convert_to_datetime(entry, grouping):
+        # Default values
+        yy = '1904'
+        mm = '01'
+        dd = '01'
+        for grp, val in zip(grouping, entry.split('-')):
+            if grp == 'month':
+                mm = f"{int(val):02d}"
+            elif grp == 'quarter':
+                mm = f"{(int(val)-1)*3+1:02d}"
+            elif grp == 'ea_rainy_season':
+                if val == '01':
+                    mm = '03'  # March rains
+                elif val == '02':
+                    mm = '10'  # October rains
+                else:
+                    raise ValueError("Invalid East African rainy season")
+            elif grp == 'year':
+                yy = val
+            else:
+                raise ValueError("Invalid time grouping")
+        return np.datetime64(f"{yy}-{mm}-{dd}", 'ns')
+    if not isinstance(grouping, list):
+        grouping = [grouping]
+    return [convert_to_datetime(x, grouping) for x in group.values]
+
+
 def shift_forecast_date_to_target_date(ds, forecast_date_dim, lead):
     """Shift a forecast date dimension to a target date coordinate from a lead time."""
     ds = ds.assign_coords(forecast_date_dim=[
