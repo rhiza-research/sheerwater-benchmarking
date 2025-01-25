@@ -1,12 +1,9 @@
 """General utility functions for all parts of the data pipeline."""
-import numpy as np
 import matplotlib.pyplot as plt
 import gcsfs
 import xarray as xr
 
-import plotly.express as px
 import plotly.graph_objects as go
-import xarray as xr
 
 
 def load_object(filepath):
@@ -59,10 +56,6 @@ def plot_ds(ds, sel=None, variable=None):
     else:  # Assume it is a DataArray
         ds.sel(sel).plot(x='lon')
     plt.show()
-
-
-def plot_ds_map(ds, sel=None, variable=None, zoom=3, center_lat=None, center_lon=None):
-    """Plot gridded data from an xarray Dataset on top of a Plotly map."""
 
 
 def plot_ds_map(ds, sel=None, variable=None, zoom=3, center_lat=None, center_lon=None):

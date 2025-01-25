@@ -9,11 +9,11 @@ from sheerwater_benchmarking.utils.time_utils import dayofyear_to_datetime
 from sheerwater_benchmarking.metrics import get_datasource_fn
 
 from sheerwater_benchmarking.forecasts.ecmwf_er import (
-    ifs_extended_range, ifs_extended_range_debiased, ifs_extended_range_debiased_regrid,
+    ifs_extended_range, ifs_extended_range_debiased_regrid,
 )
 from sheerwater_benchmarking.forecasts.salient import salient_daily_gap
 
-from sheerwater_benchmarking.utils import (plot_ds, apply_mask, clip_region,
+from sheerwater_benchmarking.utils import (apply_mask, clip_region,
                                            assign_grouping_coordinates, convert_group_to_time)
 
 # def suitable_planting_window(ds):
@@ -97,6 +97,15 @@ def first_rain(data, time_dim='time', time_offset=None, prob_dim='member', prob_
 
 
 def rainy_season_fcst(data, time_dim='time', time_offset=None, prob_dim='member', prob_threshold=0.5):
+    """Get the rainy season onset from a forecast by looking over a rolling lead time.
+
+    Args:
+        data (xr.Dataset): Dataset to apply the condition to.
+        time_dim (str): Name of the time dimension.
+        time_offset (str): Base dimension to use if time is a timedelta objects (optional).
+        prob_dim (str): Name of the ensemble dimension.
+        prob_threshold (float): Threshold for the probability dimension.
+    """
     # Add the relevant rolling values and left-align the rolling windows
     dsp = data.copy()
     dsp['precip_8d'] = dsp['precip'].rolling({time_dim: 8}).sum()
@@ -193,13 +202,7 @@ def rainy_season_onset_forecast(start_time, end_time,
     elif forecast == "ecmwf_ifs_er_debiased":
         ds = ifs_extended_range_debiased_regrid(start_time, end_time, 'precip',
                                                 run_type=run_type, time_group='daily', grid=grid)
-    elif forecast == 'salient':
-        ds = salient_daily_gap(start_time, end_time, 'precip', grid=grid)
     else:
-        # Get the ground truth data
-        # forecast_fn = get_datasource_fn(forecast)
-        # ds = forecast_fn(start_time, end_time, 'precip', time_group='daily',
-        #                  grid=grid, mask=mask, region=region)
         raise ValueError("Only ECMWF IFS Extended Range and debiased forecasts are supported.")
 
     # Apply masking
@@ -210,8 +213,7 @@ def rainy_season_onset_forecast(start_time, end_time,
     if prob_type == 'deterministic':
         agg_fn = partial(first_rain, time_dim='lead_time', time_offset='start_date')
     else:
-        # agg_fn = partial(first_rain, time_dim='lead_time', time_offset='start_date',
-        #                  prob_dim='member', prob_threshold=0.25)
+        # If a non-NaN forecast is passed, produce a specific date forecast
         agg_fn = partial(rainy_season_fcst, time_dim='lead_time', time_offset='start_date',
                          prob_dim='member', prob_threshold=None)
     # Add time groups
@@ -223,7 +225,6 @@ def rainy_season_onset_forecast(start_time, end_time,
 
     rainy_ds = rainy_da.to_dataset(name='rainy_forecast')
     # TODO: why is chunking not working?
-    # rainy_ds = rainy_ds.chunk({'lat': 121, 'lon': 240, 'start_date': 1000})
     rainy_ds = rainy_ds.chunk(-1)
     # Apply masking
     rainy_ds = apply_mask(rainy_ds, mask, var='rainy_forecast', grid=grid)
@@ -248,9 +249,6 @@ def rainy_season_onset_error(start_time, end_time,
                              prob_type='probabilistic',
                              grid='global0_25', mask='lsm', region='global'):
     """Get the rainy reason onset from a given forecast."""
-    # if any([isinstance(x, list) for x in grouping]):
-    #     raise ValueError("Only flat grouping is supported for error calculation.")
-
     truth_ds = rainy_season_onset_truth(
         start_time, end_time, truth=truth, groupby=groupby, grid=grid, mask=mask, region=region)
     forecast_ds = rainy_season_onset_forecast(
@@ -380,10 +378,11 @@ def rainfall_data(start_time, end_time, agg_days=1,
     datasets = []
     for truth in ['era5', 'chirps', 'imerg', 'ghcn']:
         source_fn = get_datasource_fn(truth)
-        try:
+        if truth == 'ghcn':
+            # Call GHCN with non-default mean cell aggregation
             ds = source_fn(start_time, end_time, 'precip', agg_days=agg_days,
                            grid=grid, mask=mask, region=region, cell_aggregation='mean')
-        except:
+        else:
             ds = source_fn(start_time, end_time, 'precip', agg_days=agg_days,
                            grid=grid, mask=mask, region=region)
         ds = ds.rename({'precip': f'{truth}_precip'})

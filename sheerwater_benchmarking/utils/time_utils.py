@@ -49,6 +49,17 @@ def dayofyear_to_datetime(x):
 
 
 def assign_grouping_coordinates(ds, group, time_dim='time'):
+    """Assigns time-based grouping coordinates to the time dimension.
+
+    Args:
+        ds (xr.Dataset): The dataset to add grouping to.
+        group (str, list): The time grouping label to add. One of:
+            - 'month': Group by month.
+            - 'quarter': Group by quarter.
+            - 'ea_rainy_season': Group by East African rainy season.
+            - 'year': Group by year.
+        time_dim (str): The time dimension to add the grouping based on.
+    """
     coords = []
     if not isinstance(group, list):
         group = [group]
@@ -84,15 +95,17 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
 
     Args:
         ds (xr.Dataset): The dataset to aggregate.
-        group_by (str, list): The time grouping to use. One of:
+        groupby (str, list): The time grouping to use. One of:
             - 'month': Group by month.
             - 'year': Group by year.
             - 'quarter': Group by quarter.
             - 'african_rainy_season': Group by African rainy season.
         agg_fn (object, list): The aggregation function to apply.
         time_dim (str): The time dimension to group by.
-        return_timeseries (bool): If True, return a timeseries (the first date in each period). 
+        return_timeseries (bool): If True, return a timeseries (the first date in each period).
              Otherwise, returns the label for the group (e.g., 'January-2020', 12, 4).
+        only_schema (bool): If True, return only the schema of the would-be grouped dataset.
+        kwargs: Additional keyword arguments to pass to the aggregation function.
     """
     # Input validation
     if isinstance(groupby, list) and not isinstance(agg_fn, list):

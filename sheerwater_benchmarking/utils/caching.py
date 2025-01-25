@@ -30,8 +30,7 @@ CHUNK_SIZE_LOWER_LIMIT_MB = 30
 
 
 def flatten_nested(data):
-    """
-    Flattens a nested iterable into a single iterable. 
+    """Flattens a nested iterable into a single iterable.
 
     Args:
         data (list, tuple, dict, set, ...): An iterable that may contain nested iterables.
