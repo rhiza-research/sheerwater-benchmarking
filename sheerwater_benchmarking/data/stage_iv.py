@@ -1,4 +1,5 @@
 """Stage IV precipitation data product."""
+import numpy as np
 import xarray as xr
 from dateutil import parser
 
@@ -23,7 +24,9 @@ def stage_iv_gridded(year, grid):
     ds = ds.sel(time=slice(f"{year}-01-01", f"{year}-12-31"))
 
     # Ensure consistent naming
-    ds = ds.rename({'Total_precipitation_surface_1_Hour_Accumulation': 'precip'})
+    ds = ds.rename(
+        {'Total_precipitation_surface_1_Hour_Accumulation': 'precip'},
+    )
 
     # chirps is in "units": "mm/day"
     # stage iv is in "units": "kg m-2" and is measured hourly
@@ -32,36 +35,44 @@ def stage_iv_gridded(year, grid):
     ds.attrs.update(units='mm/day')
 
     # Fix coordinates and dimensions
-    # Dimentions are currently stored in 2D (y,x) format (CRS:WGS84)
-    # Coordinates:
-    #     latitude   (y, x) float64 8MB dask.array<chunksize=(53, 68), meta=np.ndarray>
-    #     longitude  (y, x) float64 8MB dask.array<chunksize=(53, 68), meta=np.ndarray>
-    #   * time       (time) datetime64[ns] 6kB 2025-01-01 ... 2025-01-29T23:00:00
+    # Data is in polar stereographic projection with 2D lat/lon coordinates
+    # Need to interpolate to a regular lat/lon grid before regridding
 
-    # The data is WGS84 so no coordinate conversion is needed from (y,x) to (lat,lon)
-    # Simple rename of the dimensions from (y,x) to (lat,lon)
-    ds = ds.rename_dims({'y': 'lat', 'x': 'lon'})
+    # Get min/max bounds of the data
+    lat_min = ds.latitude.min().values
+    lat_max = ds.latitude.max().values
+    lon_min = ds.longitude.min().values
+    lon_max = ds.longitude.max().values
 
-    # We do need to convert to 1D arrays for lat and lon to match the expected input of the regrid function
+    # Create regular lat/lon coordinates at approximately the same resolution
+    n_lat = ds.dims['y']
+    n_lon = ds.dims['x']
+    new_lats = np.linspace(lat_min, lat_max, n_lat)
+    new_lons = np.linspace(lon_min, lon_max, n_lon)
+
+    # Interpolate to the new regular grid
+    ds = ds.interp(
+        y=new_lats,
+        x=new_lons,
+        method='linear'
+    )
+
+    # Drop any existing coordinates
+    ds = ds.reset_coords(drop=True)
+
+    # Rename dimensions and assign final coordinates
+    ds = ds.rename({'y': 'lat', 'x': 'lon'})
     ds = ds.assign_coords({
-        'lon': ('lon', ds.longitude[0,:].values),
-        'lat': ('lat', ds.latitude[:,0].values)
+        'lat': ('lat', new_lats),
+        'lon': ('lon', new_lons)
     })
 
-    # Drop the 2D coordinates and crs fields
-    # The crs data is unneccesary as we are using WGS84 and already converted from y/x to lat/lon
-    ds = ds.drop_vars(['latitude', 'longitude', 'crs'])
-
-    # Coordinates:
-    #   * time     (time) datetime64[ns] 232B 2025-01-01 2025-01-02 ... 2025-01-29
-    #   * lon      (lon) float64 9kB -119.0 -119.0 -119.0 ... -80.81 -80.78 -80.75
-    #   * lat      (lat) float64 7kB 23.12 23.15 23.18 23.21 ... 53.44 53.48 53.51
+    ds = ds.drop_vars(['crs'])
 
     # regrid
     ds = regrid(ds, grid, base='base180', method='conservative')
 
     return ds
-
 
 @dask_remote
 @cacheable(data_type='array',
@@ -78,15 +89,18 @@ def stage_iv_rolled(start_time, end_time, agg_days, grid):
         ds = stage_iv_gridded(year, grid, filepath_only=True)
         datasets.append(ds)
 
-    ds = xr.open_mfdataset(datasets,
-                           engine='zarr',
-                           parallel=True,
-                           chunks={'lat': 300, 'lon': 300, 'time': 365})
+    # FIXME: Is this not working because of the disabled cache?
+    # ds = xr.open_mfdataset(datasets,
+    #                        engine='zarr',
+    #                        parallel=True,
+    #                        chunks={'lat': 300, 'lon': 300, 'time': 365})
+
+    # Concatenate the datasets along the time dimension
+    ds = xr.concat(datasets, dim='time')
 
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean')
 
     return ds
-
 
 @dask_remote
 @cacheable(data_type='array',
