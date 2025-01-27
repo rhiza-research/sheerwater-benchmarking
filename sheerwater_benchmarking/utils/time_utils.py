@@ -99,10 +99,10 @@ def convert_group_to_time(group, grouping):
         - Quarters are 'Q1', 'Q2', ..., 'Q4'
         - East African rainy season is 'MAM', 'OND'
 
-    Converts groups to datetime objects as follows: 
+    Converts groups to datetime objects as follows:
         - Years are represented as the first day of the year
         - Months are represented as the first day of that month
-        - Quarters are represented as the first day of the quarter 
+        - Quarters are represented as the first day of the quarter
             (e.g., Q1 is Jan 1st, Q2 is Apr 1st, Q3 is Jul 1st, Q4 is Oct 1st)
         - East African rainy season is represented as the first day of the rainy season
             (e.g., the MAM rains are Mar 1st, the OND rains are Oct 1st)
