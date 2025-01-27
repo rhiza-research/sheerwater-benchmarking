@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import pytest
+pytest.skip("iri_ecmwf does not exist", allow_module_level=True)
+
 """Test file for ECMWF data validation.
 
 This testing should be run after data generation, to ensure data
