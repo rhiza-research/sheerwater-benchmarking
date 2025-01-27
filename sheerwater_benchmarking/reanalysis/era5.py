@@ -93,7 +93,7 @@ def era5_daily(start_time, end_time, variable, grid="global1_5"):
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'method', 'grid'],
+           cache_args=['variable', 'grid'],
            cache_disable_if={'grid': 'global0_25'},
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
