@@ -737,9 +737,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     compute_result = False
                         elif backend == 'parquet':
                             if filepath_only:
-                                cache_map = fs.get_mapper(cache_path)
-
-                                return cache_map
+                                return cache_path
                             else:
                                 print(f"Opening cache {cache_path}")
                                 ds = read_from_parquet(cache_path)
@@ -912,8 +910,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             raise ValueError("Only pickle backend is implemented for basic data data")
 
             if filepath_only:
-                cache_map = fs.get_mapper(cache_path)
-                return cache_map
+                if backend == 'parquet':
+                    return cache_path
+                else:
+                    cache_map = fs.get_mapper(cache_path)
+                    return cache_map
             else:
                 # Do the time series filtering
                 if timeseries is not None:
