@@ -405,6 +405,8 @@ def cache_exists(backend, cache_path, verify_path=None):
             return fs.exists(cache_path)
     elif backend == 'postgres':
         return check_exists_postgres(cache_path)
+    else:
+        raise ValueError(f'Unknown backend {backend}')
 
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
