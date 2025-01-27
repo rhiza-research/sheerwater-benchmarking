@@ -363,7 +363,7 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
     ds = ds.rename({'start_date': 'time'})
 
     # TODO: remove this once we update ECMWF caches
-    if variable == 'precip':
+    if variable == 'precip' and time_group != 'daily':
         print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
         agg = {'daily': 1, 'weekly': 7, 'biweekly': 14}[time_group]
         ds['precip'] /= agg
@@ -419,7 +419,7 @@ def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deter
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip' and time_group != 'daily':
         print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
-        agg = {'weekly': 7, 'biweekly': 14}[time_group]
+        agg = {'daily': 1, 'weekly': 7, 'biweekly': 14}[time_group]
         ds['precip'] /= agg
 
     # Apply masking
