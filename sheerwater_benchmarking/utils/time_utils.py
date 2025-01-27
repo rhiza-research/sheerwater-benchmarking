@@ -73,9 +73,9 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
             # East African rainy period is from March to May and October to December
             def month_to_period(month):
                 if 2 <= month <= 5:
-                    return 1
-                elif 8 <= month <= 12:
-                    return 2
+                    return 'MAM'
+                elif 9 <= month <= 12:
+                    return 'OND'
                 else:
                     return None
             coords.append([month_to_period(x) for x in ds[time_dim].dt.month.values])
@@ -90,6 +90,50 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
     return ds
 
 
+def convert_group_to_time(group, grouping):
+    """Converts a group label to a time coordinate.
+
+    Assumes that groups are represented in the following format:
+        - Years are a the year value
+        - Months are 'M1', 'M2', ..., 'M12'
+        - Quarters are 'Q1', 'Q2', ..., 'Q4'
+        - East African rainy season is 'MAM', 'OND'
+
+    Converts groups to datetime objects as follows: 
+        - Years are represented as the first day of the year
+        - Months are represented as the first day of that month
+        - Quarters are represented as the first day of the quarter 
+            (e.g., Q1 is Jan 1st, Q2 is Apr 1st, Q3 is Jul 1st, Q4 is Oct 1st)
+        - East African rainy season is represented as the first day of the rainy season
+            (e.g., the MAM rains are Mar 1st, the OND rains are Oct 1st)
+    """
+    def convert_to_datetime(entry, grouping):
+        # Default values
+        yy = '1904'
+        mm = '01'
+        dd = '01'
+        for grp, val in zip(grouping, entry.split('-')):
+            if grp == 'month':
+                mm = f"{int(val):02d}"
+            elif grp == 'quarter':
+                mm = f"{(int(val)-1)*3+1:02d}"
+            elif grp == 'ea_rainy_season':
+                if val == 'MAM':
+                    mm = '03'  # March rains
+                elif val == 'OND':
+                    mm = '10'  # October rains
+                else:
+                    raise ValueError("Invalid East African rainy season")
+            elif grp == 'year':
+                yy = val
+            else:
+                raise ValueError("Invalid time grouping")
+        return np.datetime64(f"{yy}-{mm}-{dd}", 'ns')
+    if not isinstance(grouping, list):
+        grouping = [grouping]
+    return [convert_to_datetime(x, grouping) for x in group.values]
+
+
 def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, only_schema=False, **kwargs):
     """Aggregates data in groups along the time dimension according to time_grouping.
 
@@ -99,11 +143,11 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
             - 'month': Group by month.
             - 'year': Group by year.
             - 'quarter': Group by quarter.
-            - 'ea_rainy_season': Group by East African rainy season.
+            - 'ea_rainy_season': Group by East African rainy season (MAM and OND).
         agg_fn (object, list): The aggregation function to apply.
         time_dim (str): The time dimension to group by.
         return_timeseries (bool): If True, return a timeseries (the first date in each period).
-             Otherwise, returns the label for the group (e.g., 'January-2020', 12, 4).
+             Otherwise, returns the label for the group (e.g., 'MAM', 2015, 'Q4', 'M1').
         only_schema (bool): If True, return only the schema of the would-be grouped dataset.
         kwargs: Additional keyword arguments to pass to the aggregation function.
     """
@@ -143,35 +187,6 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
             ds = ds.drop('group')
 
     return ds
-
-
-def convert_group_to_time(group, grouping):
-    """Converts a group label to a time coordinate."""
-    def convert_to_datetime(entry, grouping):
-        # Default values
-        yy = '1904'
-        mm = '01'
-        dd = '01'
-        for grp, val in zip(grouping, entry.split('-')):
-            if grp == 'month':
-                mm = f"{int(val):02d}"
-            elif grp == 'quarter':
-                mm = f"{(int(val)-1)*3+1:02d}"
-            elif grp == 'ea_rainy_season':
-                if val == '01':
-                    mm = '03'  # March rains
-                elif val == '02':
-                    mm = '10'  # October rains
-                else:
-                    raise ValueError("Invalid East African rainy season")
-            elif grp == 'year':
-                yy = val
-            else:
-                raise ValueError("Invalid time grouping")
-        return np.datetime64(f"{yy}-{mm}-{dd}", 'ns')
-    if not isinstance(grouping, list):
-        grouping = [grouping]
-    return [convert_to_datetime(x, grouping) for x in group.values]
 
 
 def shift_forecast_date_to_target_date(ds, forecast_date_dim, lead):

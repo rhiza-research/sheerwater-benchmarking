@@ -489,7 +489,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
                 auto_rechunk, cache, cache_disable_if, backend, storage_backend
 
-            # Calculate the appropriate cache k
+            # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, backend, \
                 storage_backend, passed_auto_rechunk = get_cache_args(kwargs, cache_kwargs)
