@@ -416,11 +416,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         data_type(str): The type of data being cached. One of 'array', 'tabular', or 'basic'.
         cache_args(list): The arguments to use as the cache key.
         timeseries(str, list): The name of the time series dimension (for array data) or column (for
-            tabular data) in the cached array. For tabular data, if the name of the index is in
-            'timeseries', then the index will be used. If not a time series, set to None (default).
-            If a list, will use the first matching coordinate in the list. If 'timeseries' is set,
-            the function must have arguments 'start_time' and 'end_time', and they must be passed as
-            positional arguments.
+            tabular data) in the cached array. If not a time series, set to None (default). If a
+            list, will use the first matching coordinate in the list.
         chunking(dict): Specifies chunking if that coordinate exists. If coordinate does not exist
             the chunking specified will be dropped.
         chunk_by_arg(dict): Specifies chunking modifiers based on the passed cached arguments,
@@ -916,12 +913,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 f"Timeseries array must return a dimension named {tl} for slicing."
                             )
                     elif data_type == "tabular":
-                        if ds.index.name in tl: # If the index has a name that's in tl (e.g. "time"), slice by that.
-                            return ds[start_time:end_time]
                         match_time = [t for t in tl if t in ds.columns]
                         if len(match_time) == 0:
                             raise RuntimeError(
-                                f"Timeseries must have index or a column named {tl} for slicing."
+                                f"Timeseries must have a column named {tl} for slicing."
                             )
                     else:
                         raise ValueError("Timeseries is only supported for array and tabular data")
