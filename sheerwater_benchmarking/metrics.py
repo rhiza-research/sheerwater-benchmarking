@@ -17,6 +17,13 @@ PROB_METRICS = ['crps']  # a list of probabilistic metrics
 COUPLED_METRICS = ['acc', 'pearson']  # a list of metrics that are coupled in space and time
 CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of dichotomous contingency metrics
 CATEGORICAL_CONTINGENCY_METRICS = ['heidke']  # a list of contingency metrics
+PRECIP_ONLY_METRICS = ["heidke", "pod", "far", "ets", "mape", "smape", "bias_score", "seeps"]
+
+def is_precip_only(metric):
+    if '-' in metric:
+        metric = metric.split('-')[0]
+
+    return metric in PRECIP_ONLY_METRICS
 
 def is_categorical(metric):
     if '-' in metric:
@@ -166,6 +173,9 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     if is_coupled(metric) and not avg_time:
         raise ValueError("Coupled metrics must be averaged in time")
 
+    if is_precip_only(metric) and variable != 'precip':
+        raise ValueError(f"{metric} Can only be run with precipitation.")
+
     # drop all times not in fcst
     obs = obs.sel(time=fcst.time)
 
@@ -175,11 +185,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the appropriate climatology dataframe for metric calculation
     if metric == 'seeps':
-        if variable != 'precip':
-            raise ValueError("SEEPS metric only works with precipitation.")
-
-        wet_threshold = seeps_wet_threshold(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead))
-        dry_fraction = seeps_dry_fraction(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead))
+        wet_threshold = seeps_wet_threshold(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead), grid=grid)
+        dry_fraction = seeps_dry_fraction(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead), grid=grid)
         clim_ds = xr.merge([wet_threshold, dry_fraction])
 
         metric_kwargs = {
