@@ -609,6 +609,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     cache_path = cache_key
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = False
+                else:
+                    raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
             elif data_type == 'basic':
                 backend = "pickle" if backend is None else backend
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.pkl'
