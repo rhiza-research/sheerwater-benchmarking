@@ -99,7 +99,7 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
             - 'month': Group by month.
             - 'year': Group by year.
             - 'quarter': Group by quarter.
-            - 'african_rainy_season': Group by African rainy season.
+            - 'ea_rainy_season': Group by East African rainy season.
         agg_fn (object, list): The aggregation function to apply.
         time_dim (str): The time dimension to group by.
         return_timeseries (bool): If True, return a timeseries (the first date in each period).

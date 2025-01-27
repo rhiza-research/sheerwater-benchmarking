@@ -49,28 +49,6 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries='start_date',
-           cache_args=['variable', 'grid'],
-           chunking={"lat": 721, "lon": 1440, "start_date": 30, 'lead_time': 1, 'member': 1},
-           auto_rechunk=False)
-def salient_daily_gap(start_time, end_time, variable, grid="global0_25"):  # noqa: ARG001
-    """Processed Salient forecast files."""
-    # TODO: integrate this into the pipeline
-    var = get_variable(variable, 'salient')
-    filename = 'gs://sheerwater-datalake/salient-data/gap/salient_v9.zarr'
-    ds = xr.open_zarr(filename)
-    # Select variable as a dataset
-    ds = ds[[var]]
-    ds = ds.rename({'ensemble': 'member', 'forecast_date': 'start_date', 'forecast_day_idx': 'lead_time'})
-    # Modify forecast date idx to be a timedelta object
-    ds['lead_time'] = ds['lead_time'].astype('timedelta64[D]')
-    # Regrid the data
-    ds = regrid(ds, grid, base='base180', method='conservative')
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='array',
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
