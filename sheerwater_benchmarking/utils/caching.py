@@ -914,11 +914,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 # Do the time series filtering
                 if timeseries is not None:
 
-                    match_time = [
-                        t
-                        for t in tl
-                        if t in (ds.dims if data_type == "array" else ds.columns)
-                    ]
+                    if data_type == "array":
+                        match_time = [t for t in tl if t in ds.dims]
+                    elif data_type == "tabular":
+                        match_time = [t for t in tl if t in ds.columns]
+                    else:
+                        raise ValueError(
+                            f"Timeseries is only supported for array or tabular data, not {data_type}"
+                        )
+
                     if len(match_time) == 0:
                         raise RuntimeError(
                             f"Timeseries must have a dimension or column named {tl} for slicing."
