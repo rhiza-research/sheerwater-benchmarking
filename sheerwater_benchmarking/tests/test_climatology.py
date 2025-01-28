@@ -3,7 +3,7 @@
 
 """Test file for climatology data validation."""
 
-from sheerwater_benchmarking.baselines import climatology, climatology_standard_30yr
+from sheerwater_benchmarking.baselines import climatology_raw
 
 
 def test_climatology():
@@ -13,8 +13,5 @@ def test_climatology():
     last_year = 2020
     variable = "tmp2m"
 
-    ds = climatology(first_year, last_year, variable, grid="global1_5", mask="lsm")
-    dsp = climatology_standard_30yr(variable, grid="global1_5", mask="lsm")
-
-    assert ds.sizes["doy"] == 366
-    assert dsp.sizes["doy"] == 366
+    ds = climatology_raw(variable, first_year, last_year, grid="global1_5")
+    assert ds.sizes["dayofyear"] == 366
