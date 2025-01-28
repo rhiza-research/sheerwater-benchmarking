@@ -3,7 +3,7 @@ import numpy as np
 import xarray as xr
 
 
-from sheerwater_benchmarking.utils.time_utils import dayofyear_to_datetime
+from .time_utils import dayofyear_to_datetime
 
 
 def first_satisfied_date(ds, condition, time_dim='time', base_time=None, prob_dim='member', prob_threshold=0.5):

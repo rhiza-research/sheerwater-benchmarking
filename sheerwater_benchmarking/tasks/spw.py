@@ -13,7 +13,7 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import (
 from sheerwater_benchmarking.utils import (apply_mask, clip_region,
                                            assign_grouping_coordinates, convert_group_to_time)
 
-from .tasks import first_satisfied_date, average_time, convert_to_datetime
+from sheerwater_benchmarking.utils import first_satisfied_date, average_time, convert_to_datetime
 
 
 def rainy_onset_condition(da, prob_dim='member', prob_threshold=0.6):

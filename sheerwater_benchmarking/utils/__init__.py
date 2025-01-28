@@ -17,6 +17,7 @@ from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_
 
 from .weather_utils import get_variable
 
+from .task_utils import first_satisfied_date, convert_to_datetime, average_time
 
 # Use __all__ to define what is part of the public API.
 __all__ = [
@@ -66,4 +67,7 @@ __all__ = [
     "convert_group_to_time",
     "shift_forecast_date_to_target_date",
     "lead_to_agg_days",
+    "first_satisfied_date",
+    "convert_to_datetime",
+    "average_time",
 ]
