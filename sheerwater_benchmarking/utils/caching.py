@@ -146,7 +146,12 @@ def write_to_parquet(cache_path, df, overwrite=False):
     if hasattr(df, 'cache_partition'):
         part = df.cache_partition
 
-    df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
+    if isinstance(df, dd.DataFrame):
+        df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
+    elif isinstance(df, pd.DataFrame):
+        df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
+    else:
+        raise ValueError("Can only write dask and pandas dataframes to parquet.")
 
 
 def write_to_delta(cache_path, df, overwrite=False):
@@ -385,7 +390,7 @@ def write_to_terracotta(cache_key, ds):
 
 def cache_exists(backend, cache_path, verify_path=None):
     """Check if a cache exists generically."""
-    if backend == 'zarr' or backend == 'delta' or backend == 'pickle' or backend == 'terracotta':
+    if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
         if backend == 'zarr':
