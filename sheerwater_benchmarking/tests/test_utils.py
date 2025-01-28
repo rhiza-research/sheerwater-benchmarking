@@ -1,5 +1,4 @@
 """Test the utility functions in the utils module."""
-import pytest
 import numpy as np
 
 from sheerwater_benchmarking.utils import get_grid
