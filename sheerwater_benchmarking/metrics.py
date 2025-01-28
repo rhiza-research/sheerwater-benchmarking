@@ -245,6 +245,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         m_ds = metric_fn()
 
     elif metric == 'pearson':
+        fcst = fcst.chunk(time=-1, lat=-1, lon=-1)  # all must be -1 to succeed
+        obs = obs.chunk(time=-1, lat=-1, lon=-1)  # all must be -1 to succeed
         if spatial:
             m_ds = xskillscore.pearson_r(a=obs, b=fcst, dim='time', skipna=True)
         else:

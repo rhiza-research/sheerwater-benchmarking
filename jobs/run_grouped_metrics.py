@@ -23,6 +23,14 @@ def run_grouped(combo):
     print(combo)
     metric, variable, grid, region, lead, forecast, time_grouping = combo
 
+    if is_precip_only(metric) and variable != 'precip':
+        print(f"Skipping {metric} for not precip variable.")
+        return
+
+    if metric == 'seeps' and grid == 'global0_25':
+        print(f"Skipping seeps at 0.25 grid for now")
+        return
+
     try:
         grouped_metric(start_time, end_time, variable, lead, forecast, truth, metric,
                        spatial=False, time_grouping=time_grouping, grid=grid, region=region,
