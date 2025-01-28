@@ -146,7 +146,12 @@ def write_to_parquet(cache_path, df, overwrite=False):
     if hasattr(df, 'cache_partition'):
         part = df.cache_partition
 
-    df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
+    if isinstance(df, dd.DataFrame):
+        df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
+    elif isinstance(df, pd.DataFrame):
+        df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
+    else:
+        raise ValueError("Can only write dask and pandas dataframes to parquet.")
 
 
 def write_to_delta(cache_path, df, overwrite=False):
