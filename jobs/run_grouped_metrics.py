@@ -8,6 +8,9 @@ from sheerwater_benchmarking.metrics import grouped_metric
 from sheerwater_benchmarking.utils import start_remote
 from jobs import parse_args, run_in_parallel
 
+from sheerwater_benchmarking.metrics import is_precip_only
+from sheerwater_benchmarking.metrics import is_coupled
+
 (start_time, end_time, forecasts, truth, metrics, variables, grids,
  regions, leads, time_groupings, parallelism,
  recompute, backend, remote_name, remote, remote_config) = parse_args()
