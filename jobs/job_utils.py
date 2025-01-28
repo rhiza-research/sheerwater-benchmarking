@@ -29,7 +29,7 @@ def parse_args():
     if args.station_evaluation:
         forecasts = ["era5", "chirps", "imerg"]
     else:
-        forecasts = ["perpp", "salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
+        forecasts = ["salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
                      "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
     if args.forecast:
         forecasts = args.forecast
