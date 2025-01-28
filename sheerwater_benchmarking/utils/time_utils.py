@@ -50,8 +50,8 @@ def dayofyear_to_datetime(x):
 
 def shift_forecast_date_to_target_date(ds, forecast_date_dim, lead):
     """Shift a forecast date dimension to a target date coordinate from a lead time."""
-    ds = ds.assign_coords(forecast_date_dim=[
-        forecast_date_to_target_date(x, lead) for x in ds[forecast_date_dim].values])
+    ds = ds.assign_coords({forecast_date_dim: [
+        forecast_date_to_target_date(x, lead) for x in ds[forecast_date_dim].values]})
     return ds
 
 
