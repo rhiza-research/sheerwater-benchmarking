@@ -34,6 +34,10 @@ def run_grouped(combo):
         print(f"Skipping {metric} for not precip variable.")
         return
 
+    if metric == 'seeps' and grid == 'global0_25':
+        print(f"Skipping seeps at 0.25 grid for now")
+        return
+
     try:
         global_metric(start_time, end_time, variable, lead, forecast, truth, metric, grid=grid,
                        force_overwrite=True, filepath_only=True, recompute=recompute)
