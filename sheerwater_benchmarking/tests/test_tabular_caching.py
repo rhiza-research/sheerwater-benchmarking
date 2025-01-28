@@ -28,4 +28,4 @@ def test_tab():
     tab('josh') # should cache
     tab('josh') # should return cache
     dtab('josh', backend='parquet') # should cache
-    dtab('josh', backend='parquet') # should retunr cache
+    dtab('josh', backend='parquet') # should return cache
