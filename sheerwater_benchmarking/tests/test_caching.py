@@ -8,10 +8,10 @@ from sheerwater_benchmarking.utils import cacheable, get_dates
 
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['name', 'species'])
-def simple_timeseries(start_time, end_time, name, species='coraciidae'):
+           cache_args=['name', 'species', 'stride'])
+def simple_timeseries(start_time, end_time, name, species='coraciidae', stride='day'):
     """Generate a simple timeseries dataset for testing."""
-    times = get_dates(start_time, end_time, stride='day', return_string=False)
+    times = get_dates(start_time, end_time, stride=stride, return_string=False)
     obs = np.random.randint(0, 10, size=(len(times),))
     ds = xr.Dataset({'obs': ('time', obs)}, coords={'time': times})
     ds.attrs['name'] = name
@@ -26,7 +26,7 @@ def test_null_time_caching():
     name = 'lilac-breasted roller'
 
     # Run once to ensure simple timeseries is cached
-    ds1 = simple_timeseries(start_time, end_time, name)
+    ds1 = simple_timeseries(start_time, end_time, name, recompute=True, force_overwrite=True)
 
     # Run again with null time
     ds2 = simple_timeseries(None, None, name)
@@ -40,9 +40,47 @@ def test_null_time_caching():
         ds1 = simple_timeseries(None, None, name)
 
 
+def test_validate_timeseries():
+    """Test triggering recompute with validate_cache_timeseries=True."""
+    name = "racket-tailed roller"
+    start_time = "2018-01-01"
+    end_time = "2020-01-01"
+    ds1 = simple_timeseries(
+        start_time, end_time, name, stride="month", recompute=True, force_overwrite=True
+    )
+
+    # 6 months earlier -> should not recompute
+    start_time = "2017-06-01"
+    ds2 = simple_timeseries(
+        start_time, end_time, name, stride="month", validate_cache_timeseries=True
+    )
+    assert ds1.equals(ds2)
+
+    # 18 months earlier, but validate_cache_timeseries=False -> should not recompute
+    start_time = "2017-06-01"
+    ds3 = simple_timeseries(
+        start_time, end_time, name, stride="month", validate_cache_timeseries=False
+    )
+    assert ds1.equals(ds3)
+
+    # 18 months earlier -> should recompute
+    start_time = "2016-06-01"
+    # force_overwrite to avoid reading from stdin during test
+    ds4 = simple_timeseries(
+        start_time,
+        end_time,
+        name,
+        stride="month",
+        validate_cache_timeseries=True,
+        force_overwrite=True,
+    )
+    assert len(ds1.time) < len(ds4.time)
+
+
+
 @cacheable(data_type='tabular',
            timeseries='time',
-           backend='arrow',
+           backend='parquet',
            cache_args=['species'])
 def tabular_timeseries(start_time, end_time, species='coraciidae'):
     """Generate a simple tabular timeseries dataset for testing."""
@@ -53,10 +91,11 @@ def tabular_timeseries(start_time, end_time, species='coraciidae'):
 
 
 def test_tabular_timeseries():
+    """Test timeseries caching with data_type='tabular'."""
     start_time = '2020-01-01'
     end_time = '2020-01-10'
 
-    ds1 = tabular_timeseries(start_time, end_time, recompute=True, force_overwrite=True)
+    ds1 = tabular_timeseries(start_time, end_time, recompute=True, force_overwrite=True, backend="parquet")
 
     end_time = '2020-01-15'
     # Without validate_cache_timeseries, this should return only the original 10 days (and the same values, not
@@ -74,4 +113,5 @@ def test_tabular_timeseries():
 
 if __name__ == "__main__":
     test_null_time_caching()
+    test_validate_timeseries()
     test_tabular_timeseries()
