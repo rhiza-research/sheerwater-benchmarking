@@ -41,8 +41,7 @@ def test_null_time_caching():
 
 
 def test_validate_timeseries():
-    """
-    Test triggering recompute with validate_cache_timeseries=True.
+    """Test triggering recompute with validate_cache_timeseries=True.
 
     If there's no data within a year of the requested start or end times, and validate_cache_timeseries=True, we should
     recompute. This is tested with array data because the check isn't supported for tabular data yet.
@@ -88,8 +87,11 @@ def test_validate_timeseries():
            backend='parquet',
            validate_cache_timeseries=False,
            cache_args=['species'])
-def tabular_timeseries(start_time, end_time, species='coraciidae'):
-    """Generate a simple tabular timeseries dataset for testing."""
+def tabular_timeseries(start_time, end_time, species='coraciidae'): # noqa: ARG001
+    """Generate a simple tabular timeseries dataset for testing.
+
+    The 'species' argument is unused, but still matters because it's a cache key
+    """
     times = get_dates(start_time, end_time, stride='day', return_string=False)
     obs = np.random.randint(0, 10, size=(len(times),))
     ds = pd.DataFrame({'obs': obs, 'time': times})
@@ -97,8 +99,7 @@ def tabular_timeseries(start_time, end_time, species='coraciidae'):
 
 
 def test_tabular_timeseries():
-    """
-    Test timeseries caching with data_type='tabular'.
+    """Test timeseries caching with data_type='tabular'.
 
     Requesting more days of data should return the same thing, because we can't yet
     validate_cache_timeseries. Requesting fewer should return less data, though.
@@ -106,7 +107,6 @@ def test_tabular_timeseries():
     We can tell that a function is cached by having it return random data, and checking if the
     randomness is consistent between calls.
     """
-
     start_time = '2020-01-01'
     end_time = '2020-01-10'
 
