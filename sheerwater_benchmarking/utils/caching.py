@@ -390,7 +390,8 @@ def write_to_terracotta(cache_key, ds):
 
 def cache_exists(backend, cache_path, verify_path=None):
     """Check if a cache exists generically."""
-    if backend == 'zarr' or backend == 'delta' or backend == 'pickle' or backend == 'terracotta':
+    if (backend == 'zarr' or backend == 'delta' or backend == 'pickle' or
+        backend == 'terracotta' or backend == 'parquet'):
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
         if backend == 'zarr':
