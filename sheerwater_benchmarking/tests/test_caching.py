@@ -114,14 +114,19 @@ def test_tabular_timeseries():
     end_time = '2020-01-15'
     # Without validate_cache_timeseries, this should return only the original 10 days (and the same values, not
     # new random numbers).
-    ds2 = tabular_timeseries(start_time, end_time, validate_cache_timeseries=False)
+    print("DS2") # XXX
+    ds2 = tabular_timeseries(
+        start_time, end_time, backend="parquet", validate_cache_timeseries=False
+    )
 
     # Don't use .equals(), because it's OK if times are stored as datetime64[ns] and restored as datetime64[us]
     assert (ds1.columns == ds2.columns).all()
-    assert (ds1 == ds2).all().all()
+    assert (ds1 == ds2.compute()).all().all()
 
     end_time = '2020-01-07'
-    ds3 =  tabular_timeseries(start_time, end_time, validate_cache_timeseries=False)
+    ds3 = tabular_timeseries(
+        start_time, end_time, backend="parquet", validate_cache_timeseries=False
+    )
     assert len(ds3) < len(ds1)
 
 
