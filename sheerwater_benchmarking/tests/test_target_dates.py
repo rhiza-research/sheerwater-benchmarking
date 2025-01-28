@@ -15,25 +15,25 @@ def test_target_date_conversion():
     end_date = "2020-01-31"
 
     # Test the target date to forecast date conversion
-    fd_week1_start = target_date_to_forecast_date(start_date, "week1", return_string=True)
-    fd_week1_end = target_date_to_forecast_date(end_date, "week1", return_string=True)
+    fd_week1_start = target_date_to_forecast_date(start_date, "week1")
+    fd_week1_end = target_date_to_forecast_date(end_date, "week1")
     assert fd_week1_start == start_date
     assert fd_week1_end == end_date
 
     # Should be shifted back by 7 days for week2
-    fd_week2_start = target_date_to_forecast_date(start_date, "week2", return_string=True)
-    fd_week2_end = target_date_to_forecast_date(end_date, "week2", return_string=True)
+    fd_week2_start = target_date_to_forecast_date(start_date, "week2")
+    fd_week2_end = target_date_to_forecast_date(end_date, "week2")
     assert fd_week2_start == "2020-01-07"
     assert fd_week2_end == "2020-01-24"
 
     # Should be shifted back by 14 days for weeks34
-    fd_week34_start = target_date_to_forecast_date(start_date, "weeks34", return_string=True)
-    fd_week34_end = target_date_to_forecast_date(end_date, "weeks34", return_string=True)
+    fd_week34_start = target_date_to_forecast_date(start_date, "weeks34")
+    fd_week34_end = target_date_to_forecast_date(end_date, "weeks34")
     assert fd_week34_start == "2019-12-31"
     assert fd_week34_end == "2020-01-17"
 
     # Ground truth data is already in "target date" format
-    ds = era5(start_date, end_date, "tmp2m", "week3", grid="global1_5", mask=None, region='global')
+    ds = era5(start_date, end_date, "tmp2m", agg_days=7, grid="global1_5", mask=None, region='global')
     dsr = era5_rolled(start_date, end_date, "tmp2m", agg_days=7, grid="global1_5")
     assert ds.equals(dsr)
 
