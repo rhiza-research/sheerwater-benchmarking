@@ -410,7 +410,7 @@ def cache_exists(backend, cache_path, verify_path=None):
 
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
-              auto_rechunk=False, cache=True, cache_disable_if=None,
+              auto_rechunk=False, cache=True, validate_cache_timeseries=True, cache_disable_if=None,
               backend=None, storage_backend=None):
     """Decorator for caching function results.
 
@@ -456,7 +456,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "filepath_only": False,
         "recompute": False,
         "cache": None,
-        "validate_cache_timeseries": True,
+        "validate_cache_timeseries": None,
         "force_overwrite": False,
         "retry_null_cache": False,
         "backend": None,
@@ -469,17 +469,22 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
-                auto_rechunk, cache, cache_disable_if, backend, storage_backend
+                auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
+                backend, storage_backend
 
             # Calculate the appropriate cache key
-            filepath_only, recompute, passed_cache, validate_cache_timeseries, \
-                force_overwrite, retry_null_cache, backend, \
+            filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
+                force_overwrite, retry_null_cache, passed_backend, \
                 storage_backend, passed_auto_rechunk = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
             if passed_auto_rechunk is not None:
                 auto_rechunk = passed_auto_rechunk
+            if passed_validate_cache_timeseries is not None:
+                validate_cache_timeseries = passed_validate_cache_timeseries
+            if passed_backend is not None:
+                backend = passed_backend
 
             params = signature(func).parameters
 
