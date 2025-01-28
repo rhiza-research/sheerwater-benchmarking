@@ -41,7 +41,12 @@ def test_null_time_caching():
 
 
 def test_validate_timeseries():
-    """Test triggering recompute with validate_cache_timeseries=True."""
+    """
+    Test triggering recompute with validate_cache_timeseries=True.
+
+    If there's no data within a year of the requested start or end times, and validate_cache_timeseries=True, we should
+    recompute. This is tested with array data because the check isn't supported for tabular data yet.
+    """
     name = "racket-tailed roller"
     start_time = "2018-01-01"
     end_time = "2020-01-01"
@@ -91,7 +96,16 @@ def tabular_timeseries(start_time, end_time, species='coraciidae'):
 
 
 def test_tabular_timeseries():
-    """Test timeseries caching with data_type='tabular'."""
+    """
+    Test timeseries caching with data_type='tabular'.
+
+    Requesting more days of data should return the same thing, because we can't yet
+    validate_cache_timeseries. Requesting fewer should return less data, though.
+
+    We can tell that a function is cached by having it return random data, and checking if the
+    randomness is consistent between calls.
+    """
+
     start_time = '2020-01-01'
     end_time = '2020-01-10'
 
