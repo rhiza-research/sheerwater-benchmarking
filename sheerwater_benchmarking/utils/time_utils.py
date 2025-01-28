@@ -83,10 +83,23 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
             coords.append(ds[time_dim].dt.year.values)
         else:
             raise ValueError("Invalid time grouping.")
-    # Drop elements that can't be grouped
+    # Drop elements that can't be grouped (e.g., months outside of the rainy season onset groups)
     has_group = [None not in x for x in zip(*coords)]
     ds = ds.isel({time_dim: has_group})
-    ds = ds.assign_coords(group=(time_dim, ["-".join([f"{y:02d}" for y in x]) for x in zip(*coords) if None not in x]))
+
+    # Give each group a string representation that concatenates the group values
+    joined_coords = []
+    for i, coord in enumerate(zip(*coords)):  # iterate over all time entires
+        if has_group[i]:  # only group if the time entry has a group
+            coord_str = []  # string representation of the group
+            for y in coord:  # iterate over all group values
+                try:
+                    coord_str.append(f"{y:02d}")  # if the group value is a number, format it as a string
+                except ValueError:  # MAM / OND strings
+                    coord_str.append(y)
+            joined_coords.append("-".join(coord_str))  # join the group values with a dash
+
+    ds = ds.assign_coords(group=(time_dim, joined_coords))
     return ds
 
 

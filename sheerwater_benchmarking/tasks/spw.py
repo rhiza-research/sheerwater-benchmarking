@@ -9,6 +9,7 @@ from sheerwater_benchmarking.metrics import get_datasource_fn
 from sheerwater_benchmarking.forecasts.ecmwf_er import (
     ifs_extended_range, ifs_extended_range_debiased_regrid,
 )
+from sheerwater_benchmarking.baselines import climatology_raw
 
 from sheerwater_benchmarking.utils import (apply_mask, clip_region,
                                            assign_grouping_coordinates, convert_group_to_time)
@@ -120,17 +121,26 @@ def rainy_season_onset_truth(start_time, end_time,
         region (str): Name of the region.
     """
     # Get the ground truth data on a daily aggregation
-    truth_fn = get_datasource_fn(truth)
-    if truth == 'ghcn':
-        # Call GHCN with non-default mean cell aggregation
-        ds = truth_fn(start_time, end_time, 'precip', agg_days=1,
-                      grid=grid, mask=mask, region=region, cell_aggregation='mean')
+    if truth == 'ltn':
+        # Call raw climatology data for 12 years prior to evaluation period
+        time_dim = 'dayofyear'
+        ds = climatology_raw('precip', first_year=2004, last_year=2015, grid=grid)
+        # Mask and clip the region
+        ds = apply_mask(ds, mask, var='precip', grid=grid)
+        ds = clip_region(ds, region=region)
     else:
-        ds = truth_fn(start_time, end_time, 'precip', agg_days=1,
-                      grid=grid, mask=mask, region=region)
+        time_dim = 'time'
+        truth_fn = get_datasource_fn(truth)
+        if truth == 'ghcn':
+            # Call GHCN with non-default mean cell aggregation
+            ds = truth_fn(start_time, end_time, 'precip', agg_days=1,
+                          grid=grid, mask=mask, region=region, cell_aggregation='mean')
+        else:
+            ds = truth_fn(start_time, end_time, 'precip', agg_days=1,
+                          grid=grid, mask=mask, region=region)
 
     #  First, get the rainy season onset within the first grouping value over dimension time
-    agg_fn = [partial(first_rainy_onset, time_dim='time', prob_dim=None, prob_threshold=None)]
+    agg_fn = [partial(first_rainy_onset, time_dim=time_dim, prob_dim=None, prob_threshold=None)]
 
     # Returns a dataframe with a dimension 'time' corresponding to the first grouping value
     # and value 'rainy_onset' corresponding to the rainy season onset date
@@ -146,7 +156,7 @@ def rainy_season_onset_truth(start_time, end_time,
     rainy_da = groupby_time(ds,
                             groupby=groupby,
                             agg_fn=agg_fn,
-                            time_dim='time',
+                            time_dim=time_dim,
                             return_timeseries=True)
 
     rainy_ds = rainy_da.to_dataset(name='rainy_onset')

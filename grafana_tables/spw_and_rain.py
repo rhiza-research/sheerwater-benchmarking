@@ -3,10 +3,24 @@ import xarray as xr
 
 from sheerwater_benchmarking.utils import cacheable, dask_remote, roll_and_agg
 from sheerwater_benchmarking.metrics import get_datasource_fn
+from sheerwater_benchmarking.reanalysis import era5
+from sheerwater_benchmarking.baselines import climatology_raw
 
 from sheerwater_benchmarking.tasks import (
     rainy_season_onset_truth, rainy_season_onset_forecast,
 )
+
+
+@dask_remote
+@cacheable(data_type='tabular',
+           cache_args=['grid', 'mask', 'region'],
+           backend='postgres')
+def ltn_windowed_spw(grid='global1_5', mask='lsm', region='global'):
+    """Store the rolling windows of precipitation relevant to SPW in the database."""
+    ds =
+    # Get the ground truth data
+    # Call GHCN with non-default mean cell aggregation
+    return ds
 
 
 @dask_remote
