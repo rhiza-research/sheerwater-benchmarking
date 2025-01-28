@@ -114,7 +114,6 @@ def test_tabular_timeseries():
     end_time = '2020-01-15'
     # Without validate_cache_timeseries, this should return only the original 10 days (and the same values, not
     # new random numbers).
-    print("DS2") # XXX
     ds2 = tabular_timeseries(
         start_time, end_time, backend="parquet", validate_cache_timeseries=False
     )
