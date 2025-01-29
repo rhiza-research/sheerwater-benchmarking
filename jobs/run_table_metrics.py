@@ -7,6 +7,9 @@ from sheerwater_benchmarking.metrics import summary_metrics_table
 from sheerwater_benchmarking.utils import start_remote
 from jobs import parse_args, run_in_parallel
 
+from sheerwater_benchmarking.metrics import is_precip_only
+from sheerwater_benchmarking.metrics import is_coupled
+
 (start_time, end_time, forecasts, truth, metrics,
  variables, grids, regions, leads,
  time_groupings, parallelism, recompute,
@@ -26,8 +29,16 @@ def run_metrics_table(combo):
     """Run table metrics."""
     metric, variable, grid, region, time_grouping = combo
 
-    if metric == 'acc' and time_grouping is not None:
-        print("Cannot run ACC for time groupings.")
+    if is_coupled(metric) and time_grouping is not None:
+        print(f"Cannot run coupled metric {metric} with a time grouping.")
+        return
+
+    if is_precip_only(metric) and variable != 'precip':
+        print(f"Skipping {metric} for not precip variable.")
+        return
+
+    if (metric == 'seeps' or metric == 'pearson') and grid == 'global0_25':
+        print(f"Skipping seeps and pearson at 0.25 grid for now")
         return
 
     try:
