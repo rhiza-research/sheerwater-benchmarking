@@ -30,8 +30,8 @@ def run_grouped(combo):
         print(f"Skipping {metric} for not precip variable.")
         return
 
-    if metric == 'seeps' and grid == 'global0_25':
-        print(f"Skipping seeps at 0.25 grid for now")
+    if (metric == 'seeps' or metric == 'pearson') and grid == 'global0_25':
+        print(f"Skipping seeps and pearson at 0.25 grid for now")
         return
 
     try:
