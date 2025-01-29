@@ -11,6 +11,7 @@ from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
                                            apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
 
+
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['first_year', 'last_year', 'agg_days', 'grid'],
@@ -39,6 +40,7 @@ def seeps_dry_fraction(first_year=1985, last_year=2014, agg_days=7, grid='global
     ds['dayofyear'] = ds.dayofyear.dt.dayofyear
 
     return ds
+
 
 @dask_remote
 @cacheable(data_type='array',
@@ -235,8 +237,7 @@ def climatology_linear_weights(variable, first_year=1985, last_year=2014, agg_da
     end_time = f"{last_year}-12-31"
 
     # Get single day, masked data between start and end years
-    ds = _era5_rolled_for_clim(start_time, end_time, variable=variable, agg_days=agg_days, grid=grid,
-                               recompute=True, force_overwrite=True)  # need these to be recomputed
+    ds = _era5_rolled_for_clim(start_time, end_time, variable=variable, agg_days=agg_days, grid=grid)
 
     def fit_trend(sub_ds):
         return sub_ds.swap_dims({"time": "year"}).polyfit(dim='year', deg=1)

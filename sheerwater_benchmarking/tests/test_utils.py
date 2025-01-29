@@ -2,8 +2,7 @@
 import numpy as np
 
 from sheerwater_benchmarking.utils import get_grid
-from sheerwater_benchmarking.utils.general_utils import base180_to_base360, base360_to_base180
-
+from sheerwater_benchmarking.utils import base180_to_base360, base360_to_base180
 
 def test_get_grid():
     """Test the get_grid function."""

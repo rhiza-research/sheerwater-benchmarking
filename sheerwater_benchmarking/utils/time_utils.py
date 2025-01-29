@@ -204,8 +204,8 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
 
 def shift_forecast_date_to_target_date(ds, forecast_date_dim, lead):
     """Shift a forecast date dimension to a target date coordinate from a lead time."""
-    ds = ds.assign_coords(forecast_date_dim=[
-        forecast_date_to_target_date(x, lead) for x in ds[forecast_date_dim].values])
+    ds = ds.assign_coords({forecast_date_dim: [
+        forecast_date_to_target_date(x, lead) for x in ds[forecast_date_dim].values]})
     return ds
 
 
