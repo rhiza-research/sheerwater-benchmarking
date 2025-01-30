@@ -38,10 +38,11 @@ def is_contingency(metric):
     return metric in CONTINGENCY_METRICS or metric in CATEGORICAL_CONTINGENCY_METRICS
 
 def get_bins(metric):
-    if is_categorical(metric) and len(metric.split('-')) <= 2:
-        raise ValueError(f"Categorical contingency metric {metric} must be in the format 'metric-edge-edge...'")
-    elif is_contingency(metric) and len(metric.split('-')) != 2:
-        raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge'")
+    if is_contingency(metric) and len(metric.split('-')) != 2:
+        if is_categorical(metric) and len(metric.split('-')) <= 2:
+            raise ValueError(f"Categorical contingency metric {metric} must be in the format 'metric-edge-edge...'")
+        elif not is_categorical(metric):
+            raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge'")
 
     bins = [int(x) for x in metric.split('-')[1:]]
     bins = [-np.inf] + bins + [np.inf]
