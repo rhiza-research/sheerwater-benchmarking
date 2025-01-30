@@ -883,7 +883,7 @@ xarray-regrid==0.4.0
     # via sheerwater-benchmarking
 xhistogram==0.3.2
     # via xskillscore
-xskillscore @ git+https://github.com/rhiza-research/xskillscore@1489aafa837a250dc9cd6dee7c952bfd181e71b1
+xskillscore @ git+https://github.com/rhiza-research/xskillscore@24836c2994c41c7566d6e4d686df7eb28f7a3455
     # via sheerwater-benchmarking
 xyzservices==2024.9.0
     # via bokeh
