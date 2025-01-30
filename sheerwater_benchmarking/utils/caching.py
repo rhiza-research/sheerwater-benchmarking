@@ -836,8 +836,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 print(f"Caching result for {cache_path} as zarr.")
                                 if isinstance(ds, xr.Dataset):
                                     cache_map = fs.get_mapper(cache_path)
-                                    chunk_config = chunking if chunking else 'auto'
-                                    chunk_to_zarr(ds, cache_path, verify_path, chunk_config)
+
+                                    if chunking:
+                                        # If we aren't doing auto chunking delete the encoding chunks
+                                        chunk_to_zarr(ds, cache_path, verify_path, chunking)
+                                    else:
+                                        chunk_to_zarr(ds, cache_path, verify_path, 'auto')
+
                                     # Reopen the dataset to truncate the computational path
                                     ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
@@ -853,6 +858,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                or none instead of {type(ds)}""")
 
                         # TODO: combine repeated code
+                        write = False
                         if storage_backend == 'delta':
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
