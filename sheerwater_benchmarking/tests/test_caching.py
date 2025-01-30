@@ -116,9 +116,7 @@ def test_tabular_timeseries():
     # new random numbers).
     ds2 = tabular_timeseries(start_time, end_time)
 
-    # Don't use .equals(), because it's OK if times are stored as datetime64[ns] and restored as datetime64[us]
-    assert (ds1.columns == ds2.columns).all()
-    assert (ds1 == ds2.compute()).all().all()
+    assert ds1.compute().equals(ds2.compute())
 
     end_time = '2020-01-07'
     ds3 = tabular_timeseries(start_time, end_time)
