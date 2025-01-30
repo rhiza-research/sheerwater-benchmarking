@@ -32,6 +32,7 @@ def tahmo_station(station_code):
 
 @dask_remote
 @cacheable(data_type='array', cache_args=['grid', 'cell_aggregation'],
+           #timeseries='time',
            chunking={
                'time': 365,
                'lat': 300,
@@ -62,6 +63,9 @@ def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first')
     # For each station ID roll the data into a daily mean
     obs = obs.groupby([obs.time.dt.date, 'station_code']).agg({'precip': 'sum'})
     obs = obs.reset_index()
+
+    # Convert time back to a datetime
+    obs['time'] = dd.to_datetime(obs['time'])
 
     # Round the coordinates to the nearest grid
     lats, lons, grid_size = get_grid(grid)
@@ -98,9 +102,6 @@ def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first')
     # Group by only way to set a multi index in dask?
     obs = obs.groupby(['lat', 'lon', 'time']).agg(precip=('precip', 'mean'))
 
-    print(obs)
-    print(obs.columns)
-
     # Convert to xarray - for this to succeed obs must be a pandas dataframe
     obs = xr.Dataset.from_dataframe(obs.compute())
 
@@ -133,18 +134,17 @@ def tahmo_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thre
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['variable', 'agg_days', 'grid', 'mask', 'region', 'missing_thresh', 'cell_aggregation'],
+           cache_args=['variable', 'agg_days', 'grid', 'mask', 'region', 'missing_thresh'],
            chunking={'lat': 300, 'lon': 300, 'time': 365},
            cache=False)
 def tahmo(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global',
-         missing_thresh=0.5, cell_aggregation='first'):
+         missing_thresh=0.5):
     """Standard interface for ghcn data."""
-    ds = tahmo_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation)
+    if variable != 'precip':
+        raise NotImplementedError("Tahmo data currently only has precip.")
 
-    # Get the variable
-    variable_ghcn = get_variable(variable, 'ghcn')
-    variable_sheerwater = get_variable(variable, 'sheerwater')
-    ds = ds[variable_ghcn].to_dataset()
+    ds = tahmo_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation='first')
+
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable_ghcn, grid=grid)
@@ -152,8 +152,30 @@ def tahmo(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm
     # Clip to specified region
     ds = clip_region(ds, region=region)
 
-    # Rename
-    ds = ds.rename({variable_ghcn: variable_sheerwater})
+    # Note that this is sparse
+    ds = ds.assign_attrs(sparse=True)
+
+    return ds
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'agg_days', 'grid', 'mask', 'region', 'missing_thresh'],
+           chunking={'lat': 300, 'lon': 300, 'time': 365},
+           cache=False)
+def tahmo_avg(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global',
+         missing_thresh=0.5):
+    """Standard interface for ghcn data."""
+    if variable != 'precip':
+        raise NotImplementedError("Tahmo data currently only has precip.")
+
+    ds = tahmo_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation='mean')
+
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable_ghcn, grid=grid)
+
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
 
     # Note that this is sparse
     ds = ds.assign_attrs(sparse=True)
