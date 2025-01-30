@@ -32,12 +32,12 @@ def tahmo_station(station_code):
 
 @dask_remote
 @cacheable(data_type='array', cache_args=['grid', 'cell_aggregation'],
-           #timeseries='time',
+           timeseries='time',
            chunking={
                'time': 365,
                'lat': 300,
                'lon': 300,
-        })
+        }, validate_cache_timeseries=False)
 def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first'):
     """Get tahmo data from the QC controlled stations."""
 
@@ -89,25 +89,24 @@ def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first')
         stat = stat[stat['station_code'].isin(stations_to_use)]
         stat = stat.set_index('station_code')
         obs = obs.join(stat, on='station_code', how='inner')
+
+        # Prepare for xarray
+        obs = obs.drop(['station_code', 'name', 'country'], axis=1)
+
+        # Group by only way to set a multi index in dask?
+        obs = obs.groupby(['lat', 'lon', 'time']).agg(precip=('precip', 'mean'))
     elif cell_aggregation == 'mean':
         # Group by lat/lon/time
         stat = stat.set_index('station_code')
         obs = obs.join(stat, on='station_code', how='inner')
         obs = obs.groupby(by=['lat', 'lon', 'time']).agg(precip=('precip', 'mean'))
 
-
-    # Prepare for xarray
-    obs = obs.drop(['station_code', 'name', 'country'], axis=1)
-
-    # Group by only way to set a multi index in dask?
-    obs = obs.groupby(['lat', 'lon', 'time']).agg(precip=('precip', 'mean'))
-
     # Convert to xarray - for this to succeed obs must be a pandas dataframe
     obs = xr.Dataset.from_dataframe(obs.compute())
 
-    # Reindex to fill out the lat/lon
-    grid_ds = get_grid_ds(grid)
-    obs = obs.reindex_like(grid_ds)
+    obs = obs.chunk({'time': 365,
+                     'lat': 300,
+                     'lon': 300})
 
     # Return the xarray
     return obs
@@ -122,6 +121,10 @@ def tahmo_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thre
     """Tahmo rolled and aggregated."""
     # Get the data
     ds = tahmo_raw(start_time, end_time, grid, cell_aggregation)
+
+    # Reindex to fill out the lat/lon
+    grid_ds = get_grid_ds(grid)
+    ds = ds.reindex_like(grid_ds)
 
     # Roll and agg
     agg_thresh = max(int(agg_days*missing_thresh), 1)
@@ -144,7 +147,6 @@ def tahmo(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm
         raise NotImplementedError("Tahmo data currently only has precip.")
 
     ds = tahmo_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation='first')
-
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable_ghcn, grid=grid)
