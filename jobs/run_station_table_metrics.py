@@ -34,8 +34,16 @@ def run_metrics_table(combo):
     """Run table metrics."""
     metric, variable, grid, region, time_grouping = combo
 
-    if metric == 'acc' and time_grouping is not None:
-        print("Cannot run ACC for time groupings.")
+    if is_coupled(metric) and time_grouping is not None:
+        print(f"Cannot run coupled metric {metric} with a time grouping.")
+        return
+
+    if is_precip_only(metric) and variable != 'precip':
+        print(f"Skipping {metric} for not precip variable.")
+        return
+
+    if (metric == 'seeps' or metric == 'pearson') and grid == 'global0_25':
+        print(f"Skipping seeps and pearson at 0.25 grid for now")
         return
 
     try:
