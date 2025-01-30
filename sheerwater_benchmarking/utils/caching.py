@@ -841,14 +841,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     if chunking:
                                         # If we aren't doing auto chunking delete the encoding chunks
                                         chunk_to_zarr(ds, cache_path, verify_path, chunking)
-
-                                        # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                     else:
                                         chunk_to_zarr(ds, cache_path, verify_path, 'auto')
 
-                                        # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                    # Reopen the dataset to truncate the computational path
+                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
                                     raise RuntimeError(
                                         f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
@@ -860,11 +857,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                     elif data_type == 'tabular':
                         if not (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
-                            raise RuntimeError(f"""Tabular datatypes must return pandas dataframe
+                            raise RuntimeError(f"""Tabular datatypes must return pandas or dask dataframe
                                                or none instead of {type(ds)}""")
 
+                        # TODO: combine repeated code
+                        write = False
                         if storage_backend == 'delta':
-                            write = False
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -876,8 +874,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_path} in delta.")
                                 write_to_delta(cache_path, ds, overwrite=True)
+                                ds = read_from_delta(cache_path) # Reopen dataset to truncate the computational path
                         elif storage_backend == 'parquet':
-                            write = False
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -887,11 +885,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path} in delta.")
+                                print(f"Caching result for {cache_path} in parquet.")
                                 write_to_parquet(cache_path, ds, overwrite=True)
+                                ds = read_from_parquet(cache_path) # Reopen dataset to truncate the computational path
 
                         elif storage_backend == 'postgres':
-                            write = False
                             if check_exists_postgres(cache_key) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -903,6 +901,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_key} in postgres.")
                                 write_to_postgres(ds, cache_key, overwrite=True)
+                                ds = read_from_postgres(cache_path) # Reopen dataset to truncate the computational path
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
                     elif data_type == 'basic':
