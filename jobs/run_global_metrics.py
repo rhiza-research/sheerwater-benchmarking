@@ -5,10 +5,7 @@ import traceback
 
 from sheerwater_benchmarking.metrics import global_metric
 from sheerwater_benchmarking.utils import start_remote
-from jobs import parse_args, run_in_parallel
-
-from sheerwater_benchmarking.metrics import is_precip_only
-from sheerwater_benchmarking.metrics import is_coupled
+from jobs import parse_args, run_in_parallel, prune_metrics
 
 (start_time, end_time, forecasts, truth, metrics, variables, grids,
  regions, leads, time_groupings, parallelism,
@@ -17,34 +14,28 @@ from sheerwater_benchmarking.metrics import is_coupled
 if remote:
     start_remote(remote_config=remote_config, remote_name=remote_name)
 
-combos = itertools.product(metrics, variables, grids, leads, forecasts)
+combos = itertools.product(metrics, variables, grids, [None], leads, forecasts, [None])
+combos = prune_metrics(combos, skip_all_coupled=True)
+
 
 def run_grouped(combo):
     """Run global metrics."""
-    metric, variable, grid, lead, forecast = combo
+    metric, variable, grid, _, lead, forecast, _ = combo
 
     if metric == 'rmse':
         metric = 'mse'
 
-    if is_coupled(metric):
-        print("Skipping coupled metric in global run.")
-        return
-
-    if is_precip_only(metric) and variable != 'precip':
-        print(f"Skipping {metric} for not precip variable.")
-        return
-
-    if metric == 'seeps' and grid == 'global0_25':
-        print(f"Skipping seeps at 0.25 grid for now")
-        return
-
     try:
-        global_metric(start_time, end_time, variable, lead, forecast, truth, metric, grid=grid,
+        return global_metric(start_time, end_time, variable, lead, forecast, truth, metric, grid=grid,
                        force_overwrite=True, filepath_only=True, recompute=recompute)
     except KeyboardInterrupt as e:
         raise(e)
+    except NotImplementedError:
+        print(f"Metric {forecast} {lead} {grid} {variable} {metric} not implemented: {traceback.format_exc()}")
+        return "Not Impelemnted"
     except: # noqa:E722
         print(f"Failed to run global metric {forecast} {lead} {grid} {variable} {metric}: {traceback.format_exc()}")
+        return None
 
 if __name__ == "__main__":
     run_in_parallel(run_grouped, combos, parallelism)

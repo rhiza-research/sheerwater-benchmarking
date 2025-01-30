@@ -3,6 +3,8 @@ import argparse
 import dask
 import itertools
 
+from sheerwater_benchmarking.metrics import is_precip_only
+from sheerwater_benchmarking.metrics import is_coupled
 
 def parse_args():
     """Parses arguments for jobs."""
@@ -80,6 +82,29 @@ def parse_args():
             regions, leads, time_groupings, args.parallelism,
             args.recompute, args.backend, args.remote_name, args.remote, remote_config)
 
+def prune_metrics(combos, skip_all_coupled=False):
+    pruned_combos = []
+    for combo in combos:
+        metric, variable, grid, region, lead, forecast, time_grouping = combo
+
+        if skip_all_coupled:
+            if is_coupled(metric):
+                continue
+        else:
+            if is_coupled(metric) and time_grouping is not None:
+                continue
+
+        if is_precip_only(metric) and variable != 'precip':
+            continue
+
+        if metric == 'seeps' and grid == 'global0_25':
+            continue
+
+        pruned_combos.append(combo)
+
+    return pruned_combos
+
+
 def run_in_parallel(func, iterable, parallelism):
     """Run a function in parallel with dask delayed.
 
@@ -90,18 +115,31 @@ def run_in_parallel(func, iterable, parallelism):
     """
     iterable, copy = itertools.tee(iterable)
     length = len(list(copy))
+    counter = 0
+    success_count = 0
+    failed = []
     if parallelism <= 1:
         for i, it in enumerate(iterable):
             print(f"Running {i+1}/{length}")
-            func(it)
+            out = func(it)
+            if out is not None:
+                success_count += 1
+            else:
+                failed.append(it)
     else:
-        counter = 0
         for it in itertools.batched(iterable, parallelism):
             output = []
             print(f"Running {counter+1}...{counter+parallelism}/{length}")
             for i in it:
                 out = dask.delayed(func)(i)
+                if out is not None:
+                    success_count += 1
+                else:
+                    failed.append(i)
+
                 output.append(out)
 
             dask.compute(output)
             counter = counter + parallelism
+
+    print(f"{success_count}/{length} returned non-null values. Runs that failed: {failed}")
