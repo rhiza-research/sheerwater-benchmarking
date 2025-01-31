@@ -83,6 +83,10 @@ def parse_args():
             args.recompute, args.backend, args.remote_name, args.remote, remote_config)
 
 def prune_metrics(combos, skip_all_coupled=False):
+    """Prunes a list of metrics combinations.
+
+    Can skip all coupled metrics for global runs.
+    """
     pruned_combos = []
     for combo in combos:
         metric, variable, grid, region, lead, forecast, time_grouping = combo
