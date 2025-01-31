@@ -850,7 +850,7 @@ urllib3==2.2.3
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit
-weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@17e6c3dd119c4b33ec56c6dc00c5d19414e40f5f
+weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@3c95b54a74a0fc92193901310f75014dcef9f448
     # via sheerwater-benchmarking
 webcolors==24.8.0
     # via jsonschema
@@ -883,7 +883,7 @@ xarray-regrid==0.4.0
     # via sheerwater-benchmarking
 xhistogram==0.3.2
     # via xskillscore
-xskillscore @ git+https://github.com/rhiza-research/xskillscore@1489aafa837a250dc9cd6dee7c952bfd181e71b1
+xskillscore @ git+https://github.com/rhiza-research/xskillscore@24836c2994c41c7566d6e4d686df7eb28f7a3455
     # via sheerwater-benchmarking
 xyzservices==2024.9.0
     # via bokeh
