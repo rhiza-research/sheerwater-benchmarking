@@ -316,3 +316,34 @@ def ghcn(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
     ds = ds.assign_attrs(sparse=True)
 
     return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['variable', 'agg_days', 'grid', 'mask', 'region', 'missing_thresh'],
+           chunking={'lat': 300, 'lon': 300, 'time': 365},
+           cache=False)
+def ghcn_avg(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global',
+         missing_thresh=0.5):
+    """Standard interface for ghcn data."""
+    ds = ghcnd_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation='mean')
+
+    # Get the variable
+    variable_ghcn = get_variable(variable, 'ghcn')
+    variable_sheerwater = get_variable(variable, 'sheerwater')
+    ds = ds[variable_ghcn].to_dataset()
+
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable_ghcn, grid=grid)
+
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
+
+    # Rename
+    ds = ds.rename({variable_ghcn: variable_sheerwater})
+
+    # Note that this is sparse
+    ds = ds.assign_attrs(sparse=True)
+
+    return ds
