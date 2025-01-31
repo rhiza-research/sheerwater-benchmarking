@@ -7,6 +7,8 @@ import glob
 import pandas as pd
 import dask
 import xarray as xr
+import os
+import shutil
 
 @dask_remote
 @cacheable(data_type='array', cache_args=['date'])
@@ -58,6 +60,13 @@ def fuxi_single_forecast(date):
     ]
 
     ds = ds[variables]
+    ds = ds.compute()
+
+    # Delete the files
+    link = os.path.realpath(path)
+    os.remove(path)
+    os.remove(link)
+    shutil.rmtree(target_path)
 
     return ds
 
