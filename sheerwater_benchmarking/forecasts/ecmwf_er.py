@@ -303,12 +303,8 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
 def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in_days=6,
                                        run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts."""
-    if time_group in ['8d', '11d']:
-        ds = ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=margin_in_days,
-                                         run_type=run_type, time_group='daily', grid='global1_5')
-    else:
-        ds = ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=margin_in_days,
-                                         run_type=run_type, time_group=time_group, grid='global1_5')
+    ds = ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=margin_in_days,
+                                     run_type=run_type, time_group=time_group, grid='global1_5')
     if grid == 'global1_5':
         return ds
 
