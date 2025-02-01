@@ -1,7 +1,7 @@
 """Cache tables in postgres for the SPW dashboard."""
 import xarray as xr
 
-from sheerwater_benchmarking.utils import cacheable, dask_remote, roll_and_agg
+from sheerwater_benchmarking.utils import cacheable, dask_remote, roll_and_agg, apply_mask, clip_region
 from sheerwater_benchmarking.metrics import get_datasource_fn
 from sheerwater_benchmarking.reanalysis import era5
 from sheerwater_benchmarking.baselines import climatology_raw
@@ -13,18 +13,6 @@ from sheerwater_benchmarking.tasks import (
 
 @dask_remote
 @cacheable(data_type='tabular',
-           cache_args=['grid', 'mask', 'region'],
-           backend='postgres')
-def ltn_windowed_spw(grid='global1_5', mask='lsm', region='global'):
-    """Store the rolling windows of precipitation relevant to SPW in the database."""
-    ds =
-    # Get the ground truth data
-    # Call GHCN with non-default mean cell aggregation
-    return ds
-
-
-@dask_remote
-@cacheable(data_type='tabular',
            cache_args=['truth', 'grid', 'mask', 'region'],
            backend='postgres')
 def rain_windowed_spw(start_time, end_time,
@@ -32,24 +20,33 @@ def rain_windowed_spw(start_time, end_time,
                       grid='global1_5', mask='lsm', region='global'):
     """Store the rolling windows of precipitation relevant to SPW in the database."""
     # Get the ground truth data
-    source_fn = get_datasource_fn(truth)
-    if truth == 'ghcn':
-        # Call GHCN with non-default mean cell aggregation
-        ds = source_fn(start_time, end_time, 'precip', agg_days=1,
-                       grid=grid, mask=mask, region=region, cell_aggregation='mean')
+    if truth == 'ltn':
+        time_dim = 'dayofyear'
+        # Call raw climatology data for 12 years prior to evaluation period
+        ds = climatology_raw('precip', first_year=2004, last_year=2015, grid=grid)
+        # Mask and clip the region
+        ds = apply_mask(ds, mask, var='precip', grid=grid)
+        ds = clip_region(ds, region=region)
     else:
-        # Run without GHCN specific cell aggregation flag
-        ds = source_fn(start_time, end_time, 'precip', agg_days=1,
-                       grid=grid, mask=mask, region=region)
+        time_dim = 'time'
+        source_fn = get_datasource_fn(truth)
+        if truth == 'ghcn':
+            # Call GHCN with non-default mean cell aggregation
+            ds = source_fn(start_time, end_time, 'precip', agg_days=1,
+                           grid=grid, mask=mask, region=region, cell_aggregation='mean')
+        else:
+            # Run without GHCN specific cell aggregation flag
+            ds = source_fn(start_time, end_time, 'precip', agg_days=1,
+                           grid=grid, mask=mask, region=region)
 
     # Compute the rolling windows of precipitation relevant to SPW
     missing_thresh = 0.5
     agg_days = 8
     agg_thresh = max(int(agg_days*missing_thresh), 1)
-    ds['precip_8d'] = roll_and_agg(ds['precip'], agg=agg_days, agg_col='time', agg_fn='sum', agg_thresh=agg_thresh)
+    ds['precip_8d'] = roll_and_agg(ds['precip'], agg=agg_days, agg_col=time_dim, agg_fn='sum', agg_thresh=agg_thresh)
     agg_days = 11
     agg_thresh = max(int(agg_days*missing_thresh), 1)
-    ds['precip_11d'] = roll_and_agg(ds['precip'], agg=agg_days, agg_col='time', agg_fn='sum', agg_thresh=agg_thresh)
+    ds['precip_11d'] = roll_and_agg(ds['precip'], agg=agg_days, agg_col=time_dim, agg_fn='sum', agg_thresh=agg_thresh)
 
     ds = ds.drop_vars('spatial_ref')
     ds = ds.to_dataframe()
@@ -59,15 +56,18 @@ def rain_windowed_spw(start_time, end_time,
 @dask_remote
 @cacheable(data_type='tabular',
            backend='postgres',
-           cache_args=['truth', 'grid', 'mask', 'region'])
+           cache_args=['truth', 'use_ltn', 'grid', 'mask', 'region'])
 def ea_rainy_onset_truth(start_time, end_time,
                          truth='era5',
+                         use_ltn=False,
                          grid='global1_5', mask='lsm', region='global'):
     """Store the East African rainy season onset from a given truth source, according to the SPW method."""
     ds = rainy_season_onset_truth(start_time, end_time, truth=truth,
+                                  use_ltn=use_ltn, first_year=2004, last_year=2015,
                                   groupby=[['ea_rainy_season', 'year']],
                                   region=region, mask=mask, grid=grid)
-    ds = ds.drop_vars('spatial_ref')
+    if 'spatial_ref' in ds.coords:
+        ds = ds.drop_vars('spatial_ref')
     df = ds.to_dataframe()
     df = df.dropna(subset='rainy_onset')
     return df

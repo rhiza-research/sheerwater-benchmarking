@@ -8,6 +8,7 @@ from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
+                                           roll_and_agg,
                                            regrid, get_variable,
                                            target_date_to_forecast_date,
                                            shift_forecast_date_to_target_date)
@@ -126,7 +127,6 @@ def ifs_extended_range(start_time, end_time, variable, forecast_type,
     elif variable == 'ssrd':
         ds.attrs.update(units='Joules/m^2')
         ds = np.maximum(ds, 0)
-
     if grid == 'global1_5':
         return ds
     # Regrid onto appropriate grid
@@ -288,6 +288,7 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
            cache_args=['variable', 'margin_in_days', 'run_type', 'time_group', 'grid'],
            cache=True,
            timeseries=['start_date'],
+           cache_disable_if={'grid': 'global1_5'},
            chunking={"lat": 121, "lon": 240, "lead_time": 1,
                      "start_date": 1000,
                      "model_issuance_date": 1000, "start_year": 1,
@@ -302,8 +303,12 @@ def ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=6
 def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in_days=6,
                                        run_type='average', time_group='weekly', grid="global1_5"):
     """Computes the debiased ECMWF forecasts."""
-    ds = ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=margin_in_days,
-                                     run_type=run_type, time_group=time_group, grid='global1_5')
+    if time_group in ['8d', '11d']:
+        ds = ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=margin_in_days,
+                                         run_type=run_type, time_group='daily', grid='global1_5')
+    else:
+        ds = ifs_extended_range_debiased(start_time, end_time, variable, margin_in_days=margin_in_days,
+                                         run_type=run_type, time_group=time_group, grid='global1_5')
     if grid == 'global1_5':
         return ds
 
@@ -323,44 +328,104 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries='time',
-           cache=False,
-           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic',
-                 grid='global1_5', mask='lsm', region="global"):
-    """Standard format forecast data for ECMWF forecasts."""
-    lead_params = {}
-    for i in range(46):
-        lead_params[f"day{i+1}"] = ('daily', i)
-    for i in [0, 7, 14, 21, 28, 35]:
-        lead_params[f"week{i//7+1}"] = ('weekly', i)
-    for i in [0, 7, 14, 21, 28]:
-        lead_params[f"weeks{(i//7)+1}{(i//7)+2}"] = ('biweekly', i)
+           cache_args=['variable', 'run_type', 'time_group', 'debiased', 'grid'],
+           timeseries=['start_date'],
+           cache_disable_if={'time_group': ['daily', 'weekly', 'biweekly']},
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
+                     "start_date": 1000, "member": 1},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, "start_date": 30}
+               },
+           })
+def ifs_extended_range_unified(start_time, end_time, variable,
+                               run_type='average', time_group='weekly',
+                               debiased=True, grid="global1_5"):
+    if debiased:
+        fn = ifs_extended_range_debiased_regrid
+        kwargs = {'margin_in_days': 6}
+    else:
+        fn = ifs_extended_range
+        kwargs = {'forecast_type': 'forecast'}
 
-    time_group, lead_offset_days = lead_params.get(lead, (None, None))
-    if time_group is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
+    if time_group in ['8d', '11d']:
+        ds = fn(start_time, end_time, variable,
+                run_type=run_type, time_group='daily', grid=grid, **kwargs)
+        missing_thresh = 0.5
+        agg_days = int(time_group[:-1])  # get the number of agg days
+        agg_thresh = max(int(agg_days*missing_thresh), 1)
+        ds[variable] = roll_and_agg(ds[variable], agg=agg_days, agg_col='lead_time',
+                                    agg_fn='mean', agg_thresh=agg_thresh)
+    else:
+        ds = fn(start_time, end_time, variable,
+                run_type=run_type, time_group=time_group, grid=grid, **kwargs)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'run_type', 'time_group', 'debiased', 'grid', 'mask', 'region'],
+           cache=False,
+           timeseries=['time', 'start_date'],
+           chunking={"lat": 121, "lon": 240, "lead_time": 1,
+                     "start_date": 1000,
+                     "model_issuance_date": 1000, "start_year": 1,
+                     "member": 1},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'model_issuance_date': 30, "start_date": 30}
+               },
+           })
+def ecmwf_ifs_er_unified(start_time, end_time, variable,
+                         prob_type='deterministic', time_group='weekly',
+                         lead=None, debiased=True,
+                         grid="global1_5", mask='lsm', region="global"):
+    """Computes the debiased ECMWF forecasts."""
+    if time_group is not None and lead is not None:
+        raise ValueError("Cannot specify both time_group and lead.")
+
+    if time_group is not None:
+        if time_group not in ['daily', 'weekly', 'biweekly', '8d', '11d']:
+            raise NotImplementedError(f"Time group {time_group} not implemented for ECMWF forecasts.")
+    if lead is not None:
+        lead_params = {}
+        for i in range(46):
+            lead_params[f"day{i+1}"] = ('daily', i)
+        for i in range(34):
+            lead_params[f"8d_window{i+1}"] = ('8d', i)
+        for i in range(31):
+            lead_params[f"11d_window{i+1}"] = ('11d', i)
+        for i in [0, 7, 14, 21, 28, 35]:
+            lead_params[f"week{i//7+1}"] = ('weekly', i)
+        for i in [0, 7, 14, 21, 28]:
+            lead_params[f"weeks{(i//7)+1}{(i//7)+2}"] = ('biweekly', i)
+        time_group, lead_offset_days = lead_params.get(lead, (None, None))
+        if time_group is None:
+            raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
 
     # Convert start and end time to forecast start and end based on lead time
-    forecast_start = target_date_to_forecast_date(start_time, lead)
-    forecast_end = target_date_to_forecast_date(end_time, lead)
+    if lead is not None:
+        forecast_start = target_date_to_forecast_date(start_time, lead)
+        forecast_end = target_date_to_forecast_date(end_time, lead)
+    else:
+        forecast_start = start_time
+        forecast_end = end_time
 
-    if prob_type == 'deterministic':
-        ds = ifs_extended_range(forecast_start, forecast_end, variable, forecast_type="forecast",
-                                run_type='average', time_group=time_group, grid=grid)
-        ds = ds.assign_attrs(prob_type="deterministic")
-    else:  # probabilistic
-        ds = ifs_extended_range(forecast_start, forecast_end, variable, forecast_type="forecast",
-                                run_type='perturbed', time_group=time_group, grid=grid)
-        ds = ds.assign_attrs(prob_type="ensemble")
+    run_type = 'perturbed' if prob_type == 'probabilistic' else 'average'
+    prob_label = 'deterministic' if prob_type == 'deterministic' else 'ensemble'
+    ds = ecmwf_ifs_er_unified(forecast_start, forecast_end, variable,
+                              run_type=run_type, time_group=time_group,
+                              debiased=debiased, grid=grid)
+    ds = ds.assign_attrs(prob_type=prob_label)
 
     # Get specific lead
-    lead_shift = np.timedelta64(lead_offset_days, 'D')
-    ds = ds.sel(lead_time=lead_shift)
+    if lead is not None:
+        lead_shift = np.timedelta64(lead_offset_days, 'D')
+        ds = ds.sel(lead_time=lead_shift)
 
-    # Time shift - we want target date, instead of forecast date
-    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
-    ds = ds.rename({'start_date': 'time'})
+        # Time shift - we want target date, instead of forecast date
+        ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+        ds = ds.rename({'start_date': 'time'})
 
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip' and time_group != 'daily':
@@ -380,50 +445,22 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
+def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic',
+                 grid='global1_5', mask='lsm', region="global"):
+    """Standard format forecast data for ECMWF forecasts."""
+    return ecmwf_ifs_er_unified(start_time, end_time, variable, prob_type=prob_type,
+                                time_group=None, lead=lead, debiased=False,
+                                grid=grid, mask=mask, region=region)
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=False,
+           cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def ecmwf_ifs_er_debiased(start_time, end_time, variable, lead, prob_type='deterministic',
                           grid='global1_5', mask='lsm', region="global"):
     """Standard format forecast data for ECMWF forecasts."""
-    lead_params = {}
-    for i in range(46):
-        lead_params[f"day{i+1}"] = ('daily', i)
-    for i in [0, 7, 14, 21, 28, 35]:
-        lead_params[f"week{i//7+1}"] = ('weekly', i)
-    for i in [0, 7, 14, 21, 28]:
-        lead_params[f"weeks{(i//7)+1}{(i//7)+2}"] = ('biweekly', i)
-
-    time_group, lead_offset_days = lead_params.get(lead, (None, None))
-    if time_group is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF debiased forecasts.")
-
-    # Convert start and end time to forecast start and end based on lead time
-    forecast_start = target_date_to_forecast_date(start_time, lead)
-    forecast_end = target_date_to_forecast_date(end_time, lead)
-
-    if prob_type == 'deterministic':
-        ds = ifs_extended_range_debiased_regrid(forecast_start, forecast_end, variable, margin_in_days=6,
-                                                run_type='average', time_group=time_group, grid=grid)
-        ds = ds.assign_attrs(prob_type="deterministic")
-    else:  # probabilistic
-        ds = ifs_extended_range_debiased_regrid(forecast_start, forecast_end, variable, margin_in_days=6,
-                                                run_type='perturbed', time_group=time_group, grid=grid)
-        ds = ds.assign_attrs(prob_type="ensemble")
-
-    # Get specific lead
-    lead_shift = np.timedelta64(lead_offset_days, 'D')
-    ds = ds.sel(lead_time=lead_shift)
-
-    # Time shift - we want target date, instead of forecast date
-    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
-    ds = ds.rename({'start_date': 'time'})
-
-    # TODO: remove this once we update ECMWF caches
-    if variable == 'precip' and time_group != 'daily':
-        print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
-        agg = {'weekly': 7, 'biweekly': 14}[time_group]
-        ds['precip'] /= agg
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-    return ds
+    return ecmwf_ifs_er_unified(start_time, end_time, variable, prob_type=prob_type,
+                                time_group=None, lead=lead, debiased=True,
+                                grid=grid, mask=mask, region=region)

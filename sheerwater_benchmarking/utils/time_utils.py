@@ -14,18 +14,22 @@ DATETIME_FORMAT = "%Y-%m-%d"
 LEAD_OFFSETS = {
     'daily': (1, (0, 'days')),
     'weekly': (7, (0, 'days')),
-    'week1': (7, (0, 'days')),
-    'week2': (7, (7, 'days')),
-    'week3': (7, (14, 'days')),
-    'week4': (7, (21, 'days')),
-    'week5': (7, (28, 'days')),
-    'week6': (7, (35, 'days')),
     'biweekly': (14, (0, 'days')),
-    'weeks12': (14, (0, 'days')),
-    'weeks34': (14, (14, 'days')),
-    'weeks56': (14, (28, 'days')),
+    '8d': (8, (0, 'days')),
+    '11d': (11, (0, 'days')),
     'monthly': (30, (0, 'days')),
 }
+# Add daily and 8/11d windows
+for i in range(46):
+    LEAD_OFFSETS[f"day{i+1}"] = (1, (i, 'days'))
+for i in [0, 7, 14, 21, 28, 35]:
+    LEAD_OFFSETS[f"week{i//7+1}"] = (7, (i, 'days'))
+for i in [0, 7, 14, 21, 28]:
+    LEAD_OFFSETS[f"weeks{(i//7)+1}{(i//7)+2}"] = (14, (i, 'days'))
+for i in range(34):
+    LEAD_OFFSETS[f"8d_window{i+1}"] = (8, (i, 'days'))
+for i in range(31):
+    LEAD_OFFSETS[f"11d_window{i+1}"] = (11, (i, 'days'))
 
 
 def lead_to_agg_days(lead):
@@ -78,28 +82,29 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
                     return 'OND'
                 else:
                     return None
-            coords.append([month_to_period(x) for x in ds[time_dim].dt.month.values])
+
+            # coords.append([month_to_period(x) for x in ds[time_dim].dt.month.values])
+            coords.append(np.vectorize(month_to_period)(ds[time_dim].dt.month.values))
         elif grp == 'year':
             coords.append(ds[time_dim].dt.year.values)
         else:
             raise ValueError("Invalid time grouping.")
-    # Drop elements that can't be grouped (e.g., months outside of the rainy season onset groups)
-    has_group = [None not in x for x in zip(*coords)]
-    ds = ds.isel({time_dim: has_group})
 
-    # Give each group a string representation that concatenates the group values
-    joined_coords = []
-    for i, coord in enumerate(zip(*coords)):  # iterate over all time entires
-        if has_group[i]:  # only group if the time entry has a group
-            coord_str = []  # string representation of the group
-            for y in coord:  # iterate over all group values
-                try:
-                    coord_str.append(f"{y:02d}")  # if the group value is a number, format it as a string
-                except ValueError:  # MAM / OND strings
-                    coord_str.append(y)
-            joined_coords.append("-".join(coord_str))  # join the group values with a dash
+    def group_to_str(coord):
+        coord_str = []  # string representation of the group
+        if not isinstance(coord, list):
+            coord = [coord]
+        for y in coord:  # iterate over all group values
+            if y is None:  # if any values are None, give a none grouping value
+                return None
+            try:
+                coord_str.append(f"{y:02d}")  # if the group value is a number, format it as a string
+            except ValueError:  # MAM / OND strings
+                coord_str.append(y)
+        return "-".join(coord_str)  # join the group values with a dash
 
-    ds = ds.assign_coords(group=(time_dim, joined_coords))
+    joined_coords = np.vectorize(group_to_str)(*coords)
+    ds = ds.assign_coords(group=(ds[time_dim].dims, joined_coords))
     return ds
 
 
@@ -125,6 +130,10 @@ def convert_group_to_time(group, grouping):
         yy = '1904'
         mm = '01'
         dd = '01'
+        if entry is None:
+            return None
+        if not isinstance(grouping, list):
+            grouping = [grouping]
         for grp, val in zip(grouping, entry.split('-')):
             if grp == 'month':
                 mm = f"{int(val):02d}"
@@ -144,7 +153,9 @@ def convert_group_to_time(group, grouping):
         return np.datetime64(f"{yy}-{mm}-{dd}", 'ns')
     if not isinstance(grouping, list):
         grouping = [grouping]
-    return [convert_to_datetime(x, grouping) for x in group.values]
+
+    return np.vectorize(convert_to_datetime)(group.values, grouping)
+    # return [convert_to_datetime(x, grouping) for x in group.values]
 
 
 def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, only_schema=False, **kwargs):
