@@ -324,7 +324,8 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'run_type', 'time_group', 'debiased', 'grid'],
+           cache_args=['variable', 'prob_type', 'time_group', 'debiased', 'grid'],
+           cache=True,
            timeseries=['start_date'],
            cache_disable_if={'time_group': ['daily', 'weekly', 'biweekly']},
            chunking={"lat": 121, "lon": 240, "lead_time": 1,
@@ -334,9 +335,11 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
                    'global0_25': {"lat": 721, "lon": 1440, "start_date": 30}
                },
            })
-def ifs_extended_range_unified(start_time, end_time, variable,
-                               run_type='average', time_group='weekly',
-                               debiased=True, grid="global1_5"):
+def ifs_extended_range_forecast(start_time, end_time, variable,
+                                prob_type='deterministic', time_group='weekly',
+                                debiased=True, grid="global1_5"):
+    """Standard format forecast data for ECMWF forecasts."""
+    run_type = 'perturbed' if prob_type == 'probabilistic' else 'average'
     if debiased:
         fn = ifs_extended_range_debiased_regrid
         kwargs = {'margin_in_days': 6}

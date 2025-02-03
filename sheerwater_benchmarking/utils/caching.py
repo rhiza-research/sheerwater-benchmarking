@@ -585,11 +585,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
                     d = {key: d[key] for key in common_keys}
 
-                    # If they match then disable caching
-                    if comp_arg_values == d:
-                        print(f"Caching disabled for arg values {d}")
-                        cache = False
-                        break
+                    # Compare common keys
+                    for k in common_keys:
+                        if not cache:
+                            break
+                        if comp_arg_values[k] in d[k]:
+                            print(f"Caching disabled for arg values {d}")
+                            cache = False
+
             elif cache_disable_if is not None:
                 raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
 
