@@ -81,7 +81,7 @@ def parse_args():
             regions, leads, time_groupings, args.parallelism,
             args.recompute, args.backend, args.remote_name, args.remote, remote_config)
 
-def prune_metrics(combos, skip_all_coupled=False):
+def prune_metrics(combos, global=False):
     """Prunes a list of metrics combinations.
 
     Can skip all coupled metrics for global runs.
@@ -90,10 +90,10 @@ def prune_metrics(combos, skip_all_coupled=False):
     for combo in combos:
         metric, variable, grid, region, lead, forecast, time_grouping, truth = combo
 
-        if 'tahmo' in truth and region != 'east_africa':
+        if not global and 'tahmo' in truth and region != 'east_africa':
             continue
 
-        if skip_all_coupled:
+        if global:
             if is_coupled(metric):
                 continue
         else:
