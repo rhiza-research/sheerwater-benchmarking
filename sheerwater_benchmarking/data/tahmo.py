@@ -1,18 +1,17 @@
 """Get Tahmo data."""
-import numpy as np
 import dask.dataframe as dd
-import pandas as pd
 import xarray as xr
 
 from sheerwater_benchmarking.utils.caching import cacheable
-from sheerwater_benchmarking.utils import get_grid_ds, get_grid, get_variable, roll_and_agg, apply_mask, clip_region
+from sheerwater_benchmarking.utils import get_grid_ds, get_grid, roll_and_agg, apply_mask, clip_region
 from sheerwater_benchmarking.utils.remote import dask_remote
 
 @dask_remote
 @cacheable(data_type='tabular', cache_args=['station_code'], cache=True)
 def tahmo_station(station_code):
     """Get Tahmo station data."""
-    obs = dd.read_csv(f"gs://sheerwater-datalake/tahmo-data/tahmo_qc_stations_v2/{station_code}.csv", on_bad_lines="skip")
+    obs = dd.read_csv(f"gs://sheerwater-datalake/tahmo-data/tahmo_qc_stations_v2/{station_code}.csv",
+                      on_bad_lines="skip")
 
     # Get a list of columns starting with quality and merge them
     quality_cols = [col for col in obs.columns if col.startswith('quality')]
@@ -38,9 +37,8 @@ def tahmo_station(station_code):
                'lat': 300,
                'lon': 300,
         }, validate_cache_timeseries=False)
-def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first'):
+def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first'): # noqa: ARG001
     """Get tahmo data from the QC controlled stations."""
-
     # Get the station list
     stat = dd.read_csv("gs://sheerwater-datalake/tahmo-data/tahmo_station_locs.csv")
     stations = stat['station code'].unique()
@@ -149,7 +147,7 @@ def tahmo(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm
     ds = tahmo_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation='first')
 
     # Apply masking
-    ds = apply_mask(ds, mask, var=variable_ghcn, grid=grid)
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
 
     # Clip to specified region
     ds = clip_region(ds, region=region)
@@ -174,7 +172,7 @@ def tahmo_avg(start_time, end_time, variable, agg_days, grid='global0_25', mask=
     ds = tahmo_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation='mean')
 
     # Apply masking
-    ds = apply_mask(ds, mask, var=variable_ghcn, grid=grid)
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
 
     # Clip to specified region
     ds = clip_region(ds, region=region)
