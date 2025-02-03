@@ -1,20 +1,21 @@
-from huggingface_hub import hf_hub_download
-from huggingface_hub.utils import EntryNotFoundError
-from sheerwater_benchmarking.utils.secrets import huggingface_read_token
-from sheerwater_benchmarking.utils import cacheable, dask_remote
-import py7zr
+"""Interface for FuXi forecasts."""
+
+import os
 import glob
-import pandas as pd
+import shutil
 import dask
 import xarray as xr
-import os
-import shutil
 import numpy as np
+import pandas as pd
+import py7zr
 
+from huggingface_hub import hf_hub_download
+from huggingface_hub.utils import EntryNotFoundError
+
+from sheerwater_benchmarking.utils.secrets import huggingface_read_token
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
-                                           regrid, get_variable,
                                            target_date_to_forecast_date,
                                            shift_forecast_date_to_target_date, lead_to_agg_days, roll_and_agg)
 
@@ -22,6 +23,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
 @dask_remote
 @cacheable(data_type='array', cache_args=['date'])
 def fuxi_single_forecast(date):
+    """Download a single forecast from the FuXi dataset."""
     token = huggingface_read_token()
 
     date = str(date)
@@ -86,6 +88,7 @@ def fuxi_single_forecast(date):
 @cacheable(data_type='array', cache_args=[], timeseries='time',
            chunking={'lat': 121, 'lon': 240, 'lead_time': 14, 'time': 2, 'member': 51})
 def fuxi_raw(start_time, end_time, delayed=False):
+    """Combine a range of forecasts with or without dask delayed."""
     dates = pd.date_range(start_time, end_time)
 
     datasets = []
@@ -118,6 +121,7 @@ def fuxi_raw(start_time, end_time, delayed=False):
 
     return ds
 
+#### Decided not to regrid fuxi data, but leaving this as a comment
 #@dask_remote
 #@cacheable(data_type='array',
 #           timeseries='time',
@@ -139,6 +143,7 @@ def fuxi_raw(start_time, end_time, delayed=False):
            cache_args=['agg_days', 'prob_type'],
            chunking={'lat': 121, 'lon': 240, 'lead_time': 14, 'time': 2, 'member': 51})
 def fuxi_rolled(start_time, end_time, agg_days=7, prob_type='probabilistic'):
+    """Roll and aggregate the FuXi data."""
     ds = fuxi_raw(start_time, end_time)
 
     # If deterministic average across the members
@@ -159,7 +164,7 @@ def fuxi_rolled(start_time, end_time, agg_days=7, prob_type='probabilistic'):
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
          grid='global1_5', mask='lsm', region="global"):
-
+    """Final fuxi forecast interface."""
     if grid != 'global1_5':
         raise NotImplementedError("Only 1.5 grid implemented for FuXi.")
 
