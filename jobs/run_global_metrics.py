@@ -14,13 +14,13 @@ from jobs import parse_args, run_in_parallel, prune_metrics
 if remote:
     start_remote(remote_config=remote_config, remote_name=remote_name)
 
-combos = itertools.product(metrics, variables, grids, [None], leads, forecasts, [None])
+combos = itertools.product(metrics, variables, grids, [None], leads, forecasts, [None], truth)
 combos = prune_metrics(combos, skip_all_coupled=True)
 
 
 def run_grouped(combo):
     """Run global metrics."""
-    metric, variable, grid, _, lead, forecast, _ = combo
+    metric, variable, grid, _, lead, forecast, _, truth = combo
 
     if metric == 'rmse':
         metric = 'mse'

@@ -15,14 +15,14 @@ from jobs import parse_args, run_in_parallel, prune_metrics
 if remote:
     start_remote(remote_config=remote_config, remote_name=remote_name)
 
-combos = itertools.product(metrics, variables, grids, regions, leads, forecasts, time_groupings)
+combos = itertools.product(metrics, variables, grids, regions, leads, forecasts, time_groupings, truth)
 combos = prune_metrics(combos)
 
 
 def run_grouped(combo):
     """Run grouped metrics."""
     print(combo)
-    metric, variable, grid, region, lead, forecast, time_grouping = combo
+    metric, variable, grid, region, lead, forecast, time_grouping, truth = combo
 
     try:
         return grouped_metric(start_time, end_time, variable, lead, forecast, truth, metric,

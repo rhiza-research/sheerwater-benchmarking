@@ -28,12 +28,12 @@ if 'crps' in metrics:
 if 'acc' in metrics:
     metrics.remove('acc')
 
-combos = itertools.product(metrics, variables, grids, regions, [None], [None], time_groupings)
+combos = itertools.product(metrics, variables, grids, regions, [None], [None], time_groupings, truth)
 combos = prune_metrics(combos)
 
 def run_metrics_table(combo):
     """Run table metrics."""
-    metric, variable, grid, region, _, _, time_grouping = combo
+    metric, variable, grid, region, _, _, time_grouping, truth = combo
 
     try:
         return station_metrics_table(start_time, end_time, variable, truth, metric,
