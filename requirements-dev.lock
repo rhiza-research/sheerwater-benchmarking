@@ -83,6 +83,8 @@ botocore==1.35.36
     # via aiobotocore
     # via boto3
     # via s3transfer
+brotli==1.1.0
+    # via py7zr
 cachetools==5.5.0
     # via asyncache
     # via google-auth
@@ -183,8 +185,12 @@ distributed==2024.10.0
     # via dask-kubernetes
 durationpy==0.9
     # via kubernetes
+easyprocess==1.1
+    # via pyunpack
 ecmwf-api-client==1.6.3
     # via sheerwater-benchmarking
+entrypoint2==1.1
+    # via pyunpack
 executing==2.1.0
     # via stack-data
 fabric==3.2.2
@@ -195,6 +201,7 @@ fastjsonschema==2.20.0
     # via nbformat
 filelock==3.16.1
     # via coiled
+    # via huggingface-hub
 flask==3.0.3
     # via flask-cors
     # via terracotta
@@ -214,6 +221,7 @@ fsspec==2024.10.0
     # via dask
     # via dask-deltatable
     # via gcsfs
+    # via huggingface-hub
     # via s3fs
 gcsfs==2024.10.0
     # via sheerwater-benchmarking
@@ -299,6 +307,8 @@ httpx==0.27.2
     # via kr8s
 httpx-ws==0.6.2
     # via kr8s
+huggingface-hub==0.28.1
+    # via sheerwater-benchmarking
 hyperframe==6.0.1
     # via h2
 idna==3.10
@@ -309,6 +319,8 @@ idna==3.10
     # via yarl
 importlib-metadata==8.4.0
     # via coiled
+inflate64==1.0.1
+    # via py7zr
 iniconfig==2.0.0
     # via pytest
 invoke==2.2.0
@@ -442,6 +454,8 @@ multidict==6.1.0
     # via yarl
 multiurl==0.3.2
     # via cads-api-client
+multivolumefile==0.2.3
+    # via py7zr
 nbclient==0.10.0
     # via nbconvert
 nbconvert==7.16.4
@@ -515,6 +529,7 @@ packaging==24.1
     # via flox
     # via geopandas
     # via h5netcdf
+    # via huggingface-hub
     # via ipykernel
     # via jupyter-server
     # via jupyterlab
@@ -550,6 +565,8 @@ parso==0.8.4
     # via jedi
 partd==1.4.2
     # via dask
+patool==3.1.0
+    # via sheerwater-benchmarking
 patsy==0.5.6
     # via statsmodels
 pexpect==4.9.0
@@ -591,6 +608,7 @@ protobuf==4.25.5
 psutil==6.1.0
     # via distributed
     # via ipykernel
+    # via py7zr
 psycopg2-binary==2.9.10
     # via sheerwater-benchmarking
 ptyprocess==0.7.0
@@ -600,6 +618,8 @@ pure-eval==0.2.3
     # via stack-data
 pvlib==0.10.5
     # via salientsdk
+py7zr==1.0.0rc2
+    # via sheerwater-benchmarking
 pyarrow==18.0.0
     # via dask
     # via dask-deltatable
@@ -610,8 +630,12 @@ pyasn1==0.6.1
     # via rsa
 pyasn1-modules==0.4.1
     # via google-auth
+pybcj==1.0.3
+    # via py7zr
 pycparser==2.22
     # via cffi
+pycryptodomex==3.21.0
+    # via py7zr
 pygments==2.18.0
     # via ipython
     # via nbconvert
@@ -627,6 +651,8 @@ pyparsing==3.2.0
     # via matplotlib
     # via pip-requirements-parser
     # via rasterio
+pyppmd==1.1.1
+    # via py7zr
 pyproj==3.7.0
     # via cartopy
     # via geopandas
@@ -657,11 +683,14 @@ pytz==2024.2
     # via multiurl
     # via pandas
     # via pvlib
+pyunpack==0.3
+    # via sheerwater-benchmarking
 pyyaml==6.0.2
     # via apispec
     # via bokeh
     # via dask
     # via distributed
+    # via huggingface-hub
     # via jsondiff
     # via jupyter-events
     # via jupytext
@@ -675,6 +704,8 @@ pyzmq==26.2.0
     # via ipykernel
     # via jupyter-client
     # via jupyter-server
+pyzstd==0.16.2
+    # via py7zr
 rasterio==1.4.1
     # via rioxarray
     # via terracotta
@@ -692,6 +723,7 @@ requests==2.32.3
     # via gcsfs
     # via google-api-core
     # via google-cloud-storage
+    # via huggingface-hub
     # via jupyterlab-server
     # via kubernetes
     # via multiurl
@@ -784,6 +816,8 @@ terminado==0.18.1
     # via jupyter-server-terminals
 terracotta==0.8.5
     # via sheerwater-benchmarking
+texttable==1.7.0
+    # via py7zr
 threadpoolctl==3.5.0
     # via scikit-learn
 tinycss2==1.4.0
@@ -809,6 +843,7 @@ tornado==6.4.1
     # via terminado
 tqdm==4.66.6
     # via cdsapi
+    # via huggingface-hub
     # via multiurl
     # via terracotta
 traitlets==5.14.3
@@ -831,6 +866,7 @@ types-python-dateutil==2.9.0.20241003
 typing-extensions==4.12.2
     # via cads-api-client
     # via coiled
+    # via huggingface-hub
     # via kopf
     # via sqlalchemy
 tzdata==2024.2

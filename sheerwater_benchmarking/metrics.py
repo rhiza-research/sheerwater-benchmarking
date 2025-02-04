@@ -321,7 +321,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                },
            },
-           cache=True)
+           cache=True,
+           validate_cache_timeseries=False)
 def global_metric(start_time, end_time, variable, lead, forecast, truth,
                   metric, grid="global1_5", mask='lsm', region='global'):
     """Compute a metric without aggregating in space or time at a specific lead."""
@@ -550,7 +551,7 @@ def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    forecasts = ['salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
+    forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                  'climatology_trend_2015', 'climatology_rolling']
     leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,

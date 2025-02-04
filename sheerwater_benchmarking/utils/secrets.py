@@ -16,6 +16,17 @@ def postgres_write_password():
 
     return key
 
+def huggingface_read_token():
+    """Get a postgres read password."""
+    client = secretmanager.SecretManagerServiceClient()
+
+    response = client.access_secret_version(
+        request={"name": "projects/750045969992/secrets/hugging-face-read/versions/latest"})
+    key = response.payload.data.decode("UTF-8")
+
+    return key
+
+
 
 def postgres_read_password():
     """Get a postgres read password."""
