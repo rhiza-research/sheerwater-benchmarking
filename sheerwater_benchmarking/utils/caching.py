@@ -856,7 +856,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                or none instead of {type(ds)}""")
 
                         # TODO: combine repeated code
-                        write = False
+                        write = False  # boolean to determine if we should write to the cache
                         if storage_backend == 'delta':
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
@@ -901,7 +901,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
                     elif data_type == 'basic':
                         if backend == 'pickle':
-                            write = False
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
