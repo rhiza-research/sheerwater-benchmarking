@@ -15,7 +15,7 @@ if remote:
     start_remote(remote_config=remote_config, remote_name=remote_name)
 
 combos = itertools.product(metrics, variables, grids, [None], leads, forecasts, [None], truth)
-combos = prune_metrics(combos, skip_all_coupled=True)
+combos = prune_metrics(combos, global_run=True)
 
 
 def run_grouped(combo):

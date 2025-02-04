@@ -118,7 +118,8 @@ def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first')
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['agg_days', 'grid', 'missing_thresh', 'cell_aggregation'],
-           chunking={'lat': 300, 'lon': 300, 'time': 365})
+           chunking={'lat': 300, 'lon': 300, 'time': 365},
+           validate_cache_timeseries=False)
 def tahmo_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thresh=0.5, cell_aggregation='first'):
     """Tahmo rolled and aggregated."""
     # Get the data
