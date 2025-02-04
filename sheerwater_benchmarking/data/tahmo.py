@@ -13,16 +13,18 @@ def tahmo_station(station_code):
     obs = dd.read_csv(f"gs://sheerwater-datalake/tahmo-data/tahmo_qc_stations_v2/{station_code}.csv",
                       on_bad_lines="skip")
 
-    # Get a list of columns starting with quality and merge them
+    # Get a list of columns starting with quality and PR
     quality_cols = [col for col in obs.columns if col.startswith('quality')]
-    obs['qual'] = obs[quality_cols].mean(axis=1)
 
-    # Get a list of columns starting with pr and merge them
+    # Get a list of columns starting with pr and take max because ragin gauges
+    # rarely over report
     pr_cols = [col for col in obs.columns if col.startswith('pr')]
-    obs['precip'] = obs[pr_cols].mean(axis=1)
+    obs['precip'] = obs[pr_cols].max(axis=1)
+
+    # Add station code
     obs['station_code'] = station_code
 
-    # Drop the quality columns
+    # Drop the extra columns
     obs = obs.drop(columns=quality_cols)
     obs = obs.drop(columns=pr_cols)
 
@@ -50,6 +52,8 @@ def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first')
         except FileNotFoundError:
             print(f"File not found for station {station}. Skipping")
 
+    # Reading multiple parquets required reading all of them one folder up.
+    # Passing multiple paths to read_parquet did not work (dask bug?)
     print(files[0].split('/')[:-1])
     path = '/'.join(files[0].split('/')[:-1])
     obs = dd.read_parquet(path)
@@ -58,11 +62,11 @@ def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first')
     obs['time'] = dd.to_datetime(obs['Timestamp'])
     obs = obs.drop(['Timestamp'], axis=1)
 
-    # For each station ID roll the data into a daily mean
+    # For each station ID roll the data into a daily sum
     obs = obs.groupby([obs.time.dt.date, 'station_code']).agg({'precip': 'sum'})
     obs = obs.reset_index()
 
-    # Convert time back to a datetime
+    # Convert what is now a date back to a datetime
     obs['time'] = dd.to_datetime(obs['time'])
 
     # Round the coordinates to the nearest grid
@@ -91,7 +95,7 @@ def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first')
         # Prepare for xarray
         obs = obs.drop(['station_code', 'name', 'country'], axis=1)
 
-        # Group by only way to set a multi index in dask?
+        # A multi index must be set to convert to xarray and this is the only way in dask.
         obs = obs.groupby(['lat', 'lon', 'time']).agg(precip=('precip', 'mean'))
     elif cell_aggregation == 'mean':
         # Group by lat/lon/time
@@ -113,7 +117,7 @@ def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first')
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache_args=['grid', 'agg_days', 'missing_thresh', 'cell_aggregation'],
+           cache_args=['agg_days', 'grid', 'missing_thresh', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def tahmo_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thresh=0.5, cell_aggregation='first'):
     """Tahmo rolled and aggregated."""
