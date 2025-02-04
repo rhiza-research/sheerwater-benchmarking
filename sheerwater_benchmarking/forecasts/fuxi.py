@@ -87,7 +87,7 @@ def fuxi_single_forecast(date):
 @cacheable(data_type='array', cache_args=[], timeseries='time',
            chunking={'lat': 121, 'lon': 240, 'lead_time': 14, 'time': 2, 'member': 51})
 def fuxi_raw(start_time, end_time, delayed=False):
-    """Combine a range of forecasts with or without dask delayed."""
+    """Combine a range of forecasts with or without dask delayed. Returns daily, unagged fuxi timeseries"""
     dates = pd.date_range(start_time, end_time)
 
     datasets = []
@@ -136,11 +136,30 @@ def fuxi_raw(start_time, end_time, delayed=False):
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['agg_days', 'prob_type'],
+           cache_args=['variable', 'agg_days', 'prob_type'],
            chunking={'lat': 121, 'lon': 240, 'lead_time': 14, 'time': 2, 'member': 51})
-def fuxi_rolled(start_time, end_time, agg_days=7, prob_type='probabilistic'):
+def fuxi_rolled(start_time, end_time, variable, agg_days=7, prob_type='probabilistic'):
     """Roll and aggregate the FuXi data."""
     ds = fuxi_raw(start_time, end_time)
+
+    # sort the lat dim and change the lon dim
+    ds = lon_base_change(ds)
+    ds = ds.sortby(ds.lat)
+
+    # Get the right variable
+    ds = ds[[variable]]
+
+    # convert based on a linear conversion factor of the average forecast to the era5 average
+    if variable == 'precip':
+        ds['precip'] = ds['precip'] * 27.4
+
+    # Convert from kelvin
+    if variable == 'tmp2m':
+        ds['tmp2m'] = ds['tmp2m'] - 273.15
+
+    # Convert the lead time into a time delta that is 0 indexed
+    ds['lead_time'] = ds['lead_time'] - 1
+    ds['lead_time'] = ds['lead_time'] * np.timedelta64(1, 'D')
 
     # If deterministic average across the members
     if prob_type == 'deterministic':
@@ -188,27 +207,10 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
 
     # Get the data with the right days
     agg_days = lead_to_agg_days(lead)
-    ds = fuxi_rolled(forecast_start, forecast_end, prob_type=prob_type, agg_days=agg_days)
-    ds = lon_base_change(ds)
-
-    # Get the right variable
-    attrs = ds.attrs
-    ds = ds[variable].to_dataset()
-    ds = ds.assign_attrs(attrs)
-
-    # flip the lat dim
-    ds = ds.reindex(lat=list(reversed(ds.lat)))
-
-    # convert to mm
-    # if variable == 'precip':
-    #    ds['precip'] = ds['precip'] * 1000
-
-    # Convert from kelvin
-    if variable == 'tmp2m':
-        ds['tmp2m'] = ds['tmp2m'] - 273.15
+    ds = fuxi_rolled(forecast_start, forecast_end, variable=variable, prob_type=prob_type, agg_days=agg_days)
 
     # Get specific lead
-    lead_shift = np.timedelta64(lead_offset_days + 1, 'D')
+    lead_shift = np.timedelta64(lead_offset_days, 'D')
     ds = ds.sel(lead_time=lead_shift)
 
     # Time shift - we want target date, instead of forecast date
