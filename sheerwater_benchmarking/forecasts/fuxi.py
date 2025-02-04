@@ -26,8 +26,7 @@ def fuxi_single_forecast(date):
     """Download a single forecast from the FuXi dataset."""
     token = huggingface_read_token()
 
-    date = str(date)
-    date = date.replace('-', '')
+    date = str(date).replace('-', '')
     fname = date + '.7z'
     target_path = f"./{fname.replace('.7z', '')}"
 
@@ -45,7 +44,8 @@ def fuxi_single_forecast(date):
 
     files = glob.glob(f"{target_path}/**/*.nc", recursive=True)
 
-    def pre(ds):
+    def preprocess(ds):
+        """Preprocess the dataset to add the member dimension."""
         ff = ds.encoding["source"]
         member = ff.split('/')[-2]
         ds = ds.assign_coords(member=member)
@@ -54,8 +54,8 @@ def fuxi_single_forecast(date):
 
     # Transform and drop dataa
     print("Opening dataset")
-    ds = xr.open_mfdataset(files, engine='netcdf4', preprocess=pre)
-    return ds
+    ds = xr.open_mfdataset(files, engine='netcdf4', preprocess=preprocess)
+    # return ds
 
     ds = ds['__xarray_dataarray_variable__'].to_dataset(dim='channel')
 
@@ -71,8 +71,6 @@ def fuxi_single_forecast(date):
         'tcwv'
     ]
 
-    print(ds)
-
     ds = ds[variables]
     ds = ds.compute()
 
@@ -83,6 +81,7 @@ def fuxi_single_forecast(date):
     shutil.rmtree(target_path)
 
     return ds
+
 
 @dask_remote
 @cacheable(data_type='array', cache_args=[], timeseries='time',
@@ -98,13 +97,10 @@ def fuxi_raw(start_time, end_time, delayed=False):
             ds = dask.delayed(fuxi_single_forecast)(date, filepath_only=True)
         else:
             ds = fuxi_single_forecast(date, filepath_only=True)
-
         datasets.append(ds)
 
     if delayed:
         datasets = dask.compute(*datasets)
-
-    print(datasets)
 
     data = [d for d in datasets if d is not None]
     if len(data) == 0:
@@ -112,23 +108,22 @@ def fuxi_raw(start_time, end_time, delayed=False):
         return None
 
     ds = xr.open_mfdataset(data,
-                          engine='zarr',
-                          combine="by_coords",
-                          parallel=True,
-                          chunks={'lat': 121, 'lon': 240, 'lead_time': 14, 'time': 2, 'member': 51})
+                           engine='zarr',
+                           combine="by_coords",
+                           parallel=True,
+                           chunks={'lat': 121, 'lon': 240, 'lead_time': 14, 'time': 2, 'member': 51})
 
     ds = ds.rename({'tp': 'precip', 't2m': 'tmp2m'})
-
     return ds
 
-#### Decided not to regrid fuxi data, but leaving this as a comment
-#@dask_remote
-#@cacheable(data_type='array',
+# Decided not to regrid fuxi data, but leaving this as a comment
+# @dask_remote
+# @cacheable(data_type='array',
 #           timeseries='time',
 #           cache_args=['grid'],
 #           cache_disable_if={'grid':'global1_5'},
 #           chunking={'lat': 121, 'lon': 240, 'lead_time': 14, 'time': 2, 'member': 51})
-#def fuxi_gridded(start_time, end_time, grid='global1_5'):
+# def fuxi_gridded(start_time, end_time, grid='global1_5'):
 #
 #    ds = fuxi_raw(start_time, end_time)
 #
@@ -137,6 +132,7 @@ def fuxi_raw(start_time, end_time, delayed=False):
 #                    output_chunks={"lat": 721, "lon": 1440})
 #
 #    return ds
+
 
 @dask_remote
 @cacheable(data_type='array',
@@ -152,10 +148,10 @@ def fuxi_rolled(start_time, end_time, agg_days=7, prob_type='probabilistic'):
         ds = ds.assign_attrs(prob_type="deterministic")
     else:
         ds = ds.assign_attrs(prob_type="ensemble")
-
     ds = roll_and_agg(ds, agg=agg_days, agg_col="lead_time", agg_fn="mean")
 
     return ds
+
 
 @dask_remote
 @cacheable(data_type='array',
@@ -184,7 +180,7 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
     }
     time_group, lead_offset_days = lead_params.get(lead, (None, None))
     if time_group is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF debiased forecasts.")
+        raise NotImplementedError(f"Lead {lead} not implemented for FuXi forecasts.")
 
     # Convert start and end time to forecast start and end based on lead time
     forecast_start = target_date_to_forecast_date(start_time, lead)
@@ -195,7 +191,6 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = fuxi_rolled(forecast_start, forecast_end, prob_type=prob_type, agg_days=agg_days)
     ds = lon_base_change(ds)
 
-
     # Get the right variable
     attrs = ds.attrs
     ds = ds[variable].to_dataset()
@@ -205,7 +200,7 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = ds.reindex(lat=list(reversed(ds.lat)))
 
     # convert to mm
-    #if variable == 'precip':
+    # if variable == 'precip':
     #    ds['precip'] = ds['precip'] * 1000
 
     # Convert from kelvin
@@ -219,12 +214,8 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
     # Time shift - we want target date, instead of forecast date
     ds = shift_forecast_date_to_target_date(ds, 'time', lead)
 
-    # Apply masking
+    # Apply masking and clip to region
     ds = apply_mask(ds, mask, var=variable, grid=grid)
-
-    # Clip to specified region
     ds = clip_region(ds, region=region)
 
     return ds
-
-
