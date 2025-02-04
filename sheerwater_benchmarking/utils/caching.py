@@ -233,12 +233,14 @@ def chunk_to_zarr(ds, cache_path, verify_path, chunking):
         chunking = prune_chunking_dimensions(ds, chunking)
 
     ds = ds.chunk(chunks=chunking)
-    chunk_size, chunk_with_labels = get_chunk_size(ds)
+    try:
+        chunk_size, chunk_with_labels = get_chunk_size(ds)
 
-    if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
-        print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
-        print(chunk_with_labels)
-
+        if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
+            print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
+            print(chunk_with_labels)
+    except ValueError:
+        print("Failed to get chunks size! Continuing with unknown chunking...")
     write_to_zarr(ds, cache_path, verify_path)
 
 
