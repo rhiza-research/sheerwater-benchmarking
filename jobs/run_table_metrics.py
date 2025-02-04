@@ -15,7 +15,7 @@ from jobs import parse_args, run_in_parallel, prune_metrics
 if remote:
     start_remote(remote_config=remote_config, remote_name=remote_name)
 
-combos = itertools.product(metrics, variables, grids, regions, [None], [None], time_groupings)
+combos = itertools.product(metrics, variables, grids, regions, [None], [None], time_groupings, truth)
 combos = prune_metrics(combos)
 
 filepath_only = True
@@ -25,7 +25,7 @@ if backend is not None:
 
 def run_metrics_table(combo):
     """Run table metrics."""
-    metric, variable, grid, region, _, _, time_grouping = combo
+    metric, variable, grid, region, _, _, time_grouping, truth = combo
 
     try:
         return summary_metrics_table(start_time, end_time, variable, truth, metric,

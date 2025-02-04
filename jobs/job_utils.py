@@ -12,7 +12,7 @@ def parse_args():
     parser.add_argument("--start-time", default="2016-01-01", type=str)
     parser.add_argument("--end-time", default="2022-12-31", type=str)
     parser.add_argument("--forecast", type=str, nargs='*')
-    parser.add_argument("--truth", type=str, default="era5")
+    parser.add_argument("--truth", type=str, nargs='*')
     parser.add_argument("--variable", type=str, nargs='*')
     parser.add_argument("--metric", type=str, nargs='*')
     parser.add_argument("--grid", type=str, nargs='*')
@@ -37,10 +37,9 @@ def parse_args():
         forecasts = args.forecast
 
     if args.station_evaluation:
-        truth = "ghcn"
-
-    if args.truth:
-        truth = args.truth
+        truth = ["ghcn", "ghcn_avg", "tahmo", "tahmo_avg"]
+    else:
+        truth = ["era5", "tahmo_avg", "ghcn_avg"]
 
     if args.station_evaluation:
         metrics = ["mae", "rmse", "bias", "acc", "smape", "seeps", "pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
@@ -82,16 +81,19 @@ def parse_args():
             regions, leads, time_groupings, args.parallelism,
             args.recompute, args.backend, args.remote_name, args.remote, remote_config)
 
-def prune_metrics(combos, skip_all_coupled=False):
+def prune_metrics(combos, global=False):
     """Prunes a list of metrics combinations.
 
     Can skip all coupled metrics for global runs.
     """
     pruned_combos = []
     for combo in combos:
-        metric, variable, grid, region, lead, forecast, time_grouping = combo
+        metric, variable, grid, region, lead, forecast, time_grouping, truth = combo
 
-        if skip_all_coupled:
+        if not global and 'tahmo' in truth and region != 'east_africa':
+            continue
+
+        if global:
             if is_coupled(metric):
                 continue
         else:
