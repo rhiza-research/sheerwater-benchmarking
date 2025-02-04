@@ -575,6 +575,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     cache_disable_if = [cache_disable_if]
 
                 for d in cache_disable_if:
+                    if not cache:  # once the cache is disabled we can break
+                        break
+
                     if not isinstance(d, dict):
                         raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
 
@@ -589,7 +592,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     for k in common_keys:
                         if not cache:
                             break
-                        if comp_arg_values[k] in d[k]:
+                        if (isinstance(d[k], list) and comp_arg_values[k] in d[k]) or \
+                                (not isinstance(d[k], list) and comp_arg_values[k] == d[k]):
                             print(f"Caching disabled for arg values {d}")
                             cache = False
 
