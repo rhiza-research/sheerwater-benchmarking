@@ -87,7 +87,7 @@ def fuxi_single_forecast(date):
 @cacheable(data_type='array', cache_args=[], timeseries='time',
            chunking={'lat': 121, 'lon': 240, 'lead_time': 14, 'time': 2, 'member': 51})
 def fuxi_raw(start_time, end_time, delayed=False):
-    """Combine a range of forecasts with or without dask delayed. Returns daily, unagged fuxi timeseries"""
+    """Combine a range of forecasts with or without dask delayed. Returns daily, unagged fuxi timeseries."""
     dates = pd.date_range(start_time, end_time)
 
     datasets = []
