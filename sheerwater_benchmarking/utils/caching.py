@@ -821,9 +821,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             f.write(b'')
                             return None
 
+                    write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            write = False
                             if cache_exists(storage_backend, cache_path, verify_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -833,7 +833,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-
                                 print(f"Caching result for {cache_path} as zarr.")
                                 if isinstance(ds, xr.Dataset):
                                     cache_map = fs.get_mapper(cache_path)
@@ -844,19 +843,16 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 else:
                                     raise RuntimeError(
                                         f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
-
                         # Either way if terracotta is specified as a backend try to write the result array to terracotta
                         elif storage_backend == 'terracotta':
                             print(f"Also caching {cache_key} to terracotta.")
                             write_to_terracotta(cache_key, ds)
-
                     elif data_type == 'tabular':
                         if not (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
                             raise RuntimeError(f"""Tabular datatypes must return pandas or dask dataframe
                                                or none instead of {type(ds)}""")
 
                         # TODO: combine repeated code
-                        write = False  # boolean to determine if we should write to the cache
                         if storage_backend == 'delta':
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
