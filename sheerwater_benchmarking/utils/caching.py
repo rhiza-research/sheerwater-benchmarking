@@ -29,6 +29,32 @@ CHUNK_SIZE_UPPER_LIMIT_MB = 300
 CHUNK_SIZE_LOWER_LIMIT_MB = 30
 
 
+def flatten_nested(data):
+    """Flattens a nested iterable into a single iterable.
+
+    Args:
+        data (list, tuple, dict, set, ...): An iterable that may contain nested iterables.
+    """
+    if isinstance(data, (list, tuple, set)):
+        for item in data:
+            sub_vals = []
+            for sub_item in flatten_nested(item):
+                sub_vals.append(sub_item)
+            sub_vals.sort()
+            for sub_item in sub_vals:
+                yield sub_item
+    elif isinstance(data, dict):
+        for k, v in data.items():
+            sub_vals = []
+            for sub_item in flatten_nested(v):
+                sub_vals.append(sub_item)
+            sub_vals.sort()
+            for sub_item in sub_vals:
+                yield f"{k}-{sub_item}"
+    else:
+        yield data
+
+
 def get_cache_args(kwargs, cache_kwargs):
     """Extract the cache arguments from the kwargs and return them."""
     cache_args = []
@@ -207,15 +233,11 @@ def chunk_to_zarr(ds, cache_path, verify_path, chunking):
         chunking = prune_chunking_dimensions(ds, chunking)
 
     ds = ds.chunk(chunks=chunking)
+    chunk_size, chunk_with_labels = get_chunk_size(ds)
 
-    try:
-        chunk_size, chunk_with_labels = get_chunk_size(ds)
-
-        if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
-            print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
-            print(chunk_with_labels)
-    except ValueError:
-        print("Failed to get chunks size! Continuing with unknown chunking...")
+    if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
+        print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
+        print(chunk_with_labels)
 
     write_to_zarr(ds, cache_path, verify_path)
 
@@ -553,6 +575,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     cache_disable_if = [cache_disable_if]
 
                 for d in cache_disable_if:
+                    if not cache:  # once the cache is disabled we can break
+                        break
+
                     if not isinstance(d, dict):
                         raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
 
@@ -563,30 +588,22 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
                     d = {key: d[key] for key in common_keys}
 
-                    # If they match then disable caching
-                    if comp_arg_values == d:
-                        print(f"Caching disabled for arg values {d}")
-                        cache = False
-                        break
+                    # Compare common keys
+                    for k in common_keys:
+                        if not cache:
+                            break
+                        if (isinstance(d[k], list) and comp_arg_values[k] in d[k]) or \
+                                (not isinstance(d[k], list) and comp_arg_values[k] == d[k]):
+                            print(f"Caching disabled for arg values {d}")
+                            cache = False
+
             elif cache_disable_if is not None:
                 raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
 
             imkeys = list(cache_arg_values.keys())
             imkeys.sort()
-            sorted_values = [cache_arg_values[i] for i in imkeys]
-            flat_values = []
-            for val in sorted_values:
-                if isinstance(val, list):
-                    sub_vals = [str(v) for v in val]
-                    sub_vals.sort()
-                    flat_values += sub_vals
-                elif isinstance(val, dict):
-                    sub_vals = [f"{k}-{v}" for k, v in val.items()]
-                    sub_vals.sort()
-                    flat_values += sub_vals
-                else:
-                    flat_values.append(str(val))
-
+            cache_values = [cache_arg_values[i] for i in imkeys]
+            flat_values = [str(val) for val in flatten_nested(cache_values)]
             cache_key = func.__name__ + '/' + '_'.join(flat_values)
             verify_path = None
             if data_type == 'array':
@@ -616,6 +633,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     cache_path = cache_key
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = False
+                else:
+                    raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
             elif data_type == 'basic':
                 backend = "pickle" if backend is None else backend
                 if storage_backend is None:
