@@ -42,6 +42,9 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean", agg_thresh=None):
     else:
         raise NotImplementedError(f"Aggregation function {agg_fn} not implemented.")
 
+    # Check to see if coord is a time value
+    assert np.issubdtype(ds[agg_col].dtype, np.timedelta64) or np.issubdtype(ds[agg_col].dtype, np.datetime64)
+
     # Drop the nan values added by the rolling aggregation at the end
     ds_agg = ds_agg.dropna(agg_col, how="all")
 

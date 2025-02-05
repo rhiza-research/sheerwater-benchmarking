@@ -38,6 +38,9 @@ config_options = {
     'xxlarge_node': {
         'worker_vm_types': ['c3-standard-88']
     },
+    'large_disk': {
+        'worker_disk_size': '300GiB'
+    },
 }
 
 

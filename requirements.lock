@@ -2,7 +2,7 @@
 # use `rye lock` or `rye sync` to update this lockfile
 #
 # last locked with the following flags:
-#   pre: true
+#   pre: false
 #   features: []
 #   all-features: false
 #   with-sources: false
@@ -12,11 +12,11 @@
 -e file:.
 affine==2.4.0
     # via rasterio
-aiobotocore==2.15.2
+aiobotocore==2.19.0
     # via s3fs
-aiohappyeyeballs==2.4.3
+aiohappyeyeballs==2.4.4
     # via aiohttp
-aiohttp==3.10.10
+aiohttp==3.11.11
     # via aiobotocore
     # via coiled
     # via gcsfs
@@ -26,14 +26,14 @@ aiohttp==3.10.10
     # via s3fs
 aioitertools==0.12.0
     # via aiobotocore
-aiosignal==1.3.1
+aiosignal==1.3.2
     # via aiohttp
-anyio==4.6.2.post1
+anyio==4.8.0
     # via httpx
     # via httpx-ws
     # via jupyter-server
     # via kr8s
-apispec==6.7.0
+apispec==6.8.1
     # via apispec-webframeworks
     # via terracotta
 apispec-webframeworks==1.2.0
@@ -47,54 +47,52 @@ argon2-cffi-bindings==21.2.0
     # via argon2-cffi
 arrow==1.3.0
     # via isoduration
-asciitree==0.3.3
-    # via zarr
-asttokens==2.4.1
+asttokens==3.0.0
     # via stack-data
 async-lru==2.0.4
     # via jupyterlab
 asyncache==0.3.1
     # via kr8s
-attrs==24.2.0
+attrs==25.1.0
     # via aiohttp
-    # via cads-api-client
+    # via datapi
     # via jsonschema
     # via rasterio
     # via referencing
-babel==2.16.0
+babel==2.17.0
     # via jupyterlab-server
 backoff==2.2.1
     # via coiled
     # via salientsdk
-bcrypt==4.2.0
+bcrypt==4.2.1
     # via paramiko
-beautifulsoup4==4.12.3
+beautifulsoup4==4.13.3
     # via google
     # via nbconvert
-bleach==6.1.0
+bleach==6.2.0
     # via nbconvert
-blinker==1.8.2
+blinker==1.9.0
     # via flask
-bokeh==3.6.0
+bokeh==3.6.3
     # via dask
     # via sheerwater-benchmarking
-boto3==1.35.36
+boto3==1.36.3
     # via coiled
-botocore==1.35.36
+botocore==1.36.3
     # via aiobotocore
     # via boto3
     # via s3transfer
-cachetools==5.5.0
+brotli==1.1.0
+    # via py7zr
+cachetools==5.5.1
     # via asyncache
     # via google-auth
     # via terracotta
-cads-api-client==1.4.7
-    # via cdsapi
 cartopy==0.23.0
     # via salientsdk
-cdsapi==0.7.4
+cdsapi==0.7.5
     # via sheerwater-benchmarking
-certifi==2024.8.30
+certifi==2025.1.31
     # via httpcore
     # via httpx
     # via kubernetes
@@ -111,9 +109,9 @@ cffi==1.17.1
     # via pynacl
 cftime==1.6.4.post1
     # via netcdf4
-charset-normalizer==3.4.0
+charset-normalizer==3.4.1
     # via requests
-click==8.1.7
+click==8.1.8
     # via click-plugins
     # via cligj
     # via coiled
@@ -131,27 +129,28 @@ click-spinner==0.1.10
     # via terracotta
 cligj==0.7.2
     # via rasterio
-cloudpickle==3.1.0
+cloudpickle==3.1.1
     # via dask
     # via distributed
-coiled==1.58.1
+coiled==1.76.1
     # via sheerwater-benchmarking
 comm==0.2.2
     # via ipykernel
     # via ipywidgets
-contourpy==1.3.0
+contourpy==1.3.1
     # via bokeh
     # via matplotlib
-cryptography==43.0.3
+crc32c==2.7.1
+    # via numcodecs
+cryptography==44.0.0
     # via kr8s
     # via paramiko
     # via sheerwater-benchmarking
 cycler==0.12.1
     # via matplotlib
-dask==2024.10.0
+dask==2025.1.0
     # via coiled
     # via dask-deltatable
-    # via dask-expr
     # via dask-kubernetes
     # via distributed
     # via salientsdk
@@ -160,13 +159,13 @@ dask==2024.10.0
     # via xskillscore
 dask-deltatable==0.3.3
     # via sheerwater-benchmarking
-dask-expr==1.1.16
-    # via dask
-dask-kubernetes==2024.9.0
+dask-kubernetes==2025.1.1
     # via sheerwater-benchmarking
-dateparser==1.2.0
+datapi==0.2.0
+    # via cdsapi
+dateparser==1.2.1
     # via sheerwater-benchmarking
-debugpy==1.8.7
+debugpy==1.8.12
     # via ipykernel
 decorator==5.1.1
     # via fabric
@@ -174,50 +173,53 @@ decorator==5.1.1
     # via ipython
 defusedxml==0.7.1
     # via nbconvert
-deltalake==0.20.2
+deltalake==0.24.0
     # via dask-deltatable
     # via sheerwater-benchmarking
-deprecated==1.2.14
+deprecated==1.2.18
     # via fabric
-distributed==2024.10.0
+    # via numcodecs
+distributed==2025.1.0
     # via coiled
     # via dask
     # via dask-kubernetes
+donfig==0.8.1.post1
+    # via zarr
 durationpy==0.9
     # via kubernetes
 ecmwf-api-client==1.6.3
     # via sheerwater-benchmarking
-executing==2.1.0
+executing==2.2.0
     # via stack-data
 fabric==3.2.2
     # via coiled
-fasteners==0.19
-    # via zarr
-fastjsonschema==2.20.0
+fastjsonschema==2.21.1
     # via nbformat
-filelock==3.16.1
+filelock==3.17.0
     # via coiled
-flask==3.0.3
+    # via huggingface-hub
+flask==3.1.0
     # via flask-cors
     # via terracotta
 flask-cors==5.0.0
     # via terracotta
-flox==0.9.13
+flox==0.10.0
     # via sheerwater-benchmarking
     # via xarray-regrid
-fonttools==4.54.1
+fonttools==4.55.8
     # via matplotlib
 fqdn==1.5.1
     # via jsonschema
 frozenlist==1.5.0
     # via aiohttp
     # via aiosignal
-fsspec==2024.10.0
+fsspec==2025.2.0
     # via dask
     # via dask-deltatable
     # via gcsfs
+    # via huggingface-hub
     # via s3fs
-gcsfs==2024.10.0
+gcsfs==2025.2.0
     # via sheerwater-benchmarking
 geopandas==1.0.1
     # via salientsdk
@@ -226,14 +228,14 @@ gilknocker==0.4.1
     # via coiled
 google==3.0.0
     # via salientsdk
-google-api-core==2.22.0
+google-api-core==2.24.1
     # via google-api-python-client
     # via google-cloud-core
     # via google-cloud-secret-manager
     # via google-cloud-storage
-google-api-python-client==2.149.0
+google-api-python-client==2.160.0
     # via sheerwater-benchmarking
-google-auth==2.35.0
+google-auth==2.38.0
     # via gcsfs
     # via google-api-core
     # via google-api-python-client
@@ -249,10 +251,10 @@ google-auth-oauthlib==1.2.1
     # via gcsfs
 google-cloud-core==2.4.1
     # via google-cloud-storage
-google-cloud-secret-manager==2.21.0
+google-cloud-secret-manager==2.22.1
     # via salientsdk
     # via sheerwater-benchmarking
-google-cloud-storage==2.18.2
+google-cloud-storage==3.0.0
     # via gcsfs
     # via sheerwater-benchmarking
 google-crc32c==1.6.0
@@ -260,13 +262,13 @@ google-crc32c==1.6.0
     # via google-resumable-media
 google-resumable-media==2.7.2
     # via google-cloud-storage
-googleapis-common-protos==1.65.0
+googleapis-common-protos==1.66.0
     # via google-api-core
     # via grpc-google-iam-v1
     # via grpcio-status
-grpc-google-iam-v1==0.13.1
+grpc-google-iam-v1==0.14.0
     # via google-cloud-secret-manager
-grpcio==1.67.0
+grpcio==1.70.0
     # via google-api-core
     # via googleapis-common-protos
     # via grpc-google-iam-v1
@@ -276,32 +278,34 @@ grpcio-status==1.62.3
 h11==0.14.0
     # via httpcore
     # via wsproto
-h2==4.1.0
+h2==4.2.0
     # via httpx
-h5netcdf==1.4.0
+h5netcdf==1.5.0
     # via salientsdk
     # via sheerwater-benchmarking
 h5py==3.12.1
     # via h5netcdf
     # via pvlib
     # via sheerwater-benchmarking
-hpack==4.0.0
+hpack==4.1.0
     # via h2
-httpcore==1.0.6
+httpcore==1.0.7
     # via httpx
     # via httpx-ws
 httplib2==0.22.0
     # via google-api-python-client
     # via google-auth-httplib2
     # via sheerwater-benchmarking
-httpx==0.27.2
+httpx==0.28.1
     # via coiled
     # via httpx-ws
     # via jupyterlab
     # via kr8s
-httpx-ws==0.6.2
+httpx-ws==0.7.1
     # via kr8s
-hyperframe==6.0.1
+huggingface-hub==0.28.1
+    # via sheerwater-benchmarking
+hyperframe==6.1.0
     # via h2
 idna==3.10
     # via anyio
@@ -309,8 +313,10 @@ idna==3.10
     # via jsonschema
     # via requests
     # via yarl
-importlib-metadata==8.4.0
+importlib-metadata==8.6.1
     # via coiled
+inflate64==1.0.1
+    # via py7zr
 iniconfig==2.0.0
     # via pytest
 invoke==2.2.0
@@ -319,7 +325,7 @@ invoke==2.2.0
 ipykernel==6.29.5
     # via jupyterlab
     # via sheerwater-benchmarking
-ipython==8.29.0
+ipython==8.32.0
     # via ipykernel
     # via ipywidgets
 ipywidgets==8.1.5
@@ -330,9 +336,9 @@ isoduration==20.11.0
     # via jsonschema
 itsdangerous==2.2.0
     # via flask
-jedi==0.19.1
+jedi==0.19.2
     # via ipython
-jinja2==3.1.4
+jinja2==3.1.5
     # via bokeh
     # via dask
     # via distributed
@@ -342,12 +348,13 @@ jinja2==3.1.4
     # via jupyterlab-server
     # via nbconvert
 jmespath==1.0.1
+    # via aiobotocore
     # via boto3
     # via botocore
     # via coiled
 joblib==1.4.2
     # via scikit-learn
-json5==0.9.25
+json5==0.10.0
     # via jupyterlab-server
 jsondiff==2.2.1
     # via coiled
@@ -371,11 +378,11 @@ jupyter-core==5.7.2
     # via nbclient
     # via nbconvert
     # via nbformat
-jupyter-events==0.10.0
+jupyter-events==0.12.0
     # via jupyter-server
 jupyter-lsp==2.2.5
     # via jupyterlab
-jupyter-server==2.14.2
+jupyter-server==2.15.0
     # via jupyter-lsp
     # via jupyter-server-proxy
     # via jupyterlab
@@ -386,7 +393,7 @@ jupyter-server-proxy==4.4.0
     # via sheerwater-benchmarking
 jupyter-server-terminals==0.5.3
     # via jupyter-server
-jupyterlab==4.2.5
+jupyterlab==4.3.5
     # via notebook
     # via sheerwater-benchmarking
 jupyterlab-pygments==0.3.0
@@ -396,22 +403,22 @@ jupyterlab-server==2.27.3
     # via notebook
 jupyterlab-widgets==3.0.13
     # via ipywidgets
-jupytext==1.16.4
+jupytext==1.16.6
     # via sheerwater-benchmarking
-kiwisolver==1.4.7
+kiwisolver==1.4.8
     # via matplotlib
-kopf==1.37.2
+kopf==1.37.4
     # via dask-kubernetes
 kr8s==0.17.4
     # via dask-kubernetes
-kubernetes==31.0.0
+kubernetes==32.0.0
     # via dask-kubernetes
-kubernetes-asyncio==31.1.0
+kubernetes-asyncio==32.0.0
     # via dask-kubernetes
 locket==1.0.0
     # via distributed
     # via partd
-lz4==4.3.3
+lz4==4.4.3
     # via dask
 markdown-it-py==3.0.0
     # via jupytext
@@ -421,9 +428,9 @@ markupsafe==3.0.2
     # via jinja2
     # via nbconvert
     # via werkzeug
-marshmallow==3.23.0
+marshmallow==3.26.1
     # via terracotta
-matplotlib==3.9.2
+matplotlib==3.10.0
     # via cartopy
     # via sheerwater-benchmarking
 matplotlib-inline==0.1.7
@@ -437,18 +444,23 @@ mercantile==1.2.1
     # via terracotta
 minio==7.2.15
     # via sheerwater-benchmarking
-mistune==3.0.2
+mistune==3.1.1
     # via nbconvert
 msgpack==1.1.0
     # via distributed
 multidict==6.1.0
+    # via aiobotocore
     # via aiohttp
     # via yarl
-multiurl==0.3.2
-    # via cads-api-client
-nbclient==0.10.0
+multiurl==0.3.3
+    # via datapi
+multivolumefile==0.2.3
+    # via py7zr
+narwhals==1.25.1
+    # via plotly
+nbclient==0.10.2
     # via nbconvert
-nbconvert==7.16.4
+nbconvert==7.16.6
     # via jupyter-server
 nbformat==5.10.4
     # via jupyter-server
@@ -460,14 +472,14 @@ nest-asyncio==1.6.0
 netcdf4==1.7.2
     # via salientsdk
     # via sheerwater-benchmarking
-notebook==7.2.2
+notebook==7.3.2
     # via sheerwater-benchmarking
 notebook-shim==0.2.4
     # via jupyterlab
     # via notebook
-numcodecs==0.13.1
+numcodecs==0.15.0
     # via zarr
-numpy==1.26.4
+numpy==2.2.2
     # via bokeh
     # via cartopy
     # via cftime
@@ -509,7 +521,7 @@ opt-einsum==3.4.0
     # via sheerwater-benchmarking
 overrides==7.7.0
     # via jupyter-server
-packaging==24.1
+packaging==24.2
     # via apispec
     # via bokeh
     # via cartopy
@@ -519,7 +531,9 @@ packaging==24.1
     # via flox
     # via geopandas
     # via h5netcdf
+    # via huggingface-hub
     # via ipykernel
+    # via jupyter-events
     # via jupyter-server
     # via jupyterlab
     # via jupyterlab-server
@@ -534,10 +548,10 @@ packaging==24.1
     # via rioxarray
     # via statsmodels
     # via xarray
+    # via zarr
 pandas==2.2.3
     # via bokeh
     # via dask
-    # via dask-expr
     # via flox
     # via geopandas
     # via pvlib
@@ -547,37 +561,38 @@ pandas==2.2.3
     # via xarray
 pandocfilters==1.5.1
     # via nbconvert
-paramiko==3.5.0
+paramiko==3.5.1
     # via coiled
     # via fabric
 parso==0.8.4
     # via jedi
 partd==1.4.2
     # via dask
-patsy==0.5.6
+patsy==1.0.1
     # via statsmodels
 pexpect==4.9.0
     # via ipython
-pillow==11.0.0
+pillow==11.1.0
     # via bokeh
     # via matplotlib
     # via terracotta
-pip==24.3.1
+pip==25.0
     # via coiled
 pip-requirements-parser==32.0.1
     # via coiled
 platformdirs==4.3.6
     # via jupyter-core
-plotly==5.24.1
+plotly==6.0.0
     # via sheerwater-benchmarking
 pluggy==1.5.0
     # via pytest
-prometheus-client==0.21.0
+prometheus-client==0.21.1
     # via coiled
     # via jupyter-server
-prompt-toolkit==3.0.48
+prompt-toolkit==3.0.50
     # via ipython
-propcache==0.2.0
+propcache==0.2.1
+    # via aiohttp
     # via yarl
 properscoring==0.1
     # via xskillscore
@@ -585,16 +600,17 @@ proto-plus==1.24.0.dev1
     # via google-api-core
     # via google-cloud-secret-manager
     # via sheerwater-benchmarking
-protobuf==4.25.5
+protobuf==4.25.6
     # via google-api-core
     # via google-cloud-secret-manager
     # via googleapis-common-protos
     # via grpc-google-iam-v1
     # via grpcio-status
     # via proto-plus
-psutil==6.1.0
+psutil==6.1.1
     # via distributed
     # via ipykernel
+    # via py7zr
 psycopg2-binary==2.9.10
     # via sheerwater-benchmarking
 ptyprocess==0.7.0
@@ -604,21 +620,26 @@ pure-eval==0.2.3
     # via stack-data
 pvlib==0.10.5
     # via salientsdk
-pyarrow==18.0.0
+py7zr==0.22.0
+    # via sheerwater-benchmarking
+pyarrow==19.0.0
     # via dask
     # via dask-deltatable
-    # via dask-expr
     # via deltalake
 pyasn1==0.6.1
     # via pyasn1-modules
     # via rsa
 pyasn1-modules==0.4.1
     # via google-auth
+pybcj==1.0.3
+    # via py7zr
 pycparser==2.22
     # via cffi
 pycryptodome==3.21.0
     # via minio
-pygments==2.18.0
+pycryptodomex==3.21.0
+    # via py7zr
+pygments==2.19.1
     # via ipython
     # via nbconvert
     # via rich
@@ -628,22 +649,25 @@ pynacl==1.5.0
     # via paramiko
 pyogrio==0.10.0
     # via geopandas
-pyparsing==3.2.0
+pyparsing==3.2.1
     # via httplib2
     # via matplotlib
     # via pip-requirements-parser
     # via rasterio
+pyppmd==1.1.1
+    # via py7zr
 pyproj==3.7.0
     # via cartopy
     # via geopandas
     # via rioxarray
 pyshp==2.3.1
     # via cartopy
-pytest==8.3.3
+pytest==8.3.4
     # via sheerwater-benchmarking
-python-box==7.2.0
+python-box==7.3.2
     # via kr8s
 python-dateutil==2.9.0.post0
+    # via aiobotocore
     # via arrow
     # via botocore
     # via dateparser
@@ -653,12 +677,12 @@ python-dateutil==2.9.0.post0
     # via matplotlib
     # via multiurl
     # via pandas
-python-json-logger==2.0.7
+python-json-logger==3.2.1
     # via jupyter-events
     # via kopf
-python-jsonpath==1.2.0
+python-jsonpath==1.3.0
     # via kr8s
-pytz==2024.2
+pytz==2025.1
     # via dateparser
     # via multiurl
     # via pandas
@@ -668,6 +692,8 @@ pyyaml==6.0.2
     # via bokeh
     # via dask
     # via distributed
+    # via donfig
+    # via huggingface-hub
     # via jsondiff
     # via jupyter-events
     # via jupytext
@@ -677,27 +703,30 @@ pyyaml==6.0.2
     # via kubernetes-asyncio
     # via pykube-ng
     # via terracotta
-pyzmq==26.2.0
+pyzmq==26.2.1
     # via ipykernel
     # via jupyter-client
     # via jupyter-server
-rasterio==1.4.1
+pyzstd==0.16.2
+    # via py7zr
+rasterio==1.4.3
     # via rioxarray
     # via terracotta
 ratelimit==2.2.1
     # via salientsdk
-referencing==0.35.1
+referencing==0.36.2
     # via jsonschema
     # via jsonschema-specifications
     # via jupyter-events
-regex==2024.9.11
+regex==2024.11.6
     # via dateparser
 requests==2.32.3
-    # via cads-api-client
     # via cdsapi
+    # via datapi
     # via gcsfs
     # via google-api-core
     # via google-cloud-storage
+    # via huggingface-hub
     # via jupyterlab-server
     # via kubernetes
     # via multiurl
@@ -715,29 +744,29 @@ rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
     # via jsonschema
     # via jupyter-events
-rich==13.9.3
+rich==13.9.4
     # via coiled
     # via dask-kubernetes
-rioxarray==0.17.0
+rioxarray==0.18.2
     # via sheerwater-benchmarking
-rpds-py==0.20.0
+rpds-py==0.22.3
     # via jsonschema
     # via referencing
 rsa==4.9
     # via google-auth
-ruff==0.7.1
+ruff==0.9.4
     # via sheerwater-benchmarking
-s3fs==2024.10.0
+s3fs==2025.2.0
     # via sheerwater-benchmarking
-s3transfer==0.10.3
+s3transfer==0.11.2
     # via boto3
-salientsdk==0.3.12
+salientsdk==0.3.17
     # via sheerwater-benchmarking
-scikit-learn==1.5.2
+scikit-learn==1.6.1
     # via salientsdk
     # via sheerwater-benchmarking
     # via weatherbench2
-scipy==1.14.1
+scipy==1.15.1
     # via flox
     # via properscoring
     # via pvlib
@@ -750,31 +779,27 @@ scipy==1.14.1
     # via xskillscore
 send2trash==1.8.3
     # via jupyter-server
-setuptools==75.2.0
+setuptools==75.8.0
     # via coiled
     # via jupyterlab
-shapely==2.0.6
+shapely==2.0.7
     # via cartopy
     # via geopandas
     # via terracotta
 simpervisor==1.0.0
     # via jupyter-server-proxy
-six==1.16.0
-    # via asttokens
-    # via bleach
+six==1.17.0
     # via kubernetes
     # via kubernetes-asyncio
-    # via patsy
     # via python-dateutil
     # via rfc3339-validator
 sniffio==1.3.1
     # via anyio
-    # via httpx
 sortedcontainers==2.4.0
     # via distributed
 soupsieve==2.6
     # via beautifulsoup4
-sqlalchemy==2.0.36
+sqlalchemy==2.0.37
     # via sheerwater-benchmarking
     # via terracotta
 stack-data==0.6.3
@@ -783,17 +808,17 @@ statsmodels==0.14.4
     # via xskillscore
 tblib==3.0.0
     # via distributed
-tenacity==9.0.0
-    # via plotly
 terminado==0.18.1
     # via jupyter-server
     # via jupyter-server-terminals
-terracotta==0.8.5
+terracotta==0.8.3
     # via sheerwater-benchmarking
+texttable==1.7.0
+    # via py7zr
 threadpoolctl==3.5.0
     # via scikit-learn
 tinycss2==1.4.0
-    # via nbconvert
+    # via bleach
 toml==0.10.2
     # via coiled
     # via salientsdk
@@ -803,7 +828,7 @@ toolz==1.0.0
     # via distributed
     # via flox
     # via partd
-tornado==6.4.1
+tornado==6.4.2
     # via bokeh
     # via distributed
     # via ipykernel
@@ -813,8 +838,9 @@ tornado==6.4.1
     # via jupyterlab
     # via notebook
     # via terminado
-tqdm==4.66.6
+tqdm==4.67.1
     # via cdsapi
+    # via huggingface-hub
     # via multiurl
     # via terracotta
 traitlets==5.14.3
@@ -832,15 +858,20 @@ traitlets==5.14.3
     # via nbclient
     # via nbconvert
     # via nbformat
-types-python-dateutil==2.9.0.20241003
+types-python-dateutil==2.9.0.20241206
     # via arrow
 typing-extensions==4.12.2
-    # via cads-api-client
+    # via anyio
+    # via beautifulsoup4
     # via coiled
+    # via datapi
+    # via huggingface-hub
     # via kopf
     # via minio
+    # via referencing
     # via sqlalchemy
-tzdata==2024.2
+    # via zarr
+tzdata==2025.1
     # via pandas
 tzlocal==5.2
     # via dateparser
@@ -848,7 +879,8 @@ uri-template==1.3.0
     # via jsonschema
 uritemplate==4.1.1
     # via google-api-python-client
-urllib3==2.2.3
+urllib3==2.3.0
+    # via aiobotocore
     # via botocore
     # via distributed
     # via kubernetes
@@ -858,9 +890,9 @@ urllib3==2.2.3
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit
-weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@17e6c3dd119c4b33ec56c6dc00c5d19414e40f5f
+weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@3c95b54a74a0fc92193901310f75014dcef9f448
     # via sheerwater-benchmarking
-webcolors==24.8.0
+webcolors==24.11.1
     # via jsonschema
 webencodings==0.5.1
     # via bleach
@@ -868,18 +900,18 @@ webencodings==0.5.1
 websocket-client==1.8.0
     # via jupyter-server
     # via kubernetes
-werkzeug==3.0.6
+werkzeug==3.1.3
     # via flask
-wheel==0.44.0
+wheel==0.45.1
     # via coiled
 widgetsnbextension==4.0.13
     # via ipywidgets
-wrapt==1.16.0
+wrapt==1.17.2
     # via aiobotocore
     # via deprecated
 wsproto==1.2.0
     # via httpx-ws
-xarray==2024.10.0
+xarray==2025.1.2
     # via rioxarray
     # via salientsdk
     # via sheerwater-benchmarking
@@ -891,16 +923,16 @@ xarray-regrid==0.4.0
     # via sheerwater-benchmarking
 xhistogram==0.3.2
     # via xskillscore
-xskillscore @ git+https://github.com/rhiza-research/xskillscore@1489aafa837a250dc9cd6dee7c952bfd181e71b1
+xskillscore @ git+https://github.com/rhiza-research/xskillscore@24836c2994c41c7566d6e4d686df7eb28f7a3455
     # via sheerwater-benchmarking
-xyzservices==2024.9.0
+xyzservices==2025.1.0
     # via bokeh
-yarl==1.16.0
+yarl==1.18.3
     # via aiohttp
-zarr==2.18.3
+zarr==3.0.2
     # via sheerwater-benchmarking
     # via weatherbench2
 zict==3.0.0
     # via distributed
-zipp==3.19.0
+zipp==3.21.0
     # via importlib-metadata
