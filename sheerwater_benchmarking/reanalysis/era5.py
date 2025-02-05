@@ -5,6 +5,7 @@ import numpy as np
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            get_variable, apply_mask, clip_region,
                                            roll_and_agg, lon_base_change, regrid)
+from sheerwater_benchmarking.tasks.spw import spw_rainy_onset
 
 
 @dask_remote
@@ -151,25 +152,34 @@ def era5_rolled(start_time, end_time, variable, agg_days=7, grid="global1_5"):
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['lead', 'prob_type', 'grid', 'mask', 'region', 'debiased'],
+           cache_args=['grid', 'mask', 'region',
+                       'groupby', 'use_ltn', 'first_year', 'last_year'],
            cache=False,
-           timeseries=['start_date'])
-def era5_spw(start_time, end_time, lead,
-             prob_type='deterministic',
+           timeseries='time')
+def era5_spw(start_time, end_time,
              grid="global1_5", mask='lsm', region="global",
-             groupby=[['ea_rainy_season', 'year']],
+             groupby=['ea_rainy_season', 'year'],
              use_ltn=False, first_year=2004, last_year=2015):
-    """Standard format forecast data for aggregated ERA5 forecasts."""
-    datasets = [era5_rolled(start_time, end_time, 'precip', agg_days=agg_days, grid=grid)
+    """Standard format forecast data for aggregated ECMWF forecasts."""
+    # Get the rolled and aggregated data, and then multiply average daily precip by the number of days
+    datasets = [agg_days*era5_rolled(start_time, end_time, 'precip',  agg_days=agg_days, grid=grid)
                 .rename({'precip': f'precip_{agg_days}d'})
                 for agg_days in [8, 11]]
+
+    # Merge both datasets
     ds = xr.merge(datasets)
-    # rainy_season_ds = rainy_season_onset_truth(start_time, end_time, truth='era5',
-    return ds
+
+    # Apply masking
+    ds = apply_mask(ds, mask, grid=grid)
+    ds = clip_region(ds, region=region)
+
+    rainy_onset_da = spw_rainy_onset(ds, groupby=groupby, time_dim='time', prob_dim=None)
+    rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
+    return rainy_onset_ds
 
 
-@ dask_remote
-@ cacheable(data_type='array',
+@dask_remote
+@cacheable(data_type='array',
            timeseries='time',
            cache=False,
            cache_args=['variable', 'agg_days', 'grid', 'mask', 'region'])
@@ -186,9 +196,12 @@ def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
         region (str): The region to clip the data to.
     """
     # Get daily data
-    ds=era5_rolled(start_time, end_time, variable, agg_days=agg_days, grid=grid)
-    # Apply masking
-    ds=apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds=clip_region(ds, region=region)
+    if variable == 'rainy_onset':
+        ds = era5_spw(start_time, end_time, grid=grid, mask=mask, region=region,
+                      groupby=['ea_rainy_season', 'year'], use_ltn=False)
+    else:
+        ds = era5_rolled(start_time, end_time, variable, agg_days=agg_days, grid=grid)
+        # Apply masking and clip region
+        ds = apply_mask(ds, mask, grid=grid)
+        ds = clip_region(ds, region=region)
     return ds

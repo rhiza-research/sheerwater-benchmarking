@@ -370,7 +370,7 @@ def ifs_extended_range_rolled(start_time, end_time, variable,
 def ifs_extended_range_spw(start_time, end_time, lead,
                            prob_type='deterministic', prob_threshold=0.6,
                            grid="global1_5", mask='lsm', region="global",
-                           groupby=[['ea_rainy_season', 'year']],
+                           groupby=['ea_rainy_season', 'year'],
                            debiased=True, use_ltn=False, first_year=2004, last_year=2015):
     """Standard format forecast data for aggregated ECMWF forecasts."""
     lead_params = {f"day{i+1}": i for i in range(27)}
@@ -431,7 +431,7 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
         # Get rainy season onset forecast
         ds = ifs_extended_range_spw(forecast_start, forecast_end, lead, prob_type=prob_type, prob_threshold=0.6,
                                     grid=grid, mask=mask, region=region, debiased=debiased,
-                                    groupby=[['ea_rainy_season', 'year']],
+                                    groupby=['ea_rainy_season', 'year'],
                                     use_ltn=True, first_year=2004, last_year=2015)
         # SPW is already lead-compensated, masked, and region-clipped
     else:
