@@ -409,9 +409,11 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
                           grid="global1_5", mask='lsm', region="global", debiased=True):
     """Unified API accessor for ECMWF raw and debiased forecasts."""
     lead_params = {}
-    for i in range(46):
-        lead_params[f"day{i+1}"] = i
-    if variable != 'rainy_onset':
+    if variable == 'rainy_onset':  # rainy onset only has daily leads out to day 27
+        lead_params = {f"day{i+1}": i for i in range(27)}
+    else:
+        for i in range(46):
+            lead_params[f"day{i+1}"] = i
         for i in [0, 7, 14, 21, 28, 35]:
             lead_params[f"week{i//7+1}"] = i
         for i in [0, 7, 14, 21, 28]:
@@ -454,7 +456,6 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
     if variable == 'precip' and agg_days in [7, 14]:
         print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
         ds['precip'] /= agg_days
-
     return ds
 
 
