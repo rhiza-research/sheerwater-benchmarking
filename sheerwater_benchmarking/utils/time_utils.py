@@ -64,10 +64,10 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
             - 'year': Group by year.
         time_dim (str): The time dimension to add the grouping based on.
     """
-    coords = []
-    if not isinstance(group, list):
+    # Ensure grouping is in standard format
+    if group and not isinstance(group, list):
         group = [group]
-
+    coords = []
     for grp in group:
         if grp == 'month':
             coords.append(ds[time_dim].dt.month.values)
@@ -86,7 +86,7 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
         elif grp == 'year':
             coords.append(ds[time_dim].dt.year.values)
         else:
-            raise ValueError("Invalid time grouping.")
+            raise ValueError(f"Invalid time grouping {grp}")
 
     def group_to_str(coord):
         coord_str = []  # string representation of the group
@@ -104,7 +104,7 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
     return ds
 
 
-def convert_group_to_time(group, grouping):
+def convert_group_to_time(group, groupby):
     """Converts a group label to a time coordinate.
 
     Assumes that groups are represented in the following format:
@@ -128,8 +128,6 @@ def convert_group_to_time(group, grouping):
         dd = '01'
         if entry is None:
             return None
-        if not isinstance(grouping, list):
-            grouping = [grouping]
         for grp, val in zip(grouping, entry.split('-')):
             if grp == 'month':
                 mm = f"{int(val):02d}"
@@ -141,15 +139,16 @@ def convert_group_to_time(group, grouping):
                 elif val == 'OND':
                     mm = '10'  # October rains
                 else:
-                    raise ValueError("Invalid East African rainy season")
+                    raise ValueError(f"Invalid East African rainy season {val}")
             elif grp == 'year':
                 yy = val
             else:
-                raise ValueError("Invalid time grouping")
+                raise ValueError(f"Invalid time grouping {grp}")
         return np.datetime64(f"{yy}-{mm}-{dd}", 'ns')
-    if not isinstance(grouping, list):
-        grouping = [grouping]
-    return [convert_to_datetime(x, grouping) for x in group.values]
+    # Ensure grouping is in standard format
+    if groupby and not isinstance(groupby, list):
+        groupby = [groupby]
+    return [convert_to_datetime(x, groupby) for x in group.values]
 
 
 def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, only_schema=False, **kwargs):
@@ -170,6 +169,10 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
         kwargs: Additional keyword arguments to pass to the aggregation function.
     """
     # Input validation
+    if groupby and not isinstance(groupby, list):
+        groupby = [groupby]
+    if groupby and not isinstance(groupby[0], list):
+        groupby = [groupby]
     if isinstance(groupby, list) and not isinstance(agg_fn, list):
         agg_fn = [agg_fn] * len(groupby)
     elif not isinstance(groupby, list) and not isinstance(agg_fn, list):

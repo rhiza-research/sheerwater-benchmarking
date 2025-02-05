@@ -9,7 +9,8 @@ import dask
 
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
-                                           apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
+                                           apply_mask, clip_region, pad_with_leapdays, add_dayofyear,
+                                           assign_grouping_coordinates, convert_group_to_time)
 from sheerwater_benchmarking.tasks.spw import spw_rainy_onset
 
 
@@ -97,24 +98,6 @@ def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5')
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['lead', 'prob_type', 'grid', 'mask', 'region', 'debiased'],
-           cache=False,
-           timeseries=['start_date'])
-def climatology_spw(start_time, end_time, lead,
-                    prob_type='deterministic',
-                    grid="global1_5", mask='lsm', region="global",
-                    groupby=[['ea_rainy_season', 'year']],
-                    use_ltn=False, first_year=2004, last_year=2015):
-    """Standard format forecast data for aggregated ERA5 forecasts."""
-    ds = climatology_raw("precip", first_year=first_year, last_year=last_year, grid=grid)
-    ds = ds.drop_vars(['spatial_ref', 'dayofyear'])
-    # Mask and clip the region
-    ds = apply_mask(ds, mask, var='precip', grid=grid)
-    ds = clip_region(ds, region=region)
-
-
-@dask_remote
-@cacheable(data_type='array',
            cache=True,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg_days', 'grid'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 1000, "member": 1},
@@ -157,34 +140,6 @@ def climatology_agg_raw(variable, first_year=1985, last_year=2014,
         return ds
     else:
         raise ValueError(f"Unsupported prob_type: {prob_type}")
-
-
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['prob_type', 'prob_threshold', 'grid', 'mask',
-                       'region', 'groupby', 'first_year', 'last_year'],
-           cache=False)
-def climatology_spw(prob_type='deterministic', prob_threshold=0.2,
-                    grid="global1_5", mask='lsm', region="global",
-                    groupby='ea_rainy_season',
-                    first_year=2004, last_year=2015):
-    """Standard format forecast data for aggregated ECMWF forecasts."""
-    # Get the rolled and aggregated data, and then multiply average daily precip by the number of days
-    datasets = [agg_days*climatology_agg_raw('precip', first_year=first_year, last_year=last_year,
-                                             prob_type=prob_type, agg_days=agg_days)
-                .rename({'precip': f'precip_{agg_days}d'})
-                for agg_days in [8, 11]]
-    # Merge both datasets
-    ds = xr.merge(datasets)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, grid=grid)
-    ds = clip_region(ds, region=region)
-
-    rainy_onset_da = spw_rainy_onset(ds, groupby=groupby, time_dim='dayofyear',
-                                     prob_dim='member', prob_threshold=prob_threshold)
-    rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
-    return rainy_onset_ds
 
 
 @dask_remote
@@ -358,14 +313,46 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['prob_type', 'prob_threshold', 'grid', 'mask',
+                       'region', 'groupby', 'first_year', 'last_year'],
+           cache=False)
+def climatology_spw(prob_type='deterministic', prob_threshold=0.2,
+                    grid="global1_5", mask='lsm', region="global",
+                    groupby='ea_rainy_season',
+                    first_year=2004, last_year=2015):
+    """Standard format forecast data for aggregated ECMWF forecasts."""
+    # Get the rolled and aggregated data, and then multiply average daily precip by the number of days
+    datasets = [agg_days*climatology_agg_raw('precip', first_year=first_year, last_year=last_year,
+                                             prob_type=prob_type, agg_days=agg_days, grid=grid)
+                .rename({'precip': f'precip_{agg_days}d'})
+                for agg_days in [8, 11]]
+    # Merge both datasets
+    ds = xr.merge(datasets)
+
+    # Apply masking
+    ds = apply_mask(ds, mask, grid=grid)
+    ds = clip_region(ds, region=region)
+
+    rainy_onset_da = spw_rainy_onset(ds, groupby=groupby, time_dim='dayofyear',
+                                     prob_dim='member', prob_threshold=prob_threshold)
+    rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
+    return rainy_onset_ds
+
+
+@dask_remote
+@cacheable(data_type='array',
            timeseries='time',
            cache=False,
-           cache_args=['variable', 'first_year', 'last_year', 'lead', 'prob_type', 'grid', 'mask', 'region'])
-def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, last_year=2014,
-                         trend=False, prob_type='deterministic', grid='global0_25', mask='lsm', region='global'):
+           cache_args=['variable', 'lead', 'first_year', 'last_year', 'trend', 'groupby',
+                       'prob_type', 'grid', 'mask', 'region'])
+def climatology_forecast(start_time, end_time, variable, lead,
+                         first_year=1985, last_year=2014,
+                         trend=False, groupby='ea_rainy_season',
+                         prob_type='deterministic',
+                         grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     lead_params = {}
-    for i in range(1, 365):
+    for i in range(1, 366):
         lead_params[f"day{i}"] = 1
     if variable != 'rainy_onset':
         for i in range(1, 7):
@@ -376,26 +363,34 @@ def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, 
     agg_days = lead_params.get(lead, None)
     if agg_days is None:
         raise NotImplementedError(f"Lead {lead} not implemented for climatology.")
+    if variable == 'rainy_onset' and trend:
+        raise NotImplementedError("Trend forecasts are not supported for rainy_onset.")
 
     # Get daily data
     if variable == 'rainy_onset':
-        raise NotImplementedError("Rainy onset climatology is not supported.")
-        if trend:
-            raise NotImplementedError("Trend forecasts are not supported for rainy_onset.")
-        #  Convert climatology suitable planting to a timeseries
-        target_dates = get_dates(start_time, end_time, stride='day', return_string=False)
-        time_ds = xr.Dataset({'time': target_dates})
-        time_ds = add_dayofyear(time_ds)
-
+        # Get climatology data
         ds = climatology_spw(prob_type=prob_type, prob_threshold=0.20,
                              grid=grid, mask=mask, region=region,
-                             groupby='ea_rainy_season', first_year=first_year, last_year=last_year)
-        import pdb
-        pdb.set_trace()
-        # Select the climatology data for the target dates, and split large chunks
+                             groupby=groupby, first_year=first_year, last_year=last_year)
+        ds = ds.drop_vars('dayofyear')
+
+        # Generate a time series of grouping values for each year
+        start_year = dateparser.parse(start_time).year
+        end_year = dateparser.parse(end_time).year
+        dates = [pd.Timestamp(date) for date in ds.time.values]
+        # Replicate date values for each year in start year to end year
+        target_dates = [pd.Timestamp(f"{year}-{date.month}-{date.day}")
+                        for year in range(start_year, end_year+1) for date in dates]
+        target_groups = [pd.Timestamp(f"1904-{date.month}-{date.day}")
+                         for date in target_dates]
+
+        # Merge the long-term normals with the truth data
         with dask.config.set(**{'array.slicing.split_large_chunks': True}):
-            ds = ds.sel(time=time_ds.dayofyear)
-            ds = ds.drop('dayofyear')
+            ds = ds.sel(time=target_groups)
+        ds = ds.rename({'time': 'dayofyear'})
+        ds = ds.assign_coords(time=('dayofyear', target_dates))
+        ds = ds.swap_dims({'dayofyear': 'time'})
+        ds = ds.drop('dayofyear')
     else:
         ds = climatology_timeseries(start_time, end_time, variable, first_year=first_year, last_year=last_year,
                                     trend=trend, prob_type=prob_type, agg_days=agg_days, grid=grid)

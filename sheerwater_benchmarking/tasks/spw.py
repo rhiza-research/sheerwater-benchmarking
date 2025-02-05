@@ -43,12 +43,12 @@ def rainy_onset_condition(da, prob_dim='member', prob_threshold=0.6, time_dim='t
 
 def spw_rainy_onset(ds, groupby, time_dim='time', prob_dim=None, prob_threshold=None):
     """Utility function to get first rainy onset."""
-    # Ensure groupby is in the proper format for the groupby utility
-    # It should be a list of lists
+    # Ensure groupby is a list of lists
     if groupby and not isinstance(groupby, list):
         groupby = [groupby]
-    if groupby and not isinstance(groupby[0], list):
+    if groupby and not isinstance(groupby[0], list):  # TODO: this is not fully general
         groupby = [groupby]
+
     # Compute the rainy season onset date for deterministic or thresholded probability forecasts
     if prob_threshold is None and prob_dim is not None:
         if groupby is not None:
