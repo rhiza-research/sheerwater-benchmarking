@@ -5,7 +5,7 @@ import numpy as np
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            get_variable, apply_mask, clip_region,
                                            roll_and_agg, lon_base_change, regrid)
-from sheerwater_benchmarking.tasks.spw import spw_rainy_onset
+from sheerwater_benchmarking.tasks import spw_rainy_onset
 
 
 @dask_remote

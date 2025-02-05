@@ -4,7 +4,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, get_variable, apply_mask, clip_region, regrid,
                                            target_date_to_forecast_date, shift_forecast_date_to_target_date)
-from sheerwater_benchmarking.tasks.spw import spw_rainy_onset
+from sheerwater_benchmarking.tasks import spw_rainy_onset
 
 
 @dask_remote

@@ -5,7 +5,7 @@ from dateutil.relativedelta import relativedelta
 import xarray as xr
 
 from sheerwater_benchmarking.reanalysis import era5_rolled
-from sheerwater_benchmarking.tasks.spw import spw_rainy_onset
+from sheerwater_benchmarking.tasks import spw_rainy_onset
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
@@ -371,7 +371,7 @@ def ifs_extended_range_spw(start_time, end_time, lead,
                            prob_type='deterministic', prob_threshold=0.6,
                            grid="global1_5", mask='lsm', region="global",
                            groupby=['ea_rainy_season', 'year'],
-                           debiased=True, use_ltn=False, first_year=2004, last_year=2015): # noqa: ARG001
+                           debiased=True, use_ltn=False, first_year=2004, last_year=2015):  # noqa: ARG001
     """Standard format forecast data for aggregated ECMWF forecasts."""
     if use_ltn:
         raise NotImplementedError('Long-term normalization not implemented for ECMWF SPW forecasts.')

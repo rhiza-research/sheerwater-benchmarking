@@ -10,7 +10,7 @@ import dask
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
                                            apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
-from sheerwater_benchmarking.tasks.spw import spw_rainy_onset
+from sheerwater_benchmarking.tasks import spw_rainy_onset
 
 
 @dask_remote
