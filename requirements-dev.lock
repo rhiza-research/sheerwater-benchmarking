@@ -134,7 +134,7 @@ cligj==0.7.2
 cloudpickle==3.1.0
     # via dask
     # via distributed
-coiled==1.58.1
+coiled==1.76.1
     # via sheerwater-benchmarking
 comm==0.2.2
     # via ipykernel
@@ -185,12 +185,8 @@ distributed==2024.10.0
     # via dask-kubernetes
 durationpy==0.9
     # via kubernetes
-easyprocess==1.1
-    # via pyunpack
 ecmwf-api-client==1.6.3
     # via sheerwater-benchmarking
-entrypoint2==1.1
-    # via pyunpack
 executing==2.1.0
     # via stack-data
 fabric==3.2.2
@@ -565,8 +561,6 @@ parso==0.8.4
     # via jedi
 partd==1.4.2
     # via dask
-patool==3.1.0
-    # via sheerwater-benchmarking
 patsy==0.5.6
     # via statsmodels
 pexpect==4.9.0
@@ -683,8 +677,6 @@ pytz==2024.2
     # via multiurl
     # via pandas
     # via pvlib
-pyunpack==0.3
-    # via sheerwater-benchmarking
 pyyaml==6.0.2
     # via apispec
     # via bokeh
