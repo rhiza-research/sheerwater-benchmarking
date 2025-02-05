@@ -379,6 +379,9 @@ def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, 
 
     # Get daily data
     if variable == 'rainy_onset':
+        raise NotImplementedError("Rainy onset climatology is not supported.")
+        if trend:
+            raise NotImplementedError("Trend forecasts are not supported for rainy_onset.")
         #  Convert climatology suitable planting to a timeseries
         target_dates = get_dates(start_time, end_time, stride='day', return_string=False)
         time_ds = xr.Dataset({'time': target_dates})
@@ -387,9 +390,11 @@ def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, 
         ds = climatology_spw(prob_type=prob_type, prob_threshold=0.20,
                              grid=grid, mask=mask, region=region,
                              groupby='ea_rainy_season', first_year=first_year, last_year=last_year)
+        import pdb
+        pdb.set_trace()
         # Select the climatology data for the target dates, and split large chunks
         with dask.config.set(**{'array.slicing.split_large_chunks': True}):
-            ds = ds.sel(dayofyear=time_ds.dayofyear)
+            ds = ds.sel(time=time_ds.dayofyear)
             ds = ds.drop('dayofyear')
     else:
         ds = climatology_timeseries(start_time, end_time, variable, first_year=first_year, last_year=last_year,
