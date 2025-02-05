@@ -156,7 +156,8 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
 
     Args:
         ds (xr.Dataset): The dataset to aggregate.
-        groupby (str, list): The time grouping to use. One of:
+        groupby (str, list): The time grouping to use. Should be a string, a list, or a list of lists. 
+            List values should be one of:
             - 'month': Group by month.
             - 'year': Group by year.
             - 'quarter': Group by quarter.
@@ -168,11 +169,13 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
         only_schema (bool): If True, return only the schema of the would-be grouped dataset.
         kwargs: Additional keyword arguments to pass to the aggregation function.
     """
-    # Input validation
+    # Input validation: if groupby is not a lists of lists, convert to a list of lists
     if groupby and not isinstance(groupby, list):
         groupby = [groupby]
     if groupby and not isinstance(groupby[0], list):
         groupby = [groupby]
+
+    # Input validation: if agg_fn is not a list, convert to a list
     if isinstance(groupby, list) and not isinstance(agg_fn, list):
         agg_fn = [agg_fn] * len(groupby)
     elif not isinstance(groupby, list) and not isinstance(agg_fn, list):
