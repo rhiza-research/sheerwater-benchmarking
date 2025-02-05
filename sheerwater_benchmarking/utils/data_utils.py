@@ -212,8 +212,12 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
         raise ValueError("Datasets have different longitude bases. Cannot mask.")
 
     # Check that dimensions are the same size
-    if not all([ds[dim] == mask_ds[dim] for dim in ['lat', 'lon']]):
-        raise ValueError("Mask and dataset must have the same dimensions")
+    try:
+        if not all([all(ds[dim].values == mask_ds[dim].values) for dim in ['lat', 'lon']]):
+            raise ValueError("Mask and dataset must have the same lat/lon coordinates.")
+    except:
+        import pdb
+        pdb.set_trace()
 
     # Mask multiple variables
     if isinstance(var, str):

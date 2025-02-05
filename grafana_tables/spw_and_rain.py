@@ -1,14 +1,12 @@
 """Cache tables in postgres for the SPW dashboard."""
 import xarray as xr
 
-from sheerwater_benchmarking.utils import cacheable, dask_remote, roll_and_agg, apply_mask, clip_region
+from sheerwater_benchmarking.utils import cacheable, dask_remote, apply_mask, clip_region
 from sheerwater_benchmarking.metrics import get_datasource_fn
-from sheerwater_benchmarking.reanalysis import era5
-from sheerwater_benchmarking.baselines import climatology_raw
-
-# from sheerwater_benchmarking.tasks import (
-#     rainy_season_onset_forecast,
-# )
+from sheerwater_benchmarking.reanalysis import era5_rolled
+from sheerwater_benchmarking.baselines import climatology_agg_raw
+from sheerwater_benchmarking.reanalysis.era5 import era5_spw
+from sheerwater_benchmarking.forecasts.ecmwf_er import ifs_extended_range_spw
 
 
 @dask_remote
@@ -21,33 +19,26 @@ def rain_windowed_spw(start_time, end_time,
     """Store the rolling windows of precipitation relevant to SPW in the database."""
     # Get the ground truth data
     if truth == 'ltn':
-        time_dim = 'dayofyear'
-        # Call raw climatology data for 12 years prior to evaluation period
-        ds = climatology_raw('precip', first_year=2004, last_year=2015, grid=grid)
-        # Mask and clip the region
-        ds = apply_mask(ds, mask, var='precip', grid=grid)
-        ds = clip_region(ds, region=region)
+        # Get the rolled and aggregated data, and then multiply average daily precip by the number of days
+        datasets = [agg_days*climatology_agg_raw('precip', first_year=2004, last_year=2015,
+                                                 prob_type='deterministic',
+                                                 agg_days=agg_days, grid=grid)
+                    .rename({'precip': f'precip_{agg_days}d'})
+                    for agg_days in [8, 11]]
     else:
-        time_dim = 'time'
-        source_fn = get_datasource_fn(truth)
-        if truth == 'ghcn':
-            # Call GHCN with non-default mean cell aggregation
-            ds = source_fn(start_time, end_time, 'precip', agg_days=1,
-                           grid=grid, mask=mask, region=region, cell_aggregation='mean')
+        if truth == 'era5':
+            datasets = [agg_days*era5_rolled(start_time, end_time, 'precip',  agg_days=agg_days, grid=grid)
+                        .rename({'precip': f'precip_{agg_days}d'})
+                        for agg_days in [8, 11]]
         else:
-            # Run without GHCN specific cell aggregation flag
-            ds = source_fn(start_time, end_time, 'precip', agg_days=1,
-                           grid=grid, mask=mask, region=region)
+            raise NotImplementedError(f"Truth source {truth} not implemented.")
 
-    # Compute the rolling windows of precipitation relevant to SPW
-    missing_thresh = 0.5
-    agg_days = 8
-    agg_thresh = max(int(agg_days*missing_thresh), 1)
-    ds['precip_8d'] = roll_and_agg(ds['precip'], agg=agg_days, agg_col=time_dim, agg_fn='sum', agg_thresh=agg_thresh)
-    agg_days = 11
-    agg_thresh = max(int(agg_days*missing_thresh), 1)
-    ds['precip_11d'] = roll_and_agg(ds['precip'], agg=agg_days, agg_col=time_dim, agg_fn='sum', agg_thresh=agg_thresh)
+    # Merge both datasets
+    ds = xr.merge(datasets)
 
+    # Apply masking
+    ds = apply_mask(ds, mask, grid=grid)
+    ds = clip_region(ds, region=region)
     ds = ds.drop_vars('spatial_ref')
     ds = ds.to_dataframe()
     return ds
@@ -62,10 +53,14 @@ def ea_rainy_onset_truth(start_time, end_time,
                          use_ltn=False,
                          grid='global1_5', mask='lsm', region='global'):
     """Store the East African rainy season onset from a given truth source, according to the SPW method."""
-    ds = rainy_season_onset_truth(start_time, end_time, truth=truth,
-                                  use_ltn=use_ltn, first_year=2004, last_year=2015,
-                                  groupby=[['ea_rainy_season', 'year']],
-                                  region=region, mask=mask, grid=grid)
+    if truth == 'era5':
+        ds = era5_spw(start_time, end_time,
+                      region=region, mask=mask, grid=grid,
+                      use_ltn=use_ltn, first_year=2004, last_year=2015,
+                      groupby=['ea_rainy_season', 'year'])
+    else:
+        raise NotImplementedError(f"Truth source {truth} not implemented.")
+
     if 'spatial_ref' in ds.coords:
         ds = ds.drop_vars('spatial_ref')
     df = ds.to_dataframe()
@@ -81,11 +76,22 @@ def ea_rainy_onset_forecast(start_time, end_time,
                             forecast='ecmwf_ifs_er_debiased',
                             grid='global1_5', mask='lsm', region='global'):
     """Store the rainy season onset from a given forecast source, according to the SPW method."""
-    # Get the forecast for rainy season onset
-    ds = rainy_season_onset_forecast(start_time, end_time,
-                                     forecast=forecast,
-                                     region=region, grid=grid, mask=mask)
-    ds = ds.drop_vars('spatial_ref')
+    if forecast == 'ecmwf_ifs_er_debiased' or forecast == 'ecmwf_ifs_er':
+        debiased = (forecast == 'ecmwf_ifs_er_debiased')
+        datasets = []
+        for lead in [f'day{d}' for d in range(1, 28)]:
+            ds = ifs_extended_range_spw(start_time, end_time, lead,
+                                        prob_type='probabilistic',
+                                        prob_threshold=None,
+                                        region=region, mask=mask, grid=grid,
+                                        groupby=None,
+                                        debiased=debiased)
+            datasets.append(ds)
+
+        ds = xr.concat(datasets, dim='lead_time')
+        ds = ds.drop_vars('spatial_ref')
+    else:
+        raise NotImplementedError(f"Forecast source {forecast} not implemented.")
     df = ds.to_dataframe()
     df = df.dropna(subset='rainy_forecast')
     return df
