@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE_UPPER_LIMIT_MB = 300
 CHUNK_SIZE_LOWER_LIMIT_MB = 30
 
-LOCAL_CACHE_DIR = "~/.cache/sheerwater/"
+LOCAL_CACHE_DIR = os.path.expanduser("~/.cache/sheerwater/")
 
 
 def get_cache_args(kwargs, cache_kwargs):
