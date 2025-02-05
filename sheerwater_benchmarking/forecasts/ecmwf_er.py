@@ -434,7 +434,7 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
         ds = ifs_extended_range_spw(forecast_start, forecast_end, lead, prob_type=prob_type, prob_threshold=0.6,
                                     grid=grid, mask=mask, region=region, debiased=debiased,
                                     groupby=['ea_rainy_season', 'year'],
-                                    use_ltn=True, first_year=2004, last_year=2015)
+                                    use_ltn=False, first_year=2004, last_year=2015)
         # SPW is already lead-compensated, masked, and region-clipped
     else:
         ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,

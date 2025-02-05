@@ -69,7 +69,7 @@ dependencies = [
     "jupytext",
     "dask-kubernetes",
     "gcsfs",
-    "zarr",
+    "zarr<3.0.0", # zarr 3 seems to fail storing an FSMap
     "h5py",
     "netcdf4",
     "h5netcdf",
