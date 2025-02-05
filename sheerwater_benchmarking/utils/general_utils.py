@@ -1,6 +1,7 @@
 """General utility functions for all parts of the data pipeline."""
 import matplotlib.pyplot as plt
 import gcsfs
+import numpy as np
 import xarray as xr
 
 import plotly.graph_objects as go
@@ -51,10 +52,17 @@ def plot_ds(ds, sel=None, variable=None):
         sel = {dim: ds[dim][0].values for dim in ds.dims if dim not in ['lat', 'lon']}
 
     # Plot the data
+    is_time = np.issubdtype(ds[variable].dtype, np.timedelta64) or (ds[variable].dtype == np.dtype('<M8[ns]'))
     if isinstance(ds, xr.Dataset):
-        ds[variable].sel(sel).plot(x='lon')
+        if is_time:
+            ds[variable].dt.dayofyear.sel(sel).plot(x='lon')
+        else:
+            ds[variable].sel(sel).plot(x='lon')
     else:  # Assume it is a DataArray
-        ds.sel(sel).plot(x='lon')
+        if is_time:
+            ds.dt.dayofyear.sel(sel).plot(x='lon')
+        else:
+            ds.sel(sel).plot(x='lon')
     plt.show()
 
 

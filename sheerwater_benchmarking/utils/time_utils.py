@@ -82,8 +82,6 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
                     return 'OND'
                 else:
                     return None
-
-            # coords.append([month_to_period(x) for x in ds[time_dim].dt.month.values])
             coords.append(np.vectorize(month_to_period)(ds[time_dim].dt.month.values))
         elif grp == 'year':
             coords.append(ds[time_dim].dt.year.values)
@@ -92,8 +90,6 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
 
     def group_to_str(coord):
         coord_str = []  # string representation of the group
-        if not isinstance(coord, list):
-            coord = [coord]
         for y in coord:  # iterate over all group values
             if y is None:  # if any values are None, give a none grouping value
                 return None
@@ -103,7 +99,7 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
                 coord_str.append(y)
         return "-".join(coord_str)  # join the group values with a dash
 
-    joined_coords = np.vectorize(group_to_str)(*coords)
+    joined_coords = [group_to_str(x) for x in zip(*coords)]
     ds = ds.assign_coords(group=(ds[time_dim].dims, joined_coords))
     return ds
 
@@ -153,9 +149,7 @@ def convert_group_to_time(group, grouping):
         return np.datetime64(f"{yy}-{mm}-{dd}", 'ns')
     if not isinstance(grouping, list):
         grouping = [grouping]
-
-    return np.vectorize(convert_to_datetime)(group.values, grouping)
-    # return [convert_to_datetime(x, grouping) for x in group.values]
+    return [convert_to_datetime(x, grouping) for x in group.values]
 
 
 def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, only_schema=False, **kwargs):

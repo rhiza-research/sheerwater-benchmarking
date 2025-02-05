@@ -96,6 +96,26 @@ def climatology_raw(variable, first_year=1985, last_year=2014, grid='global1_5')
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['lead', 'prob_type', 'grid', 'mask', 'region', 'debiased'],
+           cache=False,
+           timeseries=['start_date'])
+def climatology_spw(start_time, end_time, lead,
+                    prob_type='deterministic',
+                    grid="global1_5", mask='lsm', region="global",
+                    groupby=[['ea_rainy_season', 'year']],
+                    use_ltn=False, first_year=2004, last_year=2015):
+    """Standard format forecast data for aggregated ERA5 forecasts."""
+    ds = climatology_raw("precip", first_year=first_year, last_year=last_year, grid=grid)
+    ds = ds.drop_vars(['spatial_ref', 'dayofyear'])
+    # Mask and clip the region
+    ds = apply_mask(ds, mask, var='precip', grid=grid)
+    ds = clip_region(ds, region=region)
+
+
+
+
+@dask_remote
+@cacheable(data_type='array',
            cache=True,
            cache_args=['variable', 'first_year', 'last_year', 'prob_type', 'agg_days', 'grid'],
            chunking={"lat": 121, "lon": 240, "dayofyear": 1000, "member": 1},

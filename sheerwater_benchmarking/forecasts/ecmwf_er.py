@@ -5,6 +5,7 @@ from dateutil.relativedelta import relativedelta
 import xarray as xr
 
 from sheerwater_benchmarking.reanalysis import era5_rolled
+from sheerwater_benchmarking.tasks.spw import spw_rainy_onset
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
@@ -328,8 +329,7 @@ def ifs_extended_range_debiased_regrid(start_time, end_time, variable, margin_in
            cache_args=['variable', 'prob_type', 'agg_days', 'grid', 'debiased'],
            cache=True,
            timeseries=['start_date'],
-        #    cache_disable_if={'agg_days': [1, 7, 14]},
-           cache_disable_if={'agg_days': 7},
+           cache_disable_if={'agg_days': [1, 7, 14]},
            chunking={"lat": 121, "lon": 240, "lead_time": 1,
                      "start_date": 1000, "member": 1},
            chunk_by_arg={
@@ -362,45 +362,99 @@ def ifs_extended_range_rolled(start_time, end_time, variable,
 
 
 @dask_remote
+@cacheable(data_type='array',
+           cache_args=['lead', 'prob_type', 'prob_threshold', 'grid', 'mask',
+                       'region', 'groupby', 'debiased', 'use_ltn', 'first_year', 'last_year'],
+           cache=False,
+           timeseries='time')
+def ifs_extended_range_spw(start_time, end_time, lead,
+                           prob_type='deterministic', prob_threshold=0.6,
+                           grid="global1_5", mask='lsm', region="global",
+                           groupby=[['ea_rainy_season', 'year']],
+                           debiased=True, use_ltn=False, first_year=2004, last_year=2015):
+    """Standard format forecast data for aggregated ECMWF forecasts."""
+    lead_params = {f"day{i+1}": i for i in range(27)}
+    lead_offset_days = lead_params.get(lead, None)
+    if lead_offset_days is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF SPW forecasts.")
+
+    # Get the rolled and aggregated data, and then multiply average daily precip by the number of days
+    datasets = [agg_days*ifs_extended_range_rolled(start_time, end_time, 'precip', prob_type=prob_type,
+                                                   agg_days=agg_days, grid=grid, debiased=debiased)
+                .rename({'precip': f'precip_{agg_days}d'})
+                for agg_days in [8, 11]]
+
+    # Select the appropriate lead
+    lead_shift = np.timedelta64(lead_offset_days, 'D')
+    datasets = [ds.sel(lead_time=lead_shift) for ds in datasets]
+    # Time shift - we want target date, instead of forecast date
+    datasets = [shift_forecast_date_to_target_date(ds, 'start_date', lead)
+                .rename({'start_date': 'time'}) for ds in datasets]
+
+    # Merge both datasets
+    ds = xr.merge(datasets)
+
+    # Apply masking
+    ds = apply_mask(ds, mask, grid=grid)
+    ds = clip_region(ds, region=region)
+
+    rainy_onset_da = spw_rainy_onset(ds, groupby=groupby, time_dim='time',
+                                     prob_dim='member', prob_threshold=prob_threshold)
+    rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
+    return rainy_onset_ds
+
+
+@dask_remote
 def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deterministic',
                           grid="global1_5", mask='lsm', region="global", debiased=True):
     """Unified API accessor for ECMWF raw and debiased forecasts."""
     lead_params = {}
     for i in range(46):
         lead_params[f"day{i+1}"] = i
-    for i in [0, 7, 14, 21, 28, 35]:
-        lead_params[f"week{i//7+1}"] = i
-    for i in [0, 7, 14, 21, 28]:
-        lead_params[f"weeks{(i//7)+1}{(i//7)+2}"] = i
+    if variable != 'rainy_onset':
+        for i in [0, 7, 14, 21, 28, 35]:
+            lead_params[f"week{i//7+1}"] = i
+        for i in [0, 7, 14, 21, 28]:
+            lead_params[f"weeks{(i//7)+1}{(i//7)+2}"] = i
     lead_offset_days = lead_params.get(lead, None)
     if lead_offset_days is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF forecasts.")
+        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF {variable} forecasts.")
 
     agg_days = lead_to_agg_days(lead)
     forecast_start = target_date_to_forecast_date(start_time, lead)
     forecast_end = target_date_to_forecast_date(end_time, lead)
 
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
-    ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,
-                                   agg_days=agg_days, grid=grid, debiased=debiased)
+    if variable == 'rainy_onset':
+        # Get rainy season onset forecast
+        ds = ifs_extended_range_spw(forecast_start, forecast_end, lead, prob_type=prob_type, prob_threshold=0.6,
+                                    grid=grid, mask=mask, region=region, debiased=debiased,
+                                    groupby=[['ea_rainy_season', 'year']],
+                                    use_ltn=True, first_year=2004, last_year=2015)
+        # SPW is already lead-compensated, masked, and region-clipped
+    else:
+        ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,
+                                       agg_days=agg_days, grid=grid, debiased=debiased)
+
+        lead_shift = np.timedelta64(lead_offset_days, 'D')
+        ds = ds.sel(lead_time=lead_shift)
+
+        # Time shift - we want target date, instead of forecast date
+        ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+        ds = ds.rename({'start_date': 'time'})
+        # Apply masking and clip to region
+        ds = apply_mask(ds, mask, grid=grid)
+        ds = clip_region(ds, region=region)
+
+    # Assign probability label
     ds = ds.assign_attrs(prob_type=prob_label)
-
-    lead_shift = np.timedelta64(lead_offset_days, 'D')
-    ds = ds.sel(lead_time=lead_shift)
-
-    # Time shift - we want target date, instead of forecast date
-    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
-    ds = ds.rename({'start_date': 'time'})
+    ds = ds.drop_vars('spatial_ref')
 
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip' and agg_days in [7, 14]:
         print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
         ds['precip'] /= agg_days
 
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
     return ds
 
 

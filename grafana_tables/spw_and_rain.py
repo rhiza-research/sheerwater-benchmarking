@@ -6,9 +6,9 @@ from sheerwater_benchmarking.metrics import get_datasource_fn
 from sheerwater_benchmarking.reanalysis import era5
 from sheerwater_benchmarking.baselines import climatology_raw
 
-from sheerwater_benchmarking.tasks import (
-    rainy_season_onset_truth, rainy_season_onset_forecast,
-)
+# from sheerwater_benchmarking.tasks import (
+#     rainy_season_onset_forecast,
+# )
 
 
 @dask_remote

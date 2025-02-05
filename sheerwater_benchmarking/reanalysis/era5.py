@@ -151,6 +151,25 @@ def era5_rolled(start_time, end_time, variable, agg_days=7, grid="global1_5"):
 
 @dask_remote
 @cacheable(data_type='array',
+           cache_args=['lead', 'prob_type', 'grid', 'mask', 'region', 'debiased'],
+           cache=False,
+           timeseries=['start_date'])
+def era5_spw(start_time, end_time, lead,
+             prob_type='deterministic',
+             grid="global1_5", mask='lsm', region="global",
+             groupby=[['ea_rainy_season', 'year']],
+             use_ltn=False, first_year=2004, last_year=2015):
+    """Standard format forecast data for aggregated ERA5 forecasts."""
+    datasets = [era5_rolled(start_time, end_time, 'precip', agg_days=agg_days, grid=grid)
+                .rename({'precip': f'precip_{agg_days}d'})
+                for agg_days in [8, 11]]
+    ds = xr.merge(datasets)
+    # rainy_season_ds = rainy_season_onset_truth(start_time, end_time, truth='era5',
+    return ds
+
+
+@ dask_remote
+@ cacheable(data_type='array',
            timeseries='time',
            cache=False,
            cache_args=['variable', 'agg_days', 'grid', 'mask', 'region'])
@@ -167,9 +186,9 @@ def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
         region (str): The region to clip the data to.
     """
     # Get daily data
-    ds = era5_rolled(start_time, end_time, variable, agg_days=agg_days, grid=grid)
+    ds=era5_rolled(start_time, end_time, variable, agg_days=agg_days, grid=grid)
     # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    ds=apply_mask(ds, mask, var=variable, grid=grid)
     # Clip to specified region
-    ds = clip_region(ds, region=region)
+    ds=clip_region(ds, region=region)
     return ds
