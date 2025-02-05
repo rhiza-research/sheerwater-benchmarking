@@ -22,6 +22,7 @@ def rainy_onset_condition(da, prob_dim='member', prob_threshold=0.6, time_dim='t
         da (xr.Dataset): Dataset to apply the condition to.
         prob_dim (str): Name of the ensemble dimension.
         prob_threshold (float): Threshold for the probability dimension.
+        time_dim (str): Name of the time dimension.
     """
     # Ensure the data has the required aggregations
     if 'precip_11d' not in da.data_vars or 'precip_8d' not in da.data_vars:

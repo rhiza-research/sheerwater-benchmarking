@@ -9,8 +9,7 @@ import dask
 
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
-                                           apply_mask, clip_region, pad_with_leapdays, add_dayofyear,
-                                           assign_grouping_coordinates, convert_group_to_time)
+                                           apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
 from sheerwater_benchmarking.tasks.spw import spw_rainy_onset
 
 
@@ -357,8 +356,8 @@ def climatology_forecast(start_time, end_time, variable, lead,
     if variable != 'rainy_onset':
         for i in range(1, 7):
             lead_params[f"week{i}"] = 7
-        for l in ['weeks12', 'weeks23', 'weeks34', 'weeks45', 'weeks56']:
-            lead_params[l] = 14
+        for le in ['weeks12', 'weeks23', 'weeks34', 'weeks45', 'weeks56']:
+            lead_params[le] = 14
 
     agg_days = lead_params.get(lead, None)
     if agg_days is None:

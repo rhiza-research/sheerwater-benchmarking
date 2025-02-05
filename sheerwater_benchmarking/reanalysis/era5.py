@@ -159,8 +159,10 @@ def era5_rolled(start_time, end_time, variable, agg_days=7, grid="global1_5"):
 def era5_spw(start_time, end_time,
              grid="global1_5", mask='lsm', region="global",
              groupby=['ea_rainy_season', 'year'],
-             use_ltn=False, first_year=2004, last_year=2015):
+             use_ltn=False, first_year=2004, last_year=2015):  # noqa: ARG001
     """Standard format forecast data for aggregated ECMWF forecasts."""
+    if use_ltn:
+        raise NotImplementedError('Long-term normalization not implemented for ECMWF SPW forecasts.')
     # Get the rolled and aggregated data, and then multiply average daily precip by the number of days
     datasets = [agg_days*era5_rolled(start_time, end_time, 'precip',  agg_days=agg_days, grid=grid)
                 .rename({'precip': f'precip_{agg_days}d'})

@@ -2,8 +2,7 @@
 import numpy as np
 import xarray as xr
 
-from sheerwater_benchmarking.utils import (cacheable, dask_remote, get_dates,
-                                           get_variable, apply_mask, clip_region, regrid,
+from sheerwater_benchmarking.utils import (cacheable, dask_remote, get_variable, apply_mask, clip_region, regrid,
                                            target_date_to_forecast_date, shift_forecast_date_to_target_date)
 from sheerwater_benchmarking.tasks.spw import spw_rainy_onset
 
@@ -59,8 +58,10 @@ def salient_spw(start_time, end_time, lead,
                 prob_type='deterministic', prob_threshold=0.6,
                 grid="global1_5", mask='lsm', region="global",
                 groupby=['ea_rainy_season', 'year'],
-                use_ltn=False, first_year=2004, last_year=2015):
+                use_ltn=False, first_year=2004, last_year=2015):  # noqa: ARG001
     """Approximate suitable planting window from Salient weekly forecasts."""
+    if use_ltn:
+        raise NotImplementedError('Long-term normalization not implemented for ECMWF SPW forecasts.')
     if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecasts supported for Salient SPW.")
 

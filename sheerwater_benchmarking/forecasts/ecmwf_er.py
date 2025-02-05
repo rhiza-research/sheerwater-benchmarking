@@ -371,8 +371,10 @@ def ifs_extended_range_spw(start_time, end_time, lead,
                            prob_type='deterministic', prob_threshold=0.6,
                            grid="global1_5", mask='lsm', region="global",
                            groupby=['ea_rainy_season', 'year'],
-                           debiased=True, use_ltn=False, first_year=2004, last_year=2015):
+                           debiased=True, use_ltn=False, first_year=2004, last_year=2015): # noqa: ARG001
     """Standard format forecast data for aggregated ECMWF forecasts."""
+    if use_ltn:
+        raise NotImplementedError('Long-term normalization not implemented for ECMWF SPW forecasts.')
     lead_params = {f"day{i+1}": i for i in range(27)}
     lead_offset_days = lead_params.get(lead, None)
     if lead_offset_days is None:

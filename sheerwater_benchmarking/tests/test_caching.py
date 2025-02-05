@@ -130,13 +130,13 @@ def test_cache_disable_if():
     @cacheable(data_type='basic',
                cache_args=['agg_days'],
                cache_disable_if={'agg_days': 7})
-    def cached_func(agg_days=7):
+    def cached_func(agg_days=7):  # noqa: ARG001
         return np.random.randint(1000)
 
     @cacheable(data_type='basic',
                cache_args=['agg_days'],
                cache_disable_if={'agg_days': [1, 7, 14]})
-    def cached_func2(agg_days=7):
+    def cached_func2(agg_days=7):  # noqa: ARG001
         return np.random.randint(1000)
 
     # Instantiate the cache
