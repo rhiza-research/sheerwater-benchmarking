@@ -1,4 +1,5 @@
 """Automated dataframe caching utilities."""
+import os
 import datetime
 import dateparser
 from functools import wraps
@@ -27,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 CHUNK_SIZE_UPPER_LIMIT_MB = 300
 CHUNK_SIZE_LOWER_LIMIT_MB = 30
+
+LOCAL_CACHE_DIR = "~/.cache/sheerwater/"
 
 
 def get_cache_args(kwargs, cache_kwargs):
@@ -183,6 +186,8 @@ def write_to_parquet(cache_path, df, overwrite=False):
     if isinstance(df, dd.DataFrame):
         df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
     elif isinstance(df, pd.DataFrame):
+        if not os.path.exists(os.path.dirname(cache_path)):
+            os.makedirs(os.path.dirname(cache_path))
         df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
     else:
         raise ValueError("Can only write dask and pandas dataframes to parquet.")
@@ -423,8 +428,11 @@ def write_to_terracotta(cache_key, ds):
             write_individual_raster(driver, bucket, ds, cache_key)
 
 
-def cache_exists(backend, cache_path, verify_path=None):
+def cache_exists(backend, cache_path, verify_path=None, local=False):
     """Check if a cache exists generically."""
+    if local:
+        assert backend == "parquet", "local storage is only supported for parquet files"
+        return os.path.isfile(cache_path)
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
@@ -485,6 +493,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             to match backend. Useful for pulling from one backend and writing to another.
         auto_rechunk(bool): If True, will rechunk the cache on load if the cache chunking
             does not match the requested chunking. Default is False.
+        local(bool): TODO
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -497,6 +506,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "backend": None,
         "storage_backend": None,
         "auto_rechunk":  None,
+        "local": False,
     }
 
     def create_cacheable(func):
@@ -510,7 +520,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \
-                storage_backend, passed_auto_rechunk = get_cache_args(kwargs, cache_kwargs)
+                storage_backend, passed_auto_rechunk, local = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
@@ -621,8 +631,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'parquet':
-                    cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.parquet'
-                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    prefix = LOCAL_CACHE_DIR if local else "gs://sheerwater-datalake/caches/"
+                    cache_path = prefix + cache_key + '.parquet'
+                    null_path = prefix + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'postgres':
                     cache_path = cache_key
@@ -645,15 +656,25 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             ds = None
             compute_result = True
-            fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
-            # Delete the null cache if retry null cache is passed
-            if fs.exists(null_path) and retry_null_cache:
-                print(f"Removing and retrying null cache {null_path}.")
-                fs.rm(null_path, recursive=True)
+            if local:
+                # Don't define fs if local. This will throw a NameError or UnboundLocalError if we
+                # try to talk to Google Cloud.
+
+                # Delete the null cache if retry null cache is passed
+                if os.path.exists(null_path) and retry_null_cache:
+                    print(f"Removing and retrying null cache {null_path}.")
+                    os.unlink(null_path, recursive=True)
+            else:
+                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+
+                # Delete the null cache if retry null cache is passed
+                if fs.exists(null_path) and retry_null_cache:
+                    print(f"Removing and retrying null cache {null_path}.")
+                    fs.rm(null_path, recursive=True)
 
             if not recompute and cache:
-                if cache_exists(backend, cache_path, verify_path):
+                if cache_exists(backend, cache_path, verify_path, local=local):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
                     if data_type == 'array':
@@ -792,7 +813,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             raise ValueError("Only pickle backend supported for basic types.")
                     else:
                         print("Auto caching currently only supports array, tabular, and basic types.")
-                elif fs.exists(null_path) and not recompute and cache and not retry_null_cache:
+                elif (
+                    (
+                        (local and os.path.exists(cache_path))
+                        or (not local and fs.exists(null_path))
+                    )
+                    and not recompute
+                    and cache
+                    and not retry_null_cache
+                ):
                     print(f"Found null cache for {null_path}. Skipping computation.")
                     return None
 
@@ -873,7 +902,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write_to_delta(cache_path, ds, overwrite=True)
                                 ds = read_from_delta(cache_path)  # Reopen dataset to truncate the computational path
                         elif storage_backend == 'parquet':
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if (
+                                (local and os.path.exists(cache_path))
+                                or (not local and fs.exists(cache_path))
+                            ) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
