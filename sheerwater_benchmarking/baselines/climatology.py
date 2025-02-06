@@ -313,12 +313,12 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['first_year', 'last_year',
-                       'prob_type', 'prob_dim', 'prob_threshold',
+                       'prob_type', 'prob_threshold',
                        'onset_group', 'aggregate_group',
                        'grid', 'mask', 'region'],
            cache=False)
 def climatology_spw(first_year=2004, last_year=2015,
-                    prob_type='deterministic', prob_dim=None, prob_threshold=None,
+                    prob_type='deterministic', prob_threshold=None,
                     onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                     grid="global1_5", mask='lsm', region="global"):
     """Standard format forecast data for aggregated ECMWF forecasts."""
@@ -335,9 +335,11 @@ def climatology_spw(first_year=2004, last_year=2015,
     ds = clip_region(ds, region=region)
 
     # Call the suitable planting window utility
+    (prob_dim, prob_threshold) = (None, None) if prob_type == 'deterministic' else ("member", prob_threshold)
+    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
     rainy_onset_da = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group,
                                      time_dim='dayofyear',
-                                     prob_type=prob_type, prob_dim=prob_dim, prob_threshold=prob_threshold)
+                                     prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold)
     rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
     return rainy_onset_ds
 
@@ -347,13 +349,13 @@ def climatology_spw(first_year=2004, last_year=2015,
            timeseries='time',
            cache=False,
            cache_args=['variable', 'lead',
-                       'first_year', 'last_year', 'trend', 'prob_type',
+                       'first_year', 'last_year', 'trend', 'prob_type', 'prob_threshold',
                        'onset_group', 'aggregate_group',
                        'grid', 'mask', 'region'])
 def climatology_forecast(start_time, end_time, variable, lead,
                          first_year=1985, last_year=2014, trend=False,
                          onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                         prob_type='deterministic',
+                         prob_type='deterministic', prob_threshold=0.2,
                          grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     lead_params = {}
@@ -374,10 +376,8 @@ def climatology_forecast(start_time, end_time, variable, lead,
     # Get daily data
     if variable == 'rainy_onset':
         # Get climatology data
-        prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
-        (prob_dim, prob_threshold) = (None, None) if prob_type == 'deterministic' else (prob_dim, prob_threshold)
         ds = climatology_spw(first_year=first_year, last_year=last_year,
-                             prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                             prob_type=prob_type, prob_threshold=prob_threshold,
                              onset_group=onset_group, aggregate_group=aggregate_group,
                              grid=grid, mask=mask, region=region)
         ds = ds.drop_vars('dayofyear')
