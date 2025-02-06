@@ -312,13 +312,15 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['prob_type', 'prob_threshold', 'grid', 'mask',
-                       'region', 'groupby', 'first_year', 'last_year'],
+           cache_args=['first_year', 'last_year',
+                       'prob_type', 'prob_dim', 'prob_threshold',
+                       'onset_group', 'aggregate_group',
+                       'grid', 'mask', 'region'],
            cache=False)
-def climatology_spw(prob_type='deterministic', prob_threshold=0.2,
-                    grid="global1_5", mask='lsm', region="global",
-                    groupby='ea_rainy_season',
-                    first_year=2004, last_year=2015):
+def climatology_spw(first_year=2004, last_year=2015,
+                    prob_type='deterministic', prob_dim=None, prob_threshold=None,
+                    onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                    grid="global1_5", mask='lsm', region="global"):
     """Standard format forecast data for aggregated ECMWF forecasts."""
     # Get the rolled and aggregated data, and then multiply average daily precip by the number of days
     datasets = [agg_days*climatology_agg_raw('precip', first_year=first_year, last_year=last_year,
@@ -332,8 +334,10 @@ def climatology_spw(prob_type='deterministic', prob_threshold=0.2,
     ds = apply_mask(ds, mask, grid=grid)
     ds = clip_region(ds, region=region)
 
-    rainy_onset_da = spw_rainy_onset(ds, groupby=groupby, time_dim='dayofyear',
-                                     prob_dim='member', prob_threshold=prob_threshold)
+    # Call the suitable planting window utility
+    rainy_onset_da = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group,
+                                     time_dim='dayofyear',
+                                     prob_type=prob_type, prob_dim=prob_dim, prob_threshold=prob_threshold)
     rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
     return rainy_onset_ds
 
@@ -342,11 +346,13 @@ def climatology_spw(prob_type='deterministic', prob_threshold=0.2,
 @cacheable(data_type='array',
            timeseries='time',
            cache=False,
-           cache_args=['variable', 'lead', 'first_year', 'last_year', 'trend', 'groupby',
-                       'prob_type', 'grid', 'mask', 'region'])
+           cache_args=['variable', 'lead',
+                       'first_year', 'last_year', 'trend', 'prob_type',
+                       'onset_group', 'aggregate_group',
+                       'grid', 'mask', 'region'])
 def climatology_forecast(start_time, end_time, variable, lead,
-                         first_year=1985, last_year=2014,
-                         trend=False, groupby='ea_rainy_season',
+                         first_year=1985, last_year=2014, trend=False,
+                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                          prob_type='deterministic',
                          grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
@@ -368,9 +374,12 @@ def climatology_forecast(start_time, end_time, variable, lead,
     # Get daily data
     if variable == 'rainy_onset':
         # Get climatology data
-        ds = climatology_spw(prob_type=prob_type, prob_threshold=0.20,
-                             grid=grid, mask=mask, region=region,
-                             groupby=groupby, first_year=first_year, last_year=last_year)
+        prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
+        (prob_dim, prob_threshold) = (None, None) if prob_type == 'deterministic' else (prob_dim, prob_threshold)
+        ds = climatology_spw(first_year=first_year, last_year=last_year,
+                             prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                             onset_group=onset_group, aggregate_group=aggregate_group,
+                             grid=grid, mask=mask, region=region)
         ds = ds.drop_vars('dayofyear')
 
         # Generate a time series of grouping values for each year
@@ -390,9 +399,21 @@ def climatology_forecast(start_time, end_time, variable, lead,
         ds = ds.assign_coords(time=('dayofyear', target_dates))
         ds = ds.swap_dims({'dayofyear': 'time'})
         ds = ds.drop('dayofyear')
+
+        # Convert forecast values to the appropriate year
+        years_timedelta = [np.timedelta64(y-1904, 'Y') for y in ds.time.dt.year.values]
+        time_ds = xr.DataArray(
+            years_timedelta,
+            dims=['time']  # Replace 'time' with your actual dimension name
+        )
+        # Correct to the right forecast year
+        ds = ds + time_ds
     else:
-        ds = climatology_timeseries(start_time, end_time, variable, first_year=first_year, last_year=last_year,
-                                    trend=trend, prob_type=prob_type, agg_days=agg_days, grid=grid)
+        ds = climatology_timeseries(start_time, end_time, variable,
+                                    first_year=first_year, last_year=last_year,
+                                    trend=trend,
+                                    prob_type=prob_type,
+                                    agg_days=agg_days, grid=grid)
         # Apply masking and clip to region
         ds = apply_mask(ds, mask, grid=grid)
         ds = clip_region(ds, region=region)

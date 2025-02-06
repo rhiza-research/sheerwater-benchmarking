@@ -48,54 +48,55 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
     return ds
 
 
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['lead', 'prob_type',
-                       'onset_group', 'aggregate_group',
-                       'grid', 'mask', 'region'],
-           cache=False,
-           timeseries='time')
-def salient_spw(start_time, end_time, lead,
-                prob_type='deterministic',
-                onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                grid="global1_5", mask='lsm', region="global"):
-    """Approximate suitable planting window from Salient weekly forecasts."""
-    if prob_type != 'deterministic':
-        raise NotImplementedError("Only deterministic forecasts supported for Salient SPW.")
+# @dask_remote
+# @cacheable(data_type='array',
+#            cache_args=['lead',
+#                        'prob_type', 'prob_dim', 'prob_threshold',
+#                        'onset_group', 'aggregate_group',
+#                        'grid', 'mask', 'region'],
+#            cache=False,
+#            timeseries='time')
+# def salient_spw(start_time, end_time, lead,
+#                 prob_type='deterministic',
+#                 onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+#                 grid="global1_5", mask='lsm', region="global"):
+#     """Approximate suitable planting window from Salient weekly forecasts."""
+#     if prob_type != 'deterministic':
+#         raise NotImplementedError("Only deterministic forecasts supported for Salient SPW.")
 
-    lead_params = {f"day{i+1}": i for i in range(25)}
-    lead_offset_days = lead_params.get(lead, None)
-    if lead_offset_days is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for Salient SPW forecasts.")
+#     lead_params = {f"day{i+1}": i for i in range(25)}
+#     lead_offset_days = lead_params.get(lead, None)
+#     if lead_offset_days is None:
+#         raise NotImplementedError(f"Lead {lead} not implemented for Salient SPW forecasts.")
 
-    daily_ds = salient_blend(start_time, end_time, 'precip', timescale='sub-seasonal', grid=grid)
+#     daily_ds = salient_blend(start_time, end_time, 'precip', timescale='sub-seasonal', grid=grid)
 
-    # Select median as deterministic forecast
-    daily_ds = daily_ds.sel(quantiles=0.5)  # TODO: should update this to enable probabilistic handling
+#     # Select median as deterministic forecast
+#     daily_ds = daily_ds.sel(quantiles=0.5)  # TODO: should update this to enable probabilistic handling
 
-    # What week does our lead fall in?
-    week = lead_offset_days // 7 + 1  # Convert offset days to week
-    daily_ds = daily_ds.sel(lead=week)
-    daily_ds['lead'] = np.timedelta64(lead_offset_days, 'D').astype('timedelta64[ns]')
+#     # What week does our lead fall in?
+#     week = lead_offset_days // 7 + 1  # Convert offset days to week
+#     daily_ds = daily_ds.sel(lead=week)
+#     daily_ds['lead'] = np.timedelta64(lead_offset_days, 'D').astype('timedelta64[ns]')
 
-    # Time shift - we want target date, instead of forecast date
-    daily_ds = shift_forecast_date_to_target_date(daily_ds, 'forecast_date', lead)
-    daily_ds = daily_ds.rename({'forecast_date': 'time'})
+#     # Time shift - we want target date, instead of forecast date
+#     daily_ds = shift_forecast_date_to_target_date(daily_ds, 'forecast_date', lead)
+#     daily_ds = daily_ds.rename({'forecast_date': 'time'})
 
-    datasets = [(agg_days*daily_ds)
-                .rename({'precip': f'precip_{agg_days}d'})
-                for agg_days in [8, 11]]
-    # Merge both datasets
-    ds = xr.merge(datasets)
+#     datasets = [(agg_days*daily_ds)
+#                 .rename({'precip': f'precip_{agg_days}d'})
+#                 for agg_days in [8, 11]]
+#     # Merge both datasets
+#     ds = xr.merge(datasets)
 
-    # Apply masking
-    ds = apply_mask(ds, mask, grid=grid)
-    ds = clip_region(ds, region=region)
+#     # Apply masking
+#     ds = apply_mask(ds, mask, grid=grid)
+#     ds = clip_region(ds, region=region)
 
-    rainy_onset_da = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group,
-                                     time_dim='time', prob_type='deterministic')
-    rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
-    return rainy_onset_ds
+#     rainy_onset_da = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group,
+#                                      time_dim='time', prob_type='deterministic')
+#     rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
+#     return rainy_onset_ds
 
 
 @dask_remote
@@ -106,6 +107,9 @@ def salient_spw(start_time, end_time, lead,
 def salient(start_time, end_time, variable, lead, prob_type='deterministic',
             grid='global0_25', mask='lsm', region='africa'):
     """Standard format forecast data for Salient."""
+    if variable == 'rainy_onset':
+        raise NotImplementedError("Rainy onset forecasts not implemented for Salient.")
+
     lead_params = {
         "week1": ("sub-seasonal", 1),
         "week2": ("sub-seasonal", 2),
@@ -120,10 +124,6 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
         "quarter3": ("long-range", 3),
         "quarter4": ("long-range", 4),
     }
-    if variable == 'rainy_onset':
-        for i in range(1, 21):
-            lead_params[f"day{i}"] = ("sub-seasonal", i)
-
     timescale, lead_id = lead_params.get(lead, (None, None))
     if timescale is None:
         raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
@@ -132,36 +132,30 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     forecast_start = target_date_to_forecast_date(start_time, lead)
     forecast_end = target_date_to_forecast_date(end_time, lead)
 
-    if variable == 'rainy_onset':
-        ds = salient_spw(forecast_start, forecast_end, lead,
-                         prob_type=prob_type,
-                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                         grid=grid, mask=mask, region=region)
+    ds = salient_blend(forecast_start, forecast_end, variable, timescale=timescale, grid=grid)
+    if prob_type == 'deterministic':
+        # Get the median forecast
+        ds = ds.sel(quantiles=0.5)
+        # drop the quantiles dimension
+        ds = ds.reset_coords("quantiles", drop=True)
+        ds = ds.assign_attrs(prob_type="deterministic")
+    elif prob_type == "probabilistic":
+        # Set an attribute to say this is a quantile forecast
+        ds = ds.rename({'quantiles': 'member'})
+        ds = ds.assign_attrs(prob_type="quantile")
     else:
-        ds = salient_blend(forecast_start, forecast_end, variable, timescale=timescale, grid=grid)
-        if prob_type == 'deterministic':
-            # Get the median forecast
-            ds = ds.sel(quantiles=0.5)
-            # drop the quantiles dimension
-            ds = ds.reset_coords("quantiles", drop=True)
-            ds = ds.assign_attrs(prob_type="deterministic")
-        elif prob_type == "probabilistic":
-            # Set an attribute to say this is a quantile forecast
-            ds = ds.rename({'quantiles': 'member'})
-            ds = ds.assign_attrs(prob_type="quantile")
-        else:
-            raise ValueError("Invalid probabilistic type")
+        raise ValueError("Invalid probabilistic type")
 
-        # Get specific lead
-        ds = ds.sel(lead=lead_id)
+    # Get specific lead
+    ds = ds.sel(lead=lead_id)
 
-        # Time shift - we want target date, instead of forecast date
-        ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
-        ds = ds.rename({'forecast_date': 'time'})
+    # Time shift - we want target date, instead of forecast date
+    ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
+    ds = ds.rename({'forecast_date': 'time'})
 
-        # Apply masking
-        ds = apply_mask(ds, mask, var=variable, grid=grid)
-        # Clip to specified region
-        ds = clip_region(ds, region=region)
+    # Apply masking
+    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    # Clip to specified region
+    ds = clip_region(ds, region=region)
 
     return ds

@@ -363,18 +363,18 @@ def ifs_extended_range_rolled(start_time, end_time, variable,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['lead', 'prob_type', 'prob_threshold', 'grid', 'mask',
-                       'region', 'groupby', 'debiased', 'use_ltn', 'first_year', 'last_year'],
+           cache_args=['lead', 'debiased',
+                       'prob_type', 'prob_dim', 'prob_threshold',
+                       'onset_group', 'aggregate_group',
+                       'grid', 'mask', 'region'],
            cache=False,
            timeseries='time')
 def ifs_extended_range_spw(start_time, end_time, lead,
-                           prob_type='deterministic', prob_threshold=0.6,
-                           grid="global1_5", mask='lsm', region="global",
-                           groupby=['ea_rainy_season', 'year'],
-                           debiased=True, use_ltn=False, first_year=2004, last_year=2015):  # noqa: ARG001
+                           debiased=True,
+                           prob_type='deterministic', prob_dim=None, prob_threshold=None,
+                           onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                           grid="global1_5", mask='lsm', region="global"):
     """Standard format forecast data for aggregated ECMWF forecasts."""
-    if use_ltn:
-        raise NotImplementedError('Long-term normalization not implemented for ECMWF SPW forecasts.')
     lead_params = {f"day{i+1}": i for i in range(27)}
     lead_offset_days = lead_params.get(lead, None)
     if lead_offset_days is None:
@@ -400,8 +400,8 @@ def ifs_extended_range_spw(start_time, end_time, lead,
     ds = apply_mask(ds, mask, grid=grid)
     ds = clip_region(ds, region=region)
 
-    rainy_onset_da = spw_rainy_onset(ds, groupby=groupby, time_dim='time',
-                                     prob_dim='member', prob_threshold=prob_threshold)
+    rainy_onset_da = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group, time_dim='time',
+                                     prob_dim=prob_dim, prob_type=prob_type, prob_threshold=prob_threshold)
     rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
     return rainy_onset_ds
 
@@ -431,10 +431,12 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
     if variable == 'rainy_onset':
         # Get rainy season onset forecast
-        ds = ifs_extended_range_spw(forecast_start, forecast_end, lead, prob_type=prob_type, prob_threshold=0.6,
-                                    grid=grid, mask=mask, region=region, debiased=debiased,
-                                    groupby=['ea_rainy_season', 'year'],
-                                    use_ltn=False, first_year=2004, last_year=2015)
+        (prob_dim, prob_threshold) = (None, None) if prob_type == 'deterministic' else (prob_dim, prob_threshold)
+        ds = ifs_extended_range_spw(forecast_start, forecast_end, lead,
+                                    debiased=debiased,
+                                    prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                                    onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                                    grid=grid, mask=mask, region=region)
         # SPW is already lead-compensated, masked, and region-clipped
     else:
         ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,
