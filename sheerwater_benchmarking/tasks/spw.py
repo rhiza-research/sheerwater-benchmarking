@@ -9,7 +9,7 @@ def rainy_onset_condition(da, prob_type='ensemble', prob_dim='member', prob_thre
     """Condition for the rainy season onset.
 
     Requires the input data to have 11d and 8d precipitation aggregations
-    named 'precip_11d' and 'precip8d' respectively. 
+    named 'precip_11d' and 'precip_8d' respectively.
 
     If prob_type is deterministic, return a boolean array.
 

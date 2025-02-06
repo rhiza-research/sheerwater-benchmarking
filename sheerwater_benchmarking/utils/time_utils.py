@@ -178,7 +178,7 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
 
     Args:
         ds (xr.Dataset): The dataset to aggregate.
-        groupby (str, list): The time grouping to use. Should be a string, a list, or a list of lists. 
+        groupby (str, list): The time grouping to use. Should be a string, a list, or a list of lists.
             List values should be one of:
             - 'month': Group by month.
             - 'year': Group by year.
