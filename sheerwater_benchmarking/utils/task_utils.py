@@ -1,12 +1,9 @@
 """The task functions for the benchmarking platform."""
 import numpy as np
-import xarray as xr
 
 
-from .time_utils import dayofyear_to_datetime
-
-
-def first_satisfied_date(ds, condition, time_dim='time', base_time=None, prob_dim='member', prob_threshold=0.5):
+def first_satisfied_date(ds, condition, time_dim='time', base_time=None,
+                         prob_type='ensemble', prob_dim='member', prob_threshold=0.5):
     """Find the first date that a condition is satisfied in a timeseries.
 
     If the time dimension is a timedelta object, a base time must be specified.
@@ -18,11 +15,12 @@ def first_satisfied_date(ds, condition, time_dim='time', base_time=None, prob_di
         condition (callable): Condition to apply to the dataset.
         time_dim (str): Name of the time dimension.
         base_time (str): Base time for timedelta objects (optional).
+        prob_type (str): Type of probabilistic forecast. One of 'ensemble', 'quantile', or 'deterministic'.
         prob_dim (str): Name of the ensemble dimension.
         prob_threshold (float): Threshold for the probability dimension.
     """
     # Apply the rainy reason onset condition to the grouped dataframe
-    ds['condition'] = condition(ds, prob_dim, prob_threshold)
+    ds['condition'] = condition(ds, prob_type=prob_type, prob_dim=prob_dim, prob_threshold=prob_threshold)
 
     # Ensure that dates are sorted
     ds = ds.sortby(time_dim)
@@ -51,26 +49,3 @@ def first_satisfied_date(ds, condition, time_dim='time', base_time=None, prob_di
     # Rename the variable
     first_date = first_date.rename('first_occurrence')
     return first_date
-
-
-def average_time(data, avg_over='time'):
-    """Utility function for rainy onset.
-
-    For a dataset with values in a datetime format, convert to doy and average over dim.
-    """
-    # Convert to dayofyear for averaging
-    dsp = data.dt.dayofyear
-    return dsp.mean(dim=avg_over, skipna=True)
-
-
-def convert_to_datetime(data):
-    """Convert day of year to datetime.
-
-    TODO: For this to work, needed to compute the underlying dask array. Shouldn't have to do this.
-    """
-    return xr.apply_ufunc(
-        dayofyear_to_datetime,  # Function to apply
-        data.compute(),
-        vectorize=True,  # Ensures element-wise operation
-        output_dtypes=[np.datetime64]  # Specify output dtype
-    )

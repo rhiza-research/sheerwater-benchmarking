@@ -151,6 +151,28 @@ def convert_group_to_time(group, groupby):
     return [convert_to_datetime(x, groupby) for x in group.values]
 
 
+def date_mean(data, dim='time'):
+    """Mean of a date variables over a dimension, using integer number of days since 1970-01-01."""
+    #  Get the number of days since 1970-01-01
+    days = (data - np.datetime64('1970-01-01')).astype('timedelta64[D]').astype(int)
+    days = days.where(days > -1000, np.nan)  # handle NaT, which is cast to a huge negative number
+    days = days.mean(dim=dim, skipna=True)
+    # Convert back to datetime, using integer number of days since 1970-01-01
+    days = days.astype('datetime64[D]')
+    return days
+
+
+def doy_mean(data, dim='time'):
+    """Mean of a date variables over a dimension, using day of year."""
+    #  Get the number of days since 1970-01-01
+    days = data.dt.dayofyear
+    days = days.mean(dim=dim, skipna=True)
+    # Convert back to datetime in the year 1904
+    days = days.astype('datetime64[D]')
+    days = days + (np.datetime64('1904-01-01') - np.datetime64('1970-01-01'))
+    return days
+
+
 def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, only_schema=False, **kwargs):
     """Aggregates data in groups along the time dimension according to time_grouping.
 

@@ -50,22 +50,20 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['lead', 'prob_type', 'prob_threshold', 'grid', 'mask',
-                       'region', 'groupby', 'use_ltn', 'first_year', 'last_year'],
+           cache_args=['lead', 'prob_type',
+                       'onset_group', 'aggregate_group',
+                       'grid', 'mask', 'region'],
            cache=False,
            timeseries='time')
 def salient_spw(start_time, end_time, lead,
-                prob_type='deterministic', prob_threshold=0.6,
-                grid="global1_5", mask='lsm', region="global",
-                groupby=['ea_rainy_season', 'year'],
-                use_ltn=False, first_year=2004, last_year=2015):  # noqa: ARG001
+                prob_type='deterministic',
+                onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                grid="global1_5", mask='lsm', region="global"):
     """Approximate suitable planting window from Salient weekly forecasts."""
-    if use_ltn:
-        raise NotImplementedError('Long-term normalization not implemented for ECMWF SPW forecasts.')
     if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecasts supported for Salient SPW.")
 
-    lead_params = {f"day{i+1}": i for i in range(20)}
+    lead_params = {f"day{i+1}": i for i in range(25)}
     lead_offset_days = lead_params.get(lead, None)
     if lead_offset_days is None:
         raise NotImplementedError(f"Lead {lead} not implemented for Salient SPW forecasts.")
@@ -94,8 +92,8 @@ def salient_spw(start_time, end_time, lead,
     ds = apply_mask(ds, mask, grid=grid)
     ds = clip_region(ds, region=region)
 
-    rainy_onset_da = spw_rainy_onset(ds, groupby=groupby, time_dim='time',
-                                     prob_dim='ensemble', prob_threshold=prob_threshold)
+    rainy_onset_da = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group,
+                                     time_dim='time', prob_type='deterministic')
     rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
     return rainy_onset_ds
 
@@ -136,9 +134,9 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
 
     if variable == 'rainy_onset':
         ds = salient_spw(forecast_start, forecast_end, lead,
-                         prob_type=prob_type, prob_threshold=0.6,
-                         grid=grid, mask=mask, region=region,
-                         groupby=['ea_rainy_season', 'year'])
+                         prob_type=prob_type,
+                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                         grid=grid, mask=mask, region=region)
     else:
         ds = salient_blend(forecast_start, forecast_end, variable, timescale=timescale, grid=grid)
         if prob_type == 'deterministic':

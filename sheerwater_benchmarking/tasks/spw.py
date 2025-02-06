@@ -2,76 +2,83 @@
 from functools import partial
 
 from sheerwater_benchmarking.utils import groupby_time
-from sheerwater_benchmarking.utils import first_satisfied_date, average_time, convert_to_datetime
+from sheerwater_benchmarking.utils import first_satisfied_date, doy_mean
 
 
-def rainy_onset_condition(da, prob_dim='member', prob_threshold=0.6, time_dim='time'):
+def rainy_onset_condition(da, prob_type='ensemble', prob_dim='member', prob_threshold=0.6):
     """Condition for the rainy season onset.
 
-    Requires the input data to have 11d and 8d precipitation aggregations.
+    Requires the input data to have 11d and 8d precipitation aggregations
+    named 'precip_11d' and 'precip8d' respectively. 
 
-    If probability dimension is not present, return a boolean array.
+    If prob_type is deterministic, return a boolean array.
 
-    If a probability dimension is present, and prob_threshold is None,
+    If a prob_type is probabilistic (ensemble, quantile) and prob_threshold is None,
     return the probability of the condition being met.
 
-    If a probability dimension is present, and prob_threshold is not None,
+    If prob_type is probabilistic (ensemble, quantile) and prob_threshold is not None,
     return a boolean array based on the probability threshold.
 
     Args:
         da (xr.Dataset): Dataset to apply the condition to.
-        prob_dim (str): Name of the ensemble dimension.
+        prob_type (str): Type of probability to use, one of 'deterministic', 'ensemble', 'quantile'
+        prob_dim (str): Name of the probabilistic dimension to average over
         prob_threshold (float): Threshold for the probability dimension.
-        time_dim (str): Name of the time dimension.
     """
     # Ensure the data has the required aggregations
     if 'precip_11d' not in da.data_vars or 'precip_8d' not in da.data_vars:
         raise ValueError("Data must have 11d and 8d precipitation aggregations.")
+    if prob_type in ['ensemble', 'quantile'] and prob_dim not in da.dims:
+        raise ValueError("Probability dimension must be present for probabilistic forecasts.")
 
     # Check aggregation against the thresholds in mm
     cond = (da['precip_11d'] > 40.) & (da['precip_8d'] > 30.0)
-    if 'rainy_onset_ltn' in da.data_vars:
-        cond &= (da[time_dim].dt.dayofyear >= da['rainy_onset_ltn'].dt.dayofyear)
 
-    if prob_dim in da.dims:
+    if prob_type == 'ensemble':
         # If the probability dimension is present
         cond = cond.mean(dim=prob_dim)
         if prob_threshold is not None:
             # Convert to a boolean based on the probability threshold
             cond = cond > prob_threshold
+    elif prob_type == 'quantile':
+        # If the quantile dimension is present
+        raise NotImplementedError("Quantile probability not implemented yet.")
     return cond
 
 
-def spw_rainy_onset(ds, groupby, time_dim='time', prob_dim=None, prob_threshold=None):
+def spw_rainy_onset(ds, onset_group=None, aggregate_group=None, time_dim='time',
+                    prob_type='ensemble', prob_dim=None, prob_threshold=None):
     """Utility function to get first rainy onset."""
-    # Ensure groupby is a list of lists
-    if groupby and not isinstance(groupby, list):
-        groupby = [groupby]
-    if groupby and not isinstance(groupby[0], list):  # TODO: this is not fully general
-        groupby = [groupby]
+    # Ensure that onset group and aggregate groups are lists
+    if onset_group and not isinstance(onset_group, list):
+        onset_group = [onset_group]
+    if aggregate_group and not isinstance(aggregate_group, list):
+        aggregate_group = [aggregate_group]
 
-    # Compute the rainy season onset date for deterministic or thresholded probability forecasts
-    if prob_threshold is None and prob_dim is not None:
-        if groupby is not None:
+    # Form the groupby list for grouping utility
+    groupby = [onset_group]
+    if aggregate_group:
+        groupby.append(aggregate_group)
+
+    # If no grouping is provided, compute the condition probability on the timeseries
+    if prob_threshold is None and prob_type in ['ensemble', 'quantile']:
+        if onset_group is not None or aggregate_group is not None:
             raise ValueError("Grouping is not supported for probabilistic forecasts without a threshold.")
         # Compute condition probability on the timeseries
-        rainy_da = rainy_onset_condition(ds, prob_dim=prob_dim, prob_threshold=None, time_dim=time_dim)
+        rainy_da = rainy_onset_condition(ds, prob_type=prob_type, prob_dim=prob_dim, prob_threshold=None)
         return rainy_da
 
-    # Perform grouping
+    # Otherwise, compute the first satisfied date for each grouping
     agg_fn = [partial(first_satisfied_date,
                       condition=rainy_onset_condition,
-                      time_dim=time_dim, base_time=None,
-                      prob_dim=prob_dim, prob_threshold=prob_threshold)]
+                      prob_type=prob_type, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                      time_dim=time_dim)]
 
     # Returns a dataframe with a dimension 'time' corresponding to the first grouping value
     # and value 'rainy_onset' corresponding to the rainy season onset date
-    if len(groupby) > 1:
-        # For each additional grouping after the first, average over day of year within a grouping
-        agg_fn += [partial(average_time, avg_over='time')]*(len(groupby)-1)
-        # Add final conversion to datetime with no grouping
-        agg_fn += [convert_to_datetime]
-        groupby += [None]
+    if aggregate_group is not None:
+        # For the aggregate grouping average over datetimes within a grouping
+        agg_fn += [partial(doy_mean, dim='time')]
 
     #  Apply the aggregation functions to the dataset using the groupby utility
     #  Set return_timeseries to True to get a dataset with a time dimension for each grouping
