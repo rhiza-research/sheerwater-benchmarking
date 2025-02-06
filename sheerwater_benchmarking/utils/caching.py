@@ -432,7 +432,7 @@ def cache_exists(backend, cache_path, verify_path=None, local=False):
     """Check if a cache exists generically."""
     if local:
         assert backend == "parquet", "local storage is only supported for parquet files"
-        return os.path.isfile(cache_path)
+        return os.path.exists(cache_path)
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
@@ -815,7 +815,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         print("Auto caching currently only supports array, tabular, and basic types.")
                 elif (
                     (
-                        (local and os.path.exists(cache_path))
+                        (local and os.path.exists(null_path))
                         or (not local and fs.exists(null_path))
                     )
                     and not recompute
