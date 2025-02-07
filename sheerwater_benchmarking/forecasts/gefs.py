@@ -3,9 +3,9 @@
 Historical weather data from the Global Ensemble Forecast System (GEFS) model operated by NOAA NCEP,
 transformed into zarr format by dynamical.org.
 
-GEFS Forecast Dataset
+GEFS Forecast Dataset: https://dynamical.org/catalog/noaa-gefs-forecast/
 
-Zarr Dataset: s3://us-west-2.opendata.source.coop/dynamical/noaa-gefs-forecast/v0.1.0.zarr
+Zarr Dataset: https://data.dynamical.org/noaa/gefs/forecast/latest.zarr
 Attributes:
     attribution:         NOAA NWS NCEP GEFS data processed by dynamical.org from NOAA Open Data Dissemination archives.
     dataset_id:          noaa-gefs-forecast
@@ -19,7 +19,7 @@ Attributes:
     time_resolution:     Forecasts initialized every 24 hours.
 
 Dimensions:
-    init_time:       390
+    init_time:       400
     ensemble_member: 31
     lead_time:       181
     latitude:        721
@@ -31,32 +31,57 @@ Coordinates:
         units:                  realization
     expected_forecast_length:
         statistics_approximate: {'max': '35 days 00:00:00', 'min': '0 days 00:00:00'}
+        units:                  seconds
     ingested_forecast_length:
         statistics_approximate: {'max': '35 days 00:00:00', 'min': '0 days 00:00:00'}
+        units:                  seconds
     init_time:
+        calendar:               proleptic_gregorian
         statistics_approximate: {'max': 'Present', 'min': '2024-01-01T00:00:00'}
+        units:                  seconds since 1970-01-01
     latitude:
         statistics_approximate: {'max': 90.0, 'min': -90.0}
         units:                  degrees_north
     lead_time:
         statistics_approximate: {'max': '35 days 00:00:00', 'min': '0 days 00:00:00'}
+        units:                  seconds
     longitude:
         statistics_approximate: {'max': 179.75, 'min': -180.0}
-        units:                  degrees_south
+        units:                  degrees_east
+    spatial_ref:
+        crs_wkt:                     GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY[
+                                     "EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","89
+                                     01"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AXIS["Latitude",NO
+                                     RTH],AXIS["Longitude",EAST],AUTHORITY["EPSG","4326"]]
+        geographic_crs_name:         WGS 84
+        grid_mapping_name:           latitude_longitude
+        horizontal_datum_name:       World Geodetic System 1984
+        inverse_flattening:          298.257223563
+        longitude_of_prime_meridian: 0.0
+        prime_meridian_name:         Greenwich
+        reference_ellipsoid_name:    WGS 84
+        semi_major_axis:             6378137.0
+        semi_minor_axis:             6356752.314245179
+        spatial_ref:                 GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY[
+                                     "EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","89
+                                     01"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AXIS["Latitude",NO
+                                     RTH],AXIS["Longitude",EAST],AUTHORITY["EPSG","4326"]]
     valid_time:
+        calendar:               proleptic_gregorian
         statistics_approximate: {'max': 'Present + 35 days', 'min': '2024-01-01T00:00:00'}
+        units:                  seconds since 1970-01-01
 
 Data Variables:
     categorical_freezing_rain_surface:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Categorical freezing rain
         short_name: cfrzr
         step_type:  avg
         units:      0=no; 1=yes
     categorical_freezing_rain_surface_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Categorical freezing rain
         short_name:         cfrzr
@@ -64,14 +89,14 @@ Data Variables:
         units:              0=no; 1=yes
     categorical_ice_pellets_surface:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Categorical ice pellets
         short_name: cicep
         step_type:  avg
         units:      0=no; 1=yes
     categorical_ice_pellets_surface_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Categorical ice pellets
         short_name:         cicep
@@ -79,14 +104,14 @@ Data Variables:
         units:              0=no; 1=yes
     categorical_rain_surface:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Categorical rain
         short_name: crain
         step_type:  avg
         units:      0=no; 1=yes
     categorical_rain_surface_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Categorical rain
         short_name:         crain
@@ -94,14 +119,14 @@ Data Variables:
         units:              0=no; 1=yes
     categorical_snow_surface:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Categorical snow
         short_name: csnow
         step_type:  avg
         units:      0=no; 1=yes
     categorical_snow_surface_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Categorical snow
         short_name:         csnow
@@ -109,14 +134,14 @@ Data Variables:
         units:              0=no; 1=yes
     downward_long_wave_radiation_flux_surface:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Surface downward long-wave radiation flux
         short_name: sdlwrf
         step_type:  avg
         units:      W/(m^2)
     downward_long_wave_radiation_flux_surface_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Surface downward long-wave radiation flux
         short_name:         sdlwrf
@@ -124,14 +149,14 @@ Data Variables:
         units:              W/(m^2)
     downward_short_wave_radiation_flux_surface:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Surface downward short-wave radiation flux
         short_name: sdswrf
         step_type:  avg
         units:      W/(m^2)
     downward_short_wave_radiation_flux_surface_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Surface downward short-wave radiation flux
         short_name:         sdswrf
@@ -139,7 +164,7 @@ Data Variables:
         units:              W/(m^2)
     geopotential_height_cloud_ceiling:
         type:          float32
-        shape:         init_time x ensemble_member x lead_time x latitude x longitude
+        shape:         init_time * ensemble_member * lead_time * latitude * longitude
         long_name:     Geopotential height
         short_name:    gh
         standard_name: geopotential_height
@@ -147,21 +172,21 @@ Data Variables:
         units:         gpm
     percent_frozen_precipitation_surface:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Percent frozen precipitation
         short_name: cpofp
         step_type:  instant
         units:      %
     precipitable_water_atmosphere:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Precipitable water
         short_name: pwat
         step_type:  instant
         units:      kg/(m^2)
     precipitable_water_atmosphere_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Precipitable water
         short_name:         pwat
@@ -169,14 +194,14 @@ Data Variables:
         units:              kg/(m^2)
     precipitation_surface:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Total Precipitation
         short_name: tp
         step_type:  accum
         units:      kg/(m^2)
     precipitation_surface_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Total Precipitation
         short_name:         tp
@@ -184,14 +209,14 @@ Data Variables:
         units:              kg/(m^2)
     pressure_reduced_to_mean_sea_level:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Pressure reduced to MSL
         short_name: prmsl
         step_type:  instant
         units:      Pa
     pressure_reduced_to_mean_sea_level_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Pressure reduced to MSL
         short_name:         prmsl
@@ -199,7 +224,7 @@ Data Variables:
         units:              Pa
     pressure_surface:
         type:          float32
-        shape:         init_time x ensemble_member x lead_time x latitude x longitude
+        shape:         init_time * ensemble_member * lead_time * latitude * longitude
         long_name:     Surface pressure
         short_name:    sp
         standard_name: surface_air_pressure
@@ -207,7 +232,7 @@ Data Variables:
         units:         Pa
     pressure_surface_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Surface pressure
         short_name:         sp
@@ -216,7 +241,7 @@ Data Variables:
         units:              Pa
     relative_humidity_2m:
         type:          float32
-        shape:         init_time x ensemble_member x lead_time x latitude x longitude
+        shape:         init_time * ensemble_member * lead_time * latitude * longitude
         long_name:     2 metre relative humidity
         short_name:    r2
         standard_name: relative_humidity
@@ -224,7 +249,7 @@ Data Variables:
         units:         %
     relative_humidity_2m_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          2 metre relative humidity
         short_name:         r2
@@ -233,7 +258,7 @@ Data Variables:
         units:              %
     temperature_2m:
         type:          float32
-        shape:         init_time x ensemble_member x lead_time x latitude x longitude
+        shape:         init_time * ensemble_member * lead_time * latitude * longitude
         long_name:     2 metre temperature
         short_name:    t2m
         standard_name: air_temperature
@@ -241,7 +266,7 @@ Data Variables:
         units:         C
     temperature_2m_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          2 metre temperature
         short_name:         t2m
@@ -250,14 +275,14 @@ Data Variables:
         units:              C
     total_cloud_cover_atmosphere:
         type:       float32
-        shape:      init_time x ensemble_member x lead_time x latitude x longitude
+        shape:      init_time * ensemble_member * lead_time * latitude * longitude
         long_name:  Total Cloud Cover
         short_name: tcc
         step_type:  avg
         units:      %
     total_cloud_cover_atmosphere_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          Total Cloud Cover
         short_name:         tcc
@@ -265,7 +290,7 @@ Data Variables:
         units:              %
     wind_u_100m:
         type:          float32
-        shape:         init_time x ensemble_member x lead_time x latitude x longitude
+        shape:         init_time * ensemble_member * lead_time * latitude * longitude
         long_name:     100 metre U wind component
         short_name:    u100
         standard_name: eastward_wind
@@ -273,7 +298,7 @@ Data Variables:
         units:         m/s
     wind_u_10m:
         type:          float32
-        shape:         init_time x ensemble_member x lead_time x latitude x longitude
+        shape:         init_time * ensemble_member * lead_time * latitude * longitude
         long_name:     10 metre U wind component
         short_name:    u10
         standard_name: eastward_wind
@@ -281,7 +306,7 @@ Data Variables:
         units:         m/s
     wind_u_10m_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          10 metre U wind component
         short_name:         u10
@@ -290,7 +315,7 @@ Data Variables:
         units:              m/s
     wind_v_100m:
         type:          float32
-        shape:         init_time x ensemble_member x lead_time x latitude x longitude
+        shape:         init_time * ensemble_member * lead_time * latitude * longitude
         long_name:     100 metre V wind component
         short_name:    v100
         standard_name: northward_wind
@@ -298,7 +323,7 @@ Data Variables:
         units:         m/s
     wind_v_10m:
         type:          float32
-        shape:         init_time x ensemble_member x lead_time x latitude x longitude
+        shape:         init_time * ensemble_member * lead_time * latitude * longitude
         long_name:     10 metre V wind component
         short_name:    v10
         standard_name: northward_wind
@@ -306,7 +331,7 @@ Data Variables:
         units:         m/s
     wind_v_10m_avg:
         type:               float32
-        shape:              init_time x lead_time x latitude x longitude
+        shape:              init_time * lead_time * latitude * longitude
         ensemble_statistic: avg
         long_name:          10 metre V wind component
         short_name:         v10
@@ -314,7 +339,6 @@ Data Variables:
         step_type:          instant
         units:              m/s
 """
-
 import numpy as np
 import xarray as xr
 
@@ -333,7 +357,6 @@ from sheerwater_benchmarking.utils import (
 @cacheable(
     data_type="array",
     cache_args=["run_type", "grid"],
-    cache=False,
     timeseries=["start_date", "model_issuance_date"],
     chunking={
         "lat": 300,
@@ -360,15 +383,11 @@ def gefs_raw(start_time, end_time, run_type="perturbed", grid="global0_25"):
         raise NotImplementedError("Only global 0.25 degree grid is implemented.")
 
     # Open the datastore from dynamical.org
-    store = "s3://us-west-2.opendata.source.coop/dynamical/noaa-gefs-forecast/v0.1.0.zarr"
+    store = "https://data.dynamical.org/noaa/gefs/forecast/latest.zarr?email=info@rhizaresearch.org"
 
     ds = xr.open_dataset(
         store,
         engine="zarr",
-        backend_kwargs={
-            "storage_options": {"anon": True},
-            "consolidated": True,
-        },
         chunks={},
         drop_variables=[
             "categorical_freezing_rain_surface",
@@ -397,11 +416,16 @@ def gefs_raw(start_time, end_time, run_type="perturbed", grid="global0_25"):
             "wind_v_100m",
             "wind_v_10m",
             "wind_v_10m_avg",
-            # TODO: Do I want to drop these, or use them as my avg variables?
             "precipitation_surface_avg",
             "temperature_2m_avg",
+            "downward_short_wave_radiation_flux_surface_avg",
+            "downward_long_wave_radiation_flux_surface_avg",
+            "downward_short_wave_radiation_flux_surface",
+            "downward_long_wave_radiation_flux_surface",
         ],
     )
+
+    # NOTE: variables with the _avg suffix are the avg of the ensemble members
 
     # Select the right time period
     ds = ds.sel(init_time=slice(start_time, end_time))
@@ -435,6 +459,9 @@ def gefs_raw(start_time, end_time, run_type="perturbed", grid="global0_25"):
     ds["tmp2m"] = ds["tmp2m"].resample(lead_time="D").mean()
     ds["tmp2m"].attrs.update(units="C")
 
+    # Chunks need to be the same size for caching to work
+    ds = ds.unify_chunks()
+
     return ds
 
 
@@ -442,7 +469,6 @@ def gefs_raw(start_time, end_time, run_type="perturbed", grid="global0_25"):
 @cacheable(
     data_type="array",
     cache_args=["run_type", "grid"],
-    cache=False,
     timeseries=["start_date", "model_issuance_date"],
     chunking={
         "lat": 300,
@@ -457,9 +483,6 @@ def gefs_raw(start_time, end_time, run_type="perturbed", grid="global0_25"):
 def gefs_gridded(start_time, end_time, run_type="perturbed", grid="global1_5"):
     """GEFS forecast data with regridding."""
     ds = gefs_raw(start_time, end_time, run_type, grid="global0_25")
-
-    # Chunks need to be the same size for the regrid to work
-    ds = ds.unify_chunks()
 
     # Spatial resolution:
     #   0-240 hours: 0.25 degrees (~20km)
