@@ -130,6 +130,42 @@ def drop_encoded_chunks(ds):
     return ds
 
 
+def check_cache_disable_if(cache_disable_if, cache_arg_values):
+    """Check if the cache should be disabled for the given kwargs.
+
+    Cache disable if is a dict or list of dicts. Each dict specifies a set of
+    arguments that should disable the cache if they are present.
+    """
+    if isinstance(cache_disable_if, dict):
+        cache_disable_if = [cache_disable_if]
+
+    # import pdb
+    # pdb.set_trace()
+    for d in cache_disable_if:
+        if not isinstance(d, dict):
+            raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
+
+        # Get the common keys
+        common_keys = set(cache_arg_values).intersection(d)
+
+        # Remove any args not passed
+        comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
+        d = {key: d[key] for key in common_keys}
+
+        # Iterate through each key and check if the values match, with support for lists
+        key_match = [
+            (not isinstance(d[k], list) and comp_arg_values[k] == d[k]) or
+            (isinstance(d[k], list) and comp_arg_values[k] in d[k])
+            for k in common_keys
+        ]
+        # Within a cache disable if dict, if all keys match, disable the cache
+        if all(key_match):
+            print(f"Caching disabled for arg values {d}")
+            return False
+    # Keep the cache enabled - we didn't find a match
+    return True
+
+
 def read_from_delta(cache_path):
     """Read from a deltatable into a pandas dataframe."""
     return DeltaTable(cache_path).to_pandas()
@@ -544,36 +580,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
 
             # Now that we have all the cacheable args values we can calculate whether
-            # the cache should be disable from them
-            if isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
-
-                if isinstance(cache_disable_if, dict):
-                    cache_disable_if = [cache_disable_if]
-
-                for d in cache_disable_if:
-                    if not cache:  # once the cache is disabled we can break
-                        break
-
-                    if not isinstance(d, dict):
-                        raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
-
-                    # Get the common keys
-                    common_keys = set(cache_arg_values).intersection(d)
-
-                    # Remove any args not passed
-                    comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
-                    d = {key: d[key] for key in common_keys}
-
-                    # Compare common keys
-                    for k in common_keys:
-                        if not cache:
-                            break
-                        if (isinstance(d[k], list) and comp_arg_values[k] in d[k]) or \
-                                (not isinstance(d[k], list) and comp_arg_values[k] == d[k]):
-                            print(f"Caching disabled for arg values {d}")
-                            cache = False
-
-            elif cache_disable_if is not None:
+            # the cache should be disable from them if
+            if cache and isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
+                cache = check_cache_disable_if(cache_disable_if, cache_arg_values)
+            elif cache and cache_disable_if is not None:
                 raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
 
             imkeys = list(cache_arg_values.keys())
