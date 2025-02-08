@@ -139,6 +139,14 @@ def test_cache_disable_if():
     def cached_func2(agg_days=7):  # noqa: ARG001
         return np.random.randint(1000)
 
+    @cacheable(data_type='basic',
+               cache_args=['agg_days', 'grid'],
+               cache_disable_if=[{'agg_days': [1, 7, 14],
+                                  'grid': 'global1_5'},
+                                 {'agg_days': 8}])
+    def cached_func3(agg_days=7, grid='global0_25'):  # noqa: ARG001
+        return np.random.randint(1000)
+
     # Instantiate the cache
     ds = cached_func(agg_days=1)
     #  Cache should be enabled - these should be equal
@@ -155,6 +163,26 @@ def test_cache_disable_if():
     ds = cached_func2(agg_days=14)
     dsp = cached_func2(agg_days=14)
     assert ds != dsp
+
+    # Should be disabled
+    ds = cached_func3(agg_days=14, grid='global1_5')
+    dsp = cached_func3(agg_days=14, grid='global1_5')
+    assert ds != dsp
+
+    # Should be enabled
+    ds = cached_func3(agg_days=14, grid='global0_25')
+    dsp = cached_func3(agg_days=14, grid='global0_25')
+    assert ds == dsp
+
+    # Should be disabled
+    ds = cached_func3(agg_days=8)
+    dsp = cached_func3(agg_days=8)
+    assert ds != dsp
+
+    # Should be enabled
+    ds = cached_func3(agg_days=14)
+    dsp = cached_func3(agg_days=14)
+    assert ds == dsp
 
 
 if __name__ == "__main__":

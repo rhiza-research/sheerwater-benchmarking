@@ -29,32 +29,6 @@ CHUNK_SIZE_UPPER_LIMIT_MB = 300
 CHUNK_SIZE_LOWER_LIMIT_MB = 30
 
 
-def flatten_nested(data):
-    """Flattens a nested iterable into a single iterable.
-
-    Args:
-        data (list, tuple, dict, set, ...): An iterable that may contain nested iterables.
-    """
-    if isinstance(data, (list, tuple, set)):
-        for item in data:
-            sub_vals = []
-            for sub_item in flatten_nested(item):
-                sub_vals.append(sub_item)
-            sub_vals.sort()
-            for sub_item in sub_vals:
-                yield sub_item
-    elif isinstance(data, dict):
-        for k, v in data.items():
-            sub_vals = []
-            for sub_item in flatten_nested(v):
-                sub_vals.append(sub_item)
-            sub_vals.sort()
-            for sub_item in sub_vals:
-                yield f"{k}-{sub_item}"
-    else:
-        yield data
-
-
 def get_cache_args(kwargs, cache_kwargs):
     """Extract the cache arguments from the kwargs and return them."""
     cache_args = []
@@ -156,6 +130,40 @@ def drop_encoded_chunks(ds):
     return ds
 
 
+def check_cache_disable_if(cache_disable_if, cache_arg_values):
+    """Check if the cache should be disabled for the given kwargs.
+
+    Cache disable if is a dict or list of dicts. Each dict specifies a set of
+    arguments that should disable the cache if they are present.
+    """
+    if isinstance(cache_disable_if, dict):
+        cache_disable_if = [cache_disable_if]
+
+    for d in cache_disable_if:
+        if not isinstance(d, dict):
+            raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
+
+        # Get the common keys
+        common_keys = set(cache_arg_values).intersection(d)
+
+        # Remove any args not passed
+        comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
+        d = {key: d[key] for key in common_keys}
+
+        # Iterate through each key and check if the values match, with support for lists
+        key_match = [
+            (not isinstance(d[k], list) and comp_arg_values[k] == d[k]) or
+            (isinstance(d[k], list) and comp_arg_values[k] in d[k])
+            for k in common_keys
+        ]
+        # Within a cache disable if dict, if all keys match, disable the cache
+        if all(key_match):
+            print(f"Caching disabled for arg values {d}")
+            return False
+    # Keep the cache enabled - we didn't find a match
+    return True
+
+
 def read_from_delta(cache_path):
     """Read from a deltatable into a pandas dataframe."""
     return DeltaTable(cache_path).to_pandas()
@@ -233,7 +241,6 @@ def chunk_to_zarr(ds, cache_path, verify_path, chunking):
         chunking = prune_chunking_dimensions(ds, chunking)
 
     ds = ds.chunk(chunks=chunking)
-
     try:
         chunk_size, chunk_with_labels = get_chunk_size(ds)
 
@@ -242,7 +249,6 @@ def chunk_to_zarr(ds, cache_path, verify_path, chunking):
             print(chunk_with_labels)
     except ValueError:
         print("Failed to get chunks size! Continuing with unknown chunking...")
-
     write_to_zarr(ds, cache_path, verify_path)
 
 
@@ -572,42 +578,28 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
 
             # Now that we have all the cacheable args values we can calculate whether
-            # the cache should be disable from them
-            if isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
-
-                if isinstance(cache_disable_if, dict):
-                    cache_disable_if = [cache_disable_if]
-
-                for d in cache_disable_if:
-                    if not cache:  # once the cache is disabled we can break
-                        break
-
-                    if not isinstance(d, dict):
-                        raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
-
-                    # Get the common keys
-                    common_keys = set(cache_arg_values).intersection(d)
-
-                    # Remove any args not passed
-                    comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
-                    d = {key: d[key] for key in common_keys}
-
-                    # Compare common keys
-                    for k in common_keys:
-                        if not cache:
-                            break
-                        if (isinstance(d[k], list) and comp_arg_values[k] in d[k]) or \
-                                (not isinstance(d[k], list) and comp_arg_values[k] == d[k]):
-                            print(f"Caching disabled for arg values {d}")
-                            cache = False
-
-            elif cache_disable_if is not None:
+            # the cache should be disable from them if
+            if cache and isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
+                cache = check_cache_disable_if(cache_disable_if, cache_arg_values)
+            elif cache and cache_disable_if is not None:
                 raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
 
             imkeys = list(cache_arg_values.keys())
             imkeys.sort()
-            cache_values = [cache_arg_values[i] for i in imkeys]
-            flat_values = [str(val) for val in flatten_nested(cache_values)]
+            sorted_values = [cache_arg_values[i] for i in imkeys]
+            flat_values = []
+            for val in sorted_values:
+                if isinstance(val, list):
+                    sub_vals = [str(v) for v in val]
+                    sub_vals.sort()
+                    flat_values += sub_vals
+                elif isinstance(val, dict):
+                    sub_vals = [f"{k}-{v}" for k, v in val.items()]
+                    sub_vals.sort()
+                    flat_values += sub_vals
+                else:
+                    flat_values.append(str(val))
+
             cache_key = func.__name__ + '/' + '_'.join(flat_values)
             verify_path = None
             if data_type == 'array':
@@ -760,7 +752,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     compute_result = False
                         elif backend == 'parquet':
                             if filepath_only:
-                                return cache_path
+                                cache_map = fs.get_mapper(cache_path)
+
+                                return cache_map
                             else:
                                 print(f"Opening cache {cache_path}")
                                 ds = read_from_parquet(cache_path)
@@ -933,11 +927,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             raise ValueError("Only pickle backend is implemented for basic data data")
 
             if filepath_only:
-                if backend == 'parquet':
-                    return cache_path
-                else:
-                    cache_map = fs.get_mapper(cache_path)
-                    return cache_map
+                cache_map = fs.get_mapper(cache_path)
+                return cache_map
             else:
                 # Do the time series filtering
                 if timeseries is not None:
