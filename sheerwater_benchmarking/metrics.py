@@ -8,7 +8,7 @@ import weatherbench2
 
 import xarray as xr
 
-from sheerwater_benchmarking.baselines import climatology_forecast, seeps_wet_threshold, seeps_dry_fraction
+from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
                                            groupby_time, lead_to_agg_days, lead_or_agg)
 from weatherbench2.metrics import _spatial_average
@@ -18,6 +18,7 @@ COUPLED_METRICS = ['acc', 'pearson']  # a list of metrics that are coupled in sp
 CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of dichotomous contingency metrics
 CATEGORICAL_CONTINGENCY_METRICS = ['heidke']  # a list of contingency metrics
 PRECIP_ONLY_METRICS = ["heidke", "pod", "far", "ets", "mape", "smape", "bias_score", "seeps"]
+
 
 def is_precip_only(metric):
     if '-' in metric:
@@ -217,8 +218,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
                                 .compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
 
     elif metric == 'acc':
-        clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
-                                       trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
+        clim_ds = climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
+                                   grid=grid, mask=mask, region=region)
 
         fcst = fcst - clim_ds
         obs = obs - clim_ds

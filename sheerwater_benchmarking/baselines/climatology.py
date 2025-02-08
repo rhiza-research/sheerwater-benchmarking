@@ -6,11 +6,11 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import dask
-
+from functools import partial
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
                                            apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
-from sheerwater_benchmarking.tasks import spw_rainy_onset
+from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
 
 
 @dask_remote
@@ -258,8 +258,8 @@ def climatology_linear_weights(variable, first_year=1985, last_year=2014, agg_da
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                }
            })
-def climatology_timeseries(start_time, end_time, variable, first_year=1985, last_year=2014,
-                           trend=False, prob_type='deterministic', agg_days=7, grid="global1_5"):
+def climatology_rolled(start_time, end_time, variable, first_year=1985, last_year=2014,
+                       trend=False, prob_type='deterministic', agg_days=7, grid="global1_5"):
     """Generates a forecast timeseries of climatology.
 
     Args:
@@ -310,54 +310,8 @@ def climatology_timeseries(start_time, end_time, variable, first_year=1985, last
     return ds
 
 
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['first_year', 'last_year',
-                       'prob_type', 'prob_threshold',
-                       'onset_group', 'aggregate_group',
-                       'grid', 'mask', 'region'],
-           cache=False)
-def climatology_spw(first_year=2004, last_year=2015,
-                    prob_type='deterministic', prob_threshold=None,
-                    onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                    grid="global1_5", mask='lsm', region="global"):
-    """Standard format forecast data for aggregated ECMWF forecasts."""
-    # Get the rolled and aggregated data, and then multiply average daily precip by the number of days
-    datasets = [agg_days*climatology_agg_raw('precip', first_year=first_year, last_year=last_year,
-                                             prob_type=prob_type, agg_days=agg_days, grid=grid)
-                .rename({'precip': f'precip_{agg_days}d'})
-                for agg_days in [8, 11]]
-    # Merge both datasets
-    ds = xr.merge(datasets)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, grid=grid)
-    ds = clip_region(ds, region=region)
-
-    # Call the suitable planting window utility
-    (prob_dim, prob_threshold) = (None, None) if prob_type == 'deterministic' else ("member", prob_threshold)
-    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
-    rainy_onset_da = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group,
-                                     time_dim='dayofyear',
-                                     prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold)
-    rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
-    return rainy_onset_ds
-
-
-@dask_remote
-@cacheable(data_type='array',
-           timeseries='time',
-           cache=False,
-           cache_args=['variable', 'lead',
-                       'first_year', 'last_year', 'trend', 'prob_type', 'prob_threshold',
-                       'onset_group', 'aggregate_group',
-                       'grid', 'mask', 'region'])
-def climatology_forecast(start_time, end_time, variable, lead,
-                         first_year=1985, last_year=2014, trend=False,
-                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                         prob_type='deterministic', prob_threshold=0.2,
-                         grid='global0_25', mask='lsm', region='global'):
-    """Standard format forecast data for climatology forecast."""
+def _process_lead(variable, lead):
+    """Helper function for interpreting lead for climatology forecasts."""
     lead_params = {}
     for i in range(1, 366):
         lead_params[f"day{i}"] = 1
@@ -370,50 +324,35 @@ def climatology_forecast(start_time, end_time, variable, lead,
     agg_days = lead_params.get(lead, None)
     if agg_days is None:
         raise NotImplementedError(f"Lead {lead} not implemented for climatology.")
-    if variable == 'rainy_onset' and trend:
-        raise NotImplementedError("Trend forecasts are not supported for rainy_onset.")
+    return agg_days
 
+
+@dask_remote
+def _climatology_unified(start_time, end_time, variable, lead,
+                         first_year=1985, last_year=2014, trend=False,
+                         prob_type='deterministic',
+                         grid='global0_25', mask='lsm', region='global'):
+    """Standard format forecast data for climatology forecast."""
+    agg_days = _process_lead(variable, lead)
     # Get daily data
     if variable == 'rainy_onset':
-        # Get climatology data
-        ds = climatology_spw(first_year=first_year, last_year=last_year,
-                             prob_type=prob_type, prob_threshold=prob_threshold,
-                             onset_group=onset_group, aggregate_group=aggregate_group,
-                             grid=grid, mask=mask, region=region)
-        ds = ds.drop_vars('dayofyear')
+        fn = partial(climatology_rolled, start_time, end_time, variable='precip',
+                     first_year=first_year, last_year=last_year,
+                     trend=trend, prob_type=prob_type, grid=grid)
+        data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
 
-        # Generate a time series of grouping values for each year
-        start_year = dateparser.parse(start_time).year
-        end_year = dateparser.parse(end_time).year
-        dates = [pd.Timestamp(date) for date in ds.time.values]
-        # Replicate date values for each year in start year to end year
-        target_dates = [pd.Timestamp(f"{year}-{date.month}-{date.day}")
-                        for year in range(start_year, end_year+1) for date in dates]
-        target_groups = [pd.Timestamp(f"1904-{date.month}-{date.day}")
-                         for date in target_dates]
-
-        # Merge the long-term normals with the truth data
-        with dask.config.set(**{'array.slicing.split_large_chunks': True}):
-            ds = ds.sel(time=target_groups)
-        ds = ds.rename({'time': 'dayofyear'})
-        ds = ds.assign_coords(time=('dayofyear', target_dates))
-        ds = ds.swap_dims({'dayofyear': 'time'})
-        ds = ds.drop('dayofyear')
-
-        # Convert forecast values to the appropriate year
-        years_timedelta = [np.timedelta64(y-1904, 'Y') for y in ds.time.dt.year.values]
-        time_ds = xr.DataArray(
-            years_timedelta,
-            dims=['time']  # Replace 'time' with your actual dimension name
-        )
-        # Correct to the right forecast year
-        ds = ds + time_ds
+        (prob_dim, prob_threshold) = ('member', 0.2) if prob_type == 'probabilistic' else (None, None)
+        rainy_onset_da = spw_rainy_onset(data,
+                                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                                         time_dim='time',
+                                         prob_type='deterministic', prob_dim=prob_dim, prob_threshold=prob_threshold)
+        ds = rainy_onset_da.to_dataset(name='rainy_onset')
     else:
-        ds = climatology_timeseries(start_time, end_time, variable,
-                                    first_year=first_year, last_year=last_year,
-                                    trend=trend,
-                                    prob_type=prob_type,
-                                    agg_days=agg_days, grid=grid)
+        ds = climatology_rolled(start_time, end_time, variable,
+                                first_year=first_year, last_year=last_year,
+                                trend=trend,
+                                prob_type=prob_type,
+                                agg_days=agg_days, grid=grid)
         # Apply masking and clip to region
         ds = apply_mask(ds, mask, grid=grid)
         ds = clip_region(ds, region=region)
@@ -433,7 +372,7 @@ def climatology_forecast(start_time, end_time, variable, lead,
 def climatology_2015(start_time, end_time, variable, lead, prob_type='deterministic',
                      grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    return climatology_forecast(start_time, end_time, variable, lead, first_year=1985, last_year=2014,
+    return _climatology_unified(start_time, end_time, variable, lead, first_year=2004, last_year=2015,
                                 trend=False, prob_type=prob_type, grid=grid, mask=mask, region=region)
 
 
@@ -445,7 +384,7 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
 def climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
                      grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    return climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
+    return _climatology_unified(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
                                 trend=False, prob_type=prob_type, grid=grid, mask=mask, region=region)
 
 
@@ -457,7 +396,7 @@ def climatology_2020(start_time, end_time, variable, lead, prob_type='determinis
 def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='deterministic',
                            grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    return climatology_forecast(start_time, end_time, variable, lead, first_year=1985, last_year=2014,
+    return _climatology_unified(start_time, end_time, variable, lead, first_year=2004, last_year=2015,
                                 trend=True, prob_type=prob_type, grid=grid, mask=mask, region=region)
 
 
