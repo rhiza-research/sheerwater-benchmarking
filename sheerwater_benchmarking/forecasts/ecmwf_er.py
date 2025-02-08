@@ -3,9 +3,9 @@ import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 import xarray as xr
-
+from functools import partial
 from sheerwater_benchmarking.reanalysis import era5_rolled
-from sheerwater_benchmarking.tasks import spw_rainy_onset
+from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
@@ -52,7 +52,7 @@ def ifs_extended_range_raw(start_time, end_time, variable, forecast_type,  # noq
     filepath = f'gs://weatherbench2/datasets/ifs_extended_range/{time_group}/{file_str}'
 
     # Pull the google dataset
-    ds = xr.open_zarr(filepath)
+    ds = xr.open_zarr(filepath, decode_timedelta=True)
 
     # Select the right variable
     var = get_variable(variable, 'ecmwf_ifs_er')
@@ -361,60 +361,11 @@ def ifs_extended_range_rolled(start_time, end_time, variable,
     return ds
 
 
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['lead', 'debiased',
-                       'prob_type', 'prob_threshold',
-                       'onset_group', 'aggregate_group',
-                       'grid', 'mask', 'region'],
-           cache=False,
-           timeseries='time')
-def ifs_extended_range_spw(start_time, end_time, lead,
-                           debiased=True,
-                           prob_type='deterministic', prob_threshold=0.6,
-                           onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                           grid="global1_5", mask='lsm', region="global"):
-    """Standard format forecast data for aggregated ECMWF forecasts."""
-    lead_params = {f"day{i+1}": i for i in range(27)}
-    lead_offset_days = lead_params.get(lead, None)
-    if lead_offset_days is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF SPW forecasts.")
-
-    # Get the rolled and aggregated data, and then multiply average daily precip by the number of days
-    datasets = [agg_days*ifs_extended_range_rolled(start_time, end_time, 'precip', prob_type=prob_type,
-                                                   agg_days=agg_days, grid=grid, debiased=debiased)
-                .rename({'precip': f'precip_{agg_days}d'})
-                for agg_days in [8, 11]]
-
-    # Select the appropriate lead
-    lead_shift = np.timedelta64(lead_offset_days, 'D')
-    datasets = [ds.sel(lead_time=lead_shift) for ds in datasets]
-    # Time shift - we want target date, instead of forecast date
-    datasets = [shift_forecast_date_to_target_date(ds, 'start_date', lead)
-                .rename({'start_date': 'time'}) for ds in datasets]
-
-    # Merge both datasets
-    ds = xr.merge(datasets)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, grid=grid)
-    ds = clip_region(ds, region=region)
-
-    (prob_dim, prob_threshold) = (None, None) if prob_type == 'deterministic' else ('member', prob_threshold)
-    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
-    rainy_onset_da = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group, time_dim='time',
-                                     prob_dim=prob_dim, prob_type=prob_label, prob_threshold=prob_threshold)
-    rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
-    return rainy_onset_ds
-
-
-@dask_remote
-def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deterministic',
-                          grid="global1_5", mask='lsm', region="global", debiased=True):
-    """Unified API accessor for ECMWF raw and debiased forecasts."""
+def _process_lead(variable, lead):
+    """Helper function for interpreting lead for ECMWF forecasts."""
     lead_params = {}
-    if variable == 'rainy_onset':  # rainy onset only has daily leads out to day 27
-        lead_params = {f"day{i+1}": i for i in range(27)}
+    if variable == 'rainy_onset':  # rainy onset only has daily leads out to day 36
+        lead_params = {f"day{i+1}": i for i in range(36)}
     else:
         for i in range(46):
             lead_params[f"day{i+1}"] = i
@@ -427,28 +378,58 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF {variable} forecasts.")
 
     agg_days = lead_to_agg_days(lead)
+    # Handle lead-based data
+    lead_sel = {'lead_time': np.timedelta64(lead_offset_days, 'D')}
+    return agg_days, lead_sel
+
+
+def _sel_and_shift_lead(ds, lead, lead_sel):
+    """Helper function for selecting and shifting lead for ECMWF forecasts."""
+    # Select the appropriate lead
+    ds = ds.sel(**lead_sel)
+    # Time shift - we want target date, instead of forecast date
+    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+    ds = ds.rename({'start_date': 'time'})
+    return ds
+
+
+@dask_remote
+def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deterministic',
+                          grid="global1_5", mask='lsm', region="global", debiased=True):
+    """Unified API accessor for ECMWF raw and debiased forecasts."""
+    agg_days, lead_sel = _process_lead(variable, lead)
+
     forecast_start = target_date_to_forecast_date(start_time, lead)
     forecast_end = target_date_to_forecast_date(end_time, lead)
 
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
+
     if variable == 'rainy_onset':
         # Get rainy season onset forecast
-        ds = ifs_extended_range_spw(forecast_start, forecast_end, lead,
-                                    debiased=debiased,
-                                    prob_type=prob_type,
-                                    onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                                    grid=grid, mask=mask, region=region)
-        # SPW is already lead-compensated, masked, and region-clipped
+        def _shifted_ecmwf_ifs_er(start_time, end_time, lead, lead_sel, agg_days,
+                                  prob_type='deterministic', grid="global1_5", debiased=True):
+            """Helper function for selecting and shifting lead for ECMWF forecasts."""
+            ds = ifs_extended_range_rolled(start_time, end_time, variable='precip', prob_type=prob_type,
+                                           agg_days=agg_days, grid=grid, debiased=debiased)
+            ds = _sel_and_shift_lead(ds, lead=lead, lead_sel=lead_sel)
+            return ds
+
+        fn = partial(_shifted_ecmwf_ifs_er, forecast_start, forecast_end,
+                     lead=lead, lead_sel=lead_sel,
+                     prob_type=prob_type, grid=grid, debiased=debiased)
+        data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
+
+        (prob_dim, prob_threshold) = ('member', 0.6) if prob_type == 'probabilistic' else (None, None)
+        rainy_onset_da = spw_rainy_onset(data,
+                                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                                         time_dim='time',
+                                         prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold)
+        ds = rainy_onset_da.to_dataset(name='rainy_onset')
     else:
         ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,
                                        agg_days=agg_days, grid=grid, debiased=debiased)
+        ds = _sel_and_shift_lead(ds, lead, lead_sel)
 
-        lead_shift = np.timedelta64(lead_offset_days, 'D')
-        ds = ds.sel(lead_time=lead_shift)
-
-        # Time shift - we want target date, instead of forecast date
-        ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
-        ds = ds.rename({'start_date': 'time'})
         # Apply masking and clip to region
         ds = apply_mask(ds, mask, grid=grid)
         ds = clip_region(ds, region=region)
@@ -461,6 +442,7 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
     if variable == 'precip' and agg_days in [7, 14]:
         print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
         ds['precip'] /= agg_days
+
     return ds
 
 

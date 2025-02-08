@@ -1,10 +1,12 @@
 """Get Tahmo data."""
 import dask.dataframe as dd
 import xarray as xr
-
+from functools import partial
 from sheerwater_benchmarking.utils.caching import cacheable
 from sheerwater_benchmarking.utils import get_grid_ds, get_grid, roll_and_agg, apply_mask, clip_region
 from sheerwater_benchmarking.utils.remote import dask_remote
+from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
+
 
 @dask_remote
 @cacheable(data_type='tabular', cache_args=['station_code'], cache=True)
@@ -38,8 +40,8 @@ def tahmo_station(station_code):
                'time': 365,
                'lat': 300,
                'lon': 300,
-        }, validate_cache_timeseries=False)
-def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first'): # noqa: ARG001
+}, validate_cache_timeseries=False)
+def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first'):  # noqa: ARG001
     """Get tahmo data from the QC controlled stations."""
     # Get the station list
     stat = dd.read_csv("gs://sheerwater-datalake/tahmo-data/tahmo_station_locs.csv")
@@ -120,7 +122,9 @@ def tahmo_raw(start_time, end_time, grid='global0_25', cell_aggregation='first')
            cache_args=['agg_days', 'grid', 'missing_thresh', 'cell_aggregation'],
            chunking={'lat': 300, 'lon': 300, 'time': 365},
            validate_cache_timeseries=False)
-def tahmo_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thresh=0.5, cell_aggregation='first'):
+def tahmo_rolled(start_time, end_time, agg_days,
+                 grid='global0_25',
+                 missing_thresh=0.5, cell_aggregation='first'):
     """Tahmo rolled and aggregated."""
     # Get the data
     ds = tahmo_raw(start_time, end_time, grid, cell_aggregation)
@@ -131,9 +135,31 @@ def tahmo_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thre
 
     # Roll and agg
     agg_thresh = max(int(agg_days*missing_thresh), 1)
-
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean', agg_thresh=agg_thresh)
+    return ds
 
+
+@dask_remote
+def _tahmo_unified(start_time, end_time, variable, agg_days,
+                   grid='global0_25', mask='lsm', region='global',
+                   missing_thresh=0.5, cell_aggregation='first'):
+    """Standard interface for tahmo data."""
+    if variable == 'rainy_onset':
+        fn = partial(tahmo_rolled, start_time, end_time, grid=grid,
+                     missing_thresh=missing_thresh, cell_aggregation=cell_aggregation)
+        data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
+        import pdb; pdb.set_trace()
+        rainy_onset_da = spw_rainy_onset(data,
+                                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                                         time_dim='time', prob_type='deterministic')
+        ds = rainy_onset_da.to_dataset(name='rainy_onset')
+    else:
+        ds = tahmo_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation)
+        ds = apply_mask(ds, mask, grid=grid)
+        ds = clip_region(ds, region=region)
+
+    # Note that this is sparse
+    ds = ds.assign_attrs(sparse=True)
     return ds
 
 
@@ -144,23 +170,12 @@ def tahmo_rolled(start_time, end_time, agg_days, grid='global0_25', missing_thre
            chunking={'lat': 300, 'lon': 300, 'time': 365},
            cache=False)
 def tahmo(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global',
-         missing_thresh=0.5):
-    """Standard interface for ghcn data."""
-    if variable != 'precip':
-        raise NotImplementedError("Tahmo data currently only has precip.")
+          missing_thresh=0.5):
+    """Standard interface for TAHMO data."""
+    return _tahmo_unified(start_time, end_time, variable, agg_days,
+                          grid=grid, mask=mask, region=region,
+                          missing_thresh=missing_thresh, cell_aggregation='first')
 
-    ds = tahmo_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation='first')
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-
-    # Note that this is sparse
-    ds = ds.assign_attrs(sparse=True)
-
-    return ds
 
 @dask_remote
 @cacheable(data_type='array',
@@ -169,20 +184,8 @@ def tahmo(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm
            chunking={'lat': 300, 'lon': 300, 'time': 365},
            cache=False)
 def tahmo_avg(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global',
-         missing_thresh=0.5):
-    """Standard interface for ghcn data."""
-    if variable != 'precip':
-        raise NotImplementedError("Tahmo data currently only has precip.")
-
-    ds = tahmo_rolled(start_time, end_time, agg_days, grid, missing_thresh, cell_aggregation='mean')
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
-
-    # Note that this is sparse
-    ds = ds.assign_attrs(sparse=True)
-
-    return ds
+              missing_thresh=0.5):
+    """Standard interface for TAHMO data."""
+    return _tahmo_unified(start_time, end_time, variable, agg_days,
+                          grid=grid, mask=mask, region=region,
+                          missing_thresh=missing_thresh, cell_aggregation='mean')

@@ -2,10 +2,9 @@
 import xarray as xr
 
 from sheerwater_benchmarking.utils import cacheable, dask_remote, apply_mask, clip_region, start_remote
-from sheerwater_benchmarking.reanalysis import era5_rolled
+from sheerwater_benchmarking.reanalysis import era5, era5_rolled
 from sheerwater_benchmarking.baselines import climatology_agg_raw
-from sheerwater_benchmarking.reanalysis.era5 import era5_spw
-from sheerwater_benchmarking.forecasts.ecmwf_er import ifs_extended_range_spw
+from sheerwater_benchmarking.metrics import get_datasource_fn
 
 
 @dask_remote
@@ -52,13 +51,10 @@ def ea_rainy_onset_truth(start_time, end_time,
                          use_ltn=False,
                          grid='global1_5', mask='lsm', region='global'):
     """Store the East African rainy season onset from a given truth source, according to the SPW method."""
-    if truth == 'era5':
-        ds = era5_spw(start_time, end_time,
-                      region=region, mask=mask, grid=grid,
-                      use_ltn=use_ltn, first_year=2004, last_year=2015,
-                      groupby=['ea_rainy_season', 'year'])
-    else:
-        raise NotImplementedError(f"Truth source {truth} not implemented.")
+    fn = get_datasource_fn(truth)
+    kwargs = {'missing_thresh': 0.0} if truth in ['tahmo', 'ghcn'] else {}
+    ds = fn(start_time, end_time, 'rainy_onset', agg_days=None,
+            grid=grid, mask=mask, region=region, **kwargs)
 
     if 'spatial_ref' in ds.coords:
         ds = ds.drop_vars('spatial_ref')

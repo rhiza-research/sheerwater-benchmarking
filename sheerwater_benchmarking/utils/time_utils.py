@@ -82,7 +82,7 @@ def assign_grouping_coordinates(ds, group, time_dim='time'):
                     return 'OND'
                 else:
                     return None
-            coords.append(np.vectorize(month_to_period)(ds[time_dim].dt.month.values))
+            coords.append([month_to_period(x) for x in ds[time_dim].dt.month.values])
         elif grp == 'year':
             coords.append(ds[time_dim].dt.year.values)
         else:
@@ -173,7 +173,7 @@ def doy_mean(data, dim='time'):
     return days
 
 
-def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, only_schema=False, **kwargs):
+def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, **kwargs):
     """Aggregates data in groups along the time dimension according to time_grouping.
 
     Args:
@@ -188,7 +188,6 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
         time_dim (str): The time dimension to group by.
         return_timeseries (bool): If True, return a timeseries (the first date in each period).
              Otherwise, returns the label for the group (e.g., 'MAM', 2015, 'Q4', 'M1').
-        only_schema (bool): If True, return only the schema of the would-be grouped dataset.
         kwargs: Additional keyword arguments to pass to the aggregation function.
     """
     # Input validation: if groupby is not a lists of lists, convert to a list of lists
@@ -212,16 +211,10 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
     for grp, agg in zip(groupby, agg_fn):
         # If no grouping is specified, apply the aggregation function directly
         if grp is None:
-            if only_schema:
-                continue
             ds = agg(ds, **kwargs)
         else:
             ds = assign_grouping_coordinates(ds, grp, time_dim)
-            if only_schema:
-                # Get the first element of each group to create a schema
-                ds = ds.groupby("group").first()
-            else:
-                ds = ds.groupby("group").map(agg, **kwargs)
+            ds = ds.groupby("group").map(agg, **kwargs)
             if 'group' not in ds.dims:
                 raise ValueError("Aggregation function must compress dataset along the group dimension.")
 

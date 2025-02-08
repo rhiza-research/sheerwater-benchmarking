@@ -1,9 +1,12 @@
 """Imerg data product."""
 import xarray as xr
 import gcsfs
+from dateutil import parser
+from functools import partial
 
 from sheerwater_benchmarking.utils import cacheable, dask_remote, regrid, roll_and_agg, apply_mask, clip_region
-from dateutil import parser
+from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
+
 
 @dask_remote
 @cacheable(data_type='array',
@@ -17,6 +20,7 @@ def imerg_raw(year):
     ds = xr.open_mfdataset(gsf, engine='h5netcdf')
 
     return ds
+
 
 @dask_remote
 @cacheable(data_type='array',
@@ -32,9 +36,9 @@ def imerg_gridded(start_time, end_time, grid):
         datasets.append(ds)
 
     ds = xr.open_mfdataset(datasets,
-                          engine='zarr',
-                          parallel=True,
-                          chunks={'lat': 300, 'lon': 300, 'time': 365})
+                           engine='zarr',
+                           parallel=True,
+                           chunks={'lat': 300, 'lon': 300, 'time': 365})
 
     ds = ds['precipitation'].to_dataset()
     ds = ds.rename({'precipitation': 'precip'})
@@ -51,7 +55,7 @@ def imerg_gridded(start_time, end_time, grid):
            cache_args=['grid', 'agg_days'],
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def imerg_rolled(start_time, end_time, agg_days, grid):
-    """Imerg rolled and agged."""
+    """Imerg rolled and aggregated."""
     ds = imerg_gridded(start_time, end_time, grid)
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean')
     return ds
@@ -64,15 +68,19 @@ def imerg_rolled(start_time, end_time, agg_days, grid):
            cache=False)
 def imerg(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global'):
     """Final imerg product."""
-    if variable != 'precip':
-        raise NotImplementedError("Only precip provided by imerg.")
+    if variable not in ['precip', 'rainy_onset']:
+        raise NotImplementedError("Only precip and derived variables provided by IMERG.")
 
-    ds = imerg_rolled(start_time, end_time, agg_days, grid)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
+    if variable == 'rainy_onset':
+        fn = partial(imerg_rolled, start_time, end_time, grid=grid)
+        data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
+        rainy_onset_da = spw_rainy_onset(data,
+                                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                                         time_dim='time', prob_type='deterministic')
+        ds = rainy_onset_da.to_dataset(name='rainy_onset')
+    else:
+        ds = imerg_rolled(start_time, end_time, agg_days=agg_days, grid=grid)
+        ds = apply_mask(ds, mask, grid=grid)
+        ds = clip_region(ds, region=region)
 
     return ds

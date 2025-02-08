@@ -1,8 +1,9 @@
 """CHIRPS data product."""
 import xarray as xr
-
+from functools import partial
 from sheerwater_benchmarking.utils import regrid, dask_remote, cacheable, roll_and_agg, apply_mask, clip_region
 from dateutil import parser
+from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
 
 
 @dask_remote
@@ -48,9 +49,7 @@ def chirps_rolled(start_time, end_time, agg_days, grid):
                            engine='zarr',
                            parallel=True,
                            chunks={'lat': 300, 'lon': 300, 'time': 365})
-
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean')
-
     return ds
 
 
@@ -61,15 +60,19 @@ def chirps_rolled(start_time, end_time, agg_days, grid):
            cache=False)
 def chirps(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global'):
     """Final access function for chirps."""
-    if variable != 'precip':
+    if variable not in ['precip', 'rainy_onset']:
         raise NotImplementedError("Only precip provided by chirps.")
 
-    ds = chirps_rolled(start_time, end_time, agg_days, grid)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
+    if variable == 'rainy_onset':
+        fn = partial(chirps_rolled, start_time, end_time, grid=grid)
+        data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
+        rainy_onset_da = spw_rainy_onset(data,
+                                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                                         time_dim='time', prob_type='deterministic')
+        ds = rainy_onset_da.to_dataset(name='rainy_onset')
+    else:
+        ds = chirps_rolled(start_time, end_time, agg_days, grid)
+        ds = apply_mask(ds, mask, grid=grid)
+        ds = clip_region(ds, region=region)
 
     return ds

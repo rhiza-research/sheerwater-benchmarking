@@ -1,7 +1,8 @@
 """The Suitable Planting Window (SPW) task utilities."""
 from functools import partial
+import xarray as xr
 
-from sheerwater_benchmarking.utils import groupby_time
+from sheerwater_benchmarking.utils import groupby_time, apply_mask, clip_region
 from sheerwater_benchmarking.utils import first_satisfied_date, doy_mean
 
 
@@ -44,6 +45,30 @@ def rainy_onset_condition(da, prob_type='ensemble', prob_dim='member', prob_thre
         # If the quantile dimension is present
         raise NotImplementedError("Quantile probability not implemented yet.")
     return cond
+
+
+def spw_precip_preprocess(fn, mask='lsm', region='global', grid='global1_5'):
+    """Preprocess the daily data to ensure it has the required 8 and 11 day aggregations.
+
+    Args:
+        fn (callable): Function that generates a n-day aggregated precipitation dataset when 
+            called with the 'agg_days' keyword argument.
+        mask (str): Mask to apply to the data.
+        region (str): Region to clip the data to.
+        grid (str): Grid to regrid the data to.
+    """
+    # Ensure the data has the required aggregations
+    datasets = [agg_days*fn(agg_days=agg_days)
+                .rename({'precip': f'precip_{agg_days}d'})
+                for agg_days in [8, 11]]
+
+    # Merge both datasets
+    ds = xr.merge(datasets)
+
+    # Apply masking
+    ds = apply_mask(ds, mask, grid=grid)
+    ds = clip_region(ds, region=region)
+    return ds
 
 
 def spw_rainy_onset(ds, onset_group=None, aggregate_group=None, time_dim='time',
