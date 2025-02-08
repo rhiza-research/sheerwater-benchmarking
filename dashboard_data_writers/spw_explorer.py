@@ -1,7 +1,7 @@
 """Cache tables in postgres for the SPW dashboard."""
 import xarray as xr
 
-from sheerwater_benchmarking.utils import cacheable, dask_remote, apply_mask, clip_region
+from sheerwater_benchmarking.utils import cacheable, dask_remote, apply_mask, clip_region, start_remote
 from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.baselines import climatology_agg_raw
 from sheerwater_benchmarking.reanalysis.era5 import era5_spw
@@ -78,7 +78,7 @@ def ea_rainy_onset_forecast(start_time, end_time,
     if forecast == 'ecmwf_ifs_er_debiased' or forecast == 'ecmwf_ifs_er':
         debiased = (forecast == 'ecmwf_ifs_er_debiased')
         datasets = []
-        for lead in [f'day{d}' for d in range(1, 28)]:
+        for lead in [f'day{d}' for d in [1, 7, 14, 21, 28]]:
             ds = ifs_extended_range_spw(start_time, end_time, lead,
                                         prob_type='probabilistic',
                                         prob_threshold=None,
@@ -97,17 +97,20 @@ def ea_rainy_onset_forecast(start_time, end_time,
 
 
 if __name__ == "__main__":
+    start_remote()
     # Runners to generate the tables
     start_time = '2016-01-01'
     end_time = '2022-12-31'
 
-    forecast = 'ecmwf_ifs_er_debiased'
+    forecasts = ['ecmwf_ifs_er_debiased', 'ecmwf_ifs_er']
     truth = 'era5'
     use_ltn = False
-    grid = 'global1_5'
+    grids = ['global1_5', 'global0_25']
     mask = 'lsm'
-    region = 'global'
+    region = 'kenya'
 
-    ea_rainy_onset_truth(start_time, end_time, truth, use_ltn, grid, mask, region)
-    ea_rainy_onset_forecast(start_time, end_time, forecast, grid, mask, region)
-    rain_windowed_spw(start_time, end_time, truth, grid, mask, region)
+    for grid in grids:
+        rain_windowed_spw(start_time, end_time, truth, grid, mask, region)
+        ea_rainy_onset_truth(start_time, end_time, truth, use_ltn, grid, mask, region)
+        for forecast in forecasts:
+            ea_rainy_onset_forecast(start_time, end_time, forecast, grid, mask, region)
