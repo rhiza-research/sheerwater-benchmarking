@@ -35,5 +35,5 @@ if __name__ == "__main__":
     end_time = '2024-12-31'
     agg_days = [1, 7]
     for agg_day in agg_days:
-        ds = rainfall_data(start_time, end_time, agg_day, grid='global1_5', mask='lsm', region='global',
-                      recompute=True)
+        ds = rainfall_data(start_time, end_time, agg_day, grid='global0_25', mask='lsm', region='east_africa',
+                           recompute=True)
