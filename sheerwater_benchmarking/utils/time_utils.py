@@ -207,11 +207,7 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
         if grp is None:
             ds = agg(ds, **kwargs)
         else:
-            try:
-                ds = assign_grouping_coordinates(ds, grp, time_dim)
-            except:
-                import pdb
-                pdb.set_trace()
+            ds = assign_grouping_coordinates(ds, grp, time_dim)
             ds = ds.groupby("group").map(agg, **kwargs)
             if 'group' not in ds.dims:
                 raise ValueError("Aggregation function must compress dataset along the group dimension.")

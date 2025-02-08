@@ -321,8 +321,8 @@ def _ghcn_unified(start_time, end_time, variable, agg_days,
                              time_dim='time', prob_type='deterministic',
                              mask=mask, region=region, grid=grid)
     else:
-        ds = _ghcn_rolled_unified(start_time, end_time, variable, agg_days, grid, mask,
-                                  region, missing_thresh, cell_aggregation=cell_aggregation)
+        ds = _ghcn_rolled_unified(start_time, end_time, variable=variable, agg_days=agg_days,
+                                  grid=grid, missing_thresh=missing_thresh, cell_aggregation=cell_aggregation)
         # Apply masking
         ds = apply_mask(ds, mask, grid=grid)
         ds = clip_region(ds, region=region)
@@ -339,9 +339,9 @@ def ghcn(start_time, end_time, variable, agg_days,
          grid='global0_25', mask='lsm', region='global',
          missing_thresh=0.5):
     """Standard interface for ghcn data."""
-    return _ghcn_unified(start_time, end_time, variable, agg_days,
-                         grid, mask, region,
-                         missing_thresh, cell_aggregation='first')
+    return _ghcn_unified(start_time, end_time, variable, agg_days=agg_days,
+                         grid=grid, mask=mask, region=region,
+                         missing_thresh=missing_thresh, cell_aggregation='first')
 
 
 @dask_remote
@@ -353,6 +353,6 @@ def ghcn(start_time, end_time, variable, agg_days,
 def ghcn_avg(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global',
              missing_thresh=0.5):
     """Standard interface for ghcn data."""
-    return _ghcn_unified(start_time, end_time, variable, agg_days,
-                         grid, mask, region,
-                         missing_thresh, cell_aggregation='mean')
+    return _ghcn_unified(start_time, end_time, variable, agg_days=agg_days,
+                         grid=grid, mask=mask, region=region,
+                         missing_thresh=missing_thresh, cell_aggregation='mean')

@@ -51,7 +51,7 @@ def spw_precip_preprocess(fn, mask='lsm', region='global', grid='global1_5', agg
     """Preprocess the daily data to ensure it has the required 8 and 11 day aggregations.
 
     Args:
-        fn (callable): Function that generates a n-day aggregated precipitation dataset when 
+        fn (callable): Function that generates a n-day aggregated precipitation dataset when
             called with the 'agg_days' keyword argument.
         mask (str): Mask to apply to the data.
         region (str): Region to clip the data to.

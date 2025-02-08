@@ -93,7 +93,7 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
 
 #     ds = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group,
 #                                      time_dim='time', prob_type='deterministic')
-#     return ds 
+#     return ds
 
 
 @dask_remote
