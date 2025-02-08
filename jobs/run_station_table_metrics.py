@@ -20,8 +20,6 @@ filepath_only = True
 if backend is not None:
     filepath_only = False
 
-truth = "ghcn"
-
 if 'crps' in metrics:
     metrics.remove('crps')
 
