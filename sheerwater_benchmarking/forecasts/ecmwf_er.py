@@ -394,6 +394,38 @@ def _sel_and_shift_lead(ds, lead, lead_sel):
 
 
 @dask_remote
+def ecmwf_ifs_spw(start_time, end_time, variable, lead, debiased=True,
+                  prob_type='probabilistic', prob_threshold=0.6,
+                  onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                  grid='global1_5', mask='lsm', region="global"):
+    """The ECMWF SPW forecasts."""
+    # Get rainy season onset forecast
+    _, lead_sel = _process_lead(variable, lead)
+    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
+
+    def _shifted_ecmwf_ifs_er(start_time, end_time, lead, lead_sel, agg_days,
+                              prob_type='deterministic', grid="global1_5", debiased=True):
+        """Helper function for selecting and shifting lead for ECMWF forecasts."""
+        ds = ifs_extended_range_rolled(start_time, end_time, variable='precip', prob_type=prob_type,
+                                       agg_days=agg_days, grid=grid, debiased=debiased)
+        ds = _sel_and_shift_lead(ds, lead=lead, lead_sel=lead_sel)
+        return ds
+
+    fn = partial(_shifted_ecmwf_ifs_er, start_time, end_time,
+                 lead=lead, lead_sel=lead_sel,
+                 prob_type=prob_type, grid=grid, debiased=debiased)
+    data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
+
+    (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
+    rainy_onset_da = spw_rainy_onset(data,
+                                     onset_group=onset_group, aggregate_group=aggregate_group,
+                                     time_dim='time',
+                                     prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold)
+    ds = rainy_onset_da.to_dataset(name='rainy_onset')
+    return ds
+
+
+@dask_remote
 def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deterministic',
                           grid="global1_5", mask='lsm', region="global", debiased=True):
     """Unified API accessor for ECMWF raw and debiased forecasts."""
@@ -403,28 +435,11 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
     forecast_end = target_date_to_forecast_date(end_time, lead)
 
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
-
     if variable == 'rainy_onset':
-        # Get rainy season onset forecast
-        def _shifted_ecmwf_ifs_er(start_time, end_time, lead, lead_sel, agg_days,
-                                  prob_type='deterministic', grid="global1_5", debiased=True):
-            """Helper function for selecting and shifting lead for ECMWF forecasts."""
-            ds = ifs_extended_range_rolled(start_time, end_time, variable='precip', prob_type=prob_type,
-                                           agg_days=agg_days, grid=grid, debiased=debiased)
-            ds = _sel_and_shift_lead(ds, lead=lead, lead_sel=lead_sel)
-            return ds
-
-        fn = partial(_shifted_ecmwf_ifs_er, forecast_start, forecast_end,
-                     lead=lead, lead_sel=lead_sel,
-                     prob_type=prob_type, grid=grid, debiased=debiased)
-        data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
-
-        (prob_dim, prob_threshold) = ('member', 0.6) if prob_type == 'probabilistic' else (None, None)
-        rainy_onset_da = spw_rainy_onset(data,
-                                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                                         time_dim='time',
-                                         prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold)
-        ds = rainy_onset_da.to_dataset(name='rainy_onset')
+        ds = ecmwf_ifs_spw(forecast_start, forecast_end, variable, lead, debiased=debiased,
+                           prob_type=prob_type, prob_threshold=0.6,
+                           onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                           grid=grid, mask=mask, region=region)
     else:
         ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,
                                        agg_days=agg_days, grid=grid, debiased=debiased)

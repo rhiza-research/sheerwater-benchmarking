@@ -10,14 +10,16 @@ def test_spw():
     """Test that the SPW can successfully be called as a variable for all forecasters."""
     start_time = "2016-01-01"
     end_time = "2022-12-31"
+    prob_types = ['deterministic', 'probabilistic']
     datasets = []
     for forecast in ["ecmwf_ifs_er", "ecmwf_ifs_er_debiased", "climatology_2015"]:
-        fn = get_datasource_fn(forecast)
-        datasets.append(fn(start_time, end_time,
-                           'rainy_onset',
-                           lead='day11',
-                           prob_type='deterministic',
-                           grid='global1_5', mask='lsm', region='kenya').assign_attrs(forecast=forecast))
+        for prob_type in prob_types:
+            fn = get_datasource_fn(forecast)
+            datasets.append(fn(start_time, end_time,
+                            'rainy_onset',
+                               lead='day11',
+                               prob_type=prob_type,
+                               grid='global1_5', mask='lsm', region='kenya'))
 
     for ds in datasets:
         assert ds.time.size == 14
