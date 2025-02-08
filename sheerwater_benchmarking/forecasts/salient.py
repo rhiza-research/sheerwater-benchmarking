@@ -91,10 +91,9 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
 #     ds = apply_mask(ds, mask, grid=grid)
 #     ds = clip_region(ds, region=region)
 
-#     rainy_onset_da = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group,
+#     ds = spw_rainy_onset(ds, onset_group=onset_group, aggregate_group=aggregate_group,
 #                                      time_dim='time', prob_type='deterministic')
-#     rainy_onset_ds = rainy_onset_da.to_dataset(name='rainy_onset')
-#     return rainy_onset_ds
+#     return ds 
 
 
 @dask_remote

@@ -328,6 +328,27 @@ def _process_lead(variable, lead):
 
 
 @dask_remote
+def climatology_spw(start_time, end_time, first_year=1985, last_year=2014, trend=False,
+                    prob_type='probabilistic', prob_threshold=0.2,
+                    onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                    grid='global1_5', mask='lsm', region="global"):
+    """Climatology SPW forecast."""
+    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
+    fn = partial(climatology_rolled, start_time, end_time, variable='precip',
+                 first_year=first_year, last_year=last_year,
+                 trend=trend, prob_type=prob_type, grid=grid)
+    data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
+
+    (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
+    ds = spw_rainy_onset(data,
+                         onset_group=onset_group, aggregate_group=aggregate_group,
+                         time_dim='time',
+                         prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                         mask=mask, region=region, grid=grid)
+    return ds
+
+
+@dask_remote
 def _climatology_unified(start_time, end_time, variable, lead,
                          first_year=1985, last_year=2014, trend=False,
                          prob_type='deterministic',
@@ -336,17 +357,11 @@ def _climatology_unified(start_time, end_time, variable, lead,
     agg_days = _process_lead(variable, lead)
     # Get daily data
     if variable == 'rainy_onset':
-        fn = partial(climatology_rolled, start_time, end_time, variable='precip',
-                     first_year=first_year, last_year=last_year,
-                     trend=trend, prob_type=prob_type, grid=grid)
-        data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
-
-        (prob_dim, prob_threshold) = ('member', 0.2) if prob_type == 'probabilistic' else (None, None)
-        rainy_onset_da = spw_rainy_onset(data,
-                                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                                         time_dim='time',
-                                         prob_type='deterministic', prob_dim=prob_dim, prob_threshold=prob_threshold)
-        ds = rainy_onset_da.to_dataset(name='rainy_onset')
+        ds = climatology_spw(start_time, end_time, first_year=first_year, last_year=last_year,
+                             trend=trend,
+                             prob_type=prob_type, prob_threshold=0.2,
+                             onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                             grid=grid, mask=mask, region=region)
     else:
         ds = climatology_rolled(start_time, end_time, variable,
                                 first_year=first_year, last_year=last_year,

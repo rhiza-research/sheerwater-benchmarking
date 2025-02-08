@@ -316,10 +316,10 @@ def _ghcn_unified(start_time, end_time, variable, agg_days,
         fn = partial(_ghcn_rolled_unified, start_time, end_time, variable='precip', grid=grid,
                      missing_thresh=missing_thresh, cell_aggregation=cell_aggregation)
         data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
-        rainy_onset_da = spw_rainy_onset(data,
-                                         onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                                         time_dim='time', prob_type='deterministic')
-        ds = rainy_onset_da.to_dataset(name='rainy_onset')
+        ds = spw_rainy_onset(data,
+                             onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                             time_dim='time', prob_type='deterministic',
+                             mask=mask, region=region, grid=grid)
     else:
         ds = _ghcn_rolled_unified(start_time, end_time, variable, agg_days, grid, mask,
                                   region, missing_thresh, cell_aggregation=cell_aggregation)

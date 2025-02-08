@@ -190,12 +190,6 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
              Otherwise, returns the label for the group (e.g., 'MAM', 2015, 'Q4', 'M1').
         kwargs: Additional keyword arguments to pass to the aggregation function.
     """
-    # Input validation: if groupby is not a lists of lists, convert to a list of lists
-    if groupby and not isinstance(groupby, list):
-        groupby = [groupby]
-    if groupby and not isinstance(groupby[0], list):
-        groupby = [groupby]
-
     # Input validation: if agg_fn is not a list, convert to a list
     if isinstance(groupby, list) and not isinstance(agg_fn, list):
         agg_fn = [agg_fn] * len(groupby)
@@ -213,7 +207,11 @@ def groupby_time(ds, groupby, agg_fn, time_dim='time', return_timeseries=False, 
         if grp is None:
             ds = agg(ds, **kwargs)
         else:
-            ds = assign_grouping_coordinates(ds, grp, time_dim)
+            try:
+                ds = assign_grouping_coordinates(ds, grp, time_dim)
+            except:
+                import pdb
+                pdb.set_trace()
             ds = ds.groupby("group").map(agg, **kwargs)
             if 'group' not in ds.dims:
                 raise ValueError("Aggregation function must compress dataset along the group dimension.")

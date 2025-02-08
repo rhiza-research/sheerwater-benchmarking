@@ -394,13 +394,13 @@ def _sel_and_shift_lead(ds, lead, lead_sel):
 
 
 @dask_remote
-def ecmwf_ifs_spw(start_time, end_time, variable, lead, debiased=True,
+def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
                   prob_type='probabilistic', prob_threshold=0.6,
                   onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                   grid='global1_5', mask='lsm', region="global"):
     """The ECMWF SPW forecasts."""
     # Get rainy season onset forecast
-    _, lead_sel = _process_lead(variable, lead)
+    _, lead_sel = _process_lead('precip', lead)
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
 
     def _shifted_ecmwf_ifs_er(start_time, end_time, lead, lead_sel, agg_days,
@@ -417,11 +417,11 @@ def ecmwf_ifs_spw(start_time, end_time, variable, lead, debiased=True,
     data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
 
     (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
-    rainy_onset_da = spw_rainy_onset(data,
-                                     onset_group=onset_group, aggregate_group=aggregate_group,
-                                     time_dim='time',
-                                     prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold)
-    ds = rainy_onset_da.to_dataset(name='rainy_onset')
+    ds = spw_rainy_onset(data,
+                         onset_group=onset_group, aggregate_group=aggregate_group,
+                         time_dim='time',
+                         prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                         mask=mask, region=region, grid=grid)
     return ds
 
 
@@ -436,7 +436,7 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
 
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
     if variable == 'rainy_onset':
-        ds = ecmwf_ifs_spw(forecast_start, forecast_end, variable, lead, debiased=debiased,
+        ds = ecmwf_ifs_spw(forecast_start, forecast_end, lead, debiased=debiased,
                            prob_type=prob_type, prob_threshold=0.6,
                            onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                            grid=grid, mask=mask, region=region)

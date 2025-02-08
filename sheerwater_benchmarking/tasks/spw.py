@@ -72,7 +72,8 @@ def spw_precip_preprocess(fn, mask='lsm', region='global', grid='global1_5'):
 
 
 def spw_rainy_onset(ds, onset_group=None, aggregate_group=None, time_dim='time',
-                    prob_type='ensemble', prob_dim=None, prob_threshold=None):
+                    prob_type='ensemble', prob_dim=None, prob_threshold=None,
+                    mask='lsm', region='global', grid='global1_5'):
     """Utility function to get first rainy onset."""
     # Ensure that onset group and aggregate groups are lists
     if onset_group and not isinstance(onset_group, list):
@@ -91,22 +92,26 @@ def spw_rainy_onset(ds, onset_group=None, aggregate_group=None, time_dim='time',
             raise ValueError("Grouping is not supported for probabilistic forecasts without a threshold.")
         # Compute condition probability on the timeseries
         rainy_da = rainy_onset_condition(ds, prob_type=prob_type, prob_dim=prob_dim, prob_threshold=None)
-        return rainy_da
+    else:
+        # Otherwise, compute the first satisfied date for each grouping
+        agg_fn = [partial(first_satisfied_date,
+                          condition=rainy_onset_condition,
+                          prob_type=prob_type, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                          time_dim=time_dim)]
 
-    # Otherwise, compute the first satisfied date for each grouping
-    agg_fn = [partial(first_satisfied_date,
-                      condition=rainy_onset_condition,
-                      prob_type=prob_type, prob_dim=prob_dim, prob_threshold=prob_threshold,
-                      time_dim=time_dim)]
+        # Returns a dataframe with a dimension 'time' corresponding to the first grouping value
+        # and value 'rainy_onset' corresponding to the rainy season onset date
+        if aggregate_group is not None:
+            # For the aggregate grouping average over datetimes within a grouping
+            agg_fn += [partial(doy_mean, dim='time')]
 
-    # Returns a dataframe with a dimension 'time' corresponding to the first grouping value
-    # and value 'rainy_onset' corresponding to the rainy season onset date
-    if aggregate_group is not None:
-        # For the aggregate grouping average over datetimes within a grouping
-        agg_fn += [partial(doy_mean, dim='time')]
+        #  Apply the aggregation functions to the dataset using the groupby utility
+        #  Set return_timeseries to True to get a dataset with a time dimension for each grouping
+        rainy_da = groupby_time(ds, groupby=groupby, agg_fn=agg_fn,
+                                time_dim=time_dim, return_timeseries=True)
 
-    #  Apply the aggregation functions to the dataset using the groupby utility
-    #  Set return_timeseries to True to get a dataset with a time dimension for each grouping
-    rainy_da = groupby_time(ds, groupby=groupby, agg_fn=agg_fn,
-                            time_dim=time_dim, return_timeseries=True)
-    return rainy_da
+    # Apply masking and clip to region
+    rainy_ds = rainy_da.to_dataset(name='rainy_onset')
+    rainy_ds = apply_mask(rainy_ds, mask, grid=grid)
+    rainy_ds = clip_region(rainy_ds, region=region)
+    return rainy_ds

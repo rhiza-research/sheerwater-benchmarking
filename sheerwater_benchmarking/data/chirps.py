@@ -68,7 +68,8 @@ def chirps(start_time, end_time, variable, agg_days, grid='global0_25', mask='ls
         data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
         rainy_onset_da = spw_rainy_onset(data,
                                          onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
-                                         time_dim='time', prob_type='deterministic')
+                                         time_dim='time', prob_type='deterministic',
+                                         mask=mask, region=region, grid=grid)
         ds = rainy_onset_da.to_dataset(name='rainy_onset')
     else:
         ds = chirps_rolled(start_time, end_time, agg_days, grid)
