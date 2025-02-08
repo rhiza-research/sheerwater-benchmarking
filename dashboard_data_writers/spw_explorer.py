@@ -1,10 +1,18 @@
 """Cache tables in postgres for the SPW dashboard."""
 import xarray as xr
-
-from sheerwater_benchmarking.utils import cacheable, dask_remote, apply_mask, clip_region, start_remote
+import numpy as np
+from functools import partial
+from sheerwater_benchmarking.utils import cacheable, dask_remote, apply_mask, clip_region, start_remote, plot_ds
 from sheerwater_benchmarking.reanalysis import era5, era5_rolled
-from sheerwater_benchmarking.baselines import climatology_agg_raw
+from sheerwater_benchmarking.forecasts.ecmwf_er import ecmwf_ifs_spw
+from sheerwater_benchmarking.baselines.climatology import climatology_spw
+from sheerwater_benchmarking.data.imerg import imerg_rolled
+from sheerwater_benchmarking.data.chirps import chirps_rolled
+from sheerwater_benchmarking.data.ghcn import _ghcn_rolled_unified
+from sheerwater_benchmarking.data.tahmo import tahmo_rolled
+from sheerwater_benchmarking.baselines.climatology import climatology_agg_raw, climatology_rolled
 from sheerwater_benchmarking.metrics import get_datasource_fn
+from sheerwater_benchmarking.tasks import spw_precip_preprocess
 
 
 @dask_remote
@@ -16,30 +24,26 @@ def rain_windowed_spw(start_time, end_time,
                       grid='global1_5', mask='lsm', region='global'):
     """Store the rolling windows of precipitation relevant to SPW in the database."""
     # Get the ground truth data
-    if truth == 'ltn':
-        # Get the rolled and aggregated data, and then multiply average daily precip by the number of days
-        datasets = [agg_days*climatology_agg_raw('precip', first_year=2004, last_year=2015,
-                                                 prob_type='deterministic',
-                                                 agg_days=agg_days, grid=grid)
-                    .rename({'precip': f'precip_{agg_days}d'})
-                    for agg_days in [8, 11]]
-    else:
-        if truth == 'era5':
-            datasets = [agg_days*era5_rolled(start_time, end_time, 'precip',  agg_days=agg_days, grid=grid)
-                        .rename({'precip': f'precip_{agg_days}d'})
-                        for agg_days in [8, 11]]
-        else:
-            raise NotImplementedError(f"Truth source {truth} not implemented.")
-
-    # Merge both datasets
-    ds = xr.merge(datasets)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, grid=grid)
-    ds = clip_region(ds, region=region)
+    if truth == 'era5':
+        fn = partial(era5_rolled, start_time, end_time, variable='precip', grid=grid)
+    elif truth == 'imerg':
+        fn = partial(imerg_rolled, start_time, end_time, grid=grid)
+    elif truth == 'chirps':
+        fn = partial(chirps_rolled, start_time, end_time, grid=grid)
+    elif truth == 'ghcn':
+        fn = partial(_ghcn_rolled_unified, start_time, end_time, variable='precip', grid=grid,
+                     missing_thresh=0.0, cell_aggregation='first')
+    elif truth == 'tahmo':
+        fn = partial(tahmo_rolled, start_time, end_time,
+                     grid=grid, missing_thresh=0.0, cell_aggregation='first')
+    elif truth == 'ltn':
+        fn = partial(climatology_rolled, start_time, end_time, variable='precip',
+                     first_year=2004, last_year=2015,
+                     prob_type='deterministic', grid=grid)
+    ds = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid, agg_days=[1, 8, 11])
     ds = ds.drop_vars('spatial_ref')
-    ds = ds.to_dataframe()
-    return ds
+    df = ds.to_dataframe().dropna()
+    return df
 
 
 @dask_remote
@@ -48,14 +52,13 @@ def rain_windowed_spw(start_time, end_time,
            cache_args=['truth', 'use_ltn', 'grid', 'mask', 'region'])
 def ea_rainy_onset_truth(start_time, end_time,
                          truth='era5',
-                         use_ltn=False,
+                         use_ltn=False,  # noqa: ARG001
                          grid='global1_5', mask='lsm', region='global'):
     """Store the East African rainy season onset from a given truth source, according to the SPW method."""
     fn = get_datasource_fn(truth)
     kwargs = {'missing_thresh': 0.0} if truth in ['tahmo', 'ghcn'] else {}
     ds = fn(start_time, end_time, 'rainy_onset', agg_days=None,
             grid=grid, mask=mask, region=region, **kwargs)
-
     if 'spatial_ref' in ds.coords:
         ds = ds.drop_vars('spatial_ref')
     df = ds.to_dataframe()
@@ -66,29 +69,67 @@ def ea_rainy_onset_truth(start_time, end_time,
 @dask_remote
 @cacheable(data_type='tabular',
            backend='postgres',
-           cache_args=['start_time', 'end_time', 'forecast', 'grid', 'mask', 'region'])
+           cache_args=['forecast', 'use_ltn', 'grid', 'mask', 'region'])
 def ea_rainy_onset_forecast(start_time, end_time,
                             forecast='ecmwf_ifs_er_debiased',
+                            use_ltn=False,  # noqa: ARG001
                             grid='global1_5', mask='lsm', region='global'):
     """Store the rainy season onset from a given forecast source, according to the SPW method."""
-    if forecast == 'ecmwf_ifs_er_debiased' or forecast == 'ecmwf_ifs_er':
-        debiased = (forecast == 'ecmwf_ifs_er_debiased')
-        datasets = []
-        for lead in [f'day{d}' for d in [1, 7, 14, 21, 28]]:
-            ds = ifs_extended_range_spw(start_time, end_time, lead,
-                                        prob_type='probabilistic',
-                                        prob_threshold=None,
-                                        region=region, mask=mask, grid=grid,
-                                        groupby=None,
-                                        debiased=debiased)
-            datasets.append(ds)
-
-        ds = xr.concat(datasets, dim='lead_time')
-        ds = ds.drop_vars('spatial_ref')
+    fn = get_datasource_fn(forecast)
+    datasets = []
+    if forecast in ['ecmwf_ifs_er_debiased', 'ecmwf_ifs_er']:
+        leads = [f'day{d}' for d in [1, 7, 14, 21, 28]]
     else:
-        raise NotImplementedError(f"Forecast source {forecast} not implemented.")
+        leads = ['day1']
+
+    for lead in leads:
+        ds = fn(start_time, end_time, 'rainy_onset', lead=lead,
+                grid=grid, mask=mask, region=region)
+    datasets.append(ds)
+    ds = xr.concat(datasets, dim='lead_time')
+    if forecast == 'climatology_2015':
+        ds = ds.assign_coords(lead_time=[np.timedelta64(0, 'D')])
     df = ds.to_dataframe()
-    df = df.dropna(subset='rainy_forecast')
+    df = df.dropna(subset='rainy_onset')
+    return df
+
+
+@dask_remote
+@cacheable(data_type='tabular',
+           backend='postgres',
+           cache_args=['forecast', 'use_ltn', 'grid', 'mask', 'region'])
+def ea_rainy_onset_probabilities(start_time, end_time,
+                            forecast='ecmwf_ifs_er_debiased',
+                            use_ltn=False,  # noqa: ARG001
+                            grid='global1_5', mask='lsm', region='global'):
+    """Store the rainy season onset probabilities from a given forecast source, according to the SPW method."""
+    datasets = []
+    if forecast in ['ecmwf_ifs_er_debiased', 'ecmwf_ifs_er']:
+        leads = [f'day{d}' for d in [1, 7, 14, 21, 28]]
+    else:
+        leads = ['day1']
+
+    for lead in leads:
+        if forecast in ['ecmwf_ifs_er_debiased', 'ecmwf_ifs_er']:
+            ds = ecmwf_ifs_spw(start_time, end_time, lead=lead,
+                               debiased=(forecast == 'ecmwf_ifs_er_debiased'),
+                               onset_group=None,
+                               prob_type='probabilistic', prob_threshold=None,
+                               grid=grid, mask=mask, region=region)
+        elif forecast == 'climatology_2015':
+            ds = climatology_spw(start_time, end_time, first_year=2004, last_year=2015,
+                                 onset_group=None,
+                                 prob_type='probabilistic', prob_threshold=None,
+                                 grid=grid, mask=mask, region=region)
+        else:
+            raise ValueError(f"Invalid forecast source: {forecast}")
+        datasets.append(ds)
+    ds = xr.concat(datasets, dim='lead_time')
+    if forecast == 'climatology_2015':
+        ds = ds.assign_coords(lead_time=[np.timedelta64(0, 'D')])
+
+    df = ds.to_dataframe()
+    df = df.dropna(subset='rainy_onset')
     return df
 
 
@@ -97,16 +138,25 @@ if __name__ == "__main__":
     # Runners to generate the tables
     start_time = '2016-01-01'
     end_time = '2022-12-31'
-
-    forecasts = ['ecmwf_ifs_er_debiased', 'ecmwf_ifs_er']
-    truth = 'era5'
-    use_ltn = False
-    grids = ['global1_5', 'global0_25']
+    grid = 'global1_5'
     mask = 'lsm'
     region = 'kenya'
 
-    for grid in grids:
-        rain_windowed_spw(start_time, end_time, truth, grid, mask, region)
-        ea_rainy_onset_truth(start_time, end_time, truth, use_ltn, grid, mask, region)
-        for forecast in forecasts:
-            ea_rainy_onset_forecast(start_time, end_time, forecast, grid, mask, region)
+    for forecast in ['ecmwf_ifs_er_debiased', 'ecmwf_ifs_er', 'climatology_2015']:
+        df = ea_rainy_onset_forecast(start_time, end_time, forecast,
+                                     grid=grid, mask=mask, region=region,
+                                     recompute=True,
+                                     backend='postgres')
+
+        df = ea_rainy_onset_probabilities(start_time, end_time, forecast,
+                                          grid=grid, mask=mask, region=region,
+                                          recompute=True,
+                                          backend='postgres')
+
+    # Generate for all data sources
+    for truth in ["era5", "chirps", "ghcn", "imerg", "tahmo", 'ltn']:
+        df2 = ea_rainy_onset_truth(start_time, end_time, truth,
+                                   grid=grid, mask=mask, region=region,
+                                   backend='postgres', recompute=True, force_overwrite=True)
+        df3 = rain_windowed_spw(start_time, end_time, truth, grid, mask, region,
+                                backend='postgres', recompute=True, force_overwrite=True)

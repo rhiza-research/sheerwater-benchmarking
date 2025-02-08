@@ -47,7 +47,7 @@ def rainy_onset_condition(da, prob_type='ensemble', prob_dim='member', prob_thre
     return cond
 
 
-def spw_precip_preprocess(fn, mask='lsm', region='global', grid='global1_5'):
+def spw_precip_preprocess(fn, mask='lsm', region='global', grid='global1_5', agg_days=[8, 11]):
     """Preprocess the daily data to ensure it has the required 8 and 11 day aggregations.
 
     Args:
@@ -56,11 +56,12 @@ def spw_precip_preprocess(fn, mask='lsm', region='global', grid='global1_5'):
         mask (str): Mask to apply to the data.
         region (str): Region to clip the data to.
         grid (str): Grid to regrid the data to.
+        agg_days (list): List of aggregation days to compute.
     """
     # Ensure the data has the required aggregations
     datasets = [agg_days*fn(agg_days=agg_days)
                 .rename({'precip': f'precip_{agg_days}d'})
-                for agg_days in [8, 11]]
+                for agg_days in agg_days]
 
     # Merge both datasets
     ds = xr.merge(datasets)
