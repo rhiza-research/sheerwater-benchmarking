@@ -178,7 +178,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         raise ValueError(f"{metric} Can only be run with precipitation.")
 
     # drop all times not in fcst
-    obs = obs.sel(time=fcst.time)
+    valid_times = set(obs.time.values).intersection(set(fcst.time.values))
+    obs = obs.sel(time=list(valid_times))
 
     ############################################################
     #### Call the metrics with their various libraries
