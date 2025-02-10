@@ -31,7 +31,7 @@ def parse_args():
     args = parser.parse_args()
 
     if args.station_evaluation:
-        forecasts = ["era5", "chirps", "imerg"]
+        forecasts = ["era5", "chirps", "imerg", "cbam"]
     else:
         forecasts = ["salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
                      "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
@@ -96,6 +96,9 @@ def prune_metrics(combos, global_run=False):
         metric, variable, grid, region, lead, forecast, time_grouping, truth = combo
 
         if not global_run and 'tahmo' in truth and region != 'east_africa':
+            continue
+
+        if not global_run and forecast == 'cbam' and region != 'east_africa':
             continue
 
         if global_run:
