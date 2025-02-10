@@ -10,7 +10,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
-                                           lead_to_agg_days, lead_or_agg)
+                                           lead_to_agg_days, lead_or_agg, plot_ds)
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
@@ -314,8 +314,15 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     else:
         raise ValueError(f"Metric {metric} not implemented")
 
+    # If metric is a timedelta object, convert it to a number of seconds
+    if np.issubdtype(m_ds[variable].dtype, np.timedelta64) or (m_ds[variable].dtype == np.dtype('<m8[ns]')):
+        m_ds = m_ds.astype('int64') / 1e9
+        # NaT get's converted to -9.22337204e+09, so filter that to a proper nan
+        m_ds = m_ds.where(m_ds.rainy_onset == -9.22337204e+09, np.nan)
+
     m_ds = m_ds.assign_attrs(sparse=sparse)
     m_ds = m_ds.assign_attrs(metric_sparse=metric_sparse)
+
     return m_ds
 
 
@@ -438,9 +445,8 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         else:
             # Average in time
             ds = ds.mean(dim="time")
-        # TODO: we can convert this to a groupby_time call when we're ready 
+        # TODO: we can convert this to a groupby_time call when we're ready
         # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
-
 
     # Clip it to the region
     ds = clip_region(ds, region)

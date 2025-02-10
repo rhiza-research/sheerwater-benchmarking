@@ -440,6 +440,8 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
                            prob_type=prob_type, prob_threshold=0.6,
                            onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                            grid=grid, mask=mask, region=region)
+        # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
     else:
         ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,
                                        agg_days=agg_days, grid=grid, debiased=debiased)
@@ -451,7 +453,8 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
 
     # Assign probability label
     ds = ds.assign_attrs(prob_type=prob_label)
-    ds = ds.drop_vars('spatial_ref')
+    if 'spatial_ref' in ds.variables:
+        ds = ds.drop_vars('spatial_ref')
 
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip' and agg_days in [7, 14]:

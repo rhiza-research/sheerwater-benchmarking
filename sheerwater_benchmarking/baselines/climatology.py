@@ -362,6 +362,8 @@ def _climatology_unified(start_time, end_time, variable, lead,
                              prob_type=prob_type, prob_threshold=0.2,
                              onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                              grid=grid, mask=mask, region=region)
+        # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
     else:
         ds = climatology_rolled(start_time, end_time, variable,
                                 first_year=first_year, last_year=last_year,

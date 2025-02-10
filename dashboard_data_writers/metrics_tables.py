@@ -1,10 +1,10 @@
 """Verification metrics for forecasts."""
 
-
+import numpy as np
 import xarray as xr
 
-from sheerwater_benchmarking.utils import (cacheable, dask_remote, start_remote)
-from sheerwater_benchmarking.metrics import grouped_metric
+from sheerwater_benchmarking.utils import (cacheable, dask_remote, start_remote, plot_ds)
+from sheerwater_benchmarking.metrics import grouped_metric, eval_metric, global_metric, grouped_metric
 
 
 @dask_remote
@@ -26,7 +26,8 @@ def _summary_metrics_table(start_time, end_time, variable,
                 ds = grouped_metric(start_time, end_time, variable,
                                     lead=lead, forecast=forecast, truth=truth,
                                     metric=metric, time_grouping=time_grouping, spatial=False,
-                                    grid=grid, mask=mask, region=region)
+                                    grid=grid, mask=mask, region=region,
+                                    retry_null_cache=True)
             except NotImplementedError:
                 ds = None
 
@@ -130,6 +131,18 @@ if __name__ == "__main__":
     mask = 'lsm'
     forecasts = ['climatology_2015', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased']
     leads = ['day1', 'day8', 'day15', 'day22', 'day29']
+    # ds = eval_metric(start_time, end_time, 'rainy_onset', 'day1', 'climatology_2015', 'era5',
+    #                  'mae', spatial=True, avg_time=False,
+    #                  grid="global1_5", mask='lsm', region='global')
+    # ds = global_metric(start_time, end_time, 'rainy_onset', 'day1', 'climatology_2015', 'era5',
+    #                    'mae', grid="global1_5", mask='lsm', region='global')
+    # ds = grouped_metric(start_time, end_time, 'rainy_onset', 'day1', 'climatology_2015', 'era5',
+    #                     'mae', spatial=False, grid="global1_5", mask='lsm', region='africa',
+    #                     cache=False)
+    # import pdb; pdb.set_trace()
+    # # plot_ds(ds, variable='rainy_onset')
+    # import pdb
+    # pdb.set_trace()
 
     for variable in variables:
         for metric in metrics:
@@ -137,5 +150,5 @@ if __name__ == "__main__":
                 summary_metrics_table(start_time, end_time, variable, truth, metric,
                                       forecasts=forecasts, leads=leads,
                                       time_grouping=tg, grid=grid, mask=mask, region=region)
-                # station_metrics_table(start_time, end_time, variable, truth, metric, tg)
-                # biweekly_summary_metrics_table(start_time, end_time, variable, truth, metric, tg)
+    # station_metrics_table(start_time, end_time, variable, truth, metric, tg)
+    # biweekly_summary_metrics_table(start_time, end_time, variable, truth, metric, tg)

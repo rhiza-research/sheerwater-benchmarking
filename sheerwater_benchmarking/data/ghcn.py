@@ -321,6 +321,8 @@ def _ghcn_unified(start_time, end_time, variable, agg_days,
                              onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                              time_dim='time', prob_type='deterministic',
                              mask=mask, region=region, grid=grid)
+        # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
     else:
         ds = _ghcn_rolled_unified(start_time, end_time, variable=variable, agg_days=agg_days,
                                   grid=grid, missing_thresh=missing_thresh, cell_aggregation=cell_aggregation)

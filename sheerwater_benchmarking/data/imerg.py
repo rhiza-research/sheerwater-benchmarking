@@ -78,6 +78,8 @@ def imerg(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm
                              onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                              time_dim='time', prob_type='deterministic',
                              mask=mask, region=region, grid=grid)
+        # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
     else:
         ds = imerg_rolled(start_time, end_time, agg_days=agg_days, grid=grid)
         ds = apply_mask(ds, mask, grid=grid)
