@@ -3,7 +3,7 @@
 
 import xarray as xr
 
-from sheerwater_benchmarking.utils import (cacheable, dask_remote)
+from sheerwater_benchmarking.utils import (cacheable, dask_remote, start_remote)
 from sheerwater_benchmarking.metrics import grouped_metric
 
 
@@ -55,11 +55,14 @@ def _summary_metrics_table(start_time, end_time, variable,
            cache=True)
 def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
+                          forecasts=None, leads=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
-                 'climatology_trend_2015', 'climatology_rolling']
-    leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
+    if forecasts is None:
+        forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
+                     'climatology_trend_2015', 'climatology_rolling']
+    if leads is None:
+        leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)
@@ -110,18 +113,29 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
 __all__ = ['summary_metrics_table', 'biweekly_summary_metrics_table', 'station_metrics_table']
 
 if __name__ == "__main__":
+    start_remote(remote_name='genevieve')
     # Runners to generate the tables
     start_time = '2016-01-01'
     end_time = '2022-12-31'
 
-    variables = ['precip', 'tmp2m']
-    metrics = ['acc', 'heidke', 'pod', 'far', 'ets', 'mape', 'smape', 'bias_score', 'seeps']
+    # variables = ['precip', 'tmp2m']
+    variables = ['rainy_onset']
+    # metrics = ['mae', 'rmse', 'bias', 'acc', 'heidke', 'pod', 'far', 'ets', 'mape', 'smape', 'bias_score', 'seeps']
+    metrics = ['mae']
     truth = 'era5'
-    time_grouping = [None, 'month', 'year']
+    # time_grouping = [None, 'month', 'year']
+    time_grouping = [None]
+    region = 'kenya'
+    grid = 'global1_5'
+    mask = 'lsm'
+    forecasts = ['climatology_2015', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased']
+    leads = ['day1', 'day8', 'day15', 'day22', 'day29']
 
     for variable in variables:
         for metric in metrics:
             for tg in time_grouping:
-                summary_metrics_table(start_time, end_time, variable, truth, metric, tg)
-                station_metrics_table(start_time, end_time, variable, truth, metric, tg)
-                biweekly_summary_metrics_table(start_time, end_time, variable, truth, metric, tg)
+                summary_metrics_table(start_time, end_time, variable, truth, metric,
+                                      forecasts=forecasts, leads=leads,
+                                      time_grouping=tg, grid=grid, mask=mask, region=region)
+                # station_metrics_table(start_time, end_time, variable, truth, metric, tg)
+                # biweekly_summary_metrics_table(start_time, end_time, variable, truth, metric, tg)
