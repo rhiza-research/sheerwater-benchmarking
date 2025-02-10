@@ -435,7 +435,6 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     # Clip it to the region
     ds = clip_region(ds, region)
 
-
     if metric_sparse:
         print("Metric is sparse, checking if forecast is valid directly")
         if metric in PROB_METRICS:
@@ -443,8 +442,21 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         else:
             prob_type = 'deterministic'
 
-        check_ds =  get_datasource_fn(forecast)(start_time, end_time, variable, lead=lead,
-                                          prob_type=prob_type, grid=grid, mask=mask, region=region)
+        fcst_fn =  get_datasource_fn(forecast)
+
+        if 'lead' in signature(fcst_fn).parameters:
+            if lead_or_agg(lead) == 'agg':
+                raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
+
+            check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
+                           prob_type=prob_type, grid=grid, mask=mask, region=region)
+
+        else:
+            if lead_or_agg(lead) == 'lead':
+                raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
+
+            check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
+                           grid=grid, mask=mask, region=region)
     else:
         check_ds = ds
 
