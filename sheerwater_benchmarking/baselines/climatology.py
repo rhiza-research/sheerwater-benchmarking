@@ -318,17 +318,21 @@ def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, 
                          trend=False, prob_type='deterministic', grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     lead_params = {
+        "daily": 1,
+        "weekly": 7,
         "week1": 7,
         "week2": 7,
         "week3": 7,
         "week4": 7,
         "week5": 7,
         "week6": 7,
+        "biweekly": 14,
         "weeks12": 14,
         "weeks23": 14,
         "weeks34": 14,
         "weeks45": 14,
         "weeks56": 14,
+        "monthly": 30,
     }
 
     agg_days = lead_params.get(lead, None)
@@ -396,17 +400,21 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
                         grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     lead_params = {
+        "daily": 1,
+        "weekly": 7,
         "week1": 7,
         "week2": 7,
         "week3": 7,
         "week4": 7,
         "week5": 7,
         "week6": 7,
+        "biweekly": 14,
         "weeks12": 14,
         "weeks23": 14,
         "weeks34": 14,
         "weeks45": 14,
         "weeks56": 14,
+        "monthly": 30,
     }
 
     agg_days = lead_params.get(lead, None)

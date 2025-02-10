@@ -180,6 +180,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     # drop all times not in fcst
     valid_times = set(obs.time.values).intersection(set(fcst.time.values))
     obs = obs.sel(time=list(valid_times))
+    fcst = fcst.sel(time=list(valid_times))
 
     ############################################################
     #### Call the metrics with their various libraries
@@ -241,7 +242,6 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
         else:
             dims = ['time', 'lat', 'lon']
 
-        obs = obs.sel(time=fcst.time)
         contingency_table = xskillscore.Contingency(obs, fcst, bins, bins, dim=dims)
         metric_fn = getattr(contingency_table, metric_func)
         m_ds = metric_fn()
