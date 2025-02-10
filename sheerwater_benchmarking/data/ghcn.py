@@ -275,6 +275,7 @@ def ghcnd(start_time, end_time, grid="global0_25", cell_aggregation='first'):
 @cacheable(data_type='array',
            timeseries='time',
            cache_args=['grid', 'agg_days', 'missing_thresh', 'cell_aggregation'],
+           validate_cache_timeseries=False,
            chunking={'lat': 300, 'lon': 300, 'time': 365})
 def ghcnd_rolled(start_time, end_time, agg_days,
                  grid='global0_25', missing_thresh=0.5, cell_aggregation='first'):

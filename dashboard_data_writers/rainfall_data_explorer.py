@@ -14,7 +14,10 @@ def rainfall_data(start_time, end_time, agg_days=1,
     """Store rainfall data across data sources to the database."""
     # Get the ground truth data
     datasets = []
-    for truth in ['era5', 'chirps', 'imerg', 'ghcn', 'tahmo']:
+    truth = ['era5', 'chirps', 'imerg', 'ghcn']
+    if region in ['africa', 'east_africa']:
+        truth.append('tahmo')
+    for truth in truth:
         source_fn = get_datasource_fn(truth)
         ds = source_fn(start_time, end_time, 'precip', agg_days=agg_days,
                        grid=grid, mask=mask, region=region)
@@ -23,17 +26,17 @@ def rainfall_data(start_time, end_time, agg_days=1,
 
     # Merge datasets
     ds = xr.merge(datasets, join='outer')
+    ds = ds.drop_vars(['number', 'spatial_ref'])
 
     # Convert to dataframe
-    ds = ds.to_dataframe()
-    return ds
+    df = ds.to_dataframe()
+    return df
 
 
 if __name__ == "__main__":
     start_remote()
-    start_time = '2016-01-01'
+    start_time = '2022-01-01'
     end_time = '2024-12-31'
     agg_days = [1, 7]
     for agg_day in agg_days:
-        ds = rainfall_data(start_time, end_time, agg_day, grid='global0_25', mask='lsm', region='east_africa',
-                           recompute=True)
+        ds = rainfall_data(start_time, end_time, agg_day, grid='global0_25', mask='lsm', region='africa')
