@@ -99,6 +99,7 @@ dependencies = [
     "dask_deltatable",
     "huggingface_hub",
     "py7zr",
+    "tqdm",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

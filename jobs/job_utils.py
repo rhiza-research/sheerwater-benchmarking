@@ -2,6 +2,8 @@
 import argparse
 import dask
 import itertools
+import multiprocessing
+import tqdm
 
 from sheerwater_benchmarking.metrics import is_precip_only
 from sheerwater_benchmarking.metrics import is_coupled
@@ -114,7 +116,7 @@ def prune_metrics(combos, global_run=False):
     return pruned_combos
 
 
-def run_in_parallel(func, iterable, parallelism):
+def run_in_parallel(func, iterable, parallelism, local_multiproc=False):
     """Run a function in parallel with dask delayed.
 
     Args:
@@ -136,19 +138,27 @@ def run_in_parallel(func, iterable, parallelism):
             else:
                 failed.append(it)
     else:
-        for it in itertools.batched(iterable, parallelism):
-            output = []
-            print(f"Running {counter+1}...{counter+parallelism}/{length}")
-            for i in it:
-                out = dask.delayed(func)(i)
-                if out is not None:
-                    success_count += 1
-                else:
-                    failed.append(i)
+        if local_multiproc:
+            with multiprocessing.Pool(parallelism) as p:
+                results = list(tqdm.tqdm(p.imap_unordered(func, iterable), total=length))
+                outputs = [result[0] for result in results]
+                for out in outputs:
+                    if out is not None:
+                        success_count += 1
+        else:
+            for it in itertools.batched(iterable, parallelism):
+                output = []
+                print(f"Running {counter+1}...{counter+parallelism}/{length}")
+                for i in it:
+                    out = dask.delayed(func)(i)
+                    if out is not None:
+                        success_count += 1
+                    else:
+                        failed.append(i)
 
-                output.append(out)
+                    output.append(out)
 
-            dask.compute(output)
-            counter = counter + parallelism
+                dask.compute(output)
+                counter = counter + parallelism
 
     print(f"{success_count}/{length} returned non-null values. Runs that failed: {failed}")
