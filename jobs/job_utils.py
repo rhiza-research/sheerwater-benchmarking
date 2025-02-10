@@ -26,12 +26,15 @@ def parse_args():
     parser.add_argument("--recompute", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--remote", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--station-evaluation", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--seasonal", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--remote-name", type=str, default=None)
     parser.add_argument("--remote-config", type=str, nargs='*')
     args = parser.parse_args()
 
     if args.station_evaluation:
         forecasts = ["era5", "chirps", "imerg", "cbam"]
+    elif args.seasonal:
+        forecasts = ["salient", "climatology_2015"]
     else:
         forecasts = ["salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
                      "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
@@ -67,6 +70,8 @@ def parse_args():
 
     if args.station_evaluation:
         leads = ["daily", "weekly", "biweekly", "monthly"]
+    elif args.seasonal:
+        leads = ["month1", "month2", "month3"]
     else:
         leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
 

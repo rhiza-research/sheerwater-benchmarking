@@ -579,6 +579,25 @@ def summary_metrics_table(start_time, end_time, variable,
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
+def seasonal_metrics_table(start_time, end_time, variable,
+                          truth, metric, time_grouping=None,
+                          grid='global1_5', mask='lsm', region='global'):
+    """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
+    forecasts = ['salient', 'climatology_2015']
+    leads = ["month1", "month2", "month3"]
+    df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
+                                time_grouping=time_grouping,
+                                grid=grid, mask=mask, region=region)
+
+    print(df)
+    return df
+
+
+@dask_remote
+@cacheable(data_type='tabular',
+           cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
+                       'time_grouping', 'grid', 'mask', 'region'],
+           cache=True)
 def station_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):

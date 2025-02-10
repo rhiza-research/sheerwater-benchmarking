@@ -25,6 +25,9 @@ LEAD_OFFSETS = {
     'weeks34': (14, (14, 'days')),
     'weeks56': (14, (28, 'days')),
     'monthly': (30, (0, 'days')),
+    'month1': (30, (0, 'days')),
+    'month2': (30, (30, 'days')),
+    'month3': (30, (60, 'days')),
 }
 
 

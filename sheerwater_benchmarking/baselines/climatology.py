@@ -333,6 +333,9 @@ def climatology_forecast(start_time, end_time, variable, lead, first_year=1985, 
         "weeks45": 14,
         "weeks56": 14,
         "monthly": 30,
+        "month1": 30,
+        "month2": 30,
+        "month3": 30,
     }
 
     agg_days = lead_params.get(lead, None)
@@ -415,6 +418,9 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
         "weeks45": 14,
         "weeks56": 14,
         "monthly": 30,
+        "month1": 30,
+        "month2": 30,
+        "month3": 30,
     }
 
     agg_days = lead_params.get(lead, None)
