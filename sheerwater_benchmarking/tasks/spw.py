@@ -2,7 +2,7 @@
 from functools import partial
 import xarray as xr
 
-from sheerwater_benchmarking.utils import groupby_time, apply_mask, clip_region, first_satisfied_date, doy_mean, plot_ds
+from sheerwater_benchmarking.utils import groupby_time, apply_mask, clip_region, first_satisfied_date, doy_mean
 
 
 def rainy_onset_condition(da, prob_type='ensemble', prob_dim='member', prob_threshold=0.6):
@@ -83,7 +83,7 @@ def spw_precip_preprocess(agg_fn, shift_fn=None,
     """Preprocess the daily data to ensure it has the required 8 and 11 day aggregations.
 
     Args:
-        fn (callable): Function that generates a n-day aggregated precipitation dataset when
+        agg_fn (callable): Function that generates a n-day aggregated precipitation dataset when
             called with the 'agg_days' keyword argument.
         shift_fn (callable): Function that generates a n-day shifted precipitation dataset when
             called with the 'shift_days' keyword argument.

@@ -148,7 +148,7 @@ def _tahmo_unified(start_time, end_time, variable, agg_days,
         drought_condition = variable == 'rainy_onset_no_drought'
         fn = partial(tahmo_rolled, start_time, end_time, grid=grid,
                      missing_thresh=missing_thresh, cell_aggregation=cell_aggregation)
-        roll_days = [8, 11] if not drought_condition else [8, 11, 11]   
+        roll_days = [8, 11] if not drought_condition else [8, 11, 11]
         shift_days = [0, 0] if not drought_condition else [0, 0, 11]
         data = spw_precip_preprocess(fn, agg_days=roll_days, shift_days=shift_days,
                                      mask=mask, region=region, grid=grid)
