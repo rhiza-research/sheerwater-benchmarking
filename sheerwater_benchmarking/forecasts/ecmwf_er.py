@@ -412,7 +412,7 @@ def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
     roll_days = [8, 11] if not drought_condition else [8, 11, 11]
     shift_days = [0, 0] if not drought_condition else [0, 0, 11]
     data = spw_precip_preprocess(agg_fn, shift_fn, agg_days=roll_days, shift_days=shift_days,
-                                mask=mask, region=region, grid=grid)
+                                 mask=mask, region=region, grid=grid)
 
     (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
     ds = spw_rainy_onset(data,

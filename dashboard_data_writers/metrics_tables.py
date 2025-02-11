@@ -56,9 +56,12 @@ def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    if variable == 'rainy_onset':
+    if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
         forecasts = ['climatology_2015', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased',  'fuxi']
-        leads = ['day1', 'day8', 'day15', 'day22', 'day29', 'day36']
+        if variable == 'rainy_onset_no_drought':
+            leads = ['day1', 'day8', 'day15', 'day20']
+        else:
+            leads = ['day1', 'day8', 'day15', 'day22', 'day29', 'day36']
     else:
         forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                      'climatology_trend_2015', 'climatology_rolling']
@@ -113,15 +116,15 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
 __all__ = ['summary_metrics_table', 'biweekly_summary_metrics_table', 'station_metrics_table']
 
 if __name__ == "__main__":
-    start_remote(remote_name='genevieve')
+    start_remote(remote_name='genevieve', remote_config='xlarge_cluster')
     # Runners to generate the tables
     start_time = '2016-01-01'
     end_time = '2022-12-31'
 
     # variables = ['precip', 'tmp2m']
-    variables = ['rainy_onset']
+    variables = ['rainy_onset_no_drought', 'rainy_onset']
     # metrics = ['mae', 'rmse', 'bias', 'acc', 'heidke', 'pod', 'far', 'ets', 'mape', 'smape', 'bias_score', 'seeps']
-    metrics = ['rmse']
+    metrics = ['mae', 'bias', 'rmse']
     truth = 'era5'
     # time_grouping = [None, 'month', 'year']
     time_grouping = [None]
@@ -134,7 +137,7 @@ if __name__ == "__main__":
             for tg in time_grouping:
                 ds = summary_metrics_table(start_time, end_time, variable, truth, metric,
                                            time_grouping=tg, grid=grid, mask=mask, region=region,
-                                           backend='postgres')
+                                           backend='postgres', recompute=True, force_overwrite=True)
                 # station_metrics_table(start_time, end_time, variable, truth, metric, tg,
                 #                       grid=grid, mask=mask, region=region)
                 # biweekly_summary_metrics_table(start_time, end_time, variable, truth, metric, tg,

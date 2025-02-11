@@ -93,13 +93,13 @@ def spw_precip_preprocess(agg_fn, shift_fn=None,
         region (str): Region to clip the data to.
         grid (str): Grid to regrid the data to.
     """
-    # Default shift function to shift by the shift_days
-    if shift_fn is None:
-        def shift_fn(x, shift_by_days): return x.shift(time=shift_by_days)
     if agg_days is None:
         agg_days = [8, 11]
     if shift_days is None:
         shift_days = [0] * len(agg_days)
+    # Default shift function to shift by the shift_days
+    if shift_fn is None:
+        def shift_fn(x, shift_by_days): return x.shift(time=-shift_by_days)
 
     # Ensure the data has the required aggregations
     try:
@@ -171,7 +171,8 @@ def spw_rainy_onset(ds, onset_group=None, aggregate_group=None, time_dim='time',
                                 time_dim=time_dim, return_timeseries=True)
 
     # Apply masking and clip to region
-    rainy_ds = rainy_da.to_dataset(name='rainy_onset')
+    var_name = 'rainy_onset' if not drought_condition else 'rainy_onset_no_drought'
+    rainy_ds = rainy_da.to_dataset(name=var_name)
     rainy_ds = apply_mask(rainy_ds, mask, grid=grid)
     rainy_ds = clip_region(rainy_ds, region=region)
     return rainy_ds

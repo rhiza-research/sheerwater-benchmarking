@@ -104,7 +104,7 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
 def salient(start_time, end_time, variable, lead, prob_type='deterministic',
             grid='global0_25', mask='lsm', region='africa'):
     """Standard format forecast data for Salient."""
-    if variable == 'rainy_onset':
+    if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
         raise NotImplementedError("Rainy onset forecasts not implemented for Salient.")
 
     lead_params = {

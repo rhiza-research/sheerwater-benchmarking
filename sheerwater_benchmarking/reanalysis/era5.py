@@ -169,7 +169,7 @@ def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
     """
     # Get daily data
     if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
-        drought_condition = variable == 'rainy_onset_no_drought'
+        drought_condition = (variable == 'rainy_onset_no_drought')
         fn = partial(era5_rolled, start_time, end_time, variable='precip', grid=grid)
         roll_days = [8, 11] if not drought_condition else [8, 11, 11]
         shift_days = [0, 0] if not drought_condition else [0, 0, 11]
