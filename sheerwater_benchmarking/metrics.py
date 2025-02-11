@@ -237,6 +237,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             'heidke': 'heidke_score',
         }
 
+        # Contingency metrics are sparse if the contingency event doesn't occur
+        metric_sparse = True
         metric_func = metric_func_names[metric]
 
         if spatial:
@@ -402,7 +404,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         if ds is None:
             return None
 
-        sparse = ds.attrs['sparse']
+        truth_sparse = ds.attrs['sparse']
         metric_sparse = ds.attrs['metric_sparse']
     else:
 
