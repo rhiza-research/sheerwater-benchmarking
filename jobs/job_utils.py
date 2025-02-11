@@ -39,7 +39,7 @@ def parse_args():
     if args.station_evaluation:
         truth = ["ghcn", "ghcn_avg", "tahmo", "tahmo_avg"]
     else:
-        truth = ["era5", "tahmo_avg", "ghcn_avg"]
+        truth = ["era5"]
 
     if args.truth:
         truth = args.truth
