@@ -79,7 +79,7 @@ def ea_rainy_onset_forecast(start_time, end_time,
     """Store the rainy season onset from a given forecast source, according to the SPW method."""
     fn = get_datasource_fn(forecast)
     if forecast in ['ecmwf_ifs_er_debiased', 'ecmwf_ifs_er', 'fuxi']:
-        if variable == 'rainy_onset_no_drought':
+        if variable == 'rainy_onset_no_drought':  # 20 days instead of 21 to enable FuXi, which only goes out to 42 days
             leads = [f'day{d}' for d in [1, 7, 14, 20]]
         else:
             leads = [f'day{d}' for d in [1, 7, 14, 20, 28]]
@@ -112,10 +112,10 @@ def ea_rainy_onset_probabilities(start_time, end_time,
     datasets = []
     drought_condition = (variable == 'rainy_onset_no_drought')
     if forecast in ['ecmwf_ifs_er_debiased', 'ecmwf_ifs_er', 'fuxi']:
-        if drought_condition:
+        if drought_condition:  # 20 days instead of 21 to enable FuXi, which only goes out to 42 days
             leads = [f'day{d}' for d in [1, 7, 14, 20]]
         else:
-            leads = [f'day{d}' for d in [1, 7, 14, 21, 28]]
+            leads = [f'day{d}' for d in [1, 7, 14, 20, 28]]
     else:
         leads = ['day1']
 
@@ -162,13 +162,13 @@ if __name__ == "__main__":
             df = ea_rainy_onset_forecast(start_time, end_time, forecast,
                                          variable=variable,
                                          grid=grid, mask=mask, region=region,
-                                         recompute=True, force_overwrite=True,
+                                         #  recompute=True, force_overwrite=True,
                                          backend='postgres')
 
             df = ea_rainy_onset_probabilities(start_time, end_time, forecast,
                                               variable=variable,
                                               grid=grid, mask=mask, region=region,
-                                              recompute=True, force_overwrite=True,
+                                              #   recompute=True, force_overwrite=True,
                                               backend='postgres')
 
         # Generate for all data sources
@@ -176,10 +176,9 @@ if __name__ == "__main__":
             df2 = ea_rainy_onset_truth(start_time, end_time, truth,
                                        variable=variable,
                                        grid=grid, mask=mask, region=region,
-                                       recompute=True,
-                                       force_overwrite=True,
+                                       #    recompute=True,
+                                       #    force_overwrite=True,
                                        backend='postgres')
-            df3 = rain_windowed_spw(start_time, end_time, truth,
-                                    drought_condition=True,
-                                    grid=grid, mask=mask, region=region,
-                                    backend='postgres', recompute=True, force_overwrite=True)
+            # df3 = rain_windowed_spw(start_time, end_time, truth,
+            # grid=grid, mask=mask, region=region,
+            # backend='postgres', recompute=True, force_overwrite=True)

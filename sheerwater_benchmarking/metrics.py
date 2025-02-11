@@ -540,7 +540,8 @@ def _summary_metrics_table(start_time, end_time, variable,
                 ds = grouped_metric(start_time, end_time, variable,
                                     lead=lead, forecast=forecast, truth=truth,
                                     metric=metric, time_grouping=time_grouping, spatial=False,
-                                    grid=grid, mask=mask, region=region)
+                                    grid=grid, mask=mask, region=region,
+                                    retry_null_cache=True)
             except NotImplementedError:
                 ds = None
 
@@ -571,9 +572,16 @@ def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
-                 'climatology_trend_2015', 'climatology_rolling']
-    leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
+    if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
+        forecasts = ['climatology_2015', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased',  'fuxi']
+        if variable == 'rainy_onset_no_drought':
+            leads = ['day1', 'day8', 'day15', 'day20']
+        else:
+            leads = ['day1', 'day8', 'day15', 'day22', 'day29', 'day36']
+    else:
+        forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
+                     'climatology_trend_2015', 'climatology_rolling']
+        leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)
