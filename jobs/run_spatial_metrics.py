@@ -39,6 +39,6 @@ def run_grouped(combo):
 
 if __name__ == "__main__":
     if backend == 'terracotta':
-        run_in_parallel_multiproc(run_grouped, combos, parallelism, local_multiproc=True)
+        run_in_parallel(run_grouped, combos, parallelism, local_multiproc=True)
     else:
-        run_in_parallel_multiproc(run_grouped, combos, parallelism)
+        run_in_parallel(run_grouped, combos, parallelism)

@@ -122,7 +122,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     fcst_fn = get_datasource_fn(forecast)
 
     # Decide if this is a forecast with a lead or direct datasource with just an agg
-    sparse = False # A variable used to indicate whether the data sources themselves are sparse
+    sparse = False # A variable used to indicate whether the truth is creating sparsity
     metric_sparse = False # A variable used to indicate whether the metric induces sparsity
     if 'lead' in signature(fcst_fn).parameters:
         if lead_or_agg(lead) == 'agg':
@@ -179,8 +179,10 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # drop all times not in fcst
     valid_times = set(obs.time.values).intersection(set(fcst.time.values))
-    obs = obs.sel(time=list(valid_times))
-    fcst = fcst.sel(time=list(valid_times))
+    valid_times = list(valid_times)
+    valid_times.sort()
+    obs = obs.sel(time=valid_times)
+    fcst = fcst.sel(time=valid_times)
 
     ############################################################
     #### Call the metrics with their various libraries
@@ -313,7 +315,6 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='array',
-           timeseries='time',
            cache_args=['variable', 'lead', 'forecast',
                        'truth', 'metric', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
@@ -402,6 +403,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
             return None
 
         sparse = ds.attrs['sparse']
+        metric_sparse = ds.attrs['metric_sparse']
     else:
 
         # Get the unaggregated global metric
@@ -412,7 +414,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         if ds is None:
             return None
 
-        sparse = ds.attrs['sparse']
+        truth_sparse = ds.attrs['sparse']
         metric_sparse = ds.attrs['metric_sparse']
 
         # Group the time column based on time grouping
@@ -435,7 +437,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     # Clip it to the region
     ds = clip_region(ds, region)
 
-    if metric_sparse:
+    if truth_sparse or metric_sparse:
         print("Metric is sparse, checking if forecast is valid directly")
         if metric in PROB_METRICS:
             prob_type = 'probabilistic'
@@ -461,7 +463,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         check_ds = ds
 
     # Check if forecast is valid before spatial averaging
-    if not sparse and not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
+    if not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
         print("Metric is not valid for region.")
         return None
 

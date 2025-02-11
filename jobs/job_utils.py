@@ -103,9 +103,6 @@ def prune_metrics(combos, global_run=False):
         if not global_run and 'tahmo' in truth and region != 'east_africa':
             continue
 
-        if not global_run and forecast == 'cbam' and region != 'east_africa':
-            continue
-
         if global_run:
             if is_coupled(metric):
                 continue
