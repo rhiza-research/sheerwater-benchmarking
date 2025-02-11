@@ -577,7 +577,7 @@ def summary_metrics_table(start_time, end_time, variable,
         if variable == 'rainy_onset_no_drought':
             leads = ['day1', 'day8', 'day15', 'day20']
         else:
-            leads = ['day1', 'day8', 'day15', 'day22', 'day29', 'day36']
+            leads = ['day1', 'day8', 'day15', 'day20', 'day29', 'day36']
     else:
         forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                      'climatology_trend_2015', 'climatology_rolling']

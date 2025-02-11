@@ -178,13 +178,13 @@ def fuxi_rolled(start_time, end_time, variable, agg_days=7, prob_type='probabili
 def _process_lead(variable, lead):
     """Helper function for interpreting lead for FuXI forecasts."""
     lead_params = {}
-    if variable == 'rainy_onset':  # rainy onset only has daily leads out to day 36
+    if variable == 'rainy_onset':  # rainy onset only has daily leads out to day 34
         lead_params = {f"day{i+1}": i for i in range(33)}
     elif variable == 'rainy_onset_no_drought':
         # need to add 11 days to the lead to handle drought condition
         lead_params = {f"day{i+1}": i for i in range(20)}
     else:
-        for i in range(46):
+        for i in range(41):
             lead_params[f"day{i+1}"] = i
         for i in [0, 7, 14, 21, 28, 35]:
             lead_params[f"week{i//7+1}"] = i
