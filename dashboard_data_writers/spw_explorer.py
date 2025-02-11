@@ -40,7 +40,8 @@ def rain_windowed_spw(start_time, end_time,
         fn = partial(climatology_rolled, start_time, end_time, variable='precip',
                      first_year=2004, last_year=2015,
                      prob_type='deterministic', grid=grid)
-    ds = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid, agg_days=[1, 8, 11])
+    ds = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid,
+                               agg_days=[1, 8, 11], shift_days=[0, 0, 0])
     ds = ds.drop_vars('spatial_ref')
     df = ds.to_dataframe().dropna()
     return df

@@ -366,6 +366,9 @@ def _process_lead(variable, lead):
     lead_params = {}
     if variable == 'rainy_onset':  # rainy onset only has daily leads out to day 36
         lead_params = {f"day{i+1}": i for i in range(36)}
+    elif variable == 'rainy_onset_no_drought':
+        # need to add 11 days to the lead to handle drought condition
+        lead_params = {f"day{i+1}": i for i in range(25)}
     else:
         for i in range(46):
             lead_params[f"day{i+1}"] = i
@@ -378,49 +381,45 @@ def _process_lead(variable, lead):
         raise NotImplementedError(f"Lead {lead} not implemented for ECMWF {variable} forecasts.")
 
     agg_days = lead_to_agg_days(lead)
-    # Handle lead-based data
-    lead_sel = {'lead_time': np.timedelta64(lead_offset_days, 'D')}
-    return agg_days, lead_sel
-
-
-def _sel_and_shift_lead(ds, lead, lead_sel):
-    """Helper function for selecting and shifting lead for ECMWF forecasts."""
-    # Select the appropriate lead
-    ds = ds.sel(**lead_sel)
-    # Time shift - we want target date, instead of forecast date
-    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
-    ds = ds.rename({'start_date': 'time'})
-    return ds
+    return agg_days, lead_offset_days
 
 
 @dask_remote
 def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
                   prob_type='probabilistic', prob_threshold=0.6,
                   onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                  drought_condition=False,
                   grid='global1_5', mask='lsm', region="global"):
     """The ECMWF SPW forecasts."""
     # Get rainy season onset forecast
-    _, lead_sel = _process_lead('precip', lead)
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
 
-    def _shifted_ecmwf_ifs_er(start_time, end_time, lead, lead_sel, agg_days,
-                              prob_type='deterministic', grid="global1_5", debiased=True):
+    # Set up aggregation and shift functions for SPW
+    agg_fn = partial(ifs_extended_range_rolled, start_time, end_time, variable='precip',
+                     prob_type=prob_type, grid=grid, debiased=debiased)
+
+    def shift_fn(ds, shift_by_days):
         """Helper function for selecting and shifting lead for ECMWF forecasts."""
-        ds = ifs_extended_range_rolled(start_time, end_time, variable='precip', prob_type=prob_type,
-                                       agg_days=agg_days, grid=grid, debiased=debiased)
-        ds = _sel_and_shift_lead(ds, lead=lead, lead_sel=lead_sel)
+        # Select the appropriate lead
+        lead_offset_days = _process_lead('precip', lead)[1]
+        lead_sel = {'lead_time': np.timedelta64(lead_offset_days + shift_by_days, 'D')}
+        ds = ds.sel(**lead_sel)
+        # Time shift - we want target date, instead of forecast date
+        ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+        ds = ds.rename({'start_date': 'time'})
         return ds
 
-    fn = partial(_shifted_ecmwf_ifs_er, start_time, end_time,
-                 lead=lead, lead_sel=lead_sel,
-                 prob_type=prob_type, grid=grid, debiased=debiased)
-    data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
+    roll_days = [8, 11] if not drought_condition else [8, 11, 11]
+    shift_days = [0, 0] if not drought_condition else [0, 0, 11]
+    data = spw_precip_preprocess(agg_fn, shift_fn, agg_days=roll_days, shift_days=shift_days,
+                                mask=mask, region=region, grid=grid)
 
     (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
     ds = spw_rainy_onset(data,
                          onset_group=onset_group, aggregate_group=aggregate_group,
                          time_dim='time',
                          prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                         drought_condition=drought_condition,
                          mask=mask, region=region, grid=grid)
     return ds
 
@@ -429,23 +428,29 @@ def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
 def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deterministic',
                           grid="global1_5", mask='lsm', region="global", debiased=True):
     """Unified API accessor for ECMWF raw and debiased forecasts."""
-    agg_days, lead_sel = _process_lead(variable, lead)
+    agg_days, lead_offset_days = _process_lead(variable, lead)
 
     forecast_start = target_date_to_forecast_date(start_time, lead)
     forecast_end = target_date_to_forecast_date(end_time, lead)
 
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
-    if variable == 'rainy_onset':
+    if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
+        drought_condition = variable == 'rainy_onset_no_drought'
         ds = ecmwf_ifs_spw(forecast_start, forecast_end, lead, debiased=debiased,
                            prob_type=prob_type, prob_threshold=0.6,
                            onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                           drought_condition=drought_condition,
                            grid=grid, mask=mask, region=region)
         # Rainy onset is sparse, so we need to set the sparse attribute
         ds = ds.assign_attrs(sparse=True)
     else:
         ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,
                                        agg_days=agg_days, grid=grid, debiased=debiased)
-        ds = _sel_and_shift_lead(ds, lead, lead_sel)
+        # Select the appropriate lead
+        lead_sel = {'lead_time': np.timedelta64(lead_offset_days, 'D')}
+        ds = ds.sel(**lead_sel)
+        ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+        ds = ds.rename({'start_date': 'time'})
 
         # Apply masking and clip to region
         ds = apply_mask(ds, mask, grid=grid)

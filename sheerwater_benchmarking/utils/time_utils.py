@@ -15,8 +15,6 @@ LEAD_OFFSETS = {
     'daily': (1, (0, 'days')),
     'weekly': (7, (0, 'days')),
     'biweekly': (14, (0, 'days')),
-    '8d': (8, (0, 'days')),
-    '11d': (11, (0, 'days')),
     'monthly': (30, (0, 'days')),
 }
 # Add daily and 8/11d windows
@@ -26,10 +24,6 @@ for i in [0, 7, 14, 21, 28, 35]:
     LEAD_OFFSETS[f"week{i//7+1}"] = (7, (i, 'days'))
 for i in [0, 7, 14, 21, 28]:
     LEAD_OFFSETS[f"weeks{(i//7)+1}{(i//7)+2}"] = (14, (i, 'days'))
-for i in range(34):
-    LEAD_OFFSETS[f"8d_window{i+1}"] = (8, (i, 'days'))
-for i in range(31):
-    LEAD_OFFSETS[f"11d_window{i+1}"] = (11, (i, 'days'))
 
 
 def lead_to_agg_days(lead):

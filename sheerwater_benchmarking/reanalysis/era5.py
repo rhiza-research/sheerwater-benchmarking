@@ -168,12 +168,17 @@ def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
         region (str): The region to clip the data to.
     """
     # Get daily data
-    if variable == 'rainy_onset':
+    if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
+        drought_condition = variable == 'rainy_onset_no_drought'
         fn = partial(era5_rolled, start_time, end_time, variable='precip', grid=grid)
-        data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
+        roll_days = [8, 11] if not drought_condition else [8, 11, 11]
+        shift_days = [0, 0] if not drought_condition else [0, 0, 11]
+        data = spw_precip_preprocess(fn, agg_days=roll_days, shift_days=shift_days,
+                                     mask=mask, region=region, grid=grid)
         ds = spw_rainy_onset(data,
                              onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                              time_dim='time', prob_type='deterministic',
+                             drought_condition=drought_condition,
                              mask=mask, region=region, grid=grid)
         # Rainy onset is sparse, so we need to set the sparse attribute
         ds = ds.assign_attrs(sparse=True)

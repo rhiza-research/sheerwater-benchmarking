@@ -189,6 +189,16 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     # drop all times not in fcst
     obs = obs.sel(time=fcst.time)
 
+    # Convert observation and forecast times to seconds since epoch
+    if np.issubdtype(obs[variable].dtype, np.datetime64) or (obs[variable].dtype == np.dtype('<M8[ns]')):
+        # Forecast must be datetime64
+        assert np.issubdtype(fcst[variable].dtype, np.datetime64) or (fcst[variable].dtype == np.dtype('<M8[ns]'))
+        obs = obs.astype('int64') / 1e9
+        fcst = fcst.astype('int64') / 1e9
+        # NaT get's converted to -9.22337204e+09, so filter that to a proper nan
+        obs = obs.where(obs > -1e9, np.nan)
+        fcst = fcst.where(fcst > -1e9, np.nan)
+
     ############################################################
     # Call the metrics with their various libraries
     ############################################################
@@ -313,12 +323,6 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     else:
         raise ValueError(f"Metric {metric} not implemented")
-
-    # If metric is a timedelta object, convert it to a number of seconds
-    if np.issubdtype(m_ds[variable].dtype, np.timedelta64) or (m_ds[variable].dtype == np.dtype('<m8[ns]')):
-        m_ds = m_ds.astype('int64') / 1e9
-        # NaT get's converted to -9.22337204e+09, so filter that to a proper nan
-        m_ds = m_ds.where(m_ds.rainy_onset == -9.22337204e+09, np.nan)
 
     m_ds = m_ds.assign_attrs(sparse=sparse)
     m_ds = m_ds.assign_attrs(metric_sparse=metric_sparse)

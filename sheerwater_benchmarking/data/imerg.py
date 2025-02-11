@@ -68,15 +68,20 @@ def imerg_rolled(start_time, end_time, agg_days, grid):
            cache=False)
 def imerg(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global'):
     """Final imerg product."""
-    if variable not in ['precip', 'rainy_onset']:
+    if variable not in ['precip', 'rainy_onset', 'rainy_onset_no_drought']:
         raise NotImplementedError("Only precip and derived variables provided by IMERG.")
 
-    if variable == 'rainy_onset':
+    if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
+        drought_condition = variable == 'rainy_onset_no_drought'
         fn = partial(imerg_rolled, start_time, end_time, grid=grid)
-        data = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid)
+        roll_days = [8, 11] if not drought_condition else [8, 11, 11]
+        shift_days = [0, 0] if not drought_condition else [0, 0, 11]
+        data = spw_precip_preprocess(fn, agg_days=roll_days, shift_days=shift_days,
+                                     mask=mask, region=region, grid=grid)
         ds = spw_rainy_onset(data,
                              onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                              time_dim='time', prob_type='deterministic',
+                             drought_condition=drought_condition,
                              mask=mask, region=region, grid=grid)
         # Rainy onset is sparse, so we need to set the sparse attribute
         ds = ds.assign_attrs(sparse=True)
