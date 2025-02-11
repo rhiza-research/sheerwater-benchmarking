@@ -1,3 +1,4 @@
+"""Download FuXi S2S data."""
 from sheerwater_benchmarking.forecasts.fuxi import fuxi_raw
 import argparse
 

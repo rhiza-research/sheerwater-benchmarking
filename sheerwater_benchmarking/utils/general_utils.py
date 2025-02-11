@@ -1,7 +1,10 @@
 """General utility functions for all parts of the data pipeline."""
 import matplotlib.pyplot as plt
 import gcsfs
+import numpy as np
 import xarray as xr
+
+import plotly.graph_objects as go
 
 
 def load_object(filepath):
@@ -40,6 +43,37 @@ def load_zarr(filename):
 def plot_ds(ds, sel=None, variable=None):
     """Plot the first variable in a dataset."""
     # Select the first variable
+
+    if variable is None and isinstance(ds, xr.Dataset):
+        variable = list(ds.data_vars)[0]
+
+    # Select the first dim value in all dims except lat and lon
+    if sel is None:
+        sel = {dim: ds[dim][0].values for dim in ds.dims if dim not in ['lat', 'lon']}
+
+    # Plot the data
+    is_time = np.issubdtype(ds[variable].dtype, np.datetime64) or (ds[variable].dtype == np.dtype('<M8[ns]'))
+    is_timedelta = np.issubdtype(ds[variable].dtype, np.timedelta64)
+    if isinstance(ds, xr.Dataset):
+        if is_time:
+            ds[variable].dt.dayofyear.sel(sel).plot(x='lon')
+        elif is_timedelta:
+            ds[variable].dt.days.sel(sel).plot(x='lon')
+        else:
+            ds[variable].sel(sel).plot(x='lon')
+    else:  # Assume it is a DataArray
+        if is_time:
+            ds.dt.dayofyear.sel(sel).plot(x='lon')
+        elif is_timedelta:
+            ds.dt.days.sel(sel).plot(x='lon')
+        else:
+            ds.sel(sel).plot(x='lon')
+    plt.show()
+
+
+def plot_ds_map(ds, sel=None, variable=None, zoom=3, center_lat=None, center_lon=None):
+    """Plot a variable from an xarray dataset on a Plotly map."""
+    # Select the first variable
     if variable is None and isinstance(ds, xr.Dataset):
         variable = list(ds.data_vars)[0]
 
@@ -49,7 +83,42 @@ def plot_ds(ds, sel=None, variable=None):
 
     # Plot the data
     if isinstance(ds, xr.Dataset):
-        ds[variable].sel(sel).plot(x='lon')
+        data = ds[variable].sel(sel)
     else:  # Assume it is a DataArray
-        ds.sel(sel).plot()
-    plt.show()
+        data = ds.sel(sel)
+
+    # Convert to pandas DataFrame for easier manipulation with Plotly
+    df = data.to_dataframe().reset_index()
+
+    # Set center coordinates (optional, if not provided)
+    if center_lat is None:
+        center_lat = df['lat'].mean()
+    if center_lon is None:
+        center_lon = df['lon'].mean()
+
+    # Create a Plotly map figure
+    fig = go.Figure(go.Scattermapbox(
+        lat=df['lat'],
+        lon=df['lon'],
+        mode='markers',
+        marker=dict(
+            size=8,
+            color=df[variable],  # Color based on the variable
+            colorscale='Viridis',  # Use a predefined colorscale
+            colorbar=dict(title=variable)
+        ),
+        text=df[variable],  # Show values when hovering over points
+        hoverinfo='text'
+    ))
+
+    # Update layout for the map
+    fig.update_layout(
+        title=f'{variable} on Map',
+        mapbox_style="open-street-map",
+        mapbox_zoom=zoom,
+        mapbox_center={"lat": center_lat, "lon": center_lon},
+        margin={"r": 0, "t": 30, "l": 0, "b": 0},
+    )
+
+    # Show the map
+    fig.show()

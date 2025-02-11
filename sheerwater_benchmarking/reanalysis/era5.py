@@ -1,10 +1,11 @@
 """Fetches ERA5 data from the Google ARCO Store."""
 import xarray as xr
 import numpy as np
-
+from functools import partial
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            get_variable, apply_mask, clip_region,
                                            roll_and_agg, lon_base_change, regrid)
+from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
 
 
 @dask_remote
@@ -161,15 +162,29 @@ def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
         variable (str): The weather variable to fetch.
-        agg_days (int): The aggregation period, in days.
+        agg_days (int): The aggregation period, in days. Ignored if variable is 'rainy_onset'.
         grid (str): The grid resolution to fetch the data at.
         mask (str): The mask to apply to the data.
         region (str): The region to clip the data to.
     """
     # Get daily data
-    ds = era5_rolled(start_time, end_time, variable, agg_days=agg_days, grid=grid)
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
+    if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
+        drought_condition = (variable == 'rainy_onset_no_drought')
+        fn = partial(era5_rolled, start_time, end_time, variable='precip', grid=grid)
+        roll_days = [8, 11] if not drought_condition else [8, 11, 11]
+        shift_days = [0, 0] if not drought_condition else [0, 0, 11]
+        data = spw_precip_preprocess(fn, agg_days=roll_days, shift_days=shift_days,
+                                     mask=mask, region=region, grid=grid)
+        ds = spw_rainy_onset(data,
+                             onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                             time_dim='time', prob_type='deterministic',
+                             drought_condition=drought_condition,
+                             mask=mask, region=region, grid=grid)
+        # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
+    else:
+        ds = era5_rolled(start_time, end_time, variable, agg_days=agg_days, grid=grid)
+        # Apply masking and clip region
+        ds = apply_mask(ds, mask, grid=grid)
+        ds = clip_region(ds, region=region)
     return ds

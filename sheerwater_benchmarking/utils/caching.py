@@ -667,7 +667,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
                             # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
                             # every chunk is only 4B!
-                            ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                            ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
 
                             # If rechunk is passed then check to see if the rechunk array
                             # matches chunking. If not then rechunk
@@ -700,7 +700,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     fs.mv(temp_verify_path, verify_path, recursive=True)
 
                                     # Reopen the dataset
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
                                     # Requested chunks already match rechunk.
                                     pass
@@ -844,12 +844,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                         chunk_to_zarr(ds, cache_path, verify_path, chunking)
 
                                         # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                     else:
                                         chunk_to_zarr(ds, cache_path, verify_path, 'auto')
 
                                         # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
                                     raise RuntimeError(
                                         f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
