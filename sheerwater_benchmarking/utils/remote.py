@@ -1,6 +1,7 @@
 """Utilities for running functions on a remote dask cluster."""
 from dask.distributed import Client, get_client, LocalCluster
 import coiled
+from coiled.credentials.google import send_application_default_credentials
 import logging
 from functools import wraps
 import os
@@ -81,6 +82,10 @@ def start_remote(remote_name=None, remote_config=None):
         logger.info("Attaching to coiled cluster with default configuration")
 
     cluster = coiled.Cluster(**coiled_default_options)
+
+    # send Application Default Credentials
+    send_application_default_credentials(cluster)
+
     cluster.get_client()
 
 
@@ -107,8 +112,8 @@ def dask_remote(func):
                 get_client()
             except ValueError:
                 logger.info("Starting local dask cluster...")
-                #cluster = LocalCluster(n_workers=2, threads_per_worker=2)
-                #Client(cluster)
+                cluster = LocalCluster(n_workers=2, threads_per_worker=2)
+                Client(cluster)
 
         # call the function and return the result
         if 'remote' in kwargs:
