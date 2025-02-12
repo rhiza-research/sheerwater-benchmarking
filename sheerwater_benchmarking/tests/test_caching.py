@@ -81,13 +81,12 @@ def test_validate_timeseries():
     assert len(ds1.time) < len(ds4.time)
 
 
-
 @cacheable(data_type='tabular',
            timeseries='time',
            backend='parquet',
            validate_cache_timeseries=False,
            cache_args=['species'])
-def tabular_timeseries(start_time, end_time, species='coraciidae'): # noqa: ARG001
+def tabular_timeseries(start_time, end_time, species='coraciidae'):  # noqa: ARG001
     """Generate a simple tabular timeseries dataset for testing.
 
     The 'species' argument is unused, but still matters because it's a cache key
@@ -124,6 +123,66 @@ def test_tabular_timeseries():
     end_time = '2020-01-07'
     ds3 = tabular_timeseries(start_time, end_time)
     assert len(ds3) < len(ds1)
+
+
+def test_cache_disable_if():
+    """Test cache_disable_if argument."""
+    @cacheable(data_type='basic',
+               cache_args=['agg_days'],
+               cache_disable_if={'agg_days': 7})
+    def cached_func(agg_days=7):  # noqa: ARG001
+        return np.random.randint(1000)
+
+    @cacheable(data_type='basic',
+               cache_args=['agg_days'],
+               cache_disable_if={'agg_days': [1, 7, 14]})
+    def cached_func2(agg_days=7):  # noqa: ARG001
+        return np.random.randint(1000)
+
+    @cacheable(data_type='basic',
+               cache_args=['agg_days', 'grid'],
+               cache_disable_if=[{'agg_days': [1, 7, 14],
+                                  'grid': 'global1_5'},
+                                 {'agg_days': 8}])
+    def cached_func3(agg_days=7, grid='global0_25'):  # noqa: ARG001
+        return np.random.randint(1000)
+
+    # Instantiate the cache
+    ds = cached_func(agg_days=1)
+    #  Cache should be enabled - these should be equal
+    dsp = cached_func(agg_days=1)
+    assert ds == dsp
+
+    # Instantiate the cache
+    ds = cached_func(agg_days=7)
+    #  Cache should be disabled - these should be different random numbers
+    dsp = cached_func(agg_days=7)
+    assert ds != dsp
+
+    # Should be disabled
+    ds = cached_func2(agg_days=14)
+    dsp = cached_func2(agg_days=14)
+    assert ds != dsp
+
+    # Should be disabled
+    ds = cached_func3(agg_days=14, grid='global1_5')
+    dsp = cached_func3(agg_days=14, grid='global1_5')
+    assert ds != dsp
+
+    # Should be enabled
+    ds = cached_func3(agg_days=14, grid='global0_25')
+    dsp = cached_func3(agg_days=14, grid='global0_25')
+    assert ds == dsp
+
+    # Should be disabled
+    ds = cached_func3(agg_days=8)
+    dsp = cached_func3(agg_days=8)
+    assert ds != dsp
+
+    # Should be enabled
+    ds = cached_func3(agg_days=14)
+    dsp = cached_func3(agg_days=14)
+    assert ds == dsp
 
 
 if __name__ == "__main__":
