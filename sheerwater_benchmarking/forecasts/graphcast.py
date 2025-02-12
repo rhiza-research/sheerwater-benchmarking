@@ -48,6 +48,7 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
     ds3 = ds3[[variable]]
     ds3 = ds3.sel({'time': slice(pd.to_datetime("2022-01-01"), pd.to_datetime("2023-01-01"))})
 
+    import pdb; pdb.set_trace()
     # concat them together
     ds = xr.concat([ds1, ds2, ds3], 'time')
 
