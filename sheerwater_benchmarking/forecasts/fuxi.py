@@ -241,6 +241,7 @@ def fuxi_spw(start_time, end_time, lead,
 @cacheable(data_type='array',
            timeseries='time',
            cache=True,
+           validate_cache_timeseries=False,
            chunking={"lat": 121, "lon": 240, "time": 1000},
            cache_args=['lead', 'prob_type', 'prob_threshold', 'grid', 'mask'])
 def fuxi_pad_kenya(start_time, end_time, lead,
