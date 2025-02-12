@@ -1,11 +1,13 @@
 """Fetches ERA5 data from the Google ARCO Store."""
+import dateparser
+from datetime import timedelta
 import xarray as xr
 import numpy as np
 from functools import partial
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            get_variable, apply_mask, clip_region,
                                            roll_and_agg, lon_base_change, regrid)
-from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
+from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess, prise_application_date
 
 
 @dask_remote
@@ -153,6 +155,24 @@ def era5_rolled(start_time, end_time, variable, agg_days=7, grid="global1_5"):
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
+           cache=True,
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           cache_args=['grid', 'mask', 'region'])
+def era5_pad(start_time, end_time, grid='global0_25', mask='lsm', region='global'):
+    """Compute the Prise Pesticide Application Date."""
+    # Include an extra 120 days to account for the lag in the Prise data
+    end_time = (dateparser.parse(end_time) + timedelta(days=120)).strftime('%Y-%m-%d')
+    data = era5_rolled(start_time, end_time, variable='tmp2m', grid=grid)
+    ds = prise_application_date(data,
+                                time_dim='time', prob_type='deterministic',
+                                mask=mask, region=region, grid=grid)
+    ds = ds.compute()a # this should be a small-ish dataset, so let's break the dask and compute 
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
            cache=False,
            cache_args=['variable', 'agg_days', 'grid', 'mask', 'region'])
 def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global'):
@@ -181,6 +201,13 @@ def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
                              drought_condition=drought_condition,
                              mask=mask, region=region, grid=grid)
         # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
+    elif variable == 'pesticide_date':
+        data = era5_rolled(start_time, end_time, agg_days=1, variable='tmp2m', grid=grid)
+        ds = prise_application_date(data,
+                                    time_dim='time', prob_type='deterministic',
+                                    mask=mask, region=region, grid=grid)
+        # Pesticide date is sparse, so we need to set the sparse attribute
         ds = ds.assign_attrs(sparse=True)
     else:
         ds = era5_rolled(start_time, end_time, variable, agg_days=agg_days, grid=grid)

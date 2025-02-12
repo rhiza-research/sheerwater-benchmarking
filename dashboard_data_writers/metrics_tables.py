@@ -14,7 +14,7 @@ if __name__ == "__main__":
 
     # variables = ['precip', 'tmp2m']
     # variables = ['rainy_onset_no_drought', 'rainy_onset']
-    variables = ['rainy_onset_no_drought']
+    variables = ['rainy_onset']
     # metrics = ['mae', 'rmse', 'bias', 'acc', 'heidke', 'pod', 'far', 'ets', 'mape', 'smape', 'bias_score', 'seeps']
     metrics = ['mae', 'bias', 'rmse']
     truth = 'era5'

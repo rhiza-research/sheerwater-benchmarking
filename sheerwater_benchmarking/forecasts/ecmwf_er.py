@@ -4,8 +4,9 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta
 import xarray as xr
 from functools import partial
+from sheerwater_benchmarking.utils import groupby_time, doy_mean
 from sheerwater_benchmarking.reanalysis import era5_rolled
-from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
+from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess, prise_application_date, prise_pad_condition
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
@@ -183,7 +184,7 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
     def get_bias(ds_sub):
         """Get the 20-year estimated bias of the reforecast data."""
         # The the corresponding forecast dates for the reforecast data
-        dates = [np.datetime64(pd.Timestamp(ds_sub['model_issuance_date'].values[0] + relativedelta(years=x)))
+        dates = [np.datetime64(pd.Timestamp(ds_sub['model_issuance_date'].values[0]) + relativedelta(years=x))
                  for x in ds_sub.start_year]
 
         # Adjust each forecast date by the lead time (0, 1, 2, ... days)
@@ -369,6 +370,9 @@ def _process_lead(variable, lead):
     elif variable == 'rainy_onset_no_drought':
         # need to add 11 days to the lead to handle drought condition
         lead_params = {f"day{i+1}": i for i in range(25)}
+    elif variable == 'pesticide_date':
+        # Enabled out to day46
+        lead_params = {f"day{i+1}": i for i in range(45)}
     else:
         for i in range(45):
             lead_params[f"day{i+1}"] = i
@@ -421,6 +425,37 @@ def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
                          prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
                          drought_condition=drought_condition,
                          mask=mask, region=region, grid=grid)
+    return ds
+
+
+@dask_remote
+def ecmwf_ifs_pad(start_time, end_time, lead, debiased=True,
+                  prob_type='probabilistic', prob_threshold=0.6,
+                  grid='global1_5', mask='lsm', region="global"):
+    """The ECMWF Pesticide Date forecasts."""
+    # Get the ECMWF temperature forecast
+    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
+    (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
+    data = ifs_extended_range_rolled(start_time, end_time, variable='tmp2m', agg_days=1,
+                                     prob_type=prob_type, grid=grid, debiased=debiased)
+
+    # Get the appropriate leads: select from the lead time to the end of the forecast
+    lead_offset_days = _process_lead('tmp2m', lead)[1]
+    lead_offset = np.timedelta64(lead_offset_days, 'D')
+    data = data.sel(lead_time=slice(lead_offset, None))
+
+    # Pad to a constant 120-day length forecast with edge padding
+    pad_widths = {'lead_time': (0, 120-len(data.lead_time))}
+    data = data.pad(pad_widths, mode='edge')
+    # Update the lead time dimension to be the correct timedelta64 objects
+    data['lead_time'] = [np.timedelta64(x+lead_offset_days, 'D') for x in range(120)]
+
+    # Find the first planting date for each start_date
+    ds = prise_application_date(data,
+                                compute_rolling=False,
+                                time_dim='lead_time', base_time='start_date',
+                                prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                                mask=mask, region=region, grid=grid)
     return ds
 
 
