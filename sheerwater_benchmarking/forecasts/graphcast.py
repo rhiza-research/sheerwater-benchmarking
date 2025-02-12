@@ -1,12 +1,9 @@
 """Interface for graphcast forecasts."""
-import os
-import dask
 import xarray as xr
 import numpy as np
 import pandas as pd
-import dateparser
 
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, plot_ds,
+from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
                                            target_date_to_forecast_date,
@@ -26,14 +23,9 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, plot_ds,
                },
            },
            validate_cache_timeseries=True)
-def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
-    "graphcast Daily."
+def graphcast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa: ARG001
+    """A daily Graphcast forecast."""
     # Read the three years for gcloud
-    # NOTE: this must!! be an open_dataset, not an open_zarr, or it will fail and produce and empty dataset
-    # ds1 = xr.open_dataset(
-    #     'gs://weathernext/59572747_4_0/zarr/99140631_1_2020_to_2021/forecasts_10d/date_range_2019-12-01_2021-01-22_6_hours.zarr/',
-    #     decode_timedelta=True,
-    #     engine='zarr')
     ds1 = xr.open_zarr(
         'gs://weathernext/59572747_4_0/zarr/99140631_1_2020_to_2021/forecasts_10d/date_range_2019-12-01_2021-01-22_6_hours.zarr',
         chunks='auto',
@@ -111,7 +103,7 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
            },
            validate_cache_timeseries=False)
 def graphcast_rolled(start_time, end_time, variable, agg_days, grid='global0_25'):
-    """ graphcast Rolled. """
+    """A rolled and aggregated Graphcast forecast."""
     ds = graphcast_daily(start_time, end_time, variable, grid)
     if 'units' not in ds.attrs:  # units haven't been converted yet
         # Convert units
@@ -152,7 +144,7 @@ def _process_lead(variable, lead):
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def graphcast(start_time, end_time, variable, lead, prob_type='deterministic',
               grid='global1_5', mask='lsm', region="global"):
-    """Final graphcast interface"""
+    """Final Graphcast interface."""
     if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecast implemented for graphcast")
 

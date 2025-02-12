@@ -84,7 +84,10 @@ def start_remote(remote_name=None, remote_config=None):
     cluster = coiled.Cluster(**coiled_default_options)
 
     # send Application Default Credentials
-    send_application_default_credentials(cluster)
+    try:
+        send_application_default_credentials(cluster)
+    except Exception as e:
+        print("Failed to send credentials", e)
 
     cluster.get_client()
 
