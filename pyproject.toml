@@ -61,7 +61,7 @@ dependencies = [
     "cryptography",
     "ipykernel",
     "jupyterlab",
-    "xarray",
+    "xarray==2024.10",
     "matplotlib",
     "geopandas",
     "rioxarray",
@@ -69,7 +69,7 @@ dependencies = [
     "jupytext",
     "dask-kubernetes",
     "gcsfs",
-    "zarr<3.0.0", # zarr 3 seems to fail storing an FSMap
+    "zarr==2.18.3",
     "h5py",
     "netcdf4",
     "h5netcdf",
@@ -97,9 +97,9 @@ dependencies = [
     "plotly>=5.24.1",
     "salientsdk>=0.3.12",
     "dask_deltatable",
-    "minio>=7.2.15",
     "huggingface_hub",
     "py7zr",
+    "tqdm",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

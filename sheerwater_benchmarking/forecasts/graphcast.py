@@ -25,7 +25,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, plot_ds,
                    'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
                },
            },
-           validate_cache_timeseries=False)
+           validate_cache_timeseries=True)
 def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
     "graphcast Daily."
     # Read the three years for gcloud
@@ -36,35 +36,33 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
     #     engine='zarr')
     ds1 = xr.open_zarr(
         'gs://weathernext/59572747_4_0/zarr/99140631_1_2020_to_2021/forecasts_10d/date_range_2019-12-01_2021-01-22_6_hours.zarr',
-        decode_timedelta=True, chunks=None)
+        chunks='auto',
+        decode_timedelta=True)
     ds1 = ds1.rename({'prediction_timedelta': 'lead_time',
                      '2m_temperature': 'tmp2m', 'total_precipitation_6hr': 'precip'})
     ds1 = ds1[[variable]]
     ds1 = ds1.sel({'time': slice(pd.to_datetime("2019-12-01"), pd.to_datetime("2020-11-30"))})
-    plot_ds(ds1)
-    import pdb; pdb.set_trace()
 
-    ds2 = xr.open_dataset(
+    ds2 = xr.open_zarr(
         'gs://weathernext/59572747_4_0/zarr/99140631_2_2021_to_2022/forecasts_10d/date_range_2020-12-01_2022-01-22_6_hours.zarr',
         decode_timedelta=True,
-        engine='zarr')
+        chunks='auto')
     ds2 = ds2.rename({'prediction_timedelta': 'lead_time',
                      '2m_temperature': 'tmp2m', 'total_precipitation_6hr': 'precip'})
     ds2 = ds2[[variable]]
     ds2 = ds2.sel({'time': slice(pd.to_datetime("2020-12-01"), pd.to_datetime("2021-12-31"))})
 
-    ds3 = xr.open_dataset(
+    ds3 = xr.open_zarr(
         'gs://weathernext/59572747_4_0/zarr/132880704_2022_to_2023/1/forecasts_10d/date_range_2022-01-01_2023-01-01_12_hours.zarr',
         decode_timedelta=True,
-        engine='zarr')
+        chunks='auto')
     ds3 = ds3.rename({'prediction_timedelta': 'lead_time',
                      '2m_temperature': 'tmp2m', 'total_precipitation_6hr': 'precip'})
     ds3 = ds3[[variable]]
     ds3 = ds3.sel({'time': slice(pd.to_datetime("2022-01-01"), pd.to_datetime("2023-01-01"))})
 
-    import pdb; pdb.set_trace()
     # concat them together
-    ds = xr.concat([ds1, ds2, ds3], 'time')
+    ds = xr.concat([ds1, ds2, ds3], dim='time')
 
     # Convert units
     K_const = 273.15
@@ -91,8 +89,6 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
     # Convert lat/lon
     ds = lon_base_change(ds)
     ds = ds.sortby(ds.lat)
-    # ds = ds.chunk({'lat': 721, 'lon': 1440, 'lead_time': 1, 'time': 30})
-    import pdb; pdb.set_trace()
 
     # Regrid
     if grid != 'global0_25':
@@ -116,8 +112,6 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
 def graphcast_rolled(start_time, end_time, variable, agg_days, grid='global0_25'):
     """ graphcast Rolled. """
     ds = graphcast_daily(start_time, end_time, variable, grid)
-    import pdb
-    pdb.set_trace()
     if 'units' not in ds.attrs:  # units haven't been converted yet
         # Convert units
         K_const = 273.15
@@ -170,7 +164,20 @@ def graphcast(start_time, end_time, variable, lead, prob_type='deterministic',
 
     # Get the data with the right days
     ds = graphcast_rolled(forecast_start, forecast_end, variable, agg_days=agg_days, grid=grid,
-                          recompute=True)
+                          recompute=False)
+    if 'units' not in ds.attrs:  # units haven't been converted yet
+        # Convert unitsi
+        K_const = 273.15
+        if variable == 'tmp2m':
+            ds[variable] = ds[variable] - K_const
+            ds.attrs.update(units='C')
+        elif variable == 'precip':
+            ds[variable] = ds[variable] * 1000.0
+            ds.attrs.update(units='mm')
+            # Can't have precip less than zero (there are some very small negative values)
+            ds = np.maximum(ds, 0)
+        else:
+            raise ValueError(f"Variable {variable} not implemented.")
     import pdb
     pdb.set_trace()
     ds = ds.assign_attrs(prob_type="deterministic")
