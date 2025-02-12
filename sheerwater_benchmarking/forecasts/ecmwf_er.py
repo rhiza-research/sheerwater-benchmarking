@@ -428,6 +428,10 @@ def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
     return ds
 
 
+# @cacheable(data_type='array',
+#            timeseries='start_date',
+#            cache=False,
+#            cache_args=['lead', 'prob_type', 'prob_threshold', 'grid', 'mask', 'region'])
 @dask_remote
 def ecmwf_ifs_pad(start_time, end_time, lead, debiased=True,
                   prob_type='probabilistic', prob_threshold=0.6,
@@ -456,6 +460,9 @@ def ecmwf_ifs_pad(start_time, end_time, lead, debiased=True,
                                 time_dim='lead_time', base_time='start_date',
                                 prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
                                 mask=mask, region=region, grid=grid)
+    # Select the appropriate lead
+    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+    ds = ds.rename({'start_date': 'time'})
     return ds
 
 
@@ -477,6 +484,11 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
                            drought_condition=drought_condition,
                            grid=grid, mask=mask, region=region)
         # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
+    elif variable == 'pesticide_date':
+        ds = ecmwf_ifs_pad(forecast_start, forecast_end, lead, debiased=debiased,
+                           prob_type=prob_type, prob_threshold=0.6,
+                           grid=grid, mask=mask, region=region)
         ds = ds.assign_attrs(sparse=True)
     else:
         ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,

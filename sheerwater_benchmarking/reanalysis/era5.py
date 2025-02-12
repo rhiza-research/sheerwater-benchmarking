@@ -4,7 +4,7 @@ from datetime import timedelta
 import xarray as xr
 import numpy as np
 from functools import partial
-from sheerwater_benchmarking.utils import (dask_remote, cacheable,
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, 
                                            get_variable, apply_mask, clip_region,
                                            roll_and_agg, lon_base_change, regrid)
 from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess, prise_application_date
@@ -162,11 +162,11 @@ def era5_pad(start_time, end_time, grid='global0_25', mask='lsm', region='global
     """Compute the Prise Pesticide Application Date."""
     # Include an extra 120 days to account for the lag in the Prise data
     end_time = (dateparser.parse(end_time) + timedelta(days=120)).strftime('%Y-%m-%d')
-    data = era5_rolled(start_time, end_time, variable='tmp2m', grid=grid)
+    data = era5_rolled(start_time, end_time, agg_days=1, variable='tmp2m', grid=grid)
+    # Get a monthly timeseries between start_time and end_time
     ds = prise_application_date(data,
                                 time_dim='time', prob_type='deterministic',
                                 mask=mask, region=region, grid=grid)
-    ds = ds.compute()a # this should be a small-ish dataset, so let's break the dask and compute 
     return ds
 
 
@@ -203,11 +203,7 @@ def era5(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm'
         # Rainy onset is sparse, so we need to set the sparse attribute
         ds = ds.assign_attrs(sparse=True)
     elif variable == 'pesticide_date':
-        data = era5_rolled(start_time, end_time, agg_days=1, variable='tmp2m', grid=grid)
-        ds = prise_application_date(data,
-                                    time_dim='time', prob_type='deterministic',
-                                    mask=mask, region=region, grid=grid)
-        # Pesticide date is sparse, so we need to set the sparse attribute
+        ds = era5_pad(start_time, end_time, grid=grid, mask=mask, region=region)
         ds = ds.assign_attrs(sparse=True)
     else:
         ds = era5_rolled(start_time, end_time, variable, agg_days=agg_days, grid=grid)

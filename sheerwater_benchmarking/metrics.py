@@ -573,12 +573,15 @@ def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    if variable in ['rainy_onset', 'rainy_onset_no_drought', 'pesticide_date']:
+    if variable in ['rainy_onset', 'rainy_onset_no_drought']:
         forecasts = ['climatology_2015', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased',  'fuxi']
         if variable == 'rainy_onset_no_drought':
             leads = ['day1', 'day8', 'day15', 'day20']
         else:
             leads = ['day1', 'day8', 'day15', 'day20', 'day29', 'day36']
+    elif variable in ['pesticide_date']:
+        forecasts = ['ecmwf_ifs_er']
+        leads = ['day1', 'day8', 'day15', 'day20']
     else:
         forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                      'climatology_trend_2015', 'climatology_rolling']
