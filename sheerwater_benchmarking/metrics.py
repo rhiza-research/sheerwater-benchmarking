@@ -1,6 +1,7 @@
 """Verification metrics for forecasts."""
 
 import numpy as np
+import pandas as pd
 from importlib import import_module
 from inspect import signature
 import xskillscore
@@ -186,9 +187,15 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     if is_precip_only(metric) and variable != 'precip':
         raise ValueError(f"{metric} Can only be run with precipitation.")
 
-    # drop all times not in fcst
-    valid_times = set(obs.time.values).intersection(set(fcst.time.values))
-    obs = obs.sel(time=list(valid_times))
+    # Ensure that forecasts and obs are within the range of each other
+    # TODO: we need to support different time behaviors - do we want to snap to forecast times or obs times?
+    latest_start_time = max(obs.time.min(), fcst.time.min())
+    earliest_end_time = min(obs.time.max(), fcst.time.max())
+    fcst = fcst.sel(time=slice(latest_start_time, earliest_end_time))
+    obs = obs.sel(time=slice(latest_start_time, earliest_end_time))
+
+    # Do a tolerant match to get forecasts that have validation data within 4 days
+    fcst = fcst.sel(time=obs.time, method='nearest', tolerance=pd.Timedelta(days=4))
 
     # Convert observation and forecast times to seconds since epoch
     if np.issubdtype(obs[variable].dtype, np.datetime64) or (obs[variable].dtype == np.dtype('<M8[ns]')):
@@ -580,7 +587,8 @@ def summary_metrics_table(start_time, end_time, variable,
         else:
             leads = ['day1', 'day8', 'day15', 'day20', 'day29', 'day36']
     elif variable in ['pesticide_date']:
-        forecasts = ['climatology_2015', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased',  'fuxi']
+        # forecasts = ['climatology_2015', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased',  'fuxi']
+        forecasts = ['fuxi', 'climatology_2015', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased']
         leads = ['day1', 'day8', 'day15', 'day20']
     else:
         forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
