@@ -179,8 +179,6 @@ def graphcast(start_time, end_time, variable, lead, prob_type='deterministic',
             ds = np.maximum(ds, 0)
         else:
             raise ValueError(f"Variable {variable} not implemented.")
-    import pdb
-    pdb.set_trace()
     ds = ds.assign_attrs(prob_type="deterministic")
 
     # Get specific lead
