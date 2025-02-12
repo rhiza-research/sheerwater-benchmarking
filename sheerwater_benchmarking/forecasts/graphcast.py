@@ -19,7 +19,12 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable, plot_ds,
            cache_args=['variable', 'grid'],
            timeseries='time',
            cache=True,
-           cache_disable_if={'grid': 'global0_25'},
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
+               },
+           },
            validate_cache_timeseries=False)
 def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
     "graphcast Daily."
@@ -48,7 +53,6 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
     ds3 = ds3[[variable]]
     ds3 = ds3.sel({'time': slice(pd.to_datetime("2022-01-01"), pd.to_datetime("2023-01-01"))})
 
-    import pdb; pdb.set_trace()
     # concat them together
     ds = xr.concat([ds1, ds2, ds3], 'time')
 
@@ -77,6 +81,7 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
     # Convert lat/lon
     ds = lon_base_change(ds)
     ds = ds.sortby(ds.lat)
+    ds = ds.chunk({'lat': 721, 'lon': 1440, 'lead_time': 1, 'time': 30})
 
     # Regrid
     if grid != 'global0_25':
@@ -91,10 +96,17 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
            timeseries='time',
            cache=True,
            chunking={"lat": 121, "lon": 240, "lead_time": 10, "time": 100},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
+               },
+           },
            validate_cache_timeseries=False)
 def graphcast_rolled(start_time, end_time, variable, agg_days, grid='global0_25'):
     """ graphcast Rolled. """
     ds = graphcast_daily(start_time, end_time, variable, grid)
+    import pdb
+    pdb.set_trace()
     if 'units' not in ds.attrs:  # units haven't been converted yet
         # Convert units
         K_const = 273.15

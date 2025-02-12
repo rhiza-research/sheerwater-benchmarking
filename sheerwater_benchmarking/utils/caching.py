@@ -239,7 +239,7 @@ def chunk_to_zarr(ds, cache_path, verify_path, chunking):
     if isinstance(chunking, dict):
         # No need to prune if chunking is None or 'auto'
         chunking = prune_chunking_dimensions(ds, chunking)
-
+    import pdb; pdb.set_trace()
     ds = ds.chunk(chunks=chunking)
     try:
         chunk_size, chunk_with_labels = get_chunk_size(ds)
