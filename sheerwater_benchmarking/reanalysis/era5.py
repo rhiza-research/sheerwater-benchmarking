@@ -4,7 +4,7 @@ from datetime import timedelta
 import xarray as xr
 import numpy as np
 from functools import partial
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, 
+from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            get_variable, apply_mask, clip_region,
                                            roll_and_agg, lon_base_change, regrid)
 from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess, prise_application_date
@@ -157,16 +157,29 @@ def era5_rolled(start_time, end_time, variable, agg_days=7, grid="global1_5"):
            timeseries='time',
            cache=True,
            chunking={"lat": 121, "lon": 240, "time": 1000},
-           cache_args=['grid', 'mask', 'region'])
-def era5_pad(start_time, end_time, grid='global0_25', mask='lsm', region='global'):
+           cache_args=['grid', 'mask'])
+def era5_pad_kenya(start_time, end_time, grid='global0_25', mask='lsm'):
     """Compute the Prise Pesticide Application Date."""
     # Include an extra 120 days to account for the lag in the Prise data
-    end_time = (dateparser.parse(end_time) + timedelta(days=120)).strftime('%Y-%m-%d')
-    data = era5_rolled(start_time, end_time, agg_days=1, variable='tmp2m', grid=grid)
+    et = (dateparser.parse(end_time) + timedelta(days=120)).strftime('%Y-%m-%d')
+    data = era5_rolled(start_time, et, agg_days=1, variable='tmp2m', grid=grid)
     # Get a monthly timeseries between start_time and end_time
-    ds = prise_application_date(data,
+    ds = prise_application_date(data, roll_monthly=True,
                                 time_dim='time', prob_type='deterministic',
-                                mask=mask, region=region, grid=grid)
+                                mask=mask, region='kenya', grid=grid)
+    return ds
+
+
+@dask_remote
+def era5_pad(start_time, end_time, grid='global0_25', mask='lsm', region='global'):
+    """Wrapper function around Kenya-specific pesticide date forecasts."""
+    # Get the Kenya-specific pesticide date forecasts
+    ds = era5_pad_kenya(start_time, end_time, grid=grid, mask=mask)
+    if region == 'kenya':
+        return ds
+    # Regrid to global grid and then clip to region
+    ds = regrid(ds, grid, base='base180', method='conservative')
+    ds = clip_region(ds, region=region)
     return ds
 
 

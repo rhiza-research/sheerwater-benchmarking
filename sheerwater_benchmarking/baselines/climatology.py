@@ -1,6 +1,6 @@
 """A climatology baseline forecast for benchmarking."""
 import dateparser
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import numpy as np
 import pandas as pd
@@ -8,9 +8,9 @@ import xarray as xr
 import dask
 from functools import partial
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates, regrid,
                                            apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
-from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
+from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess, prise_application_date
 
 
 @dask_remote
@@ -334,7 +334,6 @@ def climatology_spw(start_time, end_time, first_year=1985, last_year=2014, trend
                     onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
                     grid='global1_5', mask='lsm', region="global"):
     """Climatology SPW forecast."""
-    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
     fn = partial(climatology_rolled, start_time, end_time, variable='precip',
                  first_year=first_year, last_year=last_year,
                  trend=trend, prob_type=prob_type, grid=grid)
@@ -343,6 +342,7 @@ def climatology_spw(start_time, end_time, first_year=1985, last_year=2014, trend
     data = spw_precip_preprocess(fn, agg_days=roll_days, shift_days=shift_days,
                                  mask=mask, region=region, grid=grid)
 
+    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
     (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
     ds = spw_rainy_onset(data,
                          onset_group=onset_group, aggregate_group=aggregate_group,
@@ -350,6 +350,50 @@ def climatology_spw(start_time, end_time, first_year=1985, last_year=2014, trend
                          prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
                          drought_condition=drought_condition,
                          mask=mask, region=region, grid=grid)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=True,
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           cache_args=['first_year', 'last_year', 'prob_type', 'prob_threshold', 'grid', 'mask'])
+def climatology_pad_kenya(start_time, end_time, first_year=1985, last_year=2014,
+                          prob_type='deterministic', prob_threshold=None,
+                          grid='global0_25', mask='lsm'):
+    """Compute the Prise Pesticide Application Date for Kenya."""
+    # Include an extra 120 days to account for the lag in the Prise data
+    et = (dateparser.parse(end_time) + timedelta(days=120)).strftime('%Y-%m-%d')
+    data = climatology_rolled(start_time, et, first_year=first_year, last_year=last_year,
+                              agg_days=1, variable='tmp2m', grid=grid)
+    # Get a monthly timeseries between start_time and end_time
+    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
+    (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
+    ds = prise_application_date(data, roll_monthly=True,
+                                time_dim='time',
+                                prob_type=prob_label, prob_threshold=prob_threshold, prob_dim=prob_dim,
+                                mask=mask, region='kenya', grid=grid)
+    return ds
+
+
+@dask_remote
+def climatology_pad(start_time, end_time, first_year=1985, last_year=2014,
+                    prob_type='deterministic', prob_threshold=None,
+                    grid='global0_25', mask='lsm', region='global'):
+    """Wrapper function around Kenya-specific pesticide date forecasts."""
+    # Get the Kenya-specific pesticide date forecasts
+    if prob_type == 'deterministic':
+        prob_threshold = None
+    ds = climatology_pad_kenya(start_time, end_time, first_year=first_year, last_year=last_year,
+                               prob_type=prob_type, prob_threshold=prob_threshold,
+                               grid=grid, mask=mask)
+    if region == 'kenya':
+        return ds
+
+    # Regrid to global grid and then clip to region
+    ds = regrid(ds, grid, base='base180', method='conservative')
+    ds = clip_region(ds, region=region)
     return ds
 
 
@@ -370,6 +414,12 @@ def _climatology_unified(start_time, end_time, variable, lead,
                              drought_condition=drought_condition,
                              grid=grid, mask=mask, region=region)
         # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
+    elif variable == 'pesticide_date':
+        ds = climatology_pad(start_time, end_time, first_year=first_year, last_year=last_year,
+                             prob_type=prob_type, prob_threshold=0.2,
+                             grid=grid, mask=mask, region=region)
+        # Pesticide date is sparse, so we need to set the sparse attribute
         ds = ds.assign_attrs(sparse=True)
     else:
         ds = climatology_rolled(start_time, end_time, variable,

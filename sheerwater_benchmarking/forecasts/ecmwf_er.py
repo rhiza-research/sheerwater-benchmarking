@@ -428,16 +428,20 @@ def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
     return ds
 
 
-# @cacheable(data_type='array',
-#            timeseries='start_date',
-#            cache=False,
-#            cache_args=['lead', 'prob_type', 'prob_threshold', 'grid', 'mask', 'region'])
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=True,
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           cache_args=['lead', 'debiased', 'prob_type', 'prob_threshold', 'grid', 'mask'])
 @dask_remote
-def ecmwf_ifs_pad(start_time, end_time, lead, debiased=True,
-                  prob_type='probabilistic', prob_threshold=0.6,
-                  grid='global1_5', mask='lsm', region="global"):
+def ecmwf_ifs_pad_kenya(start_time, end_time, lead, debiased=True,
+                        prob_type='deterministic', prob_threshold=None,
+                        grid='global1_5', mask='lsm'):
     """The ECMWF Pesticide Date forecasts."""
     # Get the ECMWF temperature forecast
+    if prob_type == 'deterministic' and prob_threshold is not None:
+        raise ValueError("Probability threshold must be None for deterministic forecasts.")
+
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
     (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
     data = ifs_extended_range_rolled(start_time, end_time, variable='tmp2m', agg_days=1,
@@ -455,14 +459,35 @@ def ecmwf_ifs_pad(start_time, end_time, lead, debiased=True,
     data['lead_time'] = [np.timedelta64(x+lead_offset_days, 'D') for x in range(120)]
 
     # Find the first planting date for each start_date
+    # Hard code region to Kenya for now
     ds = prise_application_date(data,
-                                compute_rolling=False,
+                                roll_monthly=False,
                                 time_dim='lead_time', base_time='start_date',
                                 prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
-                                mask=mask, region=region, grid=grid)
+                                mask=mask, region='kenya', grid=grid)
     # Select the appropriate lead
     ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
     ds = ds.rename({'start_date': 'time'})
+    return ds
+
+
+@dask_remote
+def ecmwf_ifs_pad(start_time, end_time, lead, debiased=True,
+                  prob_type='probabilistic', prob_threshold=0.6,
+                  grid='global1_5', mask='lsm', region="global"):
+    """Wrapper function around Kenya-specific pesticide date forecasts."""
+    # Get the Kenya-specific pesticide date forecasts
+    if prob_type == 'deterministic':
+        prob_threshold = None
+    ds = ecmwf_ifs_pad_kenya(start_time, end_time, lead, debiased=debiased,
+                             prob_type=prob_type, prob_threshold=prob_threshold,
+                             grid=grid, mask=mask)
+    if region == 'kenya':
+        return ds
+
+    # Regrid to global grid and then clip to region
+    ds = regrid(ds, grid, base='base180', method='conservative')
+    ds = clip_region(ds, region=region)
     return ds
 
 
