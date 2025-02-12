@@ -102,6 +102,7 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
            cache_args=['variable', 'agg_days', 'grid'],
            timeseries='time',
            cache=True,
+           cache_disable_if={'agg_days': 1},
            chunking={"lat": 121, "lon": 240, "lead_time": 10, "time": 100},
            chunk_by_arg={
                'grid': {
@@ -166,7 +167,7 @@ def graphcast(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = graphcast_rolled(forecast_start, forecast_end, variable, agg_days=agg_days, grid=grid,
                           recompute=False)
     if 'units' not in ds.attrs:  # units haven't been converted yet
-        # Convert unitsi
+        # Convert units
         K_const = 273.15
         if variable == 'tmp2m':
             ds[variable] = ds[variable] - K_const
