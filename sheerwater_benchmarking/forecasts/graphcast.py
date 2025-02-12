@@ -30,14 +30,19 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
     "graphcast Daily."
     # Read the three years for gcloud
     # NOTE: this must!! be an open_dataset, not an open_zarr, or it will fail and produce and empty dataset
-    ds1 = xr.open_dataset(
-        'gs://weathernext/59572747_4_0/zarr/99140631_1_2020_to_2021/forecasts_10d/date_range_2019-12-01_2021-01-22_6_hours.zarr/',
-        decode_timedelta=True,
-        engine='zarr')
+    # ds1 = xr.open_dataset(
+    #     'gs://weathernext/59572747_4_0/zarr/99140631_1_2020_to_2021/forecasts_10d/date_range_2019-12-01_2021-01-22_6_hours.zarr/',
+    #     decode_timedelta=True,
+    #     engine='zarr')
+    ds1 = xr.open_zarr(
+        'gs://weathernext/59572747_4_0/zarr/99140631_1_2020_to_2021/forecasts_10d/date_range_2019-12-01_2021-01-22_6_hours.zarr',
+        decode_timedelta=True, chunks=None)
     ds1 = ds1.rename({'prediction_timedelta': 'lead_time',
                      '2m_temperature': 'tmp2m', 'total_precipitation_6hr': 'precip'})
     ds1 = ds1[[variable]]
     ds1 = ds1.sel({'time': slice(pd.to_datetime("2019-12-01"), pd.to_datetime("2020-11-30"))})
+    plot_ds(ds1)
+    import pdb; pdb.set_trace()
 
     ds2 = xr.open_dataset(
         'gs://weathernext/59572747_4_0/zarr/99140631_2_2021_to_2022/forecasts_10d/date_range_2020-12-01_2022-01-22_6_hours.zarr',
@@ -57,6 +62,7 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
     ds3 = ds3[[variable]]
     ds3 = ds3.sel({'time': slice(pd.to_datetime("2022-01-01"), pd.to_datetime("2023-01-01"))})
 
+    import pdb; pdb.set_trace()
     # concat them together
     ds = xr.concat([ds1, ds2, ds3], 'time')
 
@@ -85,7 +91,8 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):
     # Convert lat/lon
     ds = lon_base_change(ds)
     ds = ds.sortby(ds.lat)
-    ds = ds.chunk({'lat': 721, 'lon': 1440, 'lead_time': 1, 'time': 30})
+    # ds = ds.chunk({'lat': 721, 'lon': 1440, 'lead_time': 1, 'time': 30})
+    import pdb; pdb.set_trace()
 
     # Regrid
     if grid != 'global0_25':
