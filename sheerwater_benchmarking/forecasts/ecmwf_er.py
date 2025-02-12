@@ -14,7 +14,8 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lead_to_agg_days,
                                            regrid, get_variable,
                                            target_date_to_forecast_date,
-                                           shift_forecast_date_to_target_date)
+                                           shift_forecast_date_to_target_date,
+                                           get_grid_ds)
 
 
 @dask_remote
@@ -431,6 +432,7 @@ def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
 @cacheable(data_type='array',
            timeseries='time',
            cache=True,
+           validate_cache_timeseries=False,
            chunking={"lat": 121, "lon": 240, "time": 1000},
            cache_args=['lead', 'debiased', 'prob_type', 'prob_threshold', 'grid', 'mask'])
 @dask_remote
@@ -486,7 +488,8 @@ def ecmwf_ifs_pad(start_time, end_time, lead, debiased=True,
         return ds
 
     # Regrid to global grid and then clip to region
-    ds = regrid(ds, grid, base='base180', method='conservative')
+    grid_ds = get_grid_ds(grid, base='base180')
+    ds = ds.reindex_like(grid_ds, method=None)
     ds = clip_region(ds, region=region)
     return ds
 

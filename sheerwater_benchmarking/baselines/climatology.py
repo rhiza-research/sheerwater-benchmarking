@@ -8,7 +8,7 @@ import xarray as xr
 import dask
 from functools import partial
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates, regrid,
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates, get_grid_ds,
                                            apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
 from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess, prise_application_date
 
@@ -357,6 +357,7 @@ def climatology_spw(start_time, end_time, first_year=1985, last_year=2014, trend
 @cacheable(data_type='array',
            timeseries='time',
            cache=True,
+           validate_cache_timeseries=False,
            chunking={"lat": 121, "lon": 240, "time": 1000},
            cache_args=['first_year', 'last_year', 'prob_type', 'prob_threshold', 'grid', 'mask'])
 def climatology_pad_kenya(start_time, end_time, first_year=1985, last_year=2014,
@@ -385,14 +386,14 @@ def climatology_pad(start_time, end_time, first_year=1985, last_year=2014,
     # Get the Kenya-specific pesticide date forecasts
     if prob_type == 'deterministic':
         prob_threshold = None
-    ds = climatology_pad_kenya(start_time, end_time, first_year=first_year, last_year=last_year,
-                               prob_type=prob_type, prob_threshold=prob_threshold,
-                               grid=grid, mask=mask)
+    ds = climatology_pad_kenya(start_time, end_time, first_year=first_year, last_year=last_year, prob_type=prob_type, prob_threshold=prob_threshold, grid=grid, mask=mask)
     if region == 'kenya':
         return ds
 
-    # Regrid to global grid and then clip to region
-    ds = regrid(ds, grid, base='base180', method='conservative')
+    # Expand to global grid and then clip to region
+    grid_ds = get_grid_ds(grid, base='base180')
+    ds = ds.reindex_like(grid_ds, method=None)
+
     ds = clip_region(ds, region=region)
     return ds
 

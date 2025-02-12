@@ -6,7 +6,8 @@ import numpy as np
 from functools import partial
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            get_variable, apply_mask, clip_region,
-                                           roll_and_agg, lon_base_change, regrid)
+                                           roll_and_agg, lon_base_change, regrid,
+                                           get_grid_ds)
 from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess, prise_application_date
 
 
@@ -156,6 +157,7 @@ def era5_rolled(start_time, end_time, variable, agg_days=7, grid="global1_5"):
 @cacheable(data_type='array',
            timeseries='time',
            cache=True,
+           validate_cache_timeseries=False,
            chunking={"lat": 121, "lon": 240, "time": 1000},
            cache_args=['grid', 'mask'])
 def era5_pad_kenya(start_time, end_time, grid='global0_25', mask='lsm'):
@@ -178,7 +180,8 @@ def era5_pad(start_time, end_time, grid='global0_25', mask='lsm', region='global
     if region == 'kenya':
         return ds
     # Regrid to global grid and then clip to region
-    ds = regrid(ds, grid, base='base180', method='conservative')
+    grid_ds = get_grid_ds(grid, base='base180')
+    ds = ds.reindex_like(grid_ds, method=None)
     ds = clip_region(ds, region=region)
     return ds
 

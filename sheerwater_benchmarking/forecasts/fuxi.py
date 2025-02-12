@@ -15,10 +15,11 @@ from huggingface_hub.utils import EntryNotFoundError
 
 from sheerwater_benchmarking.utils.secrets import huggingface_read_token
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
-                                           apply_mask, clip_region, regrid,
+                                           apply_mask, clip_region,
                                            lon_base_change,
                                            target_date_to_forecast_date,
-                                           shift_forecast_date_to_target_date, lead_to_agg_days, roll_and_agg)
+                                           shift_forecast_date_to_target_date, lead_to_agg_days, roll_and_agg,
+                                           get_grid_ds)
 from sheerwater_benchmarking.tasks import spw_precip_preprocess, spw_rainy_onset, prise_application_date
 
 
@@ -252,8 +253,7 @@ def fuxi_pad_kenya(start_time, end_time, lead,
     # Get the FuXi temperature forecast
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
     (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
-    data = fuxi_rolled(start_time, end_time, variable='tmp2m', agg_days=1,
-                       prob_type=prob_type, grid=grid)
+    data = fuxi_rolled(start_time, end_time, variable='tmp2m', agg_days=1, prob_type=prob_type)
 
     # Get the appropriate leads: select from the lead time to the end of the forecast
     lead_offset_days = _process_lead('tmp2m', lead)[1]
@@ -292,7 +292,8 @@ def fuxi_pad(start_time, end_time, lead,
         return ds
 
     # Regrid to global grid and then clip to region
-    ds = regrid(ds, grid, base='base180', method='conservative')
+    grid_ds = get_grid_ds(grid, base='base180')
+    ds = ds.reindex_like(grid_ds, method=None)
     ds = clip_region(ds, region=region)
     return ds
 
