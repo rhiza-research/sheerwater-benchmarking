@@ -840,6 +840,7 @@ tqdm==4.67.1
     # via cdsapi
     # via huggingface-hub
     # via multiurl
+    # via sheerwater-benchmarking
     # via terracotta
 traitlets==5.14.3
     # via comm
@@ -908,7 +909,7 @@ wrapt==1.17.2
     # via deprecated
 wsproto==1.2.0
     # via httpx-ws
-xarray==2025.1.2
+xarray==2024.10.0
     # via rioxarray
     # via salientsdk
     # via sheerwater-benchmarking
@@ -926,7 +927,7 @@ xyzservices==2025.1.0
     # via bokeh
 yarl==1.18.3
     # via aiohttp
-zarr==2.18.4
+zarr==2.18.3
     # via sheerwater-benchmarking
     # via weatherbench2
 zict==3.0.0
