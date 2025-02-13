@@ -18,8 +18,9 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
                                            target_date_to_forecast_date,
-                                           shift_forecast_date_to_target_date, lead_to_agg_days, roll_and_agg)
-from sheerwater_benchmarking.tasks import spw_precip_preprocess, spw_rainy_onset
+                                           shift_forecast_date_to_target_date, lead_to_agg_days, roll_and_agg,
+                                           get_grid_ds)
+from sheerwater_benchmarking.tasks import spw_precip_preprocess, spw_rainy_onset, prise_application_date
 
 
 @dask_remote
@@ -239,6 +240,68 @@ def fuxi_spw(start_time, end_time, lead,
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
+           cache=True,
+           validate_cache_timeseries=False,
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           cache_args=['lead', 'prob_type', 'prob_threshold', 'grid', 'mask'])
+def fuxi_pad_kenya(start_time, end_time, lead,
+                   prob_type='deterministic', prob_threshold=None,
+                   grid='global1_5', mask='lsm'):
+    """The FuXi Pesticide Date forecasts for Kenya."""
+    if prob_type == 'deterministic' and prob_threshold is not None:
+        raise ValueError("Probability threshold must be None for deterministic forecasts.")
+
+    # Get the FuXi temperature forecast
+    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
+    (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
+    data = fuxi_rolled(start_time, end_time, variable='tmp2m', agg_days=1, prob_type=prob_type)
+
+    # Get the appropriate leads: select from the lead time to the end of the forecast
+    lead_offset_days = _process_lead('tmp2m', lead)[1]
+    lead_offset = np.timedelta64(lead_offset_days, 'D')
+    data = data.sel(lead_time=slice(lead_offset, None))
+
+    # Pad to a constant 120-day length forecast with edge padding
+    pad_widths = {'lead_time': (0, 120-len(data.lead_time))}
+    data = data.pad(pad_widths, mode='edge')
+    # Update the lead time dimension to be the correct timedelta64 objects
+    data['lead_time'] = [np.timedelta64(x+lead_offset_days, 'D') for x in range(120)]
+
+    # Find the first planting date for each start_date
+    ds = prise_application_date(data,
+                                roll_monthly=False,
+                                time_dim='lead_time', base_time='time',
+                                prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                                mask=mask, region='kenya', grid=grid)
+    # Select the appropriate lead
+    ds = shift_forecast_date_to_target_date(ds, 'time', lead)
+    return ds
+
+
+@dask_remote
+def fuxi_pad(start_time, end_time, lead,
+             prob_type='probabilistic', prob_threshold=0.6,
+             grid='global1_5', mask='lsm', region="global"):
+    """Wrapper function around Kenya-specific pesticide date forecasts."""
+    # Get the Kenya-specific pesticide date forecasts
+    if prob_type == 'deterministic':
+        prob_threshold = None
+    ds = fuxi_pad_kenya(start_time, end_time, lead,
+                        prob_type=prob_type, prob_threshold=prob_threshold,
+                        grid=grid, mask=mask)
+    if region == 'kenya':
+        return ds
+
+    # Regrid to global grid and then clip to region
+    grid_ds = get_grid_ds(grid, base='base180')
+    ds = ds.reindex_like(grid_ds, method=None)
+    ds = clip_region(ds, region=region)
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           timeseries='time',
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
@@ -262,6 +325,11 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
                       drought_condition=drought_condition,
                       grid=grid, mask=mask, region=region)
         # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
+    elif variable == 'pesticide_date':
+        ds = fuxi_pad(forecast_start, forecast_end, lead,
+                      prob_type=prob_type, prob_threshold=0.6,
+                      grid=grid, mask=mask, region=region)
         ds = ds.assign_attrs(sparse=True)
     else:
         ds = fuxi_rolled(forecast_start, forecast_end, variable=variable, prob_type=prob_type, agg_days=agg_days)

@@ -20,7 +20,8 @@ def first_satisfied_date(ds, condition, time_dim='time', base_time=None,
         prob_threshold (float): Threshold for the probability dimension.
     """
     # Apply the rainy reason onset condition to the grouped dataframe
-    ds['condition'] = condition(ds, prob_type=prob_type, prob_dim=prob_dim, prob_threshold=prob_threshold)
+    ds['condition'] = condition(ds, time_dim=time_dim, prob_type=prob_type,
+                                prob_dim=prob_dim, prob_threshold=prob_threshold)
 
     # Ensure that dates are sorted
     ds = ds.sortby(time_dim)
