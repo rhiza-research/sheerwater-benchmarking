@@ -132,7 +132,7 @@ resource "google_secret_manager_secret_version" "postgres_read_password" {
 # Persistent disk
 resource "google_compute_disk" "sheerwater_benchmarking_db" {
   name  = "sheerwater-benchmarking-db"
-  type  = "pd-balanced"
+  type  = "pd-ssd"
   zone  = "us-central1-a"
   size  = 20
   project = "rhiza-shared"

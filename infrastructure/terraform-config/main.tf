@@ -198,7 +198,7 @@ data "google_secret_manager_secret_version" "sheerwater_oauth_client_secret" {
  secret   = "sheerwater-oauth-client-secret"
 }
 
-# Enable googel oauth
+# Enable google oauth
 resource "grafana_sso_settings" "google_sso_settings" {
   provider_name = "google"
   oauth2_settings {
