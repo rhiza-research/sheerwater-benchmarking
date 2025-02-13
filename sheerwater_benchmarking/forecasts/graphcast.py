@@ -22,7 +22,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                    'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
                },
            },
-           validate_cache_timeseries=True)
+           validate_cache_timeseries=False)
 def graphcast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa: ARG001
     """A daily Graphcast forecast."""
     # Read the three years for gcloud
