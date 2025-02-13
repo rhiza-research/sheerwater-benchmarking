@@ -37,7 +37,7 @@ def parse_args():
         forecasts = ["salient", "climatology_2015"]
     else:
         forecasts = ["salient", "ecmwf_ifs_er", "ecmwf_ifs_er_debiased",
-                     "climatology_2015", "climatology_trend_2015", "climatology_rolling"]
+                     "climatology_2015", "climatology_trend_2015", "climatology_rolling", "fuxi"]
     if args.forecast:
         forecasts = args.forecast
 
