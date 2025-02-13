@@ -154,8 +154,7 @@ def graphcast(start_time, end_time, variable, lead, prob_type='deterministic',
     forecast_end = target_date_to_forecast_date(end_time, lead)
 
     # Get the data with the right days
-    ds = graphcast_rolled(forecast_start, forecast_end, variable, agg_days=agg_days, grid=grid,
-                          recompute=True)
+    ds = graphcast_rolled(forecast_start, forecast_end, variable, agg_days=agg_days, grid=grid)
     if 'units' not in ds.attrs:  # units haven't been converted yet
         # Convert units
         K_const = 273.15
