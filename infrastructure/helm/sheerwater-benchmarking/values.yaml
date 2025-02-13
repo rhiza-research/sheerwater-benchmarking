@@ -3,8 +3,8 @@
 # Declare variables to be passed into your templates.
 grafana:
   image: 
-    repository: grafana/grafana
-    tag: 11.2.0
+    repository: us-central1-docker.pkg.dev/rhiza-shared/sheerwater/grafana
+    tag: v1.0.3
 
   admin_password: pass
 
