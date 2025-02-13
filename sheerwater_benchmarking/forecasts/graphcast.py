@@ -15,7 +15,6 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
 @cacheable(data_type='array',
            cache_args=['variable', 'grid'],
            timeseries='time',
-           cache=True,
            chunking={"lat": 121, "lon": 240, "lead_time": 1, "time": 1000},
            chunk_by_arg={
                'grid': {
@@ -93,7 +92,6 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa:
 @cacheable(data_type='array',
            cache_args=['variable', 'agg_days', 'grid'],
            timeseries='time',
-           cache=True,
            cache_disable_if={'agg_days': 1},
            chunking={"lat": 121, "lon": 240, "lead_time": 10, "time": 100},
            chunk_by_arg={
