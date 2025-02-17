@@ -132,10 +132,15 @@ resource "google_secret_manager_secret_version" "postgres_read_password" {
 # Persistent disk
 resource "google_compute_disk" "sheerwater_benchmarking_db" {
   name  = "sheerwater-benchmarking-db"
-  type  = "pd-ssd"
+  type  = "pd-balanced"
   zone  = "us-central1-a"
   size  = 20
   project = "rhiza-shared"
+
+  # Mark as deprecated
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Persistent disk
@@ -170,6 +175,28 @@ resource "google_compute_disk_resource_policy_attachment" "attachment" {
   disk = google_compute_disk.sheerwater_benchmarking_db.name
   zone = "us-central1-a"
   project = "rhiza-shared"
+}
+
+# Get the latest snapshot of the old disk
+data "google_compute_snapshot" "latest_db_snapshot" {
+  project = "rhiza-shared"
+  name    = "snapshot-sheerwater-benchmarking-db" # This will be the name format from the snapshot policy
+  most_recent = true
+}
+
+# Create new disk from the snapshot
+resource "google_compute_disk" "sheerwater_benchmarking_db_ssd" {
+  name     = "sheerwater-benchmarking-db-ssd"
+  type     = "pd-ssd"
+  zone     = "us-central1-a"
+  size     = 50
+  project  = "rhiza-shared"
+  snapshot = data.google_compute_snapshot.latest_db_snapshot.self_link
+
+  # Prevent accidental deletion
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 
