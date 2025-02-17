@@ -172,7 +172,7 @@ resource "google_compute_resource_policy" "db_snapshot_policy" {
 
 resource "google_compute_disk_resource_policy_attachment" "attachment" {
   name = google_compute_resource_policy.db_snapshot_policy.name
-  disk = google_compute_disk.sheerwater_benchmarking_db.name
+  disk = google_compute_disk.sheerwater_benchmarking_db_ssd.name
   zone = "us-central1-a"
   project = "rhiza-shared"
 }
@@ -289,8 +289,8 @@ locals {
     }
     postgres = {
       pv = {
-        name = "${google_compute_disk.sheerwater_benchmarking_db.name}"
-        size = "${google_compute_disk.sheerwater_benchmarking_db.size}"
+        name = "${google_compute_disk.sheerwater_benchmarking_db_ssd.name}"
+        size = "${google_compute_disk.sheerwater_benchmarking_db_ssd.size}"
       }
       admin_password = "${random_password.db_admin_password.result}"
     }
