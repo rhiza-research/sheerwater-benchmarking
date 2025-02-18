@@ -30,6 +30,12 @@ config_options = {
     'xxxlarge_cluster': {
         'n_workers': [35, 36]
     },
+    'xc_cluster': {
+        'n_workers': [90, 91]
+    },
+    'cc_cluster': {
+        'n_workers': [200, 201]
+    },
     'large_node': {
         'worker_vm_types': ['c2-standard-16', 'c3-standard-22']
     },
@@ -40,7 +46,7 @@ config_options = {
         'worker_vm_types': ['c3-standard-88']
     },
     'large_disk': {
-        'worker_disk_size': '300GiB'
+        'worker_disk_size': '150GiB'
     },
 }
 
