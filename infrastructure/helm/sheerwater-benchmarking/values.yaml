@@ -66,6 +66,6 @@ terracotta:
 
   resources:
     requests:
-      cpu: 250m
+      cpu: 2000m
       memory: 500Mi
 
