@@ -191,6 +191,9 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     # TODO: we need to support different time behaviors - do we want to snap to forecast times or obs times?
     latest_start_time = max(obs.time.min(), fcst.time.min())
     earliest_end_time = min(obs.time.max(), fcst.time.max())
+    # Get only the months that are in the EA rainy season
+    # TODO: this is a hack to get the data to work, we we'll need to do this in a better way
+    obs = obs.where(obs.time.dt.month.isin([2, 3, 4, 9, 10, 11]), drop=True)
     fcst = fcst.sel(time=slice(latest_start_time, earliest_end_time))
     obs = obs.sel(time=slice(latest_start_time, earliest_end_time))
 
