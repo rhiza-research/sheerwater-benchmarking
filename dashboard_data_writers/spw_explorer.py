@@ -2,7 +2,7 @@
 import xarray as xr
 import numpy as np
 from functools import partial
-from sheerwater_benchmarking.utils import cacheable, dask_remote, start_remote
+from sheerwater_benchmarking.utils import cacheable, dask_remote, start_remote, apply_mask, clip_region
 from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.forecasts.ecmwf_er import ecmwf_ifs_spw
 from sheerwater_benchmarking.forecasts.fuxi import fuxi_spw
@@ -43,6 +43,40 @@ def rain_windowed_spw(start_time, end_time,
                      prob_type='deterministic', grid=grid)
     ds = spw_precip_preprocess(fn, mask=mask, region=region, grid=grid,
                                agg_days=[1, 8, 11], shift_days=[0, 0, 0])
+    ds = ds.drop_vars('spatial_ref')
+    df = ds.to_dataframe().dropna()
+    return df
+
+
+@dask_remote
+@cacheable(data_type='tabular',
+           cache_args=['truth', 'grid', 'mask', 'region'],
+           backend='postgres')
+def daily_tmp2m_prise(start_time, end_time,
+                      truth='era5',
+                      grid='global1_5', mask='lsm', region='global'):
+    """Store the daily precipitation and temperature data in the database."""
+    # Get the ground truth data
+    if truth == 'era5':
+        ds = era5_rolled(start_time, end_time, variable='tmp2m', grid=grid)
+    elif truth == 'imerg':
+        ds = imerg_rolled(start_time, end_time, grid=grid)
+    elif truth == 'chirps':
+        ds = chirps_rolled(start_time, end_time, grid=grid)
+    elif truth == 'ghcn':
+        ds = _ghcn_rolled_unified(start_time, end_time, variable='tmp2m', grid=grid,
+                                missing_thresh=0.0, cell_aggregation='first')
+    elif truth == 'tahmo':
+        ds = tahmo_rolled(start_time, end_time,
+                     grid=grid, missing_thresh=0.0, cell_aggregation='first')
+    elif truth == 'ltn':
+        ds = climatology_rolled(start_time, end_time, variable='tmp2m',
+                     first_year=2004, last_year=2015,
+                     prob_type='deterministic', grid=grid)
+        
+    import pdb; pdb.set_trace()
+    ds = apply_mask(ds, mask)
+    ds = clip_region(ds, region=region)
     ds = ds.drop_vars('spatial_ref')
     df = ds.to_dataframe().dropna()
     return df
@@ -148,7 +182,7 @@ def ea_rainy_onset_probabilities(start_time, end_time,
 
 
 if __name__ == "__main__":
-    start_remote(remote_config='xlarge_cluster')
+    start_remote(remote_config='xlarge_cluster', remote_name='test2')
     # Runners to generate the tables
     start_time = '2016-01-01'
     end_time = '2022-12-31'
@@ -172,7 +206,7 @@ if __name__ == "__main__":
                                               backend='postgres')
 
         # Generate for all data sources
-        for truth in ["era5", "chirps", "ghcn", "imerg", "tahmo"]:
+        for truth in ["era5", "chirps", "ghcn", "imerg", "tahmo", "climatology_2015"]:
             df2 = ea_rainy_onset_truth(start_time, end_time, truth,
                                        variable=variable,
                                        grid=grid, mask=mask, region=region,

@@ -183,3 +183,7 @@ scratch
 tahmo_scripts
 salient_scripts
 ./data
+
+# Dot directories
+.*
+**/.*/
