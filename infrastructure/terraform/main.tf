@@ -136,6 +136,11 @@ resource "google_compute_disk" "sheerwater_benchmarking_db" {
   zone  = "us-central1-a"
   size  = 20
   project = "rhiza-shared"
+
+  # Mark as deprecated
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Persistent disk
@@ -167,9 +172,24 @@ resource "google_compute_resource_policy" "db_snapshot_policy" {
 
 resource "google_compute_disk_resource_policy_attachment" "attachment" {
   name = google_compute_resource_policy.db_snapshot_policy.name
-  disk = google_compute_disk.sheerwater_benchmarking_db.name
+  disk = google_compute_disk.sheerwater_benchmarking_db_ssd.name
   zone = "us-central1-a"
   project = "rhiza-shared"
+}
+
+# Create new disk from the specific snapshot
+resource "google_compute_disk" "sheerwater_benchmarking_db_ssd" {
+  name     = "sheerwater-benchmarking-db-ssd"
+  type     = "pd-ssd"
+  zone     = "us-central1-a"
+  size     = 50
+  project  = "rhiza-shared"
+  snapshot = "projects/rhiza-shared/global/snapshots/sheerwater-benchmar-us-central1-a-20250217055130-5p7cuzqi"
+
+  # Prevent accidental deletion
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 
@@ -262,8 +282,8 @@ locals {
     }
     postgres = {
       pv = {
-        name = "${google_compute_disk.sheerwater_benchmarking_db.name}"
-        size = "${google_compute_disk.sheerwater_benchmarking_db.size}"
+        name = "${google_compute_disk.sheerwater_benchmarking_db_ssd.name}"
+        size = "${google_compute_disk.sheerwater_benchmarking_db_ssd.size}"
       }
       admin_password = "${random_password.db_admin_password.result}"
     }
