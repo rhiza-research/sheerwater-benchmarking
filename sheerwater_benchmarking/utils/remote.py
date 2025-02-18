@@ -31,7 +31,7 @@ config_options = {
         'n_workers': [35, 36]
     },
     'xc_cluster': {
-        'n_workers': [90, 91]
+        'n_workers': [70, 71]
     },
     'cc_cluster': {
         'n_workers': [200, 201]

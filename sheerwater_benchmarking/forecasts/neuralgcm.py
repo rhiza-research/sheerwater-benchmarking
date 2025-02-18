@@ -122,12 +122,12 @@ def neuralgcm_daily(start_time, end_time, variable, grid='global0_25'):  # noqa:
 
     ds = xr.concat([ds1, ds2, ds3], dim='time')
 
+    ds = ds.chunk({'lat': 721, 'lon': 1440, 'lead_time': 10, 'time': 1, 'member': 5})
+
     # Regrid
     if grid != 'global0_25':
         ds = regrid(ds, grid, base='base180', method='conservative',
                     output_chunks={"lat": 721, "lon": 1440})
-    else:
-        ds = ds.chunk({"lat": 721, "lon": 1440, 'lead_time': 10, 'time': 1, 'member': 5})
 
     return ds
 
@@ -140,7 +140,7 @@ def neuralgcm_daily(start_time, end_time, variable, grid='global0_25'):  # noqa:
            chunking={"lat": 121, "lon": 240, "lead_time": 10, "time": 100},
            chunk_by_arg={
                'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
+                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 10, 'time': 1, 'member': 5}
                },
            },
            validate_cache_timeseries=False)
