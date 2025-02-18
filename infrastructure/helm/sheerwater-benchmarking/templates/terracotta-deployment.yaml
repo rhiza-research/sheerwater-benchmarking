@@ -57,11 +57,9 @@ spec:
           - name: TC_ALLOWED_ORIGINS_TILES
             value: '["*"]'
           - name: TC_RASTER_CACHE_SIZE
-            # Size of raster file in-memory cache, in bytes
-            value: 513802240
+            value: {{ .Values.terracotta.raster_cache_size }}
           - name: TC_RASTER_CACHE_COMPRESS_LEVEL
-            # Compression level of raster file in-memory cache, from 0-9
-            value: 9
+            value: {{ .Values.terracotta.raster_cache_compress_level }}
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-secrets

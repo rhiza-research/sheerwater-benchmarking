@@ -54,6 +54,11 @@ terracotta:
 
   driver_path: postgresql://postgres:5432/terracotta
 
+  # Size of raster file in-memory cache, in bytes
+  raster_cache_size: 513802240
+  # Compression level of raster file in-memory cache, from 0-9
+  raster_cache_compress_level: 9
+
   sql_user: read
   sql_password: read_password
 
