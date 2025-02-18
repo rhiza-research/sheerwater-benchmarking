@@ -177,21 +177,14 @@ resource "google_compute_disk_resource_policy_attachment" "attachment" {
   project = "rhiza-shared"
 }
 
-# Get the latest snapshot of the old disk
-data "google_compute_snapshot" "latest_db_snapshot" {
-  project = "rhiza-shared"
-  name    = "snapshot-sheerwater-benchmarking-db" # This will be the name format from the snapshot policy
-  most_recent = true
-}
-
-# Create new disk from the snapshot
+# Create new disk from the specific snapshot
 resource "google_compute_disk" "sheerwater_benchmarking_db_ssd" {
   name     = "sheerwater-benchmarking-db-ssd"
   type     = "pd-ssd"
   zone     = "us-central1-a"
   size     = 50
   project  = "rhiza-shared"
-  snapshot = data.google_compute_snapshot.latest_db_snapshot.self_link
+  snapshot = "projects/rhiza-shared/global/snapshots/sheerwater-benchmar-us-central1-a-20250217055130-5p7cuzqi"
 
   # Prevent accidental deletion
   lifecycle {
