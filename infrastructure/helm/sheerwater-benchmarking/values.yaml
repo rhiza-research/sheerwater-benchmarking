@@ -4,7 +4,7 @@
 grafana:
   image: 
     repository: us-central1-docker.pkg.dev/rhiza-shared/sheerwater/grafana
-    tag: v1.0.3
+    tag: v1.0.4
 
   admin_password: pass
 
