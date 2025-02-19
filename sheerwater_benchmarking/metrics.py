@@ -10,7 +10,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
-                                           lead_to_agg_days, lead_or_agg)
+                                           lead_to_agg_days, lead_or_agg, plot_ds)  # noqa: ARG001
 from weatherbench2.metrics import _spatial_average
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
@@ -426,7 +426,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 
         # Get the unaggregated global metric
         ds = global_metric(start_time, end_time, variable, lead=lead,
-                           forecast=forecast, truth=truth,
+                           forecast=forecast, truth=truth, recompute=True,
                            metric=called_metric, grid=grid, mask=mask, region='global')
 
         if ds is None:
@@ -470,6 +470,8 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Check if forecast is valid before spatial averaging
     if not sparse and not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
+        import pdb
+        pdb.set_trace()
         print("Metric is not valid for region.")
         return None
 
@@ -580,9 +582,12 @@ def summary_metrics_table(start_time, end_time, variable,
         else:
             leads = ['day1', 'day8', 'day15', 'day20', 'day29', 'day36']
     else:
-        forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
-                     'climatology_trend_2015', 'climatology_rolling']
-        leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
+        # forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
+        #              'climatology_trend_2015', 'climatology_rolling']
+        forecasts = ['graphcast', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
+                     'climatology_2020']
+        # leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
+        leads = ['day1', 'day3', 'day5', 'day7', 'day10']
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)

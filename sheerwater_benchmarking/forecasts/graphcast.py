@@ -13,16 +13,11 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'grid'],
+           cache_args=['variable', 'init_hour', 'grid'],
            timeseries='time',
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, "time": 1000},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
-               },
-           },
+           chunking={"lat": 721, "lon": 1440, "lead_time": 1, "time": 30},
            validate_cache_timeseries=False)
-def graphcast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa: ARG001
+def graphcast_daily(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
     """A daily Graphcast forecast."""
     # Read the three years for gcloud
     ds1 = xr.open_zarr(
@@ -56,7 +51,7 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa:
     ds = xr.concat([ds1, ds2, ds3], dim='time')
 
     # Select only the midnight initialization times
-    ds = ds.where(ds.time.dt.hour == 0)
+    ds = ds.where(ds.time.dt.hour == init_hour, drop=True)
 
     # Convert units
     K_const = 273.15
@@ -67,22 +62,115 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa:
     elif variable == 'precip':
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
-        ds = ds.resample(lead_time='1D').sum(dim='lead_time')
+        # Convert from 6hrly to daily precip, robust to different numbers of 6hrly samples in a day
+        ds = ds.resample(lead_time='1D').mean(dim='lead_time') * 4.0
         # Can't have precip less than zero (there are some very small negative values)
         ds = np.maximum(ds, 0)
     else:
         raise ValueError(f"Variable {variable} not implemented.")
 
-    # Shift the lead back 6 hours to be aligned
-    ds['lead_time'] = ds['lead_time'] - np.timedelta64(6, 'h')
+    # Shift the lead back 6 hours + init time to align with the start date convention
+    ds['lead_time'] = ds['lead_time'] - np.timedelta64(6+init_hour, 'h')
 
     # Convert lat/lon
     ds = lon_base_change(ds)
 
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'init_hour', 'grid'],
+           timeseries='time',
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "time": 1000},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
+               },
+           },
+           validate_cache_timeseries=False)
+def graphcast_daily_wb(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
+    """A daily Graphcast forecast."""
+    # Read the three years for gcloud
+    if grid == 'global0_25':
+        filename1 = 'gs://weatherbench2/datasets/graphcast/2018/date_range_2017-11-16_2019-02-01_12_hours.zarr'
+        filename2 = 'gs://weatherbench2/datasets/graphcast/2020/date_range_2019-11-16_2021-02-01_12_hours.zarr'
+    elif grid == 'global1_5':
+        # Global 1.5 degree grid is fractionally off from the standard 1.5 grid
+        filename1 = 'gs://weatherbench2/datasets/graphcast/2018/date_range_2017-11-16_2019-02-01_12_hours-240x121_equiangular_with_poles_conservative.zarr'
+        filename2 = 'gs://weatherbench2/datasets/graphcast/2020/date_range_2019-11-16_2021-02-01_12_hours-240x121_equiangular_with_poles_conservative.zarr'
+    else:
+        raise ValueError(f"Grid {grid} not implemented.")
+
+    ds1 = xr.open_zarr(filename1,
+                       chunks='auto',
+                       decode_timedelta=True)
+    ds1 = ds1.rename({'prediction_timedelta': 'lead_time',
+                     '2m_temperature': 'tmp2m', 'total_precipitation_6hr': 'precip'})
+    if 'latitude' in ds1.dims:
+        ds1 = ds1.rename({'latitude': 'lat', 'longitude': 'lon'})
+    ds1 = ds1[[variable]]
+
+    ds2 = xr.open_zarr(filename2,
+                       decode_timedelta=True,
+                       chunks='auto')
+    ds2 = ds2.rename({'prediction_timedelta': 'lead_time',
+                     '2m_temperature': 'tmp2m', 'total_precipitation_6hr': 'precip'})
+    if 'latitude' in ds2.dims:
+        ds2 = ds2.rename({'latitude': 'lat', 'longitude': 'lon'})
+    ds2 = ds2[[variable]]
+
+    # concat them together
+    ds = xr.concat([ds1, ds2], dim='time')
+    ds = ds.sortby('time')
+
+    # Select only the midnight initialization times
+    ds = ds.where(ds.time.dt.hour == init_hour, drop=True)
+
+    # Convert units
+    K_const = 273.15
+    if variable == 'tmp2m':
+        ds[variable] = ds[variable] - K_const
+        ds.attrs.update(units='C')
+        ds = ds.resample(lead_time='1D').mean(dim='lead_time')
+    elif variable == 'precip':
+        ds[variable] = ds[variable] * 1000.0
+        ds.attrs.update(units='mm')
+        # Convert from 6hrly to daily precip, robust to different numbers of 6hrly samples in a day
+        ds = ds.resample(lead_time='1D').mean(dim='lead_time') * 4.0
+        # Can't have precip less than zero (there are some very small negative values)
+        ds = np.maximum(ds, 0)
+    else:
+        raise ValueError(f"Variable {variable} not implemented.")
+
+    # Shift the lead back 6 hours + init time to align with the start date convention
+    ds['lead_time'] = ds['lead_time'] - np.timedelta64(6+init_hour, 'h')
+
+    # Convert lat/lon
+    ds = lon_base_change(ds)
+
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'init_hour', 'grid'],
+           timeseries='time',
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "time": 1000},
+           cache_disable_if={'grid': 'global0_25'},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
+               },
+           },
+           validate_cache_timeseries=False)
+def graphcast_daily_wb_regrid(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
     # Regrid
-    if grid != 'global0_25':
-        ds = regrid(ds, grid, base='base180', method='conservative',
-                    output_chunks={"lat": 721, "lon": 1440})
+    ds = graphcast_daily_wb(start_time, end_time, variable, init_hour=init_hour, grid='global0_25')
+    if grid == 'global0_25':
+        return ds
+    # Regrid onto appropriate grid
+    ds = regrid(ds, grid, base='base180', method='conservative', output_chunks={"lat": 121, "lon": 240})
     return ds
 
 
@@ -98,10 +186,10 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa:
                },
            },
            validate_cache_timeseries=False)
-def graphcast_rolled(start_time, end_time, variable, agg_days, grid='global0_25'):
+def graphcast_wb_rolled(start_time, end_time, variable, agg_days, grid='global0_25'):
     """A rolled and aggregated Graphcast forecast."""
-    ds = graphcast_daily(start_time, end_time, variable, grid)
-
+    # Grab the init 0 forecast; don't need to regrid
+    ds = graphcast_daily_wb_regrid(start_time, end_time, variable, init_hour=0, grid=grid)
     ds = roll_and_agg(ds, agg=agg_days, agg_col="lead_time", agg_fn="mean")
     return ds
 
@@ -140,7 +228,7 @@ def graphcast(start_time, end_time, variable, lead, prob_type='deterministic',
     forecast_end = target_date_to_forecast_date(end_time, lead)
 
     # Get the data with the right days
-    ds = graphcast_rolled(forecast_start, forecast_end, variable, agg_days=agg_days, grid=grid)
+    ds = graphcast_wb_rolled(forecast_start, forecast_end, variable, agg_days=agg_days, grid=grid)
     ds = ds.assign_attrs(prob_type="deterministic")
 
     # Get specific lead
@@ -151,7 +239,7 @@ def graphcast(start_time, end_time, variable, lead, prob_type='deterministic',
     ds = shift_forecast_date_to_target_date(ds, 'time', lead)
 
     # Apply masking and clip to region
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
+    ds = apply_mask(ds, mask, grid=grid)
     ds = clip_region(ds, region=region)
 
     return ds
