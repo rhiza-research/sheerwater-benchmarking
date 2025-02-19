@@ -1,7 +1,6 @@
 """Interface for gencast forecasts."""
 import xarray as xr
 import numpy as np
-import pandas as pd
 import gcsfs
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
@@ -11,12 +10,15 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            shift_forecast_date_to_target_date,
                                            lead_to_agg_days, roll_and_agg, regrid)
 
+
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['variable', 'year'],
+           cache_args=['year', 'variable', 'init_hour'],
            chunking={"lat": 721, "lon": 1440, 'lead_time': 10, 'time': 1, 'member': 5})
-def gencast_daily_year(year, variable):  # noqa: ARG001
-    """A daily gencast forecast."""
+def gencast_daily_year(year, variable, init_hour=0):
+    """A daily Gencast forecast."""
+    if init_hour != 0:
+        raise ValueError("Only 0 init hour supported")
 
     # Get glob of all gencast forecasts
     fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
@@ -38,35 +40,34 @@ def gencast_daily_year(year, variable):  # noqa: ARG001
 
         return zarrs
 
-
     zarrs = []
 
     if year == '2020':
-        zarrs  += get_sub_ds('gs://weathernext/126478713_1_0/zarr/124883614_2020_to_2021')
+        zarrs += get_sub_ds('gs://weathernext/126478713_1_0/zarr/124883614_2020_to_2021')
     elif year == '2021':
-        zarrs  += get_sub_ds('gs://weathernext/126478713_1_0/zarr/124958964_2021_to_2022')
+        zarrs += get_sub_ds('gs://weathernext/126478713_1_0/zarr/124958964_2021_to_2022')
     elif year == '2022':
-        zarrs  += get_sub_ds('gs://weathernext/126478713_1_0/zarr/125057031_2022_to_2023')
+        zarrs += get_sub_ds('gs://weathernext/126478713_1_0/zarr/125057031_2022_to_2023')
     elif year == '2023':
-        zarrs  += get_sub_ds('gs://weathernext/126478713_1_0/zarr/125156073_2023_to_2024')
+        zarrs += get_sub_ds('gs://weathernext/126478713_1_0/zarr/125156073_2023_to_2024')
 
     ds = xr.open_mfdataset(zarrs,
                            chunks='auto',
                            decode_timedelta=True,
                            engine='zarr',
                            drop_variables=['100m_u_component_of_wind',
-                                  '100m_v_component_of_wind',
-                                  '10m_u_component_of_wind',
-                                  '10m_v_component_of_wind',
-                                  'geopotential',
-                                  'mean_sea_level_pressure',
-                                  'sea_surface_temperature',
-                                  'specific_humidity',
-                                  'temperature',
-                                  'u_component_of_wind',
-                                  'v_component_of_wind',
-                                  'vertical_velocity'
-                                  ])
+                                           '100m_v_component_of_wind',
+                                           '10m_u_component_of_wind',
+                                           '10m_v_component_of_wind',
+                                           'geopotential',
+                                           'mean_sea_level_pressure',
+                                           'sea_surface_temperature',
+                                           'specific_humidity',
+                                           'temperature',
+                                           'u_component_of_wind',
+                                           'v_component_of_wind',
+                                           'vertical_velocity'
+                                           ])
 
     # Read the three years for gcloud
     ds = ds.rename({'prediction_timedelta': 'lead_time',
@@ -76,7 +77,7 @@ def gencast_daily_year(year, variable):  # noqa: ARG001
     ds = ds[[variable]]
 
     # Select only the midnight initialization times
-    ds = ds.where(ds.time.dt.hour == 0)
+    ds = ds.where(ds.time.dt.hour == init_hour, drop=True)
 
     # Convert units
     K_const = 273.15
@@ -87,15 +88,17 @@ def gencast_daily_year(year, variable):  # noqa: ARG001
     elif variable == 'precip':
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
+
+        # Convert from 6hrly to daily precip, robust to different numbers of 6hrly samples in a day
+        ds = ds.resample(lead_time='1D').mean(dim='lead_time') * 2.0
+
         # Can't have precip less than zero (there are some very small negative values)
         ds = np.maximum(ds, 0)
-        ds = ds.resample(lead_time='1D').sum(dim='lead_time')
     else:
         raise ValueError(f"Variable {variable} not implemented.")
 
-
-    # Shift the lead back 12 hours to be aligned
-    ds['lead_time'] = ds['lead_time'] - np.timedelta64(12, 'h')
+    # Shift the lead back 12 hours + init time to be aligned
+    ds['lead_time'] = ds['lead_time'] - np.timedelta64(init_hour+12, 'h')
 
     # Convert lat/lon
     ds = lon_base_change(ds)
@@ -119,11 +122,9 @@ def gencast_daily_year(year, variable):  # noqa: ARG001
            validate_cache_timeseries=False)
 def gencast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa: ARG001
     """A daily gencast forecast."""
-    print("Calling daily")
-
-    ds1 = gencast_daily_year(year='2020', variable=variable)
-    ds2 = gencast_daily_year(year='2021', variable=variable)
-    ds3 = gencast_daily_year(year='2022', variable=variable)
+    ds1 = gencast_daily_year(year='2020', variable=variable, init_hour=0)
+    ds2 = gencast_daily_year(year='2021', variable=variable, init_hour=0)
+    ds3 = gencast_daily_year(year='2022', variable=variable, init_hour=0)
 
     ds = xr.concat([ds1, ds2, ds3], dim='time')
 
@@ -185,8 +186,8 @@ def _process_lead(variable, lead):
            cache=False,
            cache_args=['variable', 'lead', 'prob_type', 'grid', 'mask', 'region'])
 def gencast(start_time, end_time, variable, lead, prob_type='deterministic',
-              grid='global1_5', mask='lsm', region="global"):
-    """Final gencast interface."""
+            grid='global1_5', mask='lsm', region="global"):
+    """Final Gencast interface."""
     # Process the lead
     agg_days, lead_offset_days = _process_lead(variable, lead)
 
