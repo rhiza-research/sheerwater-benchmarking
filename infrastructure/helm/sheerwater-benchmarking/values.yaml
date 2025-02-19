@@ -47,12 +47,14 @@ postgres:
 
 terracotta:
   image: 
-    repository: adkinsjd/terracotta
-    tag: "v0.0.11"
+    repository: ghcr.io/rhiza-research/terracotta
+    tag: "v0.0.12"
 
   tailscale: true
 
   driver_path: postgresql://postgres:5432/terracotta
+
+  multiprocessing_workers: 6
 
   sql_user: read
   sql_password: read_password

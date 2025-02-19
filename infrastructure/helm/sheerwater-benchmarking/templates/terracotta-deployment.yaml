@@ -56,6 +56,8 @@ spec:
             value: "nearest"
           - name: TC_ALLOWED_ORIGINS_TILES
             value: '["*"]'
+          - name: TC_MULTIPROCESSING_WORKERS
+            value: "{{ .Values.terracotta.multiprocessing_workers }}"
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-secrets
