@@ -8,7 +8,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lon_base_change,
                                            target_date_to_forecast_date,
                                            shift_forecast_date_to_target_date,
-                                           lead_to_agg_days, roll_and_agg)
+                                           lead_to_agg_days, roll_and_agg, regrid)
 
 
 @dask_remote
@@ -161,26 +161,28 @@ def graphcast_daily_wb(start_time, end_time, variable, init_hour=0, grid='global
     return ds
 
 
-#@dask_remote
-#@cacheable(data_type='array',
-#           cache_args=['variable', 'init_hour', 'grid'],
-#           timeseries='time',
-#           chunking={"lat": 121, "lon": 240, "lead_time": 1, "time": 1000},
-#           cache_disable_if={'grid': 'global0_25'},
-#           chunk_by_arg={
-#               'grid': {
-#                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
-#               },
-#           },
-#           validate_cache_timeseries=False)
-#def graphcast_daily_wb_regrid(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
-#    # Regrid
-#    ds = graphcast_daily_wb(start_time, end_time, variable, init_hour=init_hour, grid='global0_25')
-#    if grid == 'global0_25':
-#        return ds
-#    # Regrid onto appropriate grid
-#    ds = regrid(ds, grid, base='base180', method='conservative', output_chunks={"lat": 121, "lon": 240})
-#    return ds
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'init_hour', 'grid'],
+           timeseries='time',
+           chunking={"lat": 121, "lon": 240, "lead_time": 1, "time": 1000},
+           cache_disable_if={'grid': 'global0_25'},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
+               },
+           },
+           validate_cache_timeseries=False)
+def graphcast_daily_regrid(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
+    # Regrid
+    ds = graphcast_daily(start_time, end_time, variable, init_hour=init_hour, grid='global0_25')
+    if grid == 'global0_25':
+        return ds
+
+    # Regrid onto appropriate grid
+    ds = regrid(ds, grid, base='base180', method='conservative', output_chunks={"lat": 121, "lon": 240})
+
+    return ds
 
 
 @dask_remote
