@@ -3,8 +3,6 @@ import xarray as xr
 import numpy as np
 import pandas as pd
 import gcsfs
-import matplotlib.pyplot as plt
-from sheerwater_benchmarking.utils import plot_ds
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
@@ -20,6 +18,9 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
            chunking={"lat": 721, "lon": 1440, 'lead_time': 10, 'time': 1, 'member': 5})
 def gencast_daily_year(year, variable, init_hour=0):
     """A daily Gencast forecast."""
+
+    if init_hour != 0:
+        raise ValueError("Only 0 init hour supported")
 
     # Get glob of all gencast forecasts
     fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
@@ -78,10 +79,6 @@ def gencast_daily_year(year, variable, init_hour=0):
     ds = ds[[variable]]
 
     # Select only the midnight initialization times
-    # import pdb; pdb.set_trace()
-    # nulls = ds.isnull().sum(dim=['lat', 'lon']) / (1440 * 720)
-    # nulls[variable].isel(lead_time=0, member=0).plot()
-    # plt.show()
     ds = ds.where(ds.time.dt.hour == init_hour, drop=True)
 
     # Convert units
@@ -93,8 +90,10 @@ def gencast_daily_year(year, variable, init_hour=0):
     elif variable == 'precip':
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
+
         # Convert from 6hrly to daily precip, robust to different numbers of 6hrly samples in a day
-        ds = ds.resample(lead_time='1D').mean(dim='lead_time') * 4.0
+        ds = ds.resample(lead_time='1D').mean(dim='lead_time') * 2.0
+
         # Can't have precip less than zero (there are some very small negative values)
         ds = np.maximum(ds, 0)
     else:
@@ -125,8 +124,6 @@ def gencast_daily_year(year, variable, init_hour=0):
            validate_cache_timeseries=False)
 def gencast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa: ARG001
     """A daily gencast forecast."""
-    print("Calling daily")
-
     ds1 = gencast_daily_year(year='2020', variable=variable, init_hour=0)
     ds2 = gencast_daily_year(year='2021', variable=variable, init_hour=0)
     ds3 = gencast_daily_year(year='2022', variable=variable, init_hour=0)

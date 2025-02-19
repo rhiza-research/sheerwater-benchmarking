@@ -2,6 +2,7 @@
 import xarray as xr
 import numpy as np
 import pandas as pd
+import numpy as np
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
@@ -19,6 +20,9 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
            validate_cache_timeseries=False)
 def graphcast_daily(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
     """A daily Graphcast forecast."""
+    if init_hour != 0:
+        raise ValueError("Only 0 init hour supported.")
+
     # Read the three years for gcloud
     ds1 = xr.open_zarr(
         'gs://weathernext/59572747_4_0/zarr/99140631_1_2020_to_2021/forecasts_10d/date_range_2019-12-01_2021-01-22_6_hours.zarr',
@@ -91,6 +95,9 @@ def graphcast_daily(start_time, end_time, variable, init_hour=0, grid='global0_2
            validate_cache_timeseries=False)
 def graphcast_daily_wb(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
     """A daily Graphcast forecast."""
+    if init_hour != 0:
+        raise ValueError("Only 0 init hour supported.")
+
     # Read the three years for gcloud
     if grid == 'global0_25':
         filename1 = 'gs://weatherbench2/datasets/graphcast/2018/date_range_2017-11-16_2019-02-01_12_hours.zarr'
@@ -127,6 +134,9 @@ def graphcast_daily_wb(start_time, end_time, variable, init_hour=0, grid='global
     # Select only the midnight initialization times
     ds = ds.where(ds.time.dt.hour == init_hour, drop=True)
 
+    # Round the lats to two decimal places
+    ds['lat'] = np.round(ds.lat, decimals=2)
+
     # Convert units
     K_const = 273.15
     if variable == 'tmp2m':
@@ -152,26 +162,26 @@ def graphcast_daily_wb(start_time, end_time, variable, init_hour=0, grid='global
     return ds
 
 
-@dask_remote
-@cacheable(data_type='array',
-           cache_args=['variable', 'init_hour', 'grid'],
-           timeseries='time',
-           chunking={"lat": 121, "lon": 240, "lead_time": 1, "time": 1000},
-           cache_disable_if={'grid': 'global0_25'},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
-               },
-           },
-           validate_cache_timeseries=False)
-def graphcast_daily_wb_regrid(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
-    # Regrid
-    ds = graphcast_daily_wb(start_time, end_time, variable, init_hour=init_hour, grid='global0_25')
-    if grid == 'global0_25':
-        return ds
-    # Regrid onto appropriate grid
-    ds = regrid(ds, grid, base='base180', method='conservative', output_chunks={"lat": 121, "lon": 240})
-    return ds
+#@dask_remote
+#@cacheable(data_type='array',
+#           cache_args=['variable', 'init_hour', 'grid'],
+#           timeseries='time',
+#           chunking={"lat": 121, "lon": 240, "lead_time": 1, "time": 1000},
+#           cache_disable_if={'grid': 'global0_25'},
+#           chunk_by_arg={
+#               'grid': {
+#                   'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 1, 'time': 30}
+#               },
+#           },
+#           validate_cache_timeseries=False)
+#def graphcast_daily_wb_regrid(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
+#    # Regrid
+#    ds = graphcast_daily_wb(start_time, end_time, variable, init_hour=init_hour, grid='global0_25')
+#    if grid == 'global0_25':
+#        return ds
+#    # Regrid onto appropriate grid
+#    ds = regrid(ds, grid, base='base180', method='conservative', output_chunks={"lat": 121, "lon": 240})
+#    return ds
 
 
 @dask_remote
@@ -189,7 +199,7 @@ def graphcast_daily_wb_regrid(start_time, end_time, variable, init_hour=0, grid=
 def graphcast_wb_rolled(start_time, end_time, variable, agg_days, grid='global0_25'):
     """A rolled and aggregated Graphcast forecast."""
     # Grab the init 0 forecast; don't need to regrid
-    ds = graphcast_daily_wb_regrid(start_time, end_time, variable, init_hour=0, grid=grid)
+    ds = graphcast_daily_wb(start_time, end_time, variable, init_hour=0, grid=grid)
     ds = roll_and_agg(ds, agg=agg_days, agg_col="lead_time", agg_fn="mean")
     return ds
 
