@@ -1,7 +1,6 @@
 """Interface for gencast forecasts."""
 import xarray as xr
 import numpy as np
-import pandas as pd
 import gcsfs
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
@@ -18,7 +17,6 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
            chunking={"lat": 721, "lon": 1440, 'lead_time': 10, 'time': 1, 'member': 5})
 def gencast_daily_year(year, variable, init_hour=0):
     """A daily Gencast forecast."""
-
     if init_hour != 0:
         raise ValueError("Only 0 init hour supported")
 

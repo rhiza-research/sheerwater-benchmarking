@@ -2,14 +2,13 @@
 import xarray as xr
 import numpy as np
 import pandas as pd
-import numpy as np
 
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
                                            target_date_to_forecast_date,
                                            shift_forecast_date_to_target_date,
-                                           lead_to_agg_days, roll_and_agg, regrid)
+                                           lead_to_agg_days, roll_and_agg)
 
 
 @dask_remote
