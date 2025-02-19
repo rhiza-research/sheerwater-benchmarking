@@ -408,7 +408,7 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
 def climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
                      grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    return _climatology_unified(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
+    return _climatology_unified(start_time, end_time, variable, lead, first_year=1990, last_year=2019,
                                 trend=False, prob_type=prob_type, grid=grid, mask=mask, region=region)
 
 

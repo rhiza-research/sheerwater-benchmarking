@@ -55,16 +55,19 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa:
     # concat them together
     ds = xr.concat([ds1, ds2, ds3], dim='time')
 
+    # Select only the midnight initialization times
+    ds = ds.where(ds.time.dt.hour == 0)
+
     # Convert units
     K_const = 273.15
     if variable == 'tmp2m':
         ds[variable] = ds[variable] - K_const
         ds.attrs.update(units='C')
-        ds = ds.resample(time='1D').mean(dim='time')
+        ds = ds.resample(lead_time='1D').mean(dim='lead_time')
     elif variable == 'precip':
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
-        ds = ds.resample(time='1D').sum(dim='time')
+        ds = ds.resample(lead_time='1D').sum(dim='lead_time')
         # Can't have precip less than zero (there are some very small negative values)
         ds = np.maximum(ds, 0)
     else:
@@ -72,14 +75,9 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa:
 
     # Shift the lead back 6 hours to be aligned
     ds['lead_time'] = ds['lead_time'] - np.timedelta64(6, 'h')
-    dates = pd.date_range("2019-12-01", "2022-12-31")
-    dates = [pd.to_datetime(date) for date in dates]
-
-    ds = ds.sel(time=dates)
 
     # Convert lat/lon
     ds = lon_base_change(ds)
-    ds = ds.sortby(ds.lat)
 
     # Regrid
     if grid != 'global0_25':
@@ -103,19 +101,7 @@ def graphcast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa:
 def graphcast_rolled(start_time, end_time, variable, agg_days, grid='global0_25'):
     """A rolled and aggregated Graphcast forecast."""
     ds = graphcast_daily(start_time, end_time, variable, grid)
-    if 'units' not in ds.attrs:  # units haven't been converted yet
-        # Convert units
-        K_const = 273.15
-        if variable == 'tmp2m':
-            ds[variable] = ds[variable] - K_const
-            ds.attrs.update(units='C')
-        elif variable == 'precip':
-            ds[variable] = ds[variable] * 1000.0
-            ds.attrs.update(units='mm')
-            # Can't have precip less than zero (there are some very small negative values)
-            ds = np.maximum(ds, 0)
-        else:
-            raise ValueError(f"Variable {variable} not implemented.")
+
     ds = roll_and_agg(ds, agg=agg_days, agg_col="lead_time", agg_fn="mean")
     return ds
 
@@ -155,19 +141,6 @@ def graphcast(start_time, end_time, variable, lead, prob_type='deterministic',
 
     # Get the data with the right days
     ds = graphcast_rolled(forecast_start, forecast_end, variable, agg_days=agg_days, grid=grid)
-    if 'units' not in ds.attrs:  # units haven't been converted yet
-        # Convert units
-        K_const = 273.15
-        if variable == 'tmp2m':
-            ds[variable] = ds[variable] - K_const
-            ds.attrs.update(units='C')
-        elif variable == 'precip':
-            ds[variable] = ds[variable] * 1000.0
-            ds.attrs.update(units='mm')
-            # Can't have precip less than zero (there are some very small negative values)
-            ds = np.maximum(ds, 0)
-        else:
-            raise ValueError(f"Variable {variable} not implemented.")
     ds = ds.assign_attrs(prob_type="deterministic")
 
     # Get specific lead
