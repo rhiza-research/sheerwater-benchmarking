@@ -47,8 +47,8 @@ postgres:
 
 terracotta:
   image: 
-    repository: adkinsjd/terracotta
-    tag: "v0.0.11"
+    repository: ghcr.io/rhiza-research/terracotta
+    tag: "v0.0.14"
 
   tailscale: true
 
@@ -58,6 +58,8 @@ terracotta:
   raster_cache_size: 513802240
   # Compression level of raster file in-memory cache, from 0-9
   raster_cache_compress_level: 9
+
+  multiprocessing_workers: 12
 
   sql_user: read
   sql_password: read_password
