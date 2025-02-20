@@ -507,6 +507,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
                 backend, storage_backend
 
+            cache=True
+
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \

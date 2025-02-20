@@ -113,7 +113,6 @@ def gencast_daily_year(year, variable, init_hour=0):
            cache_args=['variable', 'grid'],
            timeseries='time',
            chunking={"lat": 121, "lon": 240, "lead_time": 10, "time": 10, 'member': 10},
-           cache_disable_if={'grid': 'global0_25'},
            chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'lead_time': 10, 'time': 1, 'member': 5}
