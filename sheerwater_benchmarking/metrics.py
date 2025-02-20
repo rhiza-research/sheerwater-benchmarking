@@ -337,6 +337,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='array',
+           timeseries='time',
            cache_args=['variable', 'lead', 'forecast',
                        'truth', 'metric', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
