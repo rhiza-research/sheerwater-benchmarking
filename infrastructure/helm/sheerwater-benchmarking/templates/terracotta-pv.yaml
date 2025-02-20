@@ -1,15 +1,43 @@
+# This configuration creates two PersistentVolumes that point to the same GCP disk:
+# 1. A primary PV with read-write access for the first pod (pod-0)
+# 2. A replica PV with read-only access for all other pods
+#
+# Both PVs use the same underlying GCP disk, but with different access modes:
+# - Primary: ReadWriteOnce to ensure only one pod can write
+# - Replica: ReadOnlyMany to allow multiple pods to read simultaneously
+#
+# This setup enables a single writer, multiple reader pattern which is ideal for
+# serving read-heavy workloads like Terracotta's raster data.
+
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-{{ .Release.Namespace }}
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-primary-{{ .Release.Namespace }}
   labels:
     app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
     release: {{ .Release.Name }}
 spec:
   accessModes:
-  - ReadWriteMany
+  - ReadWriteOnce  # Only one pod can mount this volume with write access
   capacity:
     storage: {{ .Values.terracotta.pv.size }}
   gcePersistentDisk:
     pdName: {{ .Values.terracotta.pv.name }}
     fsType: ext4
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-replica-{{ .Release.Namespace }}
+  labels:
+    app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
+    release: {{ .Release.Name }}
+spec:
+  accessModes:
+  - ReadOnlyMany  # Multiple pods can mount this volume in read-only mode
+  capacity:
+    storage: {{ .Values.terracotta.pv.size }}
+  gcePersistentDisk:
+    pdName: {{ .Values.terracotta.pv.name }}  # Same disk as primary PV
+    fsType: ext4
+    readOnly: true  # Enforce read-only at the disk level

@@ -1,3 +1,16 @@
+# This StatefulSet manages multiple Terracotta pods with differentiated storage access:
+# - Pod-0: Primary pod with read-write access to the data volume
+# - Pod-1+: Replica pods with read-only access to the same data volume
+#
+# Key features:
+# 1. OrderedReady pod management ensures pod-0 is ready before starting replicas
+# 2. Init container logs whether each pod is primary or replica
+# 3. Volume mounts are configured as read-only for replica pods
+# 4. Dynamic PVC selection based on pod ordinal (primary vs replica)
+#
+# This configuration enables horizontal scaling while maintaining data consistency
+# through a single writer, multiple reader pattern.
+
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -8,6 +21,9 @@ metadata:
 spec:
   serviceName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
   replicas: {{ .Values.terracotta.replicas }}
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
       app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
@@ -20,6 +36,10 @@ spec:
         app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
         release: {{ .Release.Name }}
     spec:
+      initContainers:
+      - name: init-volume
+        image: busybox
+        command: ['sh', '-c', 'POD_ORDINAL=$(echo $HOSTNAME | rev | cut -d- -f1 | rev); if [ "$POD_ORDINAL" = "0" ]; then echo "Primary pod (read-write)"; else echo "Replica pod (read-only)"; fi']
       containers:
         - name: {{ .Chart.Name }}-terracotta
           image: {{ .Values.terracotta.image.repository }}:{{ .Values.terracotta.image.tag }}
@@ -60,20 +80,25 @@ spec:
             value: '["*"]'
           - name: TC_MULTIPROCESSING_WORKERS
             value: "{{ .Values.terracotta.multiprocessing_workers }}"
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-secrets
           volumeMounts:
             - mountPath: /mnt/sheerwater-datalake
               name: terracotta-rasters
+              {{ if ne (index (split "-" .POD_NAME) 2) "0" }}readOnly: true{{ end }}
       serviceAccountName: sheerwater-sa
   volumeClaimTemplates:
   - metadata:
       name: terracotta-rasters
     spec:
       storageClassName: ""
-      volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-{{ .Release.Namespace }}
-      accessModes: [ "ReadWriteMany" ]
+      volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-{{ `{{ if eq (index (split "-" .POD_NAME) 2) "0" }}primary{{ else }}replica{{ end }}` }}-{{ .Release.Namespace }}
+      accessModes: [ {{ `{{ if eq (index (split "-" .POD_NAME) 2) "0" }}"ReadWriteOnce"{{ else }}"ReadOnlyMany"{{ end }}` }} ]
       resources:
         requests:
           storage: {{ .Values.terracotta.pv.size }}
