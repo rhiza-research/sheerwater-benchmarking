@@ -29,6 +29,9 @@ spec:
             requests:
               cpu: {{ .Values.terracotta.resources.requests.cpu }}
               memory: {{ .Values.terracotta.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.terracotta.resources.limits.cpu }}
+              memory: {{ .Values.terracotta.resources.limits.memory }}
           ports:
             - containerPort: 5000
           readinessProbe:
