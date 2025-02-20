@@ -59,7 +59,7 @@ terracotta:
   # Compression level of raster file in-memory cache, from 0-9
   raster_cache_compress_level: 9
 
-  multiprocessing_workers: 12
+  multiprocessing_workers: 24
 
   sql_user: read
   sql_password: read_password
@@ -74,5 +74,8 @@ terracotta:
   resources:
     requests:
       cpu: 2000m
-      memory: 500Mi
+      memory: 1500Mi
+    limits:
+      cpu: 2000m
+      memory: 2000Mi
 
