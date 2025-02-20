@@ -135,6 +135,7 @@ def graphcast_daily_wb(start_time, end_time, variable, init_hour=0, grid='global
 
     # Round the lats to two decimal places
     ds['lat'] = np.round(ds.lat, decimals=2)
+    ds['lon'] = np.round(ds.lon, decimals=2)
 
     # Convert units
     K_const = 273.15
@@ -249,6 +250,10 @@ def graphcast(start_time, end_time, variable, lead, prob_type='deterministic',
     # Time shift - we want target date, instead of forecast date
     ds = shift_forecast_date_to_target_date(ds, 'time', lead)
 
+    # Round the lats/lons to two decimal places to fix the precision issue
+    # Can remove these once the caches are updates
+    ds['lat'] = np.round(ds.lat, decimals=2)
+    ds['lon'] = np.round(ds.lon, decimals=2)
     # Apply masking and clip to region
     ds = apply_mask(ds, mask, grid=grid)
     ds = clip_region(ds, region=region)
