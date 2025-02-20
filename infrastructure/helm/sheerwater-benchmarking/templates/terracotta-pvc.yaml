@@ -1,0 +1,37 @@
+# This file defines two PVCs:
+# 1. Primary PVC with read-write access for pod-0
+# 2. Replica PVC with read-only access for all other pods
+#
+# Both PVCs point to their respective PVs which share the same underlying GCP disk
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-primary
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
+    release: {{ .Release.Name }}
+spec:
+  storageClassName: ""
+  volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-primary-{{ .Release.Namespace }}
+  accessModes: [ "ReadWriteOnce" ]
+  resources:
+    requests:
+      storage: {{ .Values.terracotta.pv.size }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-replica
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
+    release: {{ .Release.Name }}
+spec:
+  storageClassName: ""
+  volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-replica-{{ .Release.Namespace }}
+  accessModes: [ "ReadOnlyMany" ]
+  resources:
+    requests:
+      storage: {{ .Values.terracotta.pv.size }} 

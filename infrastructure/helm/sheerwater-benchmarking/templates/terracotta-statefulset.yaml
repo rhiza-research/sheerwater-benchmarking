@@ -6,7 +6,7 @@
 # 1. OrderedReady pod management ensures pod-0 is ready before starting replicas
 # 2. Init container logs whether each pod is primary or replica
 # 3. Volume mounts are configured as read-only for replica pods
-# 4. Dynamic PVC selection based on pod ordinal (primary vs replica)
+# 4. Volume selection based on pod ordinal (primary vs replica)
 #
 # This configuration enables horizontal scaling while maintaining data consistency
 # through a single writer, multiple reader pattern.
@@ -80,25 +80,14 @@ spec:
             value: '["*"]'
           - name: TC_MULTIPROCESSING_WORKERS
             value: "{{ .Values.terracotta.multiprocessing_workers }}"
-          - name: POD_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.name
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-secrets
           volumeMounts:
             - mountPath: /mnt/sheerwater-datalake
               name: terracotta-rasters
-              {{ if ne (index (split "-" .POD_NAME) 2) "0" }}readOnly: true{{ end }}
       serviceAccountName: sheerwater-sa
-  volumeClaimTemplates:
-  - metadata:
-      name: terracotta-rasters
-    spec:
-      storageClassName: ""
-      volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-{{ `{{ if eq (index (split "-" .POD_NAME) 2) "0" }}primary{{ else }}replica{{ end }}` }}-{{ .Release.Namespace }}
-      accessModes: [ {{ `{{ if eq (index (split "-" .POD_NAME) 2) "0" }}"ReadWriteOnce"{{ else }}"ReadOnlyMany"{{ end }}` }} ]
-      resources:
-        requests:
-          storage: {{ .Values.terracotta.pv.size }}
+      volumes:
+        - name: terracotta-rasters
+          persistentVolumeClaim:
+            claimName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-{{ if eq 0 (int (trimSuffix "-terracotta" (trimPrefix (printf "%s-" (include "sheerwater-benchmarking.fullname" .)) .Release.Name))) }}primary{{ else }}replica{{ end }}
