@@ -48,7 +48,7 @@ postgres:
 terracotta:
   image: 
     repository: ghcr.io/rhiza-research/terracotta
-    tag: "v0.0.12"
+    tag: "v0.0.14"
 
   tailscale: true
 

@@ -61,9 +61,6 @@ provider "helm" {
       command     = "gke-gcloud-auth-plugin"
     }
   }
-  experiments {
-    manifest = true
-  }
 }
 
 # Create the sheerwater namespace
