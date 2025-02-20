@@ -130,6 +130,40 @@ def drop_encoded_chunks(ds):
     return ds
 
 
+def check_cache_disable_if(cache_disable_if, cache_arg_values):
+    """Check if the cache should be disabled for the given kwargs.
+
+    Cache disable if is a dict or list of dicts. Each dict specifies a set of
+    arguments that should disable the cache if they are present.
+    """
+    if isinstance(cache_disable_if, dict):
+        cache_disable_if = [cache_disable_if]
+
+    for d in cache_disable_if:
+        if not isinstance(d, dict):
+            raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
+
+        # Get the common keys
+        common_keys = set(cache_arg_values).intersection(d)
+
+        # Remove any args not passed
+        comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
+        d = {key: d[key] for key in common_keys}
+
+        # Iterate through each key and check if the values match, with support for lists
+        key_match = [
+            (not isinstance(d[k], list) and comp_arg_values[k] == d[k]) or
+            (isinstance(d[k], list) and comp_arg_values[k] in d[k])
+            for k in common_keys
+        ]
+        # Within a cache disable if dict, if all keys match, disable the cache
+        if all(key_match):
+            print(f"Caching disabled for arg values {d}")
+            return False
+    # Keep the cache enabled - we didn't find a match
+    return True
+
+
 def read_from_delta(cache_path):
     """Read from a deltatable into a pandas dataframe."""
     return DeltaTable(cache_path).to_pandas()
@@ -205,9 +239,7 @@ def chunk_to_zarr(ds, cache_path, verify_path, chunking):
     if isinstance(chunking, dict):
         # No need to prune if chunking is None or 'auto'
         chunking = prune_chunking_dimensions(ds, chunking)
-
     ds = ds.chunk(chunks=chunking)
-
     try:
         chunk_size, chunk_with_labels = get_chunk_size(ds)
 
@@ -216,7 +248,6 @@ def chunk_to_zarr(ds, cache_path, verify_path, chunking):
             print(chunk_with_labels)
     except ValueError:
         print("Failed to get chunks size! Continuing with unknown chunking...")
-
     write_to_zarr(ds, cache_path, verify_path)
 
 
@@ -476,6 +507,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
                 backend, storage_backend
 
+            # cache=True
+
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \
@@ -546,29 +579,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
 
             # Now that we have all the cacheable args values we can calculate whether
-            # the cache should be disable from them
-            if isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
-
-                if isinstance(cache_disable_if, dict):
-                    cache_disable_if = [cache_disable_if]
-
-                for d in cache_disable_if:
-                    if not isinstance(d, dict):
-                        raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
-
-                    # Get the common keys
-                    common_keys = set(cache_arg_values).intersection(d)
-
-                    # Remove any args not passed
-                    comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
-                    d = {key: d[key] for key in common_keys}
-
-                    # If they match then disable caching
-                    if comp_arg_values == d:
-                        print(f"Caching disabled for arg values {d}")
-                        cache = False
-                        break
-            elif cache_disable_if is not None:
+            # the cache should be disable from them if
+            if cache and isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
+                cache = check_cache_disable_if(cache_disable_if, cache_arg_values)
+            elif cache and cache_disable_if is not None:
                 raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
 
             imkeys = list(cache_arg_values.keys())
@@ -616,6 +630,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     cache_path = cache_key
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = False
+                else:
+                    raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
             elif data_type == 'basic':
                 backend = "pickle" if backend is None else backend
                 if storage_backend is None:
@@ -652,7 +668,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
                             # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
                             # every chunk is only 4B!
-                            ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                            ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
 
                             # If rechunk is passed then check to see if the rechunk array
                             # matches chunking. If not then rechunk
@@ -685,7 +701,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     fs.mv(temp_verify_path, verify_path, recursive=True)
 
                                     # Reopen the dataset
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
                                     # Requested chunks already match rechunk.
                                     pass
@@ -829,12 +845,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                         chunk_to_zarr(ds, cache_path, verify_path, chunking)
 
                                         # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                     else:
                                         chunk_to_zarr(ds, cache_path, verify_path, 'auto')
 
                                         # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
                                     raise RuntimeError(
                                         f"Array datatypes must return xarray datasets or None instead of {type(ds)}")

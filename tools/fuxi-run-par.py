@@ -1,6 +1,5 @@
+"""Run the FuXi S2S download script in parallel."""
 
-
-from subprocess import Popen
 import pandas as pd
 import os
 
@@ -13,7 +12,8 @@ for i, d in enumerate(dates):
     date_tups.append((dates[i-1].date(), dates[i].date()))
 
 for start, end in date_tups:
-    cmd = f'coiled run --detach --forward-gcp-adc -- python tools/fuxi-download.py --start-time {start} --end-time {end} > /dev/null 2>&1 &'
-    #cmd = ['coiled', 'run',  f'python tools/fuxi-download.py --start-time {start} --end-time {end}']
+    cmd = f'coiled run --detach --forward-gcp-adc -- python tools/fuxi-download.py --start-time {
+        start} --end-time {end} > /dev/null 2>&1 &'
+    # cmd = ['coiled', 'run',  f'python tools/fuxi-download.py --start-time {start} --end-time {end}']
 
     os.system(cmd)

@@ -30,6 +30,12 @@ config_options = {
     'xxxlarge_cluster': {
         'n_workers': [35, 36]
     },
+    'xc_cluster': {
+        'n_workers': [70, 71]
+    },
+    'cc_cluster': {
+        'n_workers': [200, 201]
+    },
     'large_node': {
         'worker_vm_types': ['c2-standard-16', 'c3-standard-22']
     },
@@ -40,7 +46,7 @@ config_options = {
         'worker_vm_types': ['c3-standard-88']
     },
     'large_disk': {
-        'worker_disk_size': '300GiB'
+        'worker_disk_size': '150GiB'
     },
 }
 
@@ -86,8 +92,8 @@ def start_remote(remote_name=None, remote_config=None):
     # send Application Default Credentials
     try:
         send_application_default_credentials(cluster)
-    except Exception:
-        print("Failed to send credentials")
+    except Exception as e:
+        print("Failed to send credentials", e)
 
     cluster.get_client()
 

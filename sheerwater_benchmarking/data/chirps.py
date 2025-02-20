@@ -1,8 +1,9 @@
 """CHIRPS data product."""
 import xarray as xr
-
+from functools import partial
 from sheerwater_benchmarking.utils import regrid, dask_remote, cacheable, roll_and_agg, apply_mask, clip_region
 from dateutil import parser
+from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
 
 
 @dask_remote
@@ -48,9 +49,7 @@ def chirps_rolled(start_time, end_time, agg_days, grid):
                            engine='zarr',
                            parallel=True,
                            chunks={'lat': 300, 'lon': 300, 'time': 365})
-
     ds = roll_and_agg(ds, agg=agg_days, agg_col="time", agg_fn='mean')
-
     return ds
 
 
@@ -61,15 +60,26 @@ def chirps_rolled(start_time, end_time, agg_days, grid):
            cache=False)
 def chirps(start_time, end_time, variable, agg_days, grid='global0_25', mask='lsm', region='global'):
     """Final access function for chirps."""
-    if variable != 'precip':
-        raise NotImplementedError("Only precip provided by chirps.")
+    if variable not in ['precip', 'rainy_onset', 'rainy_onset_no_drought']:
+        raise NotImplementedError("Only precip and derived variables provided by CHIRPS.")
 
-    ds = chirps_rolled(start_time, end_time, agg_days, grid)
-
-    # Apply masking
-    ds = apply_mask(ds, mask, var=variable, grid=grid)
-
-    # Clip to specified region
-    ds = clip_region(ds, region=region)
+    if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
+        drought_condition = variable == 'rainy_onset_no_drought'
+        fn = partial(chirps_rolled, start_time, end_time, grid=grid)
+        roll_days = [8, 11] if not drought_condition else [8, 11, 11]
+        shift_days = [0, 0] if not drought_condition else [0, 0, 11]
+        data = spw_precip_preprocess(fn, agg_days=roll_days, shift_days=shift_days,
+                                     mask=mask, region=region, grid=grid)
+        ds = spw_rainy_onset(data,
+                             onset_group=['ea_rainy_season', 'year'], aggregate_group=None,
+                             time_dim='time', prob_type='deterministic',
+                             drought_condition=drought_condition,
+                             mask=mask, region=region, grid=grid)
+        # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
+    else:
+        ds = chirps_rolled(start_time, end_time, agg_days, grid)
+        ds = apply_mask(ds, mask, grid=grid)
+        ds = clip_region(ds, region=region)
 
     return ds

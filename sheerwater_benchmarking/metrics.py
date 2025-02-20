@@ -8,7 +8,7 @@ import weatherbench2
 
 import xarray as xr
 
-from sheerwater_benchmarking.baselines import climatology_forecast, seeps_wet_threshold, seeps_dry_fraction
+from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
                                            lead_to_agg_days, lead_or_agg)
 from weatherbench2.metrics import _spatial_average
@@ -19,11 +19,13 @@ CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of dichotomo
 CATEGORICAL_CONTINGENCY_METRICS = ['heidke']  # a list of contingency metrics
 PRECIP_ONLY_METRICS = ["heidke", "pod", "far", "ets", "mape", "smape", "bias_score", "seeps"]
 
+
 def is_precip_only(metric):
     if '-' in metric:
         metric = metric.split('-')[0]
 
     return metric in PRECIP_ONLY_METRICS
+
 
 def is_categorical(metric):
     if '-' in metric:
@@ -31,11 +33,13 @@ def is_categorical(metric):
 
     return metric in CATEGORICAL_CONTINGENCY_METRICS
 
+
 def is_contingency(metric):
     if '-' in metric:
         metric = metric.split('-')[0]
 
     return metric in CONTINGENCY_METRICS or metric in CATEGORICAL_CONTINGENCY_METRICS
+
 
 def get_bins(metric):
     if is_contingency(metric) and len(metric.split('-')) != 2:
@@ -49,6 +53,7 @@ def get_bins(metric):
     bins = np.array(bins)
     return bins
 
+
 def is_coupled(metric):
     return is_contingency(metric) or metric in COUPLED_METRICS
 
@@ -59,6 +64,7 @@ def spatial_mape(fcst, truth, avg_time=False, skipna=True):
         ds = ds.mean(dim="time", skipna=skipna)
     return ds
 
+
 def mape(fcst, truth, avg_time=False, skipna=True):
     ds = spatial_mape(fcst, truth, avg_time=avg_time, skipna=skipna)
     if avg_time:
@@ -67,11 +73,13 @@ def mape(fcst, truth, avg_time=False, skipna=True):
         ds = ds.mean(dim=['lat', 'lon'], skipna=skipna)
     return ds
 
+
 def spatial_smape(fcst, truth, avg_time=False, skipna=True):
     ds = abs(fcst - truth) / (abs(fcst) + abs(truth))
     if avg_time:
         ds = ds.mean(dim="time", skipna=skipna)
     return ds
+
 
 def smape(fcst, truth, avg_time=False, skipna=True):
     ds = spatial_smape(fcst, truth, avg_time=avg_time, skipna=skipna)
@@ -80,6 +88,7 @@ def smape(fcst, truth, avg_time=False, skipna=True):
     else:
         ds = ds.mean(dim=['lat', 'lon'], skipna=skipna)
     return ds
+
 
 def get_datasource_fn(datasource):
     """Import the datasource function from any available source."""
@@ -151,9 +160,9 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     # This checks if the forecast is valid for non-spatial metrics (which in practice is only coupled metrics)
     if not spatial and not sparse and not is_valid(fcst, variable, mask=mask,
                                                    region=region, grid=grid, valid_threshold=0.98):
-            # If averaging over space, we must check if the forecast is valid
-            print(f"Forecast {forecast} is not valid for region {region}.")
-            return None
+        # If averaging over space, we must check if the forecast is valid
+        print(f"Forecast {forecast} is not valid for region {region}.")
+        return None
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
@@ -184,8 +193,18 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     obs = obs.sel(time=valid_times)
     fcst = fcst.sel(time=valid_times)
 
+    # Convert observation and forecast times to seconds since epoch
+    if np.issubdtype(obs[variable].dtype, np.datetime64) or (obs[variable].dtype == np.dtype('<M8[ns]')):
+        # Forecast must be datetime64
+        assert np.issubdtype(fcst[variable].dtype, np.datetime64) or (fcst[variable].dtype == np.dtype('<M8[ns]'))
+        obs = obs.astype('int64') / 1e9
+        fcst = fcst.astype('int64') / 1e9
+        # NaT get's converted to -9.22337204e+09, so filter that to a proper nan
+        obs = obs.where(obs > -1e9, np.nan)
+        fcst = fcst.where(fcst > -1e9, np.nan)
+
     ############################################################
-    #### Call the metrics with their various libraries
+    # Call the metrics with their various libraries
     ############################################################
 
     # Get the appropriate climatology dataframe for metric calculation
@@ -213,8 +232,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
                                 .compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
 
     elif metric == 'acc':
-        clim_ds = climatology_forecast(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
-                                    trend=False, prob_type='deterministic', grid=grid, mask=mask, region=region)
+        clim_ds = climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
+                                   grid=grid, mask=mask, region=region)
 
         fcst = fcst - clim_ds
         obs = obs - clim_ds
@@ -312,6 +331,7 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
 
     m_ds = m_ds.assign_attrs(sparse=sparse)
     m_ds = m_ds.assign_attrs(metric_sparse=metric_sparse)
+
     return m_ds
 
 
@@ -419,8 +439,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         truth_sparse = ds.attrs['sparse']
         metric_sparse = ds.attrs['metric_sparse']
 
-        # Group the time column based on time grouping
-        if time_grouping:
+        if time_grouping is not None:
             if time_grouping == 'month_of_year':
                 # TODO if you want this as a name: ds.coords["time"] = ds.time.dt.strftime("%B")
                 ds.coords["time"] = ds.time.dt.month
@@ -435,6 +454,8 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         else:
             # Average in time
             ds = ds.mean(dim="time")
+        # TODO: we can convert this to a groupby_time call when we're ready
+        # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
 
     # Clip it to the region
     ds = clip_region(ds, region)
@@ -537,7 +558,8 @@ def _summary_metrics_table(start_time, end_time, variable,
                 ds = grouped_metric(start_time, end_time, variable,
                                     lead=lead, forecast=forecast, truth=truth,
                                     metric=metric, time_grouping=time_grouping, spatial=False,
-                                    grid=grid, mask=mask, region=region)
+                                    grid=grid, mask=mask, region=region,
+                                    retry_null_cache=True)
             except NotImplementedError:
                 ds = None
 
@@ -568,15 +590,23 @@ def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
-    forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
-                 'climatology_trend_2015', 'climatology_rolling']
-    leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
+    if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
+        forecasts = ['climatology_2015', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased',  'fuxi']
+        if variable == 'rainy_onset_no_drought':
+            leads = ['day1', 'day8', 'day15', 'day20']
+        else:
+            leads = ['day1', 'day8', 'day15', 'day20', 'day29', 'day36']
+    else:
+        forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
+                     'climatology_trend_2015', 'climatology_rolling', 'gencast', 'graphcast']
+        leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,
                                 grid=grid, mask=mask, region=region)
 
     print(df)
     return df
+
 
 @dask_remote
 @cacheable(data_type='tabular',
@@ -616,7 +646,6 @@ def station_metrics_table(start_time, end_time, variable,
     return df
 
 
-
 @dask_remote
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
@@ -635,7 +664,6 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
-
 
 
 __all__ = ['eval_metric', 'global_metric', 'aggregated_global_metric',
