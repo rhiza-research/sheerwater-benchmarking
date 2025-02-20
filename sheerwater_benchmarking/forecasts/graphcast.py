@@ -175,7 +175,7 @@ def graphcast_daily_wb(start_time, end_time, variable, init_hour=0, grid='global
            },
            validate_cache_timeseries=False)
 def graphcast_daily_regrid(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
-    # Regrid
+    """Regrid for the original weathernext datasource."""
     ds = graphcast_daily(start_time, end_time, variable, init_hour=init_hour, grid='global0_25')
     if grid == 'global0_25':
         return ds
