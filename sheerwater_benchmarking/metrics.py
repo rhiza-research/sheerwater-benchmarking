@@ -581,7 +581,7 @@ def summary_metrics_table(start_time, end_time, variable,
             leads = ['day1', 'day8', 'day15', 'day20', 'day29', 'day36']
     else:
         forecasts = ['fuxi', 'salient', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
-                     'climatology_trend_2015', 'climatology_rolling']
+                     'climatology_trend_2015', 'climatology_rolling', 'gencast', 'graphcast']
         leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,

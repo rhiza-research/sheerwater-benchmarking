@@ -187,6 +187,9 @@ def _process_lead(variable, lead):
 def gencast(start_time, end_time, variable, lead, prob_type='deterministic',
             grid='global1_5', mask='lsm', region="global"):
     """Final Gencast interface."""
+    if variable != 'precip':
+        raise NotImplementedError("Data error present in non-precip variables in Gencast. Skipping.")
+
     # Process the lead
     agg_days, lead_offset_days = _process_lead(variable, lead)
 
