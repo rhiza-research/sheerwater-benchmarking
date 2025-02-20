@@ -266,45 +266,81 @@ resource "google_dns_record_set" "terracotta_recordset" {
 ################
 
 # Now the helm release to release all of the kubernetes manifest
-locals {
-  chart_values = {
-    grafana = {
-      admin_password = "${random_password.grafana_admin_password.result}"
-      smtp = {
-        password = "${data.google_secret_manager_secret_version.sheerwater_sendgrid_api_key.secret_data}"
-      }
-      pv = {
-        name = "${google_compute_disk.sheerwater_benchmarking_grafana.name}"
-        size = "${google_compute_disk.sheerwater_benchmarking_grafana.size}"
-      }
-      domain_name = "${trimsuffix(google_dns_record_set.grafana_recordset.name, ".")}"
-      ip_name = "${google_compute_global_address.grafana_address.name}"
-    }
-    postgres = {
-      pv = {
-        name = "${google_compute_disk.sheerwater_benchmarking_db_ssd.name}"
-        size = "${google_compute_disk.sheerwater_benchmarking_db_ssd.size}"
-      }
-      admin_password = "${random_password.db_admin_password.result}"
-    }
-    terracotta = {
-      sql_user = "read"
-      sql_password = "${random_password.postgres_read_password.result}"
-      domain_name = "${trimsuffix(google_dns_record_set.terracotta_recordset.name, ".")}"
-      ip_name = "${google_compute_global_address.terracotta_address.name}"
-      pv = {
-        name = "${google_compute_disk.sheerwater_benchmarking_terracotta.name}"
-        size = "${google_compute_disk.sheerwater_benchmarking_terracotta.size}"
-      }
-    }
-  }
-}
-
-
-# Now monitor the deployed resources with uptime robot
 resource "helm_release" "sheerwater_benchmarking" {
   name = "sheerwater-benchmarking"
   chart = "../helm/sheerwater-benchmarking"
   namespace = "sheerwater-benchmarking"
-  values = [yamlencode(local.chart_values)]
+
+  # load the default values from the helm chart
+  values = [
+    file("../helm/sheerwater-benchmarking/values.yaml")
+  ]
+
+  # set any dynamic values based on the terraform resources
+
+  # Grafana settings
+  set {
+    name = "grafana.pv.name"
+    value = google_compute_disk.sheerwater_benchmarking_grafana.name
+  }
+  set {
+    name = "grafana.pv.size"
+    value = google_compute_disk.sheerwater_benchmarking_grafana.size
+  }
+  set {
+    name = "grafana.domain_name"
+    value = trimsuffix(google_dns_record_set.grafana_recordset.name, ".")
+  }
+  set {
+    name = "grafana.ip_name"
+    value = google_compute_global_address.grafana_address.name
+  }
+  set_sensitive {
+    name = "grafana.admin_password"
+    value = random_password.grafana_admin_password.result
+  }
+  set_sensitive {
+    name = "grafana.smtp.password"
+    value = data.google_secret_manager_secret_version.sheerwater_sendgrid_api_key.secret_data
+  }
+
+  # Postgres settings
+  set {
+    name = "postgres.pv.name"
+    value = google_compute_disk.sheerwater_benchmarking_db_ssd.name
+  }
+  set {
+    name = "postgres.pv.size"
+    value = google_compute_disk.sheerwater_benchmarking_db_ssd.size
+  }
+  set_sensitive {
+    name = "postgres.admin_password"
+    value = random_password.db_admin_password.result
+  }
+
+  # Terracotta settings
+  set {
+    name = "terracotta.sql_user"
+    value = "read"
+  }
+  set {
+    name = "terracotta.domain_name"
+    value = trimsuffix(google_dns_record_set.terracotta_recordset.name, ".")
+  }
+  set {
+    name = "terracotta.ip_name"
+    value = google_compute_global_address.terracotta_address.name
+  }
+  set {
+    name = "terracotta.pv.name"
+    value = google_compute_disk.sheerwater_benchmarking_terracotta.name
+  }
+  set {
+    name = "terracotta.pv.size"
+    value = google_compute_disk.sheerwater_benchmarking_terracotta.size
+  }
+  set_sensitive {
+    name = "terracotta.sql_password"
+    value = random_password.postgres_read_password.result
+  }
 }
