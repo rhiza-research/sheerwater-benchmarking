@@ -1,18 +1,17 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
   labels:
     app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
     release: {{ .Release.Name }}
 spec:
-  replicas: 1
+  serviceName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
+  replicas: {{ .Values.terracotta.replicas }}
   selector:
     matchLabels:
       app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
       release: {{ .Release.Name }}
-  strategy:
-    type: Recreate
   template:
     metadata:
       annotations:
@@ -68,7 +67,13 @@ spec:
             - mountPath: /mnt/sheerwater-datalake
               name: terracotta-rasters
       serviceAccountName: sheerwater-sa
-      volumes:
-        - name: terracotta-rasters
-          persistentVolumeClaim:
-            claimName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta 
+  volumeClaimTemplates:
+  - metadata:
+      name: terracotta-rasters
+    spec:
+      storageClassName: ""
+      volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-{{ .Release.Namespace }}
+      accessModes: [ "ReadWriteMany" ]
+      resources:
+        requests:
+          storage: {{ .Values.terracotta.pv.size }}
