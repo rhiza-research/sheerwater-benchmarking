@@ -86,7 +86,7 @@ def start_remote(remote_name=None, remote_config=None):
     # send Application Default Credentials
     try:
         send_application_default_credentials(cluster)
-    except:
+    except Exception:
         print("Failed to send credentials")
 
     cluster.get_client()

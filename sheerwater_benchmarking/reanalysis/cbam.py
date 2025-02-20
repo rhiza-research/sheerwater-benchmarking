@@ -1,8 +1,8 @@
 """Fetches ERA5 data from the Google ARCO Store."""
 import xarray as xr
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
-                                           get_variable, apply_mask, clip_region,
-                                           roll_and_agg, lon_base_change, regrid)
+                                           apply_mask, clip_region,
+                                           roll_and_agg, regrid)
 
 @dask_remote
 @cacheable(data_type='array',
@@ -11,7 +11,8 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
            cache=False)
 def cbam_raw(start_time, end_time, variable):  # noqa ARG001
     """CBAM raw data with some renaming/averaging."""
-    ds = xr.open_zarr('gs://sheerwater-datalake/cbam-data/gap/cbam_20241021.zarr', chunks={'time': 50, 'latitude': 500, 'longitude': 500})
+    ds = xr.open_zarr('gs://sheerwater-datalake/cbam-data/gap/cbam_20241021.zarr',
+                      chunks={'time': 50, 'latitude': 500, 'longitude': 500})
 
     ds = ds.rename({'date': 'time', 'total_rainfall': 'precip'})
     ds['tmp2m'] = (ds['min_total_temperature'] + ds['max_total_temperature'])/2
