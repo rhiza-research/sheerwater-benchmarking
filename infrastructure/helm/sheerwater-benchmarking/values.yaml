@@ -54,7 +54,7 @@ terracotta:
 
   driver_path: postgresql://postgres:5432/terracotta
 
-  multiprocessing_workers: 6
+  multiprocessing_workers: 12
 
   sql_user: read
   sql_password: read_password
