@@ -234,6 +234,10 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     elif metric == 'acc':
         clim_ds = climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
                                    grid=grid, mask=mask, region=region)
+        clim_ds = clim_ds.sel(time=valid_times)
+
+        fcst = fcst.where(obs.notnull(), np.nan)
+        clim_ds = clim_ds.where(obs.notnull(), np.nan)
 
         fcst = fcst - clim_ds
         obs = obs - clim_ds
@@ -559,8 +563,7 @@ def _summary_metrics_table(start_time, end_time, variable,
                 ds = grouped_metric(start_time, end_time, variable,
                                     lead=lead, forecast=forecast, truth=truth,
                                     metric=metric, time_grouping=time_grouping, spatial=False,
-                                    grid=grid, mask=mask, region=region,
-                                    retry_null_cache=True)
+                                    grid=grid, mask=mask, region=region)
             except NotImplementedError:
                 ds = None
 

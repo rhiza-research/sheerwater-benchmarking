@@ -82,4 +82,6 @@ def chirps(start_time, end_time, variable, agg_days, grid='global0_25', mask='ls
         ds = apply_mask(ds, mask, grid=grid)
         ds = clip_region(ds, region=region)
 
+        ds = ds.assign_attrs(sparse=True)
+
     return ds

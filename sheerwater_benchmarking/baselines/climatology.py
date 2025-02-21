@@ -315,11 +315,18 @@ def _process_lead(variable, lead):
     lead_params = {}
     for i in range(1, 366):
         lead_params[f"day{i}"] = 1
+        lead_params["daily"] = 1
     if variable != 'rainy_onset':
         for i in range(1, 7):
             lead_params[f"week{i}"] = 7
-        for le in ['weeks12', 'weeks23', 'weeks34', 'weeks45', 'weeks56']:
+        for le in ['weeks12', 'weeks23', 'weeks34', 'weeks45', 'weeks56', 'biweekly']:
             lead_params[le] = 14
+        for i in range(1, 12):
+            lead_params[f"month{i}"] = 30
+
+    lead_params["daily"] = 1
+    lead_params["weekly"] = 7
+    lead_params["monthly"] = 30
 
     agg_days = lead_params.get(lead, None)
     if agg_days is None:
