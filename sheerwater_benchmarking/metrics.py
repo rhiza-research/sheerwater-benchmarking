@@ -567,7 +567,7 @@ def _summary_metrics_table(start_time, end_time, variable,
             if ds:
                 ds = ds.rename({variable: lead})
                 ds = ds.expand_dims({'forecast': [forecast]}, axis=0)
-                results_ds = xr.combine_by_coords([results_ds, ds])
+                results_ds = xr.combine_by_coords([results_ds, ds], combine_attrs='override')
 
     if not time_grouping:
         results_ds = results_ds.reset_coords('time', drop=True)
