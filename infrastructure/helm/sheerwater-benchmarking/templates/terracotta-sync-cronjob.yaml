@@ -1,0 +1,61 @@
+# This CronJob handles synchronization of raster data from GCS to the shared volume.
+# It runs every 30 minutes and has exclusive write access to the volume.
+#
+# The job uses the read-write PVC to update the data, while all Terracotta pods
+# maintain read-only access through their separate PVC.
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-sync
+  labels:
+    app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
+    release: {{ .Release.Name }}
+spec:
+  schedule: "*/30 * * * *"  # Every 30 minutes
+  concurrencyPolicy: Forbid  # Don't start new job if previous is still running
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
+            release: {{ .Release.Name }}
+        spec:
+          containers:
+            - name: sync
+              image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+              command: ["/bin/bash"]
+              args:
+                - -c
+                - |
+                  echo "Starting raster sync at $(date)"
+                  gcloud storage rsync -r -u gs://sheerwater-datalake/rasters /mnt/sheerwater-datalake
+                  sync_status=$?
+                  
+                  if [ $sync_status -eq 0 ]; then
+                    echo "Sync completed successfully at $(date)"
+                    exit 0
+                  else
+                    echo "Sync failed with status $sync_status at $(date)"
+                    exit 1
+                  fi
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              volumeMounts:
+                - mountPath: /mnt/sheerwater-datalake
+                  name: rasters
+                  readOnly: false  # Sync job needs write access
+          restartPolicy: OnFailure
+          serviceAccountName: sheerwater-sa
+          volumes:
+            - name: rasters
+              persistentVolumeClaim:
+                claimName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-sync 
