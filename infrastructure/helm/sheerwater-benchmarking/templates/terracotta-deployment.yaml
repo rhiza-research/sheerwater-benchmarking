@@ -70,9 +70,9 @@ spec:
           - name: TC_ALLOWED_ORIGINS_TILES
             value: '["*"]'
           - name: TC_RASTER_CACHE_SIZE
-            value: "{{ .Values.terracotta.raster_cache_size }}"
+            value: {{ .Values.terracotta.raster_cache_size | int | quote }}
           - name: TC_RASTER_CACHE_COMPRESS_LEVEL
-            value: "{{ .Values.terracotta.raster_cache_compress_level }}"
+            value: {{ .Values.terracotta.raster_cache_compress_level | int | quote }}
           - name: TC_MULTIPROCESSING_WORKERS
             value: "{{ .Values.terracotta.multiprocessing_workers }}"
           envFrom:
@@ -86,4 +86,4 @@ spec:
       volumes:
         - name: terracotta-rasters
           persistentVolumeClaim:
-            claimName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta 
+            claimName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
