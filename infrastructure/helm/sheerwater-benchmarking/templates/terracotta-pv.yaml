@@ -38,20 +38,4 @@ spec:
     pdName: {{ .Values.terracotta.pv.name }}  # Same disk as sync PV
     fsType: ext4
     readOnly: true  # Enforce read-only at the disk level
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
-  labels:
-    app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
-    release: {{ .Release.Name }}
-spec:
-  storageClassName: ""
-  volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-{{ .Release.Namespace }}
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: {{ .Values.terracotta.pv.size }}
 
