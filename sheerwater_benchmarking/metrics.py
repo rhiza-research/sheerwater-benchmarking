@@ -577,11 +577,16 @@ def _summary_metrics_table(start_time, end_time, variable,
 
     df = results_ds.to_dataframe()
 
-    # Reorder the columns if necessary
-    df = df[leads]
-
-    # Rename the index
     df = df.reset_index().rename(columns={'index': 'forecast'})
+
+    if 'time' in df.columns:
+        order = ['time', 'forecast'] + leads
+    else:
+        order = ['forecast'] + leads
+
+    # Reorder the columns if necessary
+    df = df[order]
+
     return df
 
 
