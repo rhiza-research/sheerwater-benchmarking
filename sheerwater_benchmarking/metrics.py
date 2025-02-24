@@ -17,7 +17,7 @@ PROB_METRICS = ['crps']  # a list of probabilistic metrics
 COUPLED_METRICS = ['acc', 'pearson']  # a list of metrics that are coupled in space and time
 CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of dichotomous contingency metrics
 CATEGORICAL_CONTINGENCY_METRICS = ['heidke']  # a list of contingency metrics
-PRECIP_ONLY_METRICS = ["heidke", "pod", "far", "ets", "mape", "smape", "bias_score", "seeps"]
+PRECIP_ONLY_METRICS = ["pearson", "heidke", "pod", "far", "ets", "mape", "smape", "bias_score", "seeps"]
 
 
 def is_precip_only(metric):
