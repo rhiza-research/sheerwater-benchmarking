@@ -775,7 +775,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 return cache_path
                             else:
                                 print(f"Opening cache {cache_path}")
-                                ds = read_from_parquet(cache_path)
+                                try:
+                                    ds = read_from_parquet(cache_path)
+                                except ValueError as e:
+                                    if ("No files satisfy the `parquet_file_extension` criteria" in str(e)) or ("the file is corrupted" in str(e)):
+                                        recompute = True
+                                    else:
+                                        raise e
 
                                 if validate_cache_timeseries and timeseries is not None:
                                     raise NotImplementedError("""Timeseries validation is not currently implemented
@@ -846,9 +852,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if cache:
                     if ds is None:
                         print(f"Autocaching null result for {null_path}.")
-                        with fs.open(null_path, 'wb') as f:
-                            f.write(b'')
-                            return None
+                        if local:
+                            with open(null_path, 'wb') as f:
+                                f.write(b'')
+                        else:
+                            with fs.open(null_path, 'wb') as f:
+                                f.write(b'')
+                        return None
 
                     write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
