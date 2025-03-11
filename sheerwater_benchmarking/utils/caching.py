@@ -177,7 +177,7 @@ def read_from_parquet(cache_path):
     return dd.read_parquet(cache_path, engine='pyarrow')
 
 
-def write_to_parquet(cache_path, df, overwrite=False):
+def write_to_parquet(cache_path, df, mkdir=False, overwrite=False):
     """Write a pandas or dask dataframe to a parquet."""
     part = None
     if hasattr(df, 'cache_partition'):
@@ -186,7 +186,7 @@ def write_to_parquet(cache_path, df, overwrite=False):
     if isinstance(df, dd.DataFrame):
         df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
     elif isinstance(df, pd.DataFrame):
-        if not os.path.exists(os.path.dirname(cache_path)):
+        if mkdir and not os.path.exists(os.path.dirname(cache_path)):
             os.makedirs(os.path.dirname(cache_path))
         df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
     else:
@@ -925,8 +925,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_path} in parquet.")
-                                write_to_parquet(cache_path, ds, overwrite=True)
-                                ds = read_from_parquet(cache_path)  # Reopen dataset to truncate the computational path
+                                write_to_parquet(cache_path, ds, mkdir=local, overwrite=True)
+                                ds = read_from_parquet(cache_path) # Reopen dataset to truncate the computational path
 
                         elif storage_backend == 'postgres':
                             if check_exists_postgres(cache_key) and not force_overwrite:
