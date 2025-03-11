@@ -780,7 +780,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 try:
                                     ds = read_from_parquet(cache_path)
                                 except ValueError as e:
-                                    if ("No files satisfy the `parquet_file_extension` criteria" in str(e)) or ("the file is corrupted" in str(e)):
+                                    if (
+                                        "No files satisfy the `parquet_file_extension` criteria"
+                                        in str(e)
+                                    ) or ("the file is corrupted" in str(e)):
                                         recompute = True
                                     else:
                                         raise e
