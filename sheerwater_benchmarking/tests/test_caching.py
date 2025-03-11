@@ -116,12 +116,38 @@ def test_tabular_timeseries():
     # new random numbers).
     ds2 = tabular_timeseries(start_time, end_time)
 
-    # Don't use .equals(), because it's OK if times are stored as datetime64[ns] and restored as datetime64[us]
-    assert (ds1.columns == ds2.columns).all()
-    assert (ds1 == ds2.compute()).all().all()
+    assert ds1.compute().equals(ds2.compute())
 
     end_time = '2020-01-07'
     ds3 = tabular_timeseries(start_time, end_time)
+    assert len(ds3) < len(ds1)
+
+
+
+
+def test_local_timeseries():
+    """Test timeseries caching with data_type='tabular' and local=True.
+
+    Requesting more days of data should return the same thing, because we can't yet
+    validate_cache_timeseries. Requesting fewer should return less data, though.
+
+    We can tell that a function is cached by having it return random data, and checking if the
+    randomness is consistent between calls.
+    """
+    start_time = '2020-01-01'
+    end_time = '2020-01-10'
+
+    ds1 = tabular_timeseries(start_time, end_time, recompute=True, force_overwrite=True, backend="parquet", local=True)
+
+    end_time = '2020-01-15'
+    # Without validate_cache_timeseries, this should return only the original 10 days (and the same values, not
+    # new random numbers).
+    ds2 = tabular_timeseries(start_time, end_time, local=True)
+
+    assert ds1.compute().equals(ds2.compute())
+
+    end_time = '2020-01-07'
+    ds3 = tabular_timeseries(start_time, end_time, local=True)
     assert len(ds3) < len(ds1)
 
 
@@ -189,3 +215,4 @@ if __name__ == "__main__":
     test_null_time_caching()
     test_validate_timeseries()
     test_tabular_timeseries()
+    test_local_timeseries()
