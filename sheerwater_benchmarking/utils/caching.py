@@ -493,7 +493,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             to match backend. Useful for pulling from one backend and writing to another.
         auto_rechunk(bool): If True, will rechunk the cache on load if the cache chunking
             does not match the requested chunking. Default is False.
-        local(bool): TODO
+        local(bool): Cache locally (in ~/.cache/sheerwater), instead of in Google Cloud. This
+            changes both where the decorator looks to load the cache, and where it will save it.
+            Only supported for Parquet files right now. Default is False.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
