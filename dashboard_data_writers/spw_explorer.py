@@ -50,40 +50,6 @@ def rain_windowed_spw(start_time, end_time,
 
 @dask_remote
 @cacheable(data_type='tabular',
-           cache_args=['truth', 'grid', 'mask', 'region'],
-           backend='postgres')
-def daily_tmp2m_prise(start_time, end_time,
-                      truth='era5',
-                      grid='global1_5', mask='lsm', region='global'):
-    """Store the daily precipitation and temperature data in the database."""
-    # Get the ground truth data
-    if truth == 'era5':
-        ds = era5_rolled(start_time, end_time, variable='tmp2m', grid=grid)
-    elif truth == 'imerg':
-        ds = imerg_rolled(start_time, end_time, grid=grid)
-    elif truth == 'chirps':
-        ds = chirps_rolled(start_time, end_time, grid=grid)
-    elif truth == 'ghcn':
-        ds = _ghcn_rolled_unified(start_time, end_time, variable='tmp2m', grid=grid,
-                                missing_thresh=0.0, cell_aggregation='first')
-    elif truth == 'tahmo':
-        ds = tahmo_rolled(start_time, end_time,
-                     grid=grid, missing_thresh=0.0, cell_aggregation='first')
-    elif truth == 'ltn':
-        ds = climatology_rolled(start_time, end_time, variable='tmp2m',
-                     first_year=2004, last_year=2015,
-                     prob_type='deterministic', grid=grid)
-        
-    import pdb; pdb.set_trace()
-    ds = apply_mask(ds, mask)
-    ds = clip_region(ds, region=region)
-    ds = ds.drop_vars('spatial_ref')
-    df = ds.to_dataframe().dropna()
-    return df
-
-
-@dask_remote
-@cacheable(data_type='tabular',
            backend='postgres',
            cache_args=['truth', 'variable', 'grid', 'mask', 'region'])
 def ea_rainy_onset_truth(start_time, end_time,
