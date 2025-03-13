@@ -5,7 +5,8 @@ from dateutil.relativedelta import relativedelta
 import xarray as xr
 from functools import partial
 from sheerwater_benchmarking.reanalysis import era5_rolled
-from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
+from sheerwater_benchmarking.tasks import (spw_rainy_onset, spw_precip_preprocess,
+                                           prise_application_date)
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
@@ -13,7 +14,8 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lead_to_agg_days,
                                            regrid, get_variable,
                                            target_date_to_forecast_date,
-                                           shift_forecast_date_to_target_date)
+                                           shift_forecast_date_to_target_date,
+                                           get_grid_ds)
 
 
 @dask_remote
@@ -183,7 +185,7 @@ def ifs_er_reforecast_lead_bias(start_time, end_time, variable, lead=0, run_type
     def get_bias(ds_sub):
         """Get the 20-year estimated bias of the reforecast data."""
         # The the corresponding forecast dates for the reforecast data
-        dates = [np.datetime64(pd.Timestamp(ds_sub['model_issuance_date'].values[0] + relativedelta(years=x)))
+        dates = [np.datetime64(pd.Timestamp(ds_sub['model_issuance_date'].values[0]) + relativedelta(years=x))
                  for x in ds_sub.start_year]
 
         # Adjust each forecast date by the lead time (0, 1, 2, ... days)
@@ -369,6 +371,9 @@ def _process_lead(variable, lead):
     elif variable == 'rainy_onset_no_drought':
         # need to add 11 days to the lead to handle drought condition
         lead_params = {f"day{i+1}": i for i in range(25)}
+    elif variable == 'pesticide_date':
+        # Enabled out to day46
+        lead_params = {f"day{i+1}": i for i in range(45)}
     else:
         for i in range(45):
             lead_params[f"day{i+1}"] = i
@@ -424,6 +429,71 @@ def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
     return ds
 
 
+@cacheable(data_type='array',
+           timeseries='time',
+           cache=True,
+           validate_cache_timeseries=False,
+           chunking={"lat": 121, "lon": 240, "time": 1000},
+           cache_args=['lead', 'debiased', 'prob_type', 'prob_threshold', 'grid', 'mask'])
+@dask_remote
+def ecmwf_ifs_pad_kenya(start_time, end_time, lead, debiased=True,
+                        prob_type='deterministic', prob_threshold=None,
+                        grid='global1_5', mask='lsm'):
+    """The ECMWF Pesticide Date forecasts."""
+    # Get the ECMWF temperature forecast
+    if prob_type == 'deterministic' and prob_threshold is not None:
+        raise ValueError("Probability threshold must be None for deterministic forecasts.")
+
+    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
+    (prob_dim, prob_threshold) = ('member', prob_threshold) if prob_type == 'probabilistic' else (None, None)
+    data = ifs_extended_range_rolled(start_time, end_time, variable='tmp2m', agg_days=1,
+                                     prob_type=prob_type, grid=grid, debiased=debiased)
+
+    # Get the appropriate leads: select from the lead time to the end of the forecast
+    lead_offset_days = _process_lead('tmp2m', lead)[1]
+    lead_offset = np.timedelta64(lead_offset_days, 'D')
+    data = data.sel(lead_time=slice(lead_offset, None))
+
+    # Pad to a constant 120-day length forecast with edge padding
+    pad_widths = {'lead_time': (0, 120-len(data.lead_time))}
+    data = data.pad(pad_widths, mode='edge')
+    # Update the lead time dimension to be the correct timedelta64 objects
+    data['lead_time'] = [np.timedelta64(x+lead_offset_days, 'D') for x in range(120)]
+
+    # Find the first planting date for each start_date
+    # Hard code region to Kenya for now
+    ds = prise_application_date(data,
+                                roll_monthly=False,
+                                time_dim='lead_time', base_time='start_date',
+                                prob_type=prob_label, prob_dim=prob_dim, prob_threshold=prob_threshold,
+                                mask=mask, region='kenya', grid=grid)
+    # Select the appropriate lead
+    ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
+    ds = ds.rename({'start_date': 'time'})
+    return ds
+
+
+@dask_remote
+def ecmwf_ifs_pad(start_time, end_time, lead, debiased=True,
+                  prob_type='probabilistic', prob_threshold=0.6,
+                  grid='global1_5', mask='lsm', region="global"):
+    """Wrapper function around Kenya-specific pesticide date forecasts."""
+    # Get the Kenya-specific pesticide date forecasts
+    if prob_type == 'deterministic':
+        prob_threshold = None
+    ds = ecmwf_ifs_pad_kenya(start_time, end_time, lead, debiased=debiased,
+                             prob_type=prob_type, prob_threshold=prob_threshold,
+                             grid=grid, mask=mask)
+    if region == 'kenya':
+        return ds
+
+    # Regrid to global grid and then clip to region
+    grid_ds = get_grid_ds(grid, base='base180')
+    ds = ds.reindex_like(grid_ds, method=None)
+    ds = clip_region(ds, region=region)
+    return ds
+
+
 @dask_remote
 def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deterministic',
                           grid="global1_5", mask='lsm', region="global", debiased=True):
@@ -442,6 +512,11 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
                            drought_condition=drought_condition,
                            grid=grid, mask=mask, region=region)
         # Rainy onset is sparse, so we need to set the sparse attribute
+        ds = ds.assign_attrs(sparse=True)
+    elif variable == 'pesticide_date':
+        ds = ecmwf_ifs_pad(forecast_start, forecast_end, lead, debiased=debiased,
+                           prob_type=prob_type, prob_threshold=0.6,
+                           grid=grid, mask=mask, region=region)
         ds = ds.assign_attrs(sparse=True)
     else:
         ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,

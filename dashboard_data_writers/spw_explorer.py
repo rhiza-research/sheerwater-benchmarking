@@ -2,7 +2,7 @@
 import xarray as xr
 import numpy as np
 from functools import partial
-from sheerwater_benchmarking.utils import cacheable, dask_remote, start_remote
+from sheerwater_benchmarking.utils import cacheable, dask_remote, start_remote, apply_mask, clip_region
 from sheerwater_benchmarking.reanalysis import era5_rolled
 from sheerwater_benchmarking.forecasts.ecmwf_er import ecmwf_ifs_spw
 from sheerwater_benchmarking.forecasts.fuxi import fuxi_spw
@@ -148,7 +148,7 @@ def ea_rainy_onset_probabilities(start_time, end_time,
 
 
 if __name__ == "__main__":
-    start_remote(remote_config='xlarge_cluster')
+    start_remote(remote_config='xlarge_cluster', remote_name='test2')
     # Runners to generate the tables
     start_time = '2016-01-01'
     end_time = '2022-12-31'
@@ -172,7 +172,7 @@ if __name__ == "__main__":
                                               backend='postgres')
 
         # Generate for all data sources
-        for truth in ["era5", "chirps", "ghcn", "imerg", "tahmo"]:
+        for truth in ["era5", "chirps", "ghcn", "imerg", "tahmo", "climatology_2015"]:
             df2 = ea_rainy_onset_truth(start_time, end_time, truth,
                                        variable=variable,
                                        grid=grid, mask=mask, region=region,

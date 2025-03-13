@@ -7,8 +7,8 @@ from sheerwater_benchmarking.forecasts.ecmwf_er import (ifs_extended_range_debia
 if __name__ == "__main__":
     # vars = ["tmp2m", "precip"]
     # vars = ["precip", "tmp2m"]
-    vars = ["precip"]
-    # vars = ["tmp2m"]
+    # vars = ["precip"]
+    vars = ["tmp2m"]
     # aggs = [14, 7]
     # time_groups = ["weekly", "biweekly"]
     time_groups = ["daily"]
