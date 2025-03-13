@@ -87,8 +87,8 @@ def fuxi_single_forecast(date):
 
 @dask_remote
 @cacheable(data_type='array', cache_args=[], timeseries='time',
-           validate_cache_timeseries=False,
-           chunking={'lat': 121, 'lon': 240, 'lead_time': 14, 'time': 2, 'member': 51})
+           chunking={'lat': 121, 'lon': 240, 'lead_time': 14, 'time': 2, 'member': 51},
+           validate_cache_timeseries=False)
 def fuxi_raw(start_time, end_time, delayed=False):
     """Combine a range of forecasts with or without dask delayed. Returns daily, unagged fuxi timeseries."""
     dates = pd.date_range(start_time, end_time)
@@ -154,7 +154,7 @@ def fuxi_rolled(start_time, end_time, variable, agg_days=7, prob_type='probabili
 
     # convert based on a linear conversion factor of the average forecast to the era5 average
     if variable == 'precip':
-        ds['precip'] = ds['precip'] * 27.4
+        ds['precip'] = ds['precip'] * 24
 
     # Convert from kelvin
     if variable == 'tmp2m':

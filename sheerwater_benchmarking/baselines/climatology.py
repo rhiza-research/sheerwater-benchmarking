@@ -320,6 +320,14 @@ def _process_lead(variable, lead):
             lead_params[f"week{i}"] = 7
         for le in ['weeks12', 'weeks23', 'weeks34', 'weeks45', 'weeks56']:
             lead_params[le] = 14
+        for i in range(1, 12):
+            lead_params[f"month{i}"] = 30
+
+    # Adding static grouped leads for climatology
+    lead_params["daily"] = 1
+    lead_params["weekly"] = 7
+    lead_params["biweekly"] = 14
+    lead_params["monthly"] = 30
 
     agg_days = lead_params.get(lead, None)
     if agg_days is None:
@@ -408,7 +416,7 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
 def climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
                      grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    return _climatology_unified(start_time, end_time, variable, lead, first_year=1991, last_year=2020,
+    return _climatology_unified(start_time, end_time, variable, lead, first_year=1990, last_year=2019,
                                 trend=False, prob_type=prob_type, grid=grid, mask=mask, region=region)
 
 
@@ -433,17 +441,24 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
                         grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     lead_params = {
+        "daily": 1,
+        "weekly": 7,
         "week1": 7,
         "week2": 7,
         "week3": 7,
         "week4": 7,
         "week5": 7,
         "week6": 7,
+        "biweekly": 14,
         "weeks12": 14,
         "weeks23": 14,
         "weeks34": 14,
         "weeks45": 14,
         "weeks56": 14,
+        "monthly": 30,
+        "month1": 30,
+        "month2": 30,
+        "month3": 30,
     }
 
     agg_days = lead_params.get(lead, None)

@@ -16,6 +16,9 @@ LEAD_OFFSETS = {
     'weekly': (7, (0, 'days')),
     'biweekly': (14, (0, 'days')),
     'monthly': (30, (0, 'days')),
+    'month1': (30, (0, 'days')),
+    'month2': (30, (30, 'days')),
+    'month3': (30, (60, 'days')),
 }
 # Add daily and 8/11d windows
 for i in range(46):

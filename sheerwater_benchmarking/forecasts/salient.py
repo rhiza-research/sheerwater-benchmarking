@@ -1,5 +1,6 @@
 """Pulls Salient Predictions S2S forecasts from the Salient API."""
 import xarray as xr
+import numpy as np
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, get_variable, apply_mask, clip_region, regrid,
                                            target_date_to_forecast_date, shift_forecast_date_to_target_date)
@@ -113,9 +114,9 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
         "week3": ("sub-seasonal", 3),
         "week4": ("sub-seasonal", 4),
         "week5": ("sub-seasonal", 5),
-        "month1": ("seasonal", 1),
-        "month2": ("seasonal", 2),
-        "month3": ("seasonal", 3),
+        "month1": ("seasonal", np.timedelta64('1', 'D')),
+        "month2": ("seasonal", np.timedelta64('31', 'D')),
+        "month3": ("seasonal", np.timedelta64('61', 'D')),
         "quarter1": ("long-range", 1),
         "quarter2": ("long-range", 2),
         "quarter3": ("long-range", 3),
@@ -149,6 +150,7 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     # Time shift - we want target date, instead of forecast date
     ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
     ds = ds.rename({'forecast_date': 'time'})
+    ds = ds.sortby(ds.time)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

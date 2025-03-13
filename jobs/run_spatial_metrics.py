@@ -6,7 +6,7 @@ import traceback
 
 from sheerwater_benchmarking.metrics import grouped_metric
 from sheerwater_benchmarking.utils import start_remote
-from jobs import parse_args, run_in_parallel
+from jobs import parse_args, run_in_parallel, prune_metrics
 
 (start_time, end_time, forecasts, truth, metrics, variables,
  grids, regions, leads, time_groupings,
@@ -16,6 +16,7 @@ if remote:
     start_remote(remote_config=remote_config, remote_name=remote_name)
 
 combos = itertools.product(metrics, variables, grids, regions, leads, forecasts, time_groupings, truth)
+combos = prune_metrics(combos, global_run=False)
 
 filepath_only=True
 if backend is not None:
@@ -37,4 +38,7 @@ def run_grouped(combo):
 
 
 if __name__ == "__main__":
-    run_in_parallel(run_grouped, combos, parallelism)
+    if backend == 'terracotta':
+        run_in_parallel(run_grouped, combos, parallelism, local_multiproc=True)
+    else:
+        run_in_parallel(run_grouped, combos, parallelism)
