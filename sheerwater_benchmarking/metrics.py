@@ -236,6 +236,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
                                    grid=grid, mask=mask, region=region)
         clim_ds = clim_ds.sel(time=valid_times)
 
+        # If the obersations are sparse, ensure that the lengths are the same
+        # TODO: This will probably break with sparse forecaster and dense observations
         fcst = fcst.where(obs.notnull(), np.nan)
         clim_ds = clim_ds.where(obs.notnull(), np.nan)
 
@@ -475,16 +477,10 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         fcst_fn =  get_datasource_fn(forecast)
 
         if 'lead' in signature(fcst_fn).parameters:
-            if lead_or_agg(lead) == 'agg':
-                raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
-
             check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
                            prob_type=prob_type, grid=grid, mask=mask, region=region)
 
         else:
-            if lead_or_agg(lead) == 'lead':
-                raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
-
             check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
                            grid=grid, mask=mask, region=region)
     else:
