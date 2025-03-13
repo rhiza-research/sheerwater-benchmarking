@@ -136,6 +136,7 @@ def run_in_parallel(func, iterable, parallelism, local_multiproc=False):
         func(callable): A function to call. Must take one of iterable as an argument.
         iterable (iterable): Any iterable object to pass to func.
         parallelism (int): Number of func(iterables) to run in parallel at a time.
+        local_multiproc (bool): If true run using multiprocessing pool instead of dask delayed batches.
     """
     iterable, copy = itertools.tee(iterable)
     length = len(list(copy))
