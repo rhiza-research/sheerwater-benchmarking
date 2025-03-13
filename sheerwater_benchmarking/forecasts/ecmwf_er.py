@@ -4,9 +4,9 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta
 import xarray as xr
 from functools import partial
-from sheerwater_benchmarking.utils import groupby_time, doy_mean
 from sheerwater_benchmarking.reanalysis import era5_rolled
-from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess, prise_application_date, prise_pad_condition
+from sheerwater_benchmarking.tasks import (spw_rainy_onset, spw_precip_preprocess,
+                                           prise_application_date)
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,

@@ -386,7 +386,8 @@ def climatology_pad(start_time, end_time, first_year=1985, last_year=2014,
     # Get the Kenya-specific pesticide date forecasts
     if prob_type == 'deterministic':
         prob_threshold = None
-    ds = climatology_pad_kenya(start_time, end_time, first_year=first_year, last_year=last_year, prob_type=prob_type, prob_threshold=prob_threshold, grid=grid, mask=mask)
+    ds = climatology_pad_kenya(start_time, end_time, first_year=first_year, last_year=last_year,
+                               prob_type=prob_type, prob_threshold=prob_threshold, grid=grid, mask=mask)
     if region == 'kenya':
         return ds
 
