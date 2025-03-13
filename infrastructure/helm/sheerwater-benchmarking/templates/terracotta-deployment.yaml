@@ -29,6 +29,9 @@ spec:
             requests:
               cpu: {{ .Values.terracotta.resources.requests.cpu }}
               memory: {{ .Values.terracotta.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.terracotta.resources.limits.cpu }}
+              memory: {{ .Values.terracotta.resources.limits.memory }}
           ports:
             - containerPort: 5000
           readinessProbe:
@@ -56,6 +59,12 @@ spec:
             value: "nearest"
           - name: TC_ALLOWED_ORIGINS_TILES
             value: '["*"]'
+          - name: TC_RASTER_CACHE_SIZE
+            value: {{ .Values.terracotta.raster_cache_size }}
+          - name: TC_RASTER_CACHE_COMPRESS_LEVEL
+            value: {{ .Values.terracotta.raster_cache_compress_level }}
+          - name: TC_MULTIPROCESSING_WORKERS
+            value: "{{ .Values.terracotta.multiprocessing_workers }}"
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-secrets
