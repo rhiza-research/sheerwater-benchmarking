@@ -24,19 +24,22 @@ def gencast_daily_year(year, variable, init_hour=0):
     fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
     def get_sub_ds(root):
+        """Iterates through the root folder to find all sub zarrs for the requested year."""
         members = fs.ls(root, detail=False)
         members = members[1:]
         zarrs = []
         for mem in members:
+            """Open a zarr for each member set."""
             mem_path = mem + '/forecasts_15d/'
             zarr = fs.ls(mem_path, detail=False)
-            print(zarr)
             zarr = 'gs://' + zarr[0]
             ds = xr.open_zarr(zarr, chunks='auto', decode_timedelta=True)
+
+            # Evaluation WIDs <= 7 are done with 0/12hr leads - >7 are 6/18hr leads.
             if ds.attrs['evaluation_wid'] <= 7:
                 zarrs.append(zarr)
             else:
-                print("Skipping overlapping samples")
+                print("Skipping 6/18hr leads.")
 
         return zarrs
 
@@ -89,7 +92,7 @@ def gencast_daily_year(year, variable, init_hour=0):
         ds[variable] = ds[variable] * 1000.0
         ds.attrs.update(units='mm')
 
-        # Convert from 6hrly to daily precip, robust to different numbers of 6hrly samples in a day
+        # Convert from 12hrly to daily precip, robust to different numbers of 12hrly samples in a day
         ds = ds.resample(lead_time='1D').mean(dim='lead_time') * 2.0
 
         # Can't have precip less than zero (there are some very small negative values)
@@ -103,6 +106,7 @@ def gencast_daily_year(year, variable, init_hour=0):
     # Convert lat/lon
     ds = lon_base_change(ds)
 
+    # This was necessary?
     ds = ds.chunk({"lat": 721, "lon": 1440, 'lead_time': 10, 'time': 1, 'member': 5})
 
     return ds
@@ -127,6 +131,7 @@ def gencast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa: A
 
     ds = xr.concat([ds1, ds2, ds3], dim='time')
 
+    # This was necessary?
     ds = ds.chunk({'lat': 721, 'lon': 1440, 'lead_time': 10, 'time': 1, 'member': 5})
 
     # Regrid
@@ -141,7 +146,6 @@ def gencast_daily(start_time, end_time, variable, grid='global0_25'):  # noqa: A
 @cacheable(data_type='array',
            cache_args=['variable', 'agg_days', 'prob_type', 'grid'],
            timeseries='time',
-           cache_disable_if={'agg_days': 1, 'prob_type': 'probabilistic'},
            chunking={"lat": 121, "lon": 240, "lead_time": 10, "time": 10, "member": 10},
            chunk_by_arg={
                'grid': {
