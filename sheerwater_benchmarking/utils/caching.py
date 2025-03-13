@@ -821,9 +821,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             f.write(b'')
                             return None
 
+                    write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            write = False
                             if cache_exists(storage_backend, cache_path, verify_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -833,38 +833,27 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-
                                 print(f"Caching result for {cache_path} as zarr.")
                                 if isinstance(ds, xr.Dataset):
                                     cache_map = fs.get_mapper(cache_path)
-
-                                    if chunking:
-                                        # If we aren't doing auto chunking delete the encoding chunks
-                                        chunk_to_zarr(ds, cache_path, verify_path, chunking)
-
-                                        # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
-                                    else:
-                                        chunk_to_zarr(ds, cache_path, verify_path, 'auto')
-
-                                        # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                    chunk_config = chunking if chunking else 'auto'
+                                    chunk_to_zarr(ds, cache_path, verify_path, chunk_config)
+                                    # Reopen the dataset to truncate the computational path
+                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
                                     raise RuntimeError(
                                         f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
-
                         # Either way if terracotta is specified as a backend try to write the result array to terracotta
                         elif storage_backend == 'terracotta':
                             print(f"Also caching {cache_key} to terracotta.")
                             write_to_terracotta(cache_key, ds)
-
                     elif data_type == 'tabular':
                         if not (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
-                            raise RuntimeError(f"""Tabular datatypes must return pandas dataframe
+                            raise RuntimeError(f"""Tabular datatypes must return pandas or dask dataframe
                                                or none instead of {type(ds)}""")
 
+                        # TODO: combine repeated code
                         if storage_backend == 'delta':
-                            write = False
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -876,8 +865,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_path} in delta.")
                                 write_to_delta(cache_path, ds, overwrite=True)
+                                ds = read_from_delta(cache_path)  # Reopen dataset to truncate the computational path
                         elif storage_backend == 'parquet':
-                            write = False
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -887,11 +876,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path} in delta.")
+                                print(f"Caching result for {cache_path} in parquet.")
                                 write_to_parquet(cache_path, ds, overwrite=True)
+                                ds = read_from_parquet(cache_path)  # Reopen dataset to truncate the computational path
 
                         elif storage_backend == 'postgres':
-                            write = False
                             if check_exists_postgres(cache_key) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -903,11 +892,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_key} in postgres.")
                                 write_to_postgres(ds, cache_key, overwrite=True)
+                                ds = read_from_postgres(cache_path)  # Reopen dataset to truncate the computational path
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
                     elif data_type == 'basic':
                         if backend == 'pickle':
-                            write = False
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
