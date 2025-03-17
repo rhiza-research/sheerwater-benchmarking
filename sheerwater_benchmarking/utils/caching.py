@@ -675,6 +675,7 @@ class cacheable:
         }
 
     def __call__(self, func):
+        """Decorate a function to be cacheable."""
         @wraps(func)
         def cacheable_wrapper(*args, **kwargs):
             # The config that determines cacheable behavior, based on default and passed arguments
@@ -827,7 +828,8 @@ class cacheable:
                             raise ValueError("Only pickle backend supported for basic types.")
                     else:
                         print("Auto caching currently only supports array, tabular, and basic types.")
-                elif self.fs.exists(config['null_path']) and not config['recompute'] and config['cache'] and not config['retry_null_cache']:
+                elif self.fs.exists(config['null_path']) and \
+                        not config['recompute'] and config['cache'] and not config['retry_null_cache']:
                     print(f"Found null cache for {config['null_path']}. Skipping computation.")
                     return None
 
@@ -841,7 +843,8 @@ class cacheable:
                     else:
                         print(f"Cache doesn't exist for {config['cache_key']}. Running function")
 
-                    if config['timeseries'] is not None and (config['start_time'] is None or config['end_time'] is None):
+                    if config['timeseries'] is not None and \
+                            (config['start_time'] is None or config['end_time'] is None):
                         raise ValueError('Need to pass start and end time arguments when recomputing function.')
 
                     ##### IF NOT EXISTS ######
@@ -859,7 +862,9 @@ class cacheable:
                     write = False  # boolean to determine if we should write to the cache
                     if config['data_type'] == 'array':
                         if config['storage_backend'] == 'zarr':
-                            if cache_exists(config['storage_backend'], config['cache_path'], config['verify_path']) and not config['force_overwrite']:
+                            if cache_exists(config['storage_backend'],
+                                            config['cache_path'],
+                                            config['verify_path']) and not config['force_overwrite']:
                                 inp = input(f'A cache already exists at {config["cache_path"]}.'
                                             'Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -980,7 +985,8 @@ class cacheable:
                     end_time = config['end_time'] if config['end_time'] is not None else ds[time_col].max().values
                     if config['data_type'] == 'array' and isinstance(ds, xr.Dataset):
                         ds = ds.sel({time_col: slice(start_time, end_time)})
-                    elif config['data_type'] == 'tabular' and (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
+                    elif config['data_type'] == 'tabular' and \
+                            (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
                         ds = ds[(ds[time_col] >= start_time) & (ds[time_col] <= end_time)]
 
                 return ds
