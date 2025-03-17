@@ -192,8 +192,8 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
         ds (xr.Dataset): Dataset to apply mask to.
         mask (str): The mask to apply. One of: 'lsm', None
         var (str): Variable to mask. If None, applies to apply to all variables.
-        val (int): Value to mask above (any value that is
-            strictly greater than this value will be masked).
+        val (int): Value to mask below (any value that is
+            strictly less than this value will be masked).
         grid (str): The grid resolution of the dataset.
     """
     # No masking needed
@@ -214,11 +214,11 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
     if check_bases(ds, mask_ds) == -1:
         raise ValueError("Datasets have different longitude bases. Cannot mask.")
 
-    # Mask multiple variables
     if isinstance(var, str):
+        # Mask a single variable
         ds[var] = ds[var].where(mask_ds['mask'] > val, drop=False)
     else:
-        # Mask a single variable
+        # Mask multiple variables
         ds = ds.where(mask_ds['mask'] > val, drop=False)
     return ds
 
