@@ -16,7 +16,7 @@ from .space_utils import (get_grid_ds,
 from .time_utils import add_dayofyear
 
 
-def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
+def roll_and_agg(ds, agg, agg_col, agg_fn="mean", agg_thresh=None):
     """Rolling aggregation of the dataset.
 
     Applies rolling and then corrects rolling window labels to be left aligned.
@@ -27,10 +27,11 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
         agg (int): Aggregation period in days.
         agg_col (str): Column to aggregate over.
         agg_fn (str): Aggregation function. One of mean or sum.
+        agg_thresh(int): number of data required to agg.
     """
     agg_kwargs = {
         f"{agg_col}": agg,
-        "min_periods": agg,
+        "min_periods": agg_thresh,
         "center": False
     }
     # Apply n-day rolling aggregation
@@ -40,6 +41,9 @@ def roll_and_agg(ds, agg, agg_col, agg_fn="mean"):
         ds_agg = ds.rolling(**agg_kwargs).sum()
     else:
         raise NotImplementedError(f"Aggregation function {agg_fn} not implemented.")
+
+    # Check to see if coord is a time value
+    assert np.issubdtype(ds[agg_col].dtype, np.timedelta64) or np.issubdtype(ds[agg_col].dtype, np.datetime64)
 
     # Drop the nan values added by the rolling aggregation at the end
     ds_agg = ds_agg.dropna(agg_col, how="all")
@@ -149,7 +153,7 @@ def lon_base_change(ds, to_base="base180", lon_dim='lon'):
     return ds
 
 
-def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
+def clip_region(ds, region, lon_dim='lon', lat_dim='lat', drop=False):
     """Clip a dataset to a region.
 
     Args:
@@ -158,6 +162,7 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
             - africa, conus, global
         lon_dim (str): The name of the longitude dimension.
         lat_dim (str): The name of the latitude dimension.
+        drop (bool): Whether to drop the original coordinates that are NaN'd by clipping.
     """
     # No clipping needed
     if region == 'global':
@@ -173,7 +178,7 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat'):
         ds = ds.rio.set_spatial_dims(lon_dim, lat_dim)
 
         # Clip the grid to the boundary of Shapefile
-        ds = ds.rio.clip(gdf.geometry, gdf.crs, drop=False)
+        ds = ds.rio.clip(gdf.geometry, gdf.crs, drop=drop)
 
     # Slice the globe
     ds = get_globe_slice(ds, lon_slice, lat_slice, lon_dim=lon_dim, lat_dim=lat_dim, base='base180')
@@ -209,18 +214,30 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
     if check_bases(ds, mask_ds) == -1:
         raise ValueError("Datasets have different longitude bases. Cannot mask.")
 
-    att = ds.attrs
-    ds = ds[var].where(mask_ds > val, drop=False)
-
-    # Preserve name and attributes
-    ds = ds.rename({"mask": var})
-    ds.attrs = att
-
+    # Mask multiple variables
+    if isinstance(var, str):
+        ds[var] = ds[var].where(mask_ds['mask'] > val, drop=False)
+    else:
+        # Mask a single variable
+        ds = ds.where(mask_ds['mask'] > val, drop=False)
     return ds
 
 
 def is_valid(ds, var, mask, region, grid, valid_threshold=0.5):
-    """Check if the dataset is valid in the given region and mask."""
+    """Check if the dataset is valid in the given region and mask.
+
+    If there are dimensions other than lat and lon, the function will
+    check the minimum number of valid data points in the dataset.
+
+    Args:
+        ds (xr.Dataset): Dataset to check.
+        var (str): Variable to check.
+        mask (str): The mask to apply. One of: 'lsm', None
+        region (str): The region to clip to.
+        grid (str): The grid resolution of the dataset.
+        valid_threshold (float): The minimum fraction of valid data points
+            required for the dataset to be considered valid.
+    """
     if mask == 'lsm':
         # Import here to avoid circular imports
         from sheerwater_benchmarking.masks import land_sea_mask

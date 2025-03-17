@@ -61,7 +61,7 @@ dependencies = [
     "cryptography",
     "ipykernel",
     "jupyterlab",
-    "xarray",
+    "xarray==2024.10",
     "matplotlib",
     "geopandas",
     "rioxarray",
@@ -69,7 +69,7 @@ dependencies = [
     "jupytext",
     "dask-kubernetes",
     "gcsfs",
-    "zarr",
+    "zarr==2.18.3",
     "h5py",
     "netcdf4",
     "h5netcdf",
@@ -92,9 +92,10 @@ dependencies = [
     "deltalake",
     "jupyter-server-proxy",
     "xskillscore @ git+https://github.com/rhiza-research/xskillscore",
-    "coiled>=1.58.1",
+    "coiled>=1.76.1",
     "opt-einsum>=3.4.0",
-    "salientsdk>=0.3.10",
+    "plotly>=5.24.1",
+    "salientsdk>=0.3.12",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

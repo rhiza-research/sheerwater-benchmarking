@@ -162,14 +162,20 @@ resource postgresql_grant "write_public_terracottads" {
   privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
 }
 
-
-
 resource postgresql_grant "write_schema_public" {
   database    = "postgres"
   role        = postgresql_role.write.name
   schema      = "public"
   object_type = "schema"
   privileges  = ["CREATE"]
+}
+
+resource postgresql_grant "public_schema_public" {
+  database    = "postgres"
+  role        = "public"
+  schema      = "public"
+  object_type = "schema"
+  privileges  = ["CREATE", "USAGE"]
 }
 
 resource postgresql_grant "write_database_public" {
@@ -192,7 +198,7 @@ data "google_secret_manager_secret_version" "sheerwater_oauth_client_secret" {
  secret   = "sheerwater-oauth-client-secret"
 }
 
-# Enable googel oauth
+# Enable google oauth
 resource "grafana_sso_settings" "google_sso_settings" {
   provider_name = "google"
   oauth2_settings {

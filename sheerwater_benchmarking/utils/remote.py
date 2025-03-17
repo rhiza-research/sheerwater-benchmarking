@@ -1,6 +1,7 @@
 """Utilities for running functions on a remote dask cluster."""
 from dask.distributed import Client, get_client, LocalCluster
 import coiled
+from coiled.credentials.google import send_application_default_credentials
 import logging
 from functools import wraps
 import os
@@ -13,6 +14,9 @@ config_options = {
     'large_scheduler': {
         'scheduler_cpu': 16,
         'scheduler_memory': "64GiB"
+    },
+    'on_demand': {
+        'spot_policy': 'on-demand'
     },
     'large_cluster': {
         'n_workers': [10, 11]
@@ -34,6 +38,9 @@ config_options = {
     },
     'xxlarge_node': {
         'worker_vm_types': ['c3-standard-88']
+    },
+    'large_disk': {
+        'worker_disk_size': '300GiB'
     },
 }
 
@@ -75,6 +82,13 @@ def start_remote(remote_name=None, remote_config=None):
         logger.info("Attaching to coiled cluster with default configuration")
 
     cluster = coiled.Cluster(**coiled_default_options)
+
+    # send Application Default Credentials
+    try:
+        send_application_default_credentials(cluster)
+    except Exception as e:
+        print("Failed to send credentials", e)
+
     cluster.get_client()
 
 

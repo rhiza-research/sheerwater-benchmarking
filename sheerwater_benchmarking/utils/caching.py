@@ -7,16 +7,17 @@ import logging
 import hashlib
 
 import gcsfs
-from google.cloud import storage
 from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
 from rasterio.enums import Resampling
+from google.cloud import storage
 import terracotta as tc
 import sqlalchemy
 import pickle
 
 import numpy as np
 import pandas as pd
+import dask.dataframe as dd
 import xarray as xr
 
 from sheerwater_benchmarking.utils.data_utils import lon_base_change
@@ -51,21 +52,7 @@ def get_chunk_size(ds, size_in='MB'):
     chunk_groups = [(dim, np.median(chunks)) for dim, chunks in ds.chunks.items()]
     div = {'KB': 10**3, 'MB': 10**6, 'GB': 10**9, 'TB': 10**12}[size_in]
     chunk_sizes = [x[1] for x in chunk_groups]
-    return np.product(chunk_sizes) * 4 / div, chunk_groups
-
-
-def chunk_to_zarr(ds, cache_map, chunking):
-    """Write a dataset to a zarr cache map and check the chunking."""
-    ds = drop_encoded_chunks(ds)
-    if isinstance(chunking, dict):
-        # No need to prune if chunking is None or 'auto'
-        chunking = prune_chunking_dimensions(ds, chunking)
-    ds = ds.chunk(chunks=chunking)
-    chunk_size, chunk_with_labels = get_chunk_size(ds)
-    if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
-        print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
-        print(chunk_with_labels)
-    ds.to_zarr(store=cache_map, mode='w')
+    return np.prod(chunk_sizes) * 4 / div, chunk_groups
 
 
 def merge_chunk_by_arg(chunking, chunk_by_arg, kwargs):
@@ -143,17 +130,125 @@ def drop_encoded_chunks(ds):
     return ds
 
 
+def check_cache_disable_if(cache_disable_if, cache_arg_values):
+    """Check if the cache should be disabled for the given kwargs.
+
+    Cache disable if is a dict or list of dicts. Each dict specifies a set of
+    arguments that should disable the cache if they are present.
+    """
+    if isinstance(cache_disable_if, dict):
+        cache_disable_if = [cache_disable_if]
+
+    for d in cache_disable_if:
+        if not isinstance(d, dict):
+            raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
+
+        # Get the common keys
+        common_keys = set(cache_arg_values).intersection(d)
+
+        # Remove any args not passed
+        comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
+        d = {key: d[key] for key in common_keys}
+
+        # Iterate through each key and check if the values match, with support for lists
+        key_match = [
+            (not isinstance(d[k], list) and comp_arg_values[k] == d[k]) or
+            (isinstance(d[k], list) and comp_arg_values[k] in d[k])
+            for k in common_keys
+        ]
+        # Within a cache disable if dict, if all keys match, disable the cache
+        if all(key_match):
+            print(f"Caching disabled for arg values {d}")
+            return False
+    # Keep the cache enabled - we didn't find a match
+    return True
+
+
 def read_from_delta(cache_path):
     """Read from a deltatable into a pandas dataframe."""
     return DeltaTable(cache_path).to_pandas()
 
 
+def read_from_parquet(cache_path):
+    """Read from a deltatable into a pandas dataframe."""
+    return dd.read_parquet(cache_path, engine='pyarrow')
+
+
+def write_to_parquet(cache_path, df, overwrite=False):
+    """Write a pandas or dask dataframe to a parquet."""
+    part = None
+    if hasattr(df, 'cache_partition'):
+        part = df.cache_partition
+
+    if isinstance(df, dd.DataFrame):
+        df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
+    elif isinstance(df, pd.DataFrame):
+        df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
+    else:
+        raise ValueError("Can only write dask and pandas dataframes to parquet.")
+
+
 def write_to_delta(cache_path, df, overwrite=False):
     """Write a pandas dataframe to a delta table."""
+    if isinstance(df, dd.DataFrame):
+        print("""Warning: Dask datafame passed to delta backend. Will run `compute()`
+                  on the dataframe prior to storage. This will fail if the dataframe
+                  does not fit in memory. Use `backend=parquet` to handle parallel writing of dask dataframes.""")
+        df = df.compute()
+
     if overwrite:
         write_deltalake(cache_path, df, mode='overwrite', schema_mode='overwrite')
     else:
         write_deltalake(cache_path, df)
+
+
+def write_to_zarr(ds, cache_path, verify_path):
+    """Write to zarr with a temp write and move to make it more atomic.
+
+    # If you were to make this atomic this is what it would look like:
+    lock = verify_path + ".lock"
+
+    storage_client = storage.Client()
+    blob = Blob.from_string(lock, client=storage_client)
+
+    try:
+        blob.upload_from_string("lock", if_generation_match=0)
+    except google.api_core.exceptions.PreconditionFailed:
+        raise RuntimeError(f"Concurrent zarr write detected. If this is a mistake delete the lock file: {lock}")
+
+    fs.rm(lock)
+    """
+    fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+
+    if fs.exists(verify_path):
+        fs.rm(verify_path, recursive=True)
+
+    if fs.exists(cache_path):
+        fs.rm(cache_path, recursive=True)
+
+    cache_map = fs.get_mapper(cache_path)
+    ds.to_zarr(store=cache_map, mode='w')
+
+    fs.touch(verify_path)
+
+
+def chunk_to_zarr(ds, cache_path, verify_path, chunking):
+    """Write a dataset to a zarr cache map and check the chunking."""
+    ds = drop_encoded_chunks(ds)
+
+    if isinstance(chunking, dict):
+        # No need to prune if chunking is None or 'auto'
+        chunking = prune_chunking_dimensions(ds, chunking)
+    ds = ds.chunk(chunks=chunking)
+    try:
+        chunk_size, chunk_with_labels = get_chunk_size(ds)
+
+        if chunk_size > CHUNK_SIZE_UPPER_LIMIT_MB or chunk_size < CHUNK_SIZE_LOWER_LIMIT_MB:
+            print(f"WARNING: Chunk size is {chunk_size}MB. Target approx 100MB.")
+            print(chunk_with_labels)
+    except ValueError:
+        print("Failed to get chunks size! Continuing with unknown chunking...")
+    write_to_zarr(ds, cache_path, verify_path)
 
 
 def postgres_table_name(table_name):
@@ -328,26 +423,38 @@ def write_to_terracotta(cache_key, ds):
             write_individual_raster(driver, bucket, ds, cache_key)
 
 
-def cache_exists(backend, cache_path):
+def cache_exists(backend, cache_path, verify_path=None):
     """Check if a cache exists generically."""
-    if backend == 'zarr' or backend == 'delta' or backend == 'pickle' or backend == 'terracotta':
+    if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-        return fs.exists(cache_path)
+        if backend == 'zarr':
+            if not fs.exists(verify_path) and fs.exists(cache_path):
+                print("Found cache, but it appears to be corrupted. Recomputing.")
+                return False
+            elif fs.exists(verify_path) and fs.exists(cache_path):
+                return True
+            else:
+                return False
+        else:
+            return fs.exists(cache_path)
     elif backend == 'postgres':
         return check_exists_postgres(cache_path)
+    else:
+        raise ValueError(f'Unknown backend {backend}')
 
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
-              auto_rechunk=False, cache=True, cache_disable_if=None,
+              auto_rechunk=False, cache=True, validate_cache_timeseries=True, cache_disable_if=None,
               backend=None, storage_backend=None):
     """Decorator for caching function results.
 
     Args:
-        data_type(str): The type of data being cached. Currently only 'array' is supported.
+        data_type(str): The type of data being cached. One of 'array', 'tabular', or 'basic'.
         cache_args(list): The arguments to use as the cache key.
-        timeseries(str, list): The name of the time series dimension in the cached array. If not a
-            time series, set to None (default). If a list, will use the first matching coordinate in the list.
+        timeseries(str, list): The name of the time series dimension (for array data) or column (for
+            tabular data) in the cached array. If not a time series, set to None (default). If a
+            list, will use the first matching coordinate in the list.
         chunking(dict): Specifies chunking if that coordinate exists. If coordinate does not exist
             the chunking specified will be dropped.
         chunk_by_arg(dict): Specifies chunking modifiers based on the passed cached arguments,
@@ -384,7 +491,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "filepath_only": False,
         "recompute": False,
         "cache": None,
-        "validate_cache_timeseries": True,
+        "validate_cache_timeseries": None,
         "force_overwrite": False,
         "retry_null_cache": False,
         "backend": None,
@@ -397,18 +504,22 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
-                auto_rechunk, cache, cache_disable_if, backend, storage_backend
+                auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
+                backend, storage_backend
 
             # Calculate the appropriate cache key
-            filepath_only, recompute, passed_cache, validate_cache_timeseries, \
-                force_overwrite, retry_null_cache, backend, \
-                storage_backend, pass_auto_rechunk = get_cache_args(
-                    kwargs, cache_kwargs)
+            filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
+                force_overwrite, retry_null_cache, passed_backend, \
+                storage_backend, passed_auto_rechunk = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
-            if pass_auto_rechunk is not None:
-                auto_rechunk = pass_auto_rechunk
+            if passed_auto_rechunk is not None:
+                auto_rechunk = passed_auto_rechunk
+            if passed_validate_cache_timeseries is not None:
+                validate_cache_timeseries = passed_validate_cache_timeseries
+            if passed_backend is not None:
+                backend = passed_backend
 
             params = signature(func).parameters
 
@@ -428,8 +539,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         "Time series functions must have the parameters 'start_time' and 'end_time'")
                 else:
                     keys = [item for item in params]
-                    start_time = args[keys.index('start_time')]
-                    end_time = args[keys.index('end_time')]
+                    try:
+                        start_time = args[keys.index('start_time')]
+                        end_time = args[keys.index('end_time')]
+                    except IndexError:
+                        raise ValueError("'start_time' and 'end_time' must be passed as positional arguments, not "
+                                         "keyword arguments")
 
             # Handle keying based on cache arguments
             cache_arg_values = {}
@@ -462,29 +577,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
 
             # Now that we have all the cacheable args values we can calculate whether
-            # the cache should be disable from them
-            if isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
-
-                if isinstance(cache_disable_if, dict):
-                    cache_disable_if = [cache_disable_if]
-
-                for d in cache_disable_if:
-                    if not isinstance(d, dict):
-                        raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
-
-                    # Get the common keys
-                    common_keys = set(cache_arg_values).intersection(d)
-
-                    # Remove any args not passed
-                    comp_arg_values = {key: cache_arg_values[key] for key in common_keys}
-                    d = {key: d[key] for key in common_keys}
-
-                    # If they match then disable caching
-                    if comp_arg_values == d:
-                        print(f"Caching disabled for arg values {d}")
-                        cache = False
-                        break
-            elif cache_disable_if is not None:
+            # the cache should be disable from them if
+            if cache and isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
+                cache = check_cache_disable_if(cache_disable_if, cache_arg_values)
+            elif cache and cache_disable_if is not None:
                 raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
 
             imkeys = list(cache_arg_values.keys())
@@ -504,12 +600,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     flat_values.append(str(val))
 
             cache_key = func.__name__ + '/' + '_'.join(flat_values)
+            verify_path = None
             if data_type == 'array':
                 backend = "zarr" if backend is None else backend
                 if storage_backend is None:
                     storage_backend = backend
 
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
+                verify_path = "gs://sheerwater-datalake/caches/" + cache_key + '.verify'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
@@ -522,17 +620,25 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.delta'
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = True
+                elif backend == 'parquet':
+                    cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.parquet'
+                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    supports_filepath = True
                 elif backend == 'postgres':
                     cache_path = cache_key
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                     supports_filepath = False
+                else:
+                    raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
             elif data_type == 'basic':
                 backend = "pickle" if backend is None else backend
+                if storage_backend is None:
+                    storage_backend = backend
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.pkl'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
                 supports_filepath = True
             else:
-                raise ValueError("Caching currently only supports the 'array' and 'tabular' datatypes")
+                raise ValueError("Caching currently only supports the 'array', 'tabular', and 'basic' datatypes")
 
             if filepath_only and not supports_filepath:
                 raise ValueError(f"{backend} backend does not support filepath_only flag")
@@ -547,7 +653,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 fs.rm(null_path, recursive=True)
 
             if not recompute and cache:
-                if cache_exists(backend, cache_path):
+                if cache_exists(backend, cache_path, verify_path):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
                     if data_type == 'array':
@@ -560,7 +666,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
                             # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
                             # every chunk is only 4B!
-                            ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                            ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
 
                             # If rechunk is passed then check to see if the rechunk array
                             # matches chunking. If not then rechunk
@@ -580,19 +686,20 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     # the original cache map it will write it before reading the
                                     # data leading to corruption.
                                     temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
-                                    temp_cache_map = fs.get_mapper(temp_cache_path)
-                                    chunk_to_zarr(ds, temp_cache_map, chunking)
+                                    temp_verify_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.verify'
+                                    chunk_to_zarr(ds, temp_cache_path, temp_verify_path, chunking)
 
-                                    # move to a permanent cache map
+                                    if fs.exists(verify_path):
+                                        fs.rm(verify_path, recursive=True)
+
                                     if fs.exists(cache_path):
-                                        print(f"Deleting {cache_path} to replace.")
                                         fs.rm(cache_path, recursive=True)
-                                        print(f"Confirm deleted {cache_path} to replace.")
 
                                     fs.mv(temp_cache_path, cache_path, recursive=True)
+                                    fs.mv(temp_verify_path, verify_path, recursive=True)
 
                                     # Reopen the dataset
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
                                     # Requested chunks already match rechunk.
                                     pass
@@ -642,6 +749,19 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                               for tabular datasets.""")
                                 else:
                                     compute_result = False
+                        elif backend == 'parquet':
+                            if filepath_only:
+                                return cache_path
+                            else:
+                                print(f"Opening cache {cache_path}")
+                                ds = read_from_parquet(cache_path)
+
+                                if validate_cache_timeseries and timeseries is not None:
+                                    raise NotImplementedError("""Timeseries validation is not currently implemented
+                                                              for tabular datasets.""")
+                                else:
+                                    compute_result = False
+
                         elif backend == 'postgres':
                             ds = read_from_postgres(cache_key)
                             if validate_cache_timeseries and timeseries is not None:
@@ -650,7 +770,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             else:
                                 compute_result = False
                         else:
-                            raise ValueError("""Only delta, and postgres backends are
+                            raise ValueError("""Only delta, parquet, and postgres backends are
                                              supported for tabular data.""")
                     elif data_type == 'basic':
                         if backend == 'pickle':
@@ -704,7 +824,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     if data_type == 'array':
                         if storage_backend == 'zarr':
                             write = False
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if cache_exists(storage_backend, cache_path, verify_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -714,21 +834,21 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
 
-                                print(f"Caching result for {cache_path}.")
+                                print(f"Caching result for {cache_path} as zarr.")
                                 if isinstance(ds, xr.Dataset):
                                     cache_map = fs.get_mapper(cache_path)
 
                                     if chunking:
                                         # If we aren't doing auto chunking delete the encoding chunks
-                                        chunk_to_zarr(ds, cache_map, chunking)
+                                        chunk_to_zarr(ds, cache_path, verify_path, chunking)
 
                                         # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                     else:
-                                        chunk_to_zarr(ds, cache_map, 'auto')
+                                        chunk_to_zarr(ds, cache_path, verify_path, 'auto')
 
                                         # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={})
+                                        ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
                                     raise RuntimeError(
                                         f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
@@ -739,7 +859,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             write_to_terracotta(cache_key, ds)
 
                     elif data_type == 'tabular':
-                        if not isinstance(ds, pd.DataFrame):
+                        if not (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
                             raise RuntimeError(f"""Tabular datatypes must return pandas dataframe
                                                or none instead of {type(ds)}""")
 
@@ -754,12 +874,23 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path}.")
+                                print(f"Caching result for {cache_path} in delta.")
                                 write_to_delta(cache_path, ds, overwrite=True)
+                        elif storage_backend == 'parquet':
+                            write = False
+                            if fs.exists(cache_path) and not force_overwrite:
+                                inp = input(f'A cache already exists at {
+                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write = True
+                            else:
+                                write = True
+
+                            if write:
+                                print(f"Caching result for {cache_path} in delta.")
+                                write_to_parquet(cache_path, ds, overwrite=True)
 
                         elif storage_backend == 'postgres':
-                            print(f"Caching result for {cache_key} in postgres.")
-
                             write = False
                             if check_exists_postgres(cache_key) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
@@ -770,7 +901,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path}.")
+                                print(f"Caching result for {cache_key} in postgres.")
                                 write_to_postgres(ds, cache_key, overwrite=True)
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
@@ -793,15 +924,28 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             raise ValueError("Only pickle backend is implemented for basic data data")
 
             if filepath_only:
-                cache_map = fs.get_mapper(cache_path)
-                return cache_map
+                if backend == 'parquet':
+                    return cache_path
+                else:
+                    cache_map = fs.get_mapper(cache_path)
+                    return cache_map
             else:
                 # Do the time series filtering
                 if timeseries is not None:
-                    match_time = [t for t in tl if t in ds.dims]
+
+                    if data_type == "array":
+                        match_time = [t for t in tl if t in ds.dims]
+                    elif data_type == "tabular":
+                        match_time = [t for t in tl if t in ds.columns]
+                    else:
+                        raise ValueError(
+                            f"Timeseries is only supported for array or tabular data, not {data_type}"
+                        )
+
                     if len(match_time) == 0:
                         raise RuntimeError(
-                            "Timeseries array must return a 'time' dimension for slicing.")
+                            f"Timeseries must have a dimension or column named {tl} for slicing."
+                        )
 
                     time_col = match_time[0]
 
@@ -811,7 +955,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     if end_time is None:
                         end_time = ds[time_col].max().values
 
-                    ds = ds.sel({time_col: slice(start_time, end_time)})
+                    if data_type == 'array' and isinstance(ds, xr.Dataset):
+                        ds = ds.sel({time_col: slice(start_time, end_time)})
+                    elif data_type == 'tabular' and (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
+                        ds = ds[(ds[time_col] >= start_time) & (ds[time_col] <= end_time)]
 
                 return ds
 

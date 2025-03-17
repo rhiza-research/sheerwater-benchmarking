@@ -43,4 +43,8 @@ To set your default credentials for other applictions, like the gcloud Python AP
 gcloud auth application-default login
 ```
 
+### Getting Started
+To run python code in our python environment, use `rye run python <script.py> <args>`. To start a Jupyter notebook using an approriate kernel, run `rye run jupyter lab`. Our environment makes use of the `jupytext` package to run python files in a notebook environment. You can open any python script as a notebook by right clicking on the file within the jupyter lab environment and selecting `Open with' and `Notebook`. 
+
+
 

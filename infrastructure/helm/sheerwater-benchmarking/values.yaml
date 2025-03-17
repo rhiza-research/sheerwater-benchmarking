@@ -3,16 +3,15 @@
 # Declare variables to be passed into your templates.
 grafana:
   image: 
-    repository: grafana/grafana
-    tag: 11.2.0
+    repository: us-central1-docker.pkg.dev/rhiza-shared/sheerwater/grafana
+    tag: v1.0.4
 
   admin_password: pass
 
   smtp:
     user: apikey
     password: key
-    host: smtp.sendgrid.net
-    port: 587
+    host: smtp.sendgrid.net:587
     from_address: info@rhizaresearch.org
     from_name: Sheerwater Benchmarking Project
 
@@ -48,13 +47,19 @@ postgres:
 
 terracotta:
   image: 
-    repository: dhigras/terracotta
-    tag: "v0.8.5"
+    repository: ghcr.io/rhiza-research/terracotta
+    tag: "v0.0.14"
 
   tailscale: true
 
-  raster_bucket: sheerwater-datalake
   driver_path: postgresql://postgres:5432/terracotta
+
+  # Size of raster file in-memory cache, in bytes
+  raster_cache_size: 513802240
+  # Compression level of raster file in-memory cache, from 0-9
+  raster_cache_compress_level: 9
+
+  multiprocessing_workers: 24
 
   sql_user: read
   sql_password: read_password
@@ -62,8 +67,15 @@ terracotta:
   domain_name: domain.com
   ip_name: gcloud-ip
 
+  pv:
+    name: name
+    size: 50GiB
+
   resources:
     requests:
-      cpu: 250m
-      memory: 500Mi
+      cpu: 2000m
+      memory: 1500Mi
+    limits:
+      cpu: 2000m
+      memory: 2000Mi
 

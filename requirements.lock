@@ -132,7 +132,7 @@ cligj==0.7.2
 cloudpickle==3.1.0
     # via dask
     # via distributed
-coiled==1.58.1
+coiled==1.86.0
     # via sheerwater-benchmarking
 comm==0.2.2
     # via ipykernel
@@ -437,6 +437,8 @@ multidict==6.1.0
     # via yarl
 multiurl==0.3.2
     # via cads-api-client
+narwhals==1.31.0
+    # via plotly
 nbclient==0.10.0
     # via nbconvert
 nbconvert==7.16.4
@@ -519,6 +521,7 @@ packaging==24.1
     # via matplotlib
     # via nbconvert
     # via pip-requirements-parser
+    # via plotly
     # via pyogrio
     # via pytest
     # via rioxarray
@@ -558,6 +561,8 @@ pip-requirements-parser==32.0.1
     # via coiled
 platformdirs==4.3.6
     # via jupyter-core
+plotly==6.0.1
+    # via sheerwater-benchmarking
 pluggy==1.5.0
     # via pytest
 prometheus-client==0.21.0
@@ -716,9 +721,10 @@ s3fs==2024.10.0
     # via sheerwater-benchmarking
 s3transfer==0.10.3
     # via boto3
-salientsdk==0.3.10
+salientsdk==0.3.17
     # via sheerwater-benchmarking
 scikit-learn==1.5.2
+    # via salientsdk
     # via sheerwater-benchmarking
     # via weatherbench2
 scipy==1.14.1
@@ -838,7 +844,7 @@ urllib3==2.2.3
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit
-weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@1c16ec0193d8a50eaf042354b43bfa9b8330f44e
+weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@3c95b54a74a0fc92193901310f75014dcef9f448
     # via sheerwater-benchmarking
 webcolors==24.8.0
     # via jsonschema
@@ -871,7 +877,7 @@ xarray-regrid==0.4.0
     # via sheerwater-benchmarking
 xhistogram==0.3.2
     # via xskillscore
-xskillscore @ git+https://github.com/rhiza-research/xskillscore@1489aafa837a250dc9cd6dee7c952bfd181e71b1
+xskillscore @ git+https://github.com/rhiza-research/xskillscore@24836c2994c41c7566d6e4d686df7eb28f7a3455
     # via sheerwater-benchmarking
 xyzservices==2024.9.0
     # via bokeh
