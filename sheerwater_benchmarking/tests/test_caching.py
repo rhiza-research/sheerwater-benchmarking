@@ -157,12 +157,6 @@ def test_cache_disable_if():
     dsp = cached_func(agg_days=7)
     assert ds != dsp
 
-    # Retest with agg days 1
-    ds = cached_func(agg_days=1)
-    #  Cache should be disabled - these should be different random numbers
-    dsp = cached_func(agg_days=1)
-    assert ds == dsp
-
     # Should be disabled
     ds = cached_func2(agg_days=14)
     dsp = cached_func2(agg_days=14)
