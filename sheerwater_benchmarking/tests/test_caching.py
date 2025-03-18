@@ -145,21 +145,18 @@ def test_cache_disable_if():
     def cached_func3(agg_days=7, grid='global0_25'):  # noqa: ARG001
         return np.random.randint(1000)
 
-    print("hit cache 1")
     # Instantiate the cache
     ds = cached_func(agg_days=1)
     #  Cache should be enabled - these should be equal
     dsp = cached_func(agg_days=1)
     assert ds == dsp
 
-    print("cache disable 7")
     # Instantiate the cache
     ds = cached_func(agg_days=7)
     #  Cache should be disabled - these should be different random numbers
     dsp = cached_func(agg_days=7)
     assert ds != dsp
 
-    print("hit cache 1")
     # Retest with agg days 1
     ds = cached_func(agg_days=1)
     #  Cache should be disabled - these should be different random numbers
@@ -191,16 +188,36 @@ def test_cache_disable_if():
     dsp = cached_func3(agg_days=14)
     assert ds == dsp
 
+def test_cache_arg_scope():
+    """Test cache_disable_if argument."""
+    @cacheable(data_type='basic',
+               cache_args=['agg_days'],
+               cache_disable_if={'agg_days': 7})
+    def cached_func(agg_days=7):  # noqa: ARG001
+        return np.random.randint(1000)
+
+    # Instantiate the cache
+    ds = cached_func(agg_days=1)
+    #  Cache should be enabled - these should be equal
+    dsp = cached_func(agg_days=1)
+    assert ds == dsp
+
+    # Instantiate the cache
+    ds = cached_func(agg_days=7)
+    #  Cache should be disabled - these should be different random numbers
+    dsp = cached_func(agg_days=7)
+    assert ds != dsp
+
+    # Retest with agg days 1
+    ds = cached_func(agg_days=1)
+    #  Cache should be disabled - these should be different random numbers
+    dsp = cached_func(agg_days=1)
+    assert ds == dsp
+
 
 if __name__ == "__main__":
-    print("Test null time.")
     test_null_time_caching()
-
-    print("Test validate time.")
     test_validate_timeseries()
-
-    print("Test tabular time.")
     test_tabular_timeseries()
-
-    print("Test disable if.")
     test_cache_disable_if()
+    test_cache_arg_scope()
