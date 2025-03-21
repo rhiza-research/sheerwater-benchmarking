@@ -196,7 +196,7 @@ def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False):
         fs.rm(cache_path, recursive=True)
 
     if isinstance(df, dd.DataFrame):
-        df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow', write_metadata_file=True)
+        df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
     elif isinstance(df, pd.DataFrame):
         if mkdir and not os.path.exists(os.path.dirname(cache_path)):
             os.makedirs(os.path.dirname(cache_path))
