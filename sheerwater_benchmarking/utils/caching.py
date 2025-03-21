@@ -349,7 +349,7 @@ def write_to_postgres(df, table_name, overwrite=False):
         if isinstance(df, pd.DataFrame):
             df.to_sql(new_table_name, engine, if_exists=exists, index=False)
         elif isinstance(df, dd.DataFrame):
-            df.to_sql(new_table_name, uri=uri, if_exists=exists, parallel=True, index=False)
+            df.to_sql(new_table_name, uri=uri, if_exists=exists, index=False)
         else:
             raise RuntimeError("Did not return dataframe type.")
 
