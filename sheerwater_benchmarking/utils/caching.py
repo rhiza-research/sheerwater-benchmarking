@@ -943,7 +943,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 ds = read_from_delta(cache_path)  # Reopen dataset to truncate the computational path
                         elif storage_backend == 'parquet':
                             if cache_exists(storage_backend, cache_path, verify_path, verify_cache=verify_cache) and not force_overwrite:
-                                inp = input(f'A cache already exists at {
+                                inp = input(f'A parquet cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
@@ -957,8 +957,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                         elif storage_backend == 'postgres':
                             if check_exists_postgres(cache_key) and not force_overwrite:
-                                inp = input(f'A cache already exists at {
-                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                inp = input(f'A postgres cache already exists at {
+                                            cache_key}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
                             else:
