@@ -523,7 +523,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "storage_backend": None,
         "auto_rechunk":  None,
         "local": False,
-        "verify_cache": True,
+        "verify_cache": None,
     }
 
     def create_cacheable(func):
@@ -886,7 +886,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            if cache_exists(storage_backend, cache_path, verify_path) and not force_overwrite:
+                            if cache_exists(storage_backend, cache_path, verify_path, verify_cache=verify_cache) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -935,10 +935,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write_to_delta(cache_path, ds, overwrite=True)
                                 ds = read_from_delta(cache_path)  # Reopen dataset to truncate the computational path
                         elif storage_backend == 'parquet':
-                            if (
-                                (local and os.path.exists(cache_path))
-                                or (not local and fs.exists(cache_path))
-                            ) and not force_overwrite:
+                            if cache_exists(storage_backend, cache_path, verify_path, verify_cache=verify_cache) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
