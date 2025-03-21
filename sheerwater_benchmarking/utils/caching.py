@@ -339,8 +339,9 @@ def write_to_postgres(df, table_name, overwrite=False):
     new_table_name = postgres_table_name(table_name)
 
     try:
-        uri = f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres'
+        uri = f'postgresql://write:{pgwrite_pass}@35.202.186.38:5432/postgres')
         engine = sqlalchemy.create_engine(uri)
+
         exists = 'fail'
         if overwrite:
             exists = 'replace'
