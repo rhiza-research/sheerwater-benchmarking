@@ -322,14 +322,14 @@ def check_exists_postgres(table_name):
                            the tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def write_to_postgres(pandas_df, table_name, overwrite=False):
+def write_to_postgres(df, table_name, overwrite=False):
     """Writes a pandas df as a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
     we'll just hard code a connection to the running sheerwater database.
 
     Args:
-        pandas_df: A pandas dataframe
+        df: A pandas dataframe
         table_name: The table name to write to
         overwrite (bool): whether to overwrite an existing table
     """
@@ -341,10 +341,16 @@ def write_to_postgres(pandas_df, table_name, overwrite=False):
     try:
         engine = sqlalchemy.create_engine(
             f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+        exists = 'fail'
         if overwrite:
-            pandas_df.to_sql(new_table_name, engine, if_exists='replace')
+            exists = 'replace'
+
+        if isinstance(df, pd.DataFrame):
+            df.to_sql(new_table_name, engine, if_exists=exists, index=False)
+        elif isinstance(df, dd.DataFrame):
+            df.to_sql(new_table_name, engine, if_exists=exists, parallel=True, index=False)
         else:
-            pandas_df.to_sql(new_table_name, engine)
+            raise RuntimeError("Did not return dataframe type.")
 
         # Also log the table name in the tables table
         pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
@@ -960,7 +966,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_key} in postgres.")
                                 write_to_postgres(ds, cache_key, overwrite=True)
-                                ds = read_from_postgres(cache_path)  # Reopen dataset to truncate the computational path
+                                #ds = read_from_postgres(cache_path)  # Reopen dataset to truncate the computational path
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
                     elif data_type == 'basic':
