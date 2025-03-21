@@ -468,7 +468,7 @@ def cache_exists(backend, cache_path, verify_path=None, local=False):
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, validate_cache_timeseries=True, cache_disable_if=None,
-              backend=None, storage_backend=None):
+              backend=None, storage_backend=None, verify_cache=True):
     """Decorator for caching function results.
 
     Args:
@@ -523,6 +523,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "storage_backend": None,
         "auto_rechunk":  None,
         "local": False,
+        "verify_cache": True,
     }
 
     def create_cacheable(func):
@@ -531,12 +532,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Proper variable scope for the decorator args
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
                 auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
-                backend, storage_backend
+                backend, storage_backend, verify_cache
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \
-                storage_backend, passed_auto_rechunk, local = get_cache_args(kwargs, cache_kwargs)
+                storage_backend, passed_auto_rechunk, local, passed_verify_cache = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
@@ -546,6 +547,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 validate_cache_timeseries = passed_validate_cache_timeseries
             if passed_backend is not None:
                 backend = passed_backend
+            if passed_verify_cache is not None:
+                verify_cache = passed_verify_cache
 
             params = signature(func).parameters
 
