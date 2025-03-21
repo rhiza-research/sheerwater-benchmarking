@@ -1,0 +1,37 @@
+# This file defines two PVCs:
+# 1. A read-write PVC for the sync job
+# 2. A read-only PVC for all Terracotta containers
+#
+# Both PVCs point to their respective PVs which share the same underlying GCP disk
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-sync
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
+    release: {{ .Release.Name }}
+spec:
+  storageClassName: ""
+  volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-sync-pv-{{ .Release.Namespace }}
+  accessModes: [ "ReadWriteOnce" ]
+  resources:
+    requests:
+      storage: {{ .Values.terracotta.pv.size }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
+    release: {{ .Release.Name }}
+spec:
+  storageClassName: ""
+  volumeName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta-pv-{{ .Release.Namespace }}
+  accessModes: [ "ReadOnlyMany" ]
+  resources:
+    requests:
+      storage: {{ .Values.terracotta.pv.size }} 
