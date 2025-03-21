@@ -442,7 +442,7 @@ def write_to_terracotta(cache_key, ds):
             write_individual_raster(driver, bucket, ds, cache_key)
 
 
-def cache_exists(backend, cache_path, verify_path=None, local=False):
+def cache_exists(backend, cache_path, verify_path=None, local=False, verify_cache=True):
     """Check if a cache exists generically."""
     if local:
         assert backend == "parquet", "local storage is only supported for parquet files"
@@ -450,7 +450,7 @@ def cache_exists(backend, cache_path, verify_path=None, local=False):
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-        if backend == 'zarr' or backend == 'parquet':
+        if (backend == 'zarr' or backend == 'parquet') and verify_cache:
             if not fs.exists(verify_path) and fs.exists(cache_path):
                 print("Found cache, but it appears to be corrupted. Recomputing.")
                 return False
@@ -694,7 +694,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     fs.rm(null_path, recursive=True)
 
             if not recompute and cache:
-                if cache_exists(backend, cache_path, verify_path, local=local):
+                if cache_exists(backend, cache_path, verify_path, local=local, verify_cache):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
                     if data_type == 'array':
