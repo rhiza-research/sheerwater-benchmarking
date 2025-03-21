@@ -8,6 +8,7 @@ import logging
 import hashlib
 
 import gcsfs
+import fsspec
 from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
 from rasterio.enums import Resampling
@@ -177,11 +178,22 @@ def read_from_parquet(cache_path):
     return dd.read_parquet(cache_path, engine='pyarrow')
 
 
-def write_to_parquet(cache_path, df, mkdir=False, overwrite=False):
+def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False):
     """Write a pandas or dask dataframe to a parquet."""
     part = None
     if hasattr(df, 'cache_partition'):
         part = df.cache_partition
+
+    if 'gs://' in cache_path:
+        fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+    else:
+        fs = fsspec.filesystem('file')
+
+    if fs.exists(verify_path):
+        fs.rm(verify_path, recursive=True)
+
+    if fs.exists(cache_path):
+        fs.rm(cache_path, recursive=True)
 
     if isinstance(df, dd.DataFrame):
         df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
@@ -191,6 +203,8 @@ def write_to_parquet(cache_path, df, mkdir=False, overwrite=False):
         df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
     else:
         raise ValueError("Can only write dask and pandas dataframes to parquet.")
+
+    fs.touch(verify_path)
 
 
 def write_to_delta(cache_path, df, overwrite=False):
@@ -436,7 +450,7 @@ def cache_exists(backend, cache_path, verify_path=None, local=False):
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-        if backend == 'zarr':
+        if backend == 'zarr' or backend == 'parquet':
             if not fs.exists(verify_path) and fs.exists(cache_path):
                 print("Found cache, but it appears to be corrupted. Recomputing.")
                 return False
@@ -635,6 +649,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 elif backend == 'parquet':
                     prefix = LOCAL_CACHE_DIR if local else "gs://sheerwater-datalake/caches/"
                     cache_path = prefix + cache_key + '.parquet'
+                    verify_path = prefix + cache_key + '.verify'
                     null_path = prefix + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'postgres':
@@ -930,7 +945,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_path} in parquet.")
-                                write_to_parquet(cache_path, ds, mkdir=local, overwrite=True)
+                                write_to_parquet(cache_path, verify_path, ds, mkdir=local, overwrite=True)
                                 ds = read_from_parquet(cache_path) # Reopen dataset to truncate the computational path
 
                         elif storage_backend == 'postgres':
