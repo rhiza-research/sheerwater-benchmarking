@@ -175,7 +175,7 @@ def read_from_delta(cache_path):
 
 def read_from_parquet(cache_path):
     """Read from a deltatable into a pandas dataframe."""
-    return dd.read_parquet(cache_path, engine='pyarrow')
+    return dd.read_parquet(cache_path, engine='pyarrow', ignore_metadata_file=True)
 
 
 def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False):
