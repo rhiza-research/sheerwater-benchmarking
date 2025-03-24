@@ -244,4 +244,42 @@ resource "grafana_data_source" "postgres" {
   })
 }
 
+resource "grafana_organization" "tahmo" {
+  name         = "Tahmo"
+  admin_user   = "admin"
+}
+
+resource "grafana_organization_preferences" "light_preference_tahmo" {
+  theme      = "light"
+  timezone   = "utc"
+  week_start = "sunday"
+
+  lifecycle {
+    ignore_changes = [home_dashboard_uid,]
+  }
+
+  org_id = grafana_organization.tahmo.id
+}
+
+# Connect grafana to the read user with a datasource
+resource "grafana_data_source" "postgres_tahmo" {
+  type                = "grafana-postgresql-datasource"
+  name                = "postgres"
+  url                 = "postgres:5432"
+  username                = "read"
+  
+  secure_json_data_encoded = jsonencode({
+    password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
+  })
+
+  json_data_encoded = jsonencode({
+    database = "postgres"
+    sslmode = "disable"
+    postgresVersion = 1500
+    timescaledb = false
+  })
+
+  org_id = grafana_organization.tahmo.id
+}
+
 # Eventually create dashboards
