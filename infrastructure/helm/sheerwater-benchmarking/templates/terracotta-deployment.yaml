@@ -1,3 +1,13 @@
+# This Deployment manages multiple Terracotta pods with read-only access to raster data.
+# The data synchronization is handled by a separate CronJob that runs every 30 minutes.
+#
+# Key features:
+# 1. All pods are identical read-only replicas
+# 2. Horizontal scaling with consistent read-only access
+#
+# Data consistency is maintained through the separate sync CronJob (single writer)
+# while all Terracotta pods have read-only access to the data.
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,7 +16,7 @@ metadata:
     app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
     release: {{ .Release.Name }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.terracotta.replicas }}
   selector:
     matchLabels:
       app: {{ include "sheerwater-benchmarking.name" . }}-terracotta
@@ -60,9 +70,9 @@ spec:
           - name: TC_ALLOWED_ORIGINS_TILES
             value: '["*"]'
           - name: TC_RASTER_CACHE_SIZE
-            value: {{ .Values.terracotta.raster_cache_size }}
+            value: {{ .Values.terracotta.raster_cache_size | int | quote }}
           - name: TC_RASTER_CACHE_COMPRESS_LEVEL
-            value: {{ .Values.terracotta.raster_cache_compress_level }}
+            value: {{ .Values.terracotta.raster_cache_compress_level | int | quote }}
           - name: TC_MULTIPROCESSING_WORKERS
             value: "{{ .Values.terracotta.multiprocessing_workers }}"
           envFrom:
@@ -71,8 +81,9 @@ spec:
           volumeMounts:
             - mountPath: /mnt/sheerwater-datalake
               name: terracotta-rasters
+              readOnly: true  # All Terracotta containers are read-only
       serviceAccountName: sheerwater-sa
       volumes:
         - name: terracotta-rasters
           persistentVolumeClaim:
-            claimName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta 
+            claimName: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
