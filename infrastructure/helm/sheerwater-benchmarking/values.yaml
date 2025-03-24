@@ -50,6 +50,9 @@ terracotta:
     repository: ghcr.io/rhiza-research/terracotta
     tag: "v0.0.14"
 
+  # Number of replicas for horizontal scaling
+  replicas: 3
+
   tailscale: true
 
   driver_path: postgresql://postgres:5432/terracotta
@@ -59,7 +62,7 @@ terracotta:
   # Compression level of raster file in-memory cache, from 0-9
   raster_cache_compress_level: 9
 
-  multiprocessing_workers: 24
+  multiprocessing_workers: 6
 
   sql_user: read
   sql_password: read_password
@@ -74,8 +77,7 @@ terracotta:
   resources:
     requests:
       cpu: 2000m
-      memory: 1500Mi
+      memory: 500Mi
     limits:
       cpu: 2000m
-      memory: 2000Mi
-
+      memory: 1000Mi
