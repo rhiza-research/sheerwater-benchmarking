@@ -313,7 +313,7 @@ def check_exists_postgres(table_name):
 
     try:
         engine = sqlalchemy.create_engine(
-            f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+            f'postgresql://read:{pgread_pass}@35.202.186.38:5432/postgres')
         insp = sqlalchemy.inspect(engine)
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
