@@ -13,7 +13,6 @@ from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
 from rasterio.enums import Resampling
 from google.cloud import storage
-import terracotta as tc
 import sqlalchemy
 import pickle
 
@@ -372,6 +371,8 @@ def write_to_terracotta(cache_key, ds):
         clip_extreme_quantile(float): The quantile to clip the data at
     """
     # Check to make sure this is geospatial data
+    import terracotta as tc
+
     lats = ['lat', 'y', 'latitude']
     lons = ['lon', 'x', 'longitude']
     if len(ds.dims) != 2:
