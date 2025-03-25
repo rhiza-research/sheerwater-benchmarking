@@ -182,7 +182,7 @@ resource "google_compute_disk" "sheerwater_benchmarking_db_ssd" {
   name     = "sheerwater-benchmarking-db-ssd"
   type     = "pd-ssd"
   zone     = "us-central1-a"
-  size     = 50
+  size     = 200
   project  = "rhiza-shared"
   snapshot = "projects/rhiza-shared/global/snapshots/sheerwater-benchmar-us-central1-a-20250217055130-5p7cuzqi"
 
