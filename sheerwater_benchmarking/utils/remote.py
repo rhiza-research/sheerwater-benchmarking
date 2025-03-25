@@ -63,6 +63,7 @@ def start_remote(remote_name=None, remote_config=None):
         'scheduler_memory': "32GiB",
         'worker_vm_types': ['c2-standard-8', 'c3-standard-8'],
         'spot_policy': 'spot_with_fallback',
+        'package_sync_strict': True,
     }
 
     if remote_name and isinstance(remote_name, str):
