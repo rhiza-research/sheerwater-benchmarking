@@ -240,13 +240,17 @@ resource "grafana_data_source" "postgres" {
     database = "postgres"
     sslmode = "disable"
     postgresVersion = 1500
-    timescaledb = false
+    timescaledb = true
   })
 }
 
 resource "grafana_organization" "tahmo" {
   name         = "Tahmo"
   admin_user   = "admin"
+
+  lifecycle {
+    ignore_changes = [admins,]
+  }
 }
 
 resource "grafana_organization_preferences" "light_preference_tahmo" {
@@ -276,7 +280,7 @@ resource "grafana_data_source" "postgres_tahmo" {
     database = "postgres"
     sslmode = "disable"
     postgresVersion = 1500
-    timescaledb = false
+    timescaledb = true
   })
 
   org_id = grafana_organization.tahmo.id
