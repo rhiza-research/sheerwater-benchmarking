@@ -122,7 +122,7 @@ def dask_remote(func):
                 get_client()
             except ValueError:
                 logger.info("Starting local dask cluster...")
-                cluster = LocalCluster(n_workers=2, threads_per_worker=2)
+                cluster = LocalCluster()
                 Client(cluster)
 
         # call the function and return the result
