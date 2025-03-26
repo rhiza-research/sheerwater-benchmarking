@@ -45,6 +45,9 @@ config_options = {
     'xxlarge_node': {
         'worker_vm_types': ['c3-standard-88']
     },
+    'highmem_node': {
+        'worker_vm_types': ['c2d-highmem-16']
+    },
     'large_disk': {
         'worker_disk_size': '150GiB'
     },
