@@ -29,10 +29,10 @@ grafana:
 
 postgres:
   image: 
-    repository: timescale/timescaledb
-    tag: "2.19.0-pg15"
-    #repository: postgres
-    #tag: "15.8"
+    #repository: timescale/timescaledb
+      #tag: "2.19.0-pg15"
+    repository: postgres
+    tag: "15.12"
 
   pv:
     name: name
