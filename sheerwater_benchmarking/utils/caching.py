@@ -4,6 +4,7 @@ import datetime
 import dateparser
 from functools import wraps
 from inspect import signature, Parameter
+import inspect
 import logging
 import hashlib
 
@@ -13,7 +14,6 @@ from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
 from rasterio.enums import Resampling
 from google.cloud import storage
-import terracotta as tc
 import sqlalchemy
 import pickle
 
@@ -314,7 +314,7 @@ def check_exists_postgres(table_name):
 
     try:
         engine = sqlalchemy.create_engine(
-            f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+            f'postgresql://read:{pgread_pass}@35.202.186.38:5432/postgres')
         insp = sqlalchemy.inspect(engine)
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
@@ -349,7 +349,7 @@ def write_to_postgres(df, table_name, overwrite=False):
         if isinstance(df, pd.DataFrame):
             df.to_sql(new_table_name, engine, if_exists=exists, index=False)
         elif isinstance(df, dd.DataFrame):
-            df.to_sql(new_table_name, uri=uri, if_exists=exists, index=False, parallel=True, chunksize=1000, method='multi')
+            df.to_sql(new_table_name, uri=uri, if_exists=exists, index=False, parallel=True, chunksize=10000)
         else:
             raise RuntimeError("Did not return dataframe type.")
 
@@ -372,6 +372,8 @@ def write_to_terracotta(cache_key, ds):
         clip_extreme_quantile(float): The quantile to clip the data at
     """
     # Check to make sure this is geospatial data
+    import terracotta as tc
+
     lats = ['lat', 'y', 'latitude']
     lons = ['lon', 'x', 'longitude']
     if len(ds.dims) != 2:
@@ -472,6 +474,7 @@ def cache_exists(backend, cache_path, verify_path=None, local=False, verify_cach
     else:
         raise ValueError(f'Unknown backend {backend}')
 
+global_recompute_var = None
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, validate_cache_timeseries=True, cache_disable_if=None,
@@ -537,6 +540,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
+            global global_recompute_var
+
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
                 auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
                 backend, storage_backend, verify_cache
@@ -700,7 +705,51 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     print(f"Removing and retrying null cache {null_path}.")
                     fs.rm(null_path, recursive=True)
 
-            if not recompute and cache:
+
+            # If recompute is True -> recompute once -> don't set global flag, act like normal
+            # If recompute is a string or list -> recompute until function matches then set to false -> set recompute flag until match
+
+            recompute_now = False
+
+            if global_recompute_var is None:
+                if recompute is False:
+                    pass
+                elif recompute is True:
+                    print("Top level recompute requested. Recomputing once.")
+                    recompute_now = True
+                elif isinstance(recompute, str) or isinstance(recompute, list):
+                    if isinstance(recompute, str):
+                        recompute = [recompute]
+
+                    print(f'Recomputation of functions {recompute} requested. Recomputing until found')
+                    recompute_now = True
+
+                    # Check to see if we are one of the functions
+                    if func.__name__ in recompute:
+                        recompute.remove(func.__name__)
+
+                    # Set the global_recompute_var
+                    global_recompute_var = recompute
+
+                    if len(global_recompute_var) == 0:
+                        print("Done recomputing after this function.")
+                        global_recompute_var = None
+
+            elif global_recompute_var:
+                print(f"Global recompute var set to {global_recompute_var}")
+
+                recompute_now = True
+
+                # Check to see if we are one of the functions
+                if func.__name__ in global_recompute_var:
+                    global_recompute_var.remove(func.__name__)
+
+                if len(global_recompute_var) == 0:
+                    print("Done recomputing after this function.")
+                    global_recompute_var = None
+
+
+            if not recompute_now and cache:
                 if cache_exists(backend, cache_path, verify_path, local=local, verify_cache=verify_cache):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
@@ -873,6 +922,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                     if timeseries is not None and (start_time is None or end_time is None):
                         raise ValueError('Need to pass start and end time arguments when recomputing function.')
+
+
 
                     ##### IF NOT EXISTS ######
                     ds = func(*args, **kwargs)

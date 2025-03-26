@@ -63,6 +63,7 @@ def start_remote(remote_name=None, remote_config=None):
         'scheduler_memory': "32GiB",
         'worker_vm_types': ['c2-standard-8', 'c3-standard-8'],
         'spot_policy': 'spot_with_fallback',
+        'package_sync_strict': True,
     }
 
     if remote_name and isinstance(remote_name, str):
@@ -121,7 +122,7 @@ def dask_remote(func):
                 get_client()
             except ValueError:
                 logger.info("Starting local dask cluster...")
-                cluster = LocalCluster(n_workers=2, threads_per_worker=2)
+                cluster = LocalCluster()
                 Client(cluster)
 
         # call the function and return the result
