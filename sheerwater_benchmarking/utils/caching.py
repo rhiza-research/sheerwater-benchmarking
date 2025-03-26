@@ -478,7 +478,7 @@ global_recompute = None
 global_force_overwrite = None
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
-              auto_rechunk=False, cache=True, validate_cache_timeseries=True, cache_disable_if=None,
+              auto_rechunk=False, cache=True, validate_cache_timeseries=False, cache_disable_if=None,
               backend=None, storage_backend=None, verify_cache=True):
     """Decorator for caching function results.
 
