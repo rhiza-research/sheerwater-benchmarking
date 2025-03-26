@@ -476,6 +476,7 @@ def cache_exists(backend, cache_path, verify_path=None, local=False, verify_cach
 
 global_recompute = None
 global_force_overwrite = None
+global_dont_recompute= None
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, validate_cache_timeseries=False, cache_disable_if=None,
@@ -526,6 +527,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
     cache_kwargs = {
         "filepath_only": False,
         "recompute": False,
+        "dont_recompute": None,
         "cache": None,
         "validate_cache_timeseries": None,
         "force_overwrite": False,
@@ -542,6 +544,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
             global global_recompute
+            global global_dont_recompute
             global global_force_overwrite
 
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
@@ -549,7 +552,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 backend, storage_backend, verify_cache
 
             # Calculate the appropriate cache key
-            filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
+            filepath_only, recompute, dont_recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \
                 storage_backend, passed_auto_rechunk, local, passed_verify_cache = get_cache_args(kwargs, cache_kwargs)
 
@@ -579,6 +582,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 print("Resetting recompute and force overwrite")
                 global_force_overwrite = None
                 global_recompute = None
+                global_dont_recompute = None
 
             if force_overwrite is True:
                 global_force_overwrite=True
@@ -734,6 +738,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             recompute_now = False
 
+
             if global_recompute is None:
                 if recompute is False:
                     pass
@@ -769,6 +774,19 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if len(global_recompute) == 0:
                     print("Done recomputing after this function.")
                     global_recompute = None
+
+            if global_dont_recompute is None:
+                if isinstance(dont_recompute, str) or isinstance(dont_recompute, list):
+                    if isinstance(dont_recompute, str):
+                        dont_recompute = [dont_recompute]
+
+                    global_dont_recompute = dont_recompute
+
+            # also don't recompute if need
+            if global_dont_recompute is not None:
+                if func.__name__ in global_dont_recompute:
+                    print(f"Function {func.__name__} in dont recompute. Not recomputing.")
+                    recompute_now = False
 
 
             if not recompute_now and cache:

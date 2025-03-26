@@ -39,5 +39,9 @@ def test_deep_cache():
     init2 = deep_cached_func()
     assert init == init2
 
+    first = deep_cached_func3()
+    second = deep_cached_func3(force_overwrite=True, recompute='all', dont_recompute='deep_cached_func2')
+    assert first == second
+
 if __name__ == "__main__":
     test_deep_cache()
