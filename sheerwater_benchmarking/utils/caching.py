@@ -530,7 +530,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "dont_recompute": None,
         "cache": None,
         "validate_cache_timeseries": None,
-        "force_overwrite": False,
+        "force_overwrite": None,
         "retry_null_cache": False,
         "backend": None,
         "storage_backend": None,
@@ -584,10 +584,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 global_recompute = None
                 global_dont_recompute = None
 
-            if force_overwrite is True:
-                global_force_overwrite=True
-            elif global_force_overwrite is True:
-                force_overwrite=True
+            if force_overwrite is not None:
+                global_force_overwrite = force_overwrite
+            elif global_force_overwrite is not None:
+                force_overwrite= global_force_overwrite
 
             params = signature(func).parameters
 
@@ -986,11 +986,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            if cache_exists(storage_backend, cache_path, verify_path, verify_cache=verify_cache) and not force_overwrite:
+                            if cache_exists(storage_backend, cache_path, verify_path, verify_cache=verify_cache) and force_overwrite is None:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
@@ -1022,11 +1024,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         # TODO: combine repeated code
                         write = False
                         if storage_backend == 'delta':
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if fs.exists(cache_path) and force_overwrite is None:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
@@ -1035,11 +1039,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write_to_delta(cache_path, ds, overwrite=True)
                                 ds = read_from_delta(cache_path)  # Reopen dataset to truncate the computational path
                         elif storage_backend == 'parquet':
-                            if cache_exists(storage_backend, cache_path, verify_path, local=local, verify_cache=verify_cache) and not force_overwrite:
+                            if cache_exists(storage_backend, cache_path, verify_path, local=local, verify_cache=verify_cache) and force_overwrite is None:
                                 inp = input(f'A parquet cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
@@ -1049,11 +1055,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 ds = read_from_parquet(cache_path) # Reopen dataset to truncate the computational path
 
                         elif storage_backend == 'postgres':
-                            if check_exists_postgres(cache_key) and not force_overwrite:
+                            if check_exists_postgres(cache_key) and force_overwrite is None:
                                 inp = input(f'A postgres cache already exists at {
                                             cache_key}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
@@ -1065,11 +1073,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
                     elif data_type == 'basic':
                         if backend == 'pickle':
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if fs.exists(cache_path) and force_overwrite is None:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 

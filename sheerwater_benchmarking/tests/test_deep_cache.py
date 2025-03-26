@@ -43,5 +43,21 @@ def test_deep_cache():
     second = deep_cached_func3(force_overwrite=True, recompute='all', dont_recompute='deep_cached_func2')
     assert first == second
 
+def test_overwrite():
+    @cacheable(data_type='basic',
+               cache_args=[])
+    def overwrite_func():  # noqa: ARG001
+        return np.random.randint(1000)
+
+    first = overwrite_func()
+    second = overwrite_func(recompute=True, force_overwrite=True)
+    third = overwrite_func(recompute=True, force_overwrite=False)
+    fourth = overwrite_func()
+
+    assert first != second
+    assert second != third
+    assert second == fourth
+
 if __name__ == "__main__":
     test_deep_cache()
+    test_overwrite()
