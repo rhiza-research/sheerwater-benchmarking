@@ -474,7 +474,8 @@ def cache_exists(backend, cache_path, verify_path=None, local=False, verify_cach
     else:
         raise ValueError(f'Unknown backend {backend}')
 
-global_recompute_var = None
+global_recompute = None
+global_force_overwrite = None
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, validate_cache_timeseries=True, cache_disable_if=None,
@@ -540,7 +541,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
-            global global_recompute_var
+            global global_recompute
+            global global_force_overwrite
 
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
                 auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
@@ -561,6 +563,27 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 backend = passed_backend
             if passed_verify_cache is not None:
                 verify_cache = passed_verify_cache
+
+            # Check to see if we are nested! if we are not then reset the global variables
+            reset = True
+            first = True
+            for f in inspect.stack():
+                if first:
+                    first = False
+                    continue
+
+                if inspect.getframeinfo(f[0]).function == 'wrapper':
+                    reset = False
+
+            if reset:
+                print("Resetting recompute and force overwrite")
+                global_force_overwrite = None
+                global_recompute = None
+
+            if force_overwrite is True:
+                global_force_overwrite=True
+            elif global_force_overwrite is True:
+                force_overwrite=True
 
             params = signature(func).parameters
 
@@ -711,7 +734,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             recompute_now = False
 
-            if global_recompute_var is None:
+            if global_recompute is None:
                 if recompute is False:
                     pass
                 elif recompute is True:
@@ -728,25 +751,24 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     if func.__name__ in recompute:
                         recompute.remove(func.__name__)
 
-                    # Set the global_recompute_var
-                    global_recompute_var = recompute
+                    # Set the global_recompute
+                    global_recompute = recompute
 
-                    if len(global_recompute_var) == 0:
+                    if len(global_recompute) == 0:
                         print("Done recomputing after this function.")
-                        global_recompute_var = None
-
-            elif global_recompute_var:
-                print(f"Global recompute var set to {global_recompute_var}")
+                        global_recompute = None
+            elif global_recompute:
+                print(f"Global recompute var set to {global_recompute}. recomputing.")
 
                 recompute_now = True
 
                 # Check to see if we are one of the functions
-                if func.__name__ in global_recompute_var:
-                    global_recompute_var.remove(func.__name__)
+                if func.__name__ in global_recompute:
+                    global_recompute.remove(func.__name__)
 
-                if len(global_recompute_var) == 0:
+                if len(global_recompute) == 0:
                     print("Done recomputing after this function.")
-                    global_recompute_var = None
+                    global_recompute = None
 
 
             if not recompute_now and cache:
@@ -912,8 +934,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             if compute_result or backend != storage_backend:
                 if compute_result:
-                    if recompute:
-                        print(f"Recompute for {cache_key} requested. Not checking for cached result.")
+                    if recompute_now:
+                        #print(f"Recompute for {cache_key} requested. Not checking for cached result.")
+                        pass
                     elif not cache:
                         # The function isn't cacheable, recomputing
                         pass
@@ -924,6 +947,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         raise ValueError('Need to pass start and end time arguments when recomputing function.')
 
 
+                    print(f"Running {func.__name__}")
 
                     ##### IF NOT EXISTS ######
                     ds = func(*args, **kwargs)
