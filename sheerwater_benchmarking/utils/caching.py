@@ -208,10 +208,10 @@ def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False, 
 
             # remove any rows already in t
             outer_join = existing_df.merge(df, how = 'outer', indicator = True)
-            new_rows = outer_join[~(outer_join._merge == 'both')].drop('_merge', axis = 1)
+            new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
 
             # Coearce dtypes
-            new_rows = new_rows.astype(existing_df.dtypes)
+            #new_rows = new_rows.astype(existing_df.dtypes)
 
             # write in append mode
             print("Appending new rows to existing parquet.")
