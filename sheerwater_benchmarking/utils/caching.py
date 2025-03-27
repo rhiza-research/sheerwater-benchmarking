@@ -205,6 +205,7 @@ def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False, 
         # Check to see if the cache exists
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
         if fs.exists(verify_path) and fs.exists(cache_path):
+            print("Found existing cache for upsert.")
             existing_df = read_from_parquet(cache_path)
 
             # remove any rows already in t
@@ -212,9 +213,11 @@ def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False, 
             new_rows = outer_join[~(outer_join._merge == 'both')].drop('_merge', axis = 1)
 
             # write in append mode
+            print("Appending new rows to existing parquet.")
             new_rows.to_parquet(cache_path, overwrite=False, append=True, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
         else:
             # If it doesn't just write
+            print("Cache doesn't exist for upsert.")
             df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
     else:
         if isinstance(df, dd.DataFrame):
