@@ -178,7 +178,7 @@ def read_from_parquet(cache_path):
     return dd.read_parquet(cache_path, engine='pyarrow', ignore_metadata_file=True)
 
 
-def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False):
+def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False, upsert=False, primary_keys=None):
     """Write a pandas or dask dataframe to a parquet."""
     part = None
     if hasattr(df, 'cache_partition'):
@@ -195,14 +195,36 @@ def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False):
     if fs.exists(cache_path):
         fs.rm(cache_path, recursive=True)
 
-    if isinstance(df, dd.DataFrame):
-        df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
-    elif isinstance(df, pd.DataFrame):
-        if mkdir and not os.path.exists(os.path.dirname(cache_path)):
-            os.makedirs(os.path.dirname(cache_path))
-        df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
+    if upsert:
+        if primary_keys is None:
+            raise ValueError("Upsert may only be performed with primary keys specified")
+
+        if not isinstance(df, dd.DataFrame):
+            raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
+
+        # Check to see if the cache exists
+        fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+        if fs.exists(verify_path) and fs.exists(cache_path):
+            existing_df = read_from_parquet(cache_path)
+
+            # remove any rows already in t
+            outer_join = existing_df.merge(df, how = 'outer', indicator = True)
+            new_rows = outer_join[~(outer_join._merge == 'both')].drop('_merge', axis = 1)
+
+            # write in append mode
+            new_rows.to_parquet(cache_path, overwrite=False, append=True, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
+        else:
+            # If it doesn't just write
+            df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
     else:
-        raise ValueError("Can only write dask and pandas dataframes to parquet.")
+        if isinstance(df, dd.DataFrame):
+            df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
+        elif isinstance(df, pd.DataFrame):
+            if mkdir and not os.path.exists(os.path.dirname(cache_path)):
+                os.makedirs(os.path.dirname(cache_path))
+            df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
+        else:
+            raise ValueError("Can only write dask and pandas dataframes to parquet.")
 
     fs.touch(verify_path)
 
@@ -478,10 +500,11 @@ global_recompute = None
 global_force_overwrite = None
 global_dont_recompute= None
 global_temp_caches = None
+global_upsert = None
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, validate_cache_timeseries=False, cache_disable_if=None,
-              backend=None, storage_backend=None, verify_cache=True):
+              backend=None, storage_backend=None, verify_cache=True, primary_keys=None):
     """Decorator for caching function results.
 
     Args:
@@ -539,6 +562,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "auto_rechunk":  None,
         "local": False,
         "verify_cache": None,
+        "upsert": False,
     }
 
     def create_cacheable(func):
@@ -549,15 +573,16 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             global global_dont_recompute
             global global_force_overwrite
             global global_temp_caches
+            global global_upsert
 
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
                 auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
-                backend, storage_backend, verify_cache
+                backend, storage_backend, verify_cache, primary_keys
 
             # Calculate the appropriate cache key
             filepath_only, recompute, dont_recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, temporary_intermediate_caches, retry_null_cache, passed_backend, \
-                storage_backend, passed_auto_rechunk, local, passed_verify_cache = get_cache_args(kwargs, cache_kwargs)
+                storage_backend, passed_auto_rechunk, local, passed_verify_cache, upsert = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
@@ -587,6 +612,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 global_recompute = None
                 global_dont_recompute = None
                 global_temp_caches = None
+                global_upsert = None
 
             if force_overwrite is not None:
                 global_force_overwrite = force_overwrite
@@ -600,6 +626,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 global_temp_caches = True
                 temporary_intermediate_caches = False
 
+            if upsert is True:
+                global_upsert = upsert
+
+            if global_upsert is not None and upsert is False:
+                upsert = global_upsert
 
             params = signature(func).parameters
 
@@ -1001,12 +1032,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 # Store the result
                 if cache:
                     if ds is None:
-                        print(f"Autocaching null result for {null_path}.")
+                        print(f"Autocaching null result for {null_write_path}.")
                         if local:
-                            with open(null_path, 'wb') as f:
+                            with open(null_write_path, 'wb') as f:
                                 f.write(b'')
                         else:
-                            with fs.open(null_path, 'wb') as f:
+                            with fs.open(null_write_path, 'wb') as f:
                                 f.write(b'')
                         return None
 
@@ -1078,7 +1109,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_write_path} in parquet.")
-                                write_to_parquet(cache_write_path, verify_write_path, ds, mkdir=local, overwrite=True)
+                                write_to_parquet(cache_write_path, verify_write_path, ds, mkdir=local, overwrite=True, upsert=upsert, primary_keys=primary_keys)
                                 ds = read_from_parquet(cache_write_path) # Reopen dataset to truncate the computational path
 
                         elif storage_backend == 'postgres':
