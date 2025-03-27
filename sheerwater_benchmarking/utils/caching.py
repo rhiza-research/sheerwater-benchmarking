@@ -503,7 +503,6 @@ global_recompute = None
 global_force_overwrite = None
 global_dont_recompute= None
 global_temp_caches = None
-global_upsert = None
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, validate_cache_timeseries=False, cache_disable_if=None,
@@ -576,7 +575,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             global global_dont_recompute
             global global_force_overwrite
             global global_temp_caches
-            global global_upsert
 
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
                 auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
@@ -615,7 +613,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 global_recompute = None
                 global_dont_recompute = None
                 global_temp_caches = None
-                global_upsert = None
 
             if force_overwrite is not None:
                 global_force_overwrite = force_overwrite
@@ -628,12 +625,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             if global_temp_caches is None and temporary_intermediate_caches is True:
                 global_temp_caches = True
                 temporary_intermediate_caches = False
-
-            if upsert is True:
-                global_upsert = upsert
-
-            if global_upsert is not None and upsert is False:
-                upsert = global_upsert
 
             params = signature(func).parameters
 
@@ -1034,7 +1025,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                 # Store the result
                 if cache:
-                    if ds is None:
+                    if ds is None and not upsert:
                         print(f"Autocaching null result for {null_write_path}.")
                         if local:
                             with open(null_write_path, 'wb') as f:
