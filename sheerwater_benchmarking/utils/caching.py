@@ -477,6 +477,7 @@ def cache_exists(backend, cache_path, verify_path=None, local=False, verify_cach
 global_recompute = None
 global_force_overwrite = None
 global_dont_recompute= None
+global_temp_caches = None
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, validate_cache_timeseries=False, cache_disable_if=None,
@@ -531,6 +532,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "cache": None,
         "validate_cache_timeseries": None,
         "force_overwrite": None,
+        "temporary_intermediate_caches": False,
         "retry_null_cache": False,
         "backend": None,
         "storage_backend": None,
@@ -553,7 +555,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             # Calculate the appropriate cache key
             filepath_only, recompute, dont_recompute, passed_cache, passed_validate_cache_timeseries, \
-                force_overwrite, retry_null_cache, passed_backend, \
+                force_overwrite, temporary_intermediate_caches, retry_null_cache, passed_backend, \
                 storage_backend, passed_auto_rechunk, local, passed_verify_cache = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
@@ -583,11 +585,20 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 global_force_overwrite = None
                 global_recompute = None
                 global_dont_recompute = None
+                global_temp_caches = None
 
             if force_overwrite is not None:
                 global_force_overwrite = force_overwrite
             elif global_force_overwrite is not None:
                 force_overwrite= global_force_overwrite
+
+            if global_temp_caches is True and temporary_intermediate_caches is False:
+                temporary_intermediate_caches = True
+
+            if global_temp_caches is None and temporary_intermediate_caches is True:
+                global_temp_caches = True
+                temporary_intermediate_caches = False
+
 
             params = signature(func).parameters
 
@@ -668,15 +679,19 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     flat_values.append(str(val))
 
             cache_key = func.__name__ + '/' + '_'.join(flat_values)
+
+            if temporary_intermediate_caches is True:
+                temp = 'temp/'
+
             verify_path = None
             if data_type == 'array':
                 backend = "zarr" if backend is None else backend
                 if storage_backend is None:
                     storage_backend = backend
 
-                cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
-                verify_path = "gs://sheerwater-datalake/caches/" + cache_key + '.verify'
-                null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                cache_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.zarr'
+                verify_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.verify'
+                null_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
                 # Set the default
@@ -685,18 +700,18 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     storage_backend = backend
 
                 if backend == 'delta':
-                    cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.delta'
-                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    cache_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.delta'
+                    null_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'parquet':
                     prefix = LOCAL_CACHE_DIR if local else "gs://sheerwater-datalake/caches/"
-                    cache_path = prefix + cache_key + '.parquet'
-                    verify_path = prefix + cache_key + '.verify'
-                    null_path = prefix + cache_key + '.null'
+                    cache_path = prefix + temp + cache_key + '.parquet'
+                    verify_path = prefix + temp + cache_key + '.verify'
+                    null_path = prefix + temp + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'postgres':
-                    cache_path = cache_key
-                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    cache_path = temp + cache_key
+                    null_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                     supports_filepath = False
                 else:
                     raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
