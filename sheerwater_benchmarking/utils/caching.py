@@ -681,6 +681,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             cache_key = func.__name__ + '/' + '_'.join(flat_values)
 
+            temp = ''
             if temporary_intermediate_caches is True:
                 temp = 'temp/'
 
