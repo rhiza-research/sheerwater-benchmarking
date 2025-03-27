@@ -217,7 +217,7 @@ def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False, 
             new_rows.to_parquet(cache_path, overwrite=False, append=True, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
         else:
             # If it doesn't just write
-            print("fCache {cache_path} doesn't exist for upsert.")
+            print(f"Cache {cache_path} doesn't exist for upsert.")
             df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
     else:
         if isinstance(df, dd.DataFrame):
@@ -600,8 +600,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             reset = True
             first = 0
             for f in inspect.stack():
-                print(first)
-                print(inspect.getframeinfo(f[0]).function)
                 if first <= 1:
                     first += 1
                     continue
