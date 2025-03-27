@@ -598,11 +598,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             # Check to see if we are nested! if we are not then reset the global variables
             reset = True
-            first = True
+            first = 0
             for f in inspect.stack():
-                if first:
-                    first = False
+                print(first)
+                print(inspect.getframeinfo(f[0]).function)
+                if first == 0:
+                    first += 1
                     continue
+
+                first += 1
 
                 if inspect.getframeinfo(f[0]).function == 'wrapper':
                     reset = False
@@ -621,8 +625,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             if global_temp_caches is True and temporary_intermediate_caches is False:
                 temporary_intermediate_caches = True
-
-            if global_temp_caches is None and temporary_intermediate_caches is True:
+            elif global_temp_caches is None and temporary_intermediate_caches is True:
                 global_temp_caches = True
                 temporary_intermediate_caches = False
 
@@ -708,6 +711,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             temp = ''
             if temporary_intermediate_caches is True:
+                print("Setting temp caches for func {func.__name__}")
                 temp = 'temp/'
 
             verify_path = None
