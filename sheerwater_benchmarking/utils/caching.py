@@ -1024,7 +1024,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path} as zarr.")
+                                print(f"Caching result for {cache_write_path} as zarr.")
                                 if isinstance(ds, xr.Dataset):
                                     cache_map = fs.get_mapper(cache_path)
 
@@ -1062,7 +1062,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path} in delta.")
+                                print(f"Caching result for {cache_write_path} in delta.")
                                 write_to_delta(cache_write_path, ds, overwrite=True)
                                 ds = read_from_delta(cache_write_path)  # Reopen dataset to truncate the computational path
                         elif storage_backend == 'parquet':
@@ -1077,7 +1077,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path} in parquet.")
+                                print(f"Caching result for {cache_write_path} in parquet.")
                                 write_to_parquet(cache_write_path, verify_write_path, ds, mkdir=local, overwrite=True)
                                 ds = read_from_parquet(cache_write_path) # Reopen dataset to truncate the computational path
 
