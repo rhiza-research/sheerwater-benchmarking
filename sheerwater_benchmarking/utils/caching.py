@@ -602,7 +602,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             for f in inspect.stack():
                 print(first)
                 print(inspect.getframeinfo(f[0]).function)
-                if first == 0:
+                if first <= 1:
                     first += 1
                     continue
 
@@ -711,7 +711,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             temp = ''
             if temporary_intermediate_caches is True:
-                print("Setting temp caches for func {func.__name__}")
+                print(f"Setting temp caches for func {func.__name__}")
                 temp = 'temp/'
 
             verify_path = None
