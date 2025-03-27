@@ -548,6 +548,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             global global_recompute
             global global_dont_recompute
             global global_force_overwrite
+            global global_temp_caches
 
             nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
                 auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
