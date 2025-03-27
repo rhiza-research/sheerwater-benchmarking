@@ -691,9 +691,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if storage_backend is None:
                     storage_backend = backend
 
-                cache_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.zarr'
-                verify_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.verify'
-                null_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
+                cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
+                cache_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.zarr'
+                verify_path = "gs://sheerwater-datalake/caches/" + cache_key + '.verify'
+                verify_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.verify'
+                null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                null_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
                 # Set the default
@@ -702,14 +705,19 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     storage_backend = backend
 
                 if backend == 'delta':
-                    cache_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.delta'
-                    null_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
+                    cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.delta'
+                    cache_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.delta'
+                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    null_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'parquet':
                     prefix = LOCAL_CACHE_DIR if local else "gs://sheerwater-datalake/caches/"
-                    cache_path = prefix + temp + cache_key + '.parquet'
-                    verify_path = prefix + temp + cache_key + '.verify'
-                    null_path = prefix + temp + cache_key + '.null'
+                    cache_path = prefix + cache_key + '.parquet'
+                    cache_write_path = prefix + temp + cache_key + '.parquet'
+                    verify_path = prefix + cache_key + '.verify'
+                    verify_write_path = prefix + temp + cache_key + '.verify'
+                    null_path = prefix + cache_key + '.null'
+                    null_write_path = prefix + temp + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'postgres':
                     cache_path = temp + cache_key
@@ -722,7 +730,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if storage_backend is None:
                     storage_backend = backend
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.pkl'
+                cache_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.pkl'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                null_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                 supports_filepath = True
             else:
                 raise ValueError("Caching currently only supports the 'array', 'tabular', and 'basic' datatypes")
@@ -849,11 +859,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     if fs.exists(cache_path):
                                         fs.rm(cache_path, recursive=True)
 
-                                    fs.mv(temp_cache_path, cache_path, recursive=True)
-                                    fs.mv(temp_verify_path, verify_path, recursive=True)
+                                    fs.mv(temp_cache_path, cache_write_path, recursive=True)
+                                    fs.mv(temp_verify_path, verify_write_path, recursive=True)
 
                                     # Reopen the dataset
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                    ds = xr.open_dataset(cache_write_path, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
                                     # Requested chunks already match rechunk.
                                     pass
@@ -1020,12 +1030,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                                     if chunking:
                                         # If we aren't doing auto chunking delete the encoding chunks
-                                        chunk_to_zarr(ds, cache_path, verify_path, chunking)
+                                        chunk_to_zarr(ds, cache_write_path, verify_write_path, chunking)
                                     else:
-                                        chunk_to_zarr(ds, cache_path, verify_path, 'auto')
+                                        chunk_to_zarr(ds, cache_write_path, verify_write_path, 'auto')
 
                                     # Reopen the dataset to truncate the computational path
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                    ds = xr.open_dataset(cache_write_path, engine='zarr', chunks={}, decode_timedelta=True)
                                 else:
                                     raise RuntimeError(
                                         f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
@@ -1053,8 +1063,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_path} in delta.")
-                                write_to_delta(cache_path, ds, overwrite=True)
-                                ds = read_from_delta(cache_path)  # Reopen dataset to truncate the computational path
+                                write_to_delta(cache_write_path, ds, overwrite=True)
+                                ds = read_from_delta(cache_write_path)  # Reopen dataset to truncate the computational path
                         elif storage_backend == 'parquet':
                             if cache_exists(storage_backend, cache_path, verify_path, local=local, verify_cache=verify_cache) and force_overwrite is None:
                                 inp = input(f'A parquet cache already exists at {
@@ -1068,8 +1078,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_path} in parquet.")
-                                write_to_parquet(cache_path, verify_path, ds, mkdir=local, overwrite=True)
-                                ds = read_from_parquet(cache_path) # Reopen dataset to truncate the computational path
+                                write_to_parquet(cache_write_path, verify_write_path, ds, mkdir=local, overwrite=True)
+                                ds = read_from_parquet(cache_write_path) # Reopen dataset to truncate the computational path
 
                         elif storage_backend == 'postgres':
                             if check_exists_postgres(cache_key) and force_overwrite is None:
