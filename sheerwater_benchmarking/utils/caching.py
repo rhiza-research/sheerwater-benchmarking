@@ -217,7 +217,7 @@ def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False, 
             new_rows.to_parquet(cache_path, overwrite=False, append=True, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
         else:
             # If it doesn't just write
-            print("Cache doesn't exist for upsert.")
+            print("fCache {cache_path} doesn't exist for upsert.")
             df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow', write_metadata_file=True, write_index=False)
     else:
         if isinstance(df, dd.DataFrame):
