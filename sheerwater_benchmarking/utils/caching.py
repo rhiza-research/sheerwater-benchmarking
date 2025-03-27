@@ -1025,14 +1025,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                 # Store the result
                 if cache:
-                    if ds is None and not upsert:
+                    if ds is None:
                         print(f"Autocaching null result for {null_write_path}.")
-                        if local:
-                            with open(null_write_path, 'wb') as f:
-                                f.write(b'')
-                        else:
-                            with fs.open(null_write_path, 'wb') as f:
-                                f.write(b'')
+                        if not upsert:
+                            if local:
+                                with open(null_write_path, 'wb') as f:
+                                    f.write(b'')
+                            else:
+                                with fs.open(null_write_path, 'wb') as f:
+                                    f.write(b'')
                         return None
 
                     write = False  # boolean to determine if we should write to the cache
