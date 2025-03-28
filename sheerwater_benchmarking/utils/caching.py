@@ -978,7 +978,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                                         # Delete the corrupted cache
                                         if fs.exists(cache_path):
-                                            fs.rm(cache_path)
+                                            fs.rm(cache_path, recursive=True)
                                     else:
                                         raise e
 
