@@ -586,6 +586,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "real_table_name": False,
     }
 
+    nonlocals = locals()
+
     def create_cacheable(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -595,9 +597,19 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             global global_force_overwrite
             global global_temp_caches
 
-            nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
-                auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
-                backend, storage_backend, verify_cache, primary_keys
+            data_type = nonlocals['data_type']
+            cache_args = nonlocals['cache_args']
+            timeseries = nonlocals['timeseries']
+            chunking = nonlocals['chunking']
+            chunk_by_arg = nonlocals['chunk_by_arg']
+            auto_rechunk = nonlocals['auto_rechunk']
+            cache = nonlocals['cache']
+            validate_cache_timeseries = nonlocals['validate_cache_timeseries']
+            cache_disable_if = nonlocals['cache_disable_if']
+            backend = nonlocals['backend']
+            storage_backend = nonlocals['storage_backend']
+            verify_cache = nonlocals['verify_cache']
+            primary_keys = nonlocals['primary_keys']
 
             # Calculate the appropriate cache key
             filepath_only, recompute, dont_recompute, passed_cache, passed_validate_cache_timeseries, \
