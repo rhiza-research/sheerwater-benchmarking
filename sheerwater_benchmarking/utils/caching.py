@@ -376,7 +376,7 @@ def write_to_postgres(df, table_name, overwrite=False, real_table_name=False):
     # Get the postgres write secret
     pgwrite_pass = postgres_write_password()
 
-    if real_cache_name:
+    if real_table_name:
         new_table_name = table_name
     else:
         new_table_name = postgres_table_name(table_name)
