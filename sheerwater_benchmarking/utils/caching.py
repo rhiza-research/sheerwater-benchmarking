@@ -962,20 +962,26 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 print(f"Opening cache {cache_path}")
                                 try:
                                     ds = read_from_parquet(cache_path)
+
+                                    if validate_cache_timeseries and timeseries is not None:
+                                        raise NotImplementedError("""Timeseries validation is not currently implemented
+                                                                  for tabular datasets.""")
+                                    else:
+                                        compute_result = False
                                 except ValueError as e:
                                     if (
                                         "No files satisfy the `parquet_file_extension` criteria"
                                         in str(e)
                                     ) or ("the file is corrupted" in str(e)):
-                                        recompute = True
+                                        print("Detected corrupted parquet cache. Deleting and Recomputing.")
+                                        compute_result = True
+
+                                        # Delete the corrupted cache
+                                        if fs.exists(cache_path)
+                                            fs.rm(cache_path)
                                     else:
                                         raise e
 
-                                if validate_cache_timeseries and timeseries is not None:
-                                    raise NotImplementedError("""Timeseries validation is not currently implemented
-                                                              for tabular datasets.""")
-                                else:
-                                    compute_result = False
 
                         elif backend == 'postgres':
                             ds = read_from_postgres(cache_key)
