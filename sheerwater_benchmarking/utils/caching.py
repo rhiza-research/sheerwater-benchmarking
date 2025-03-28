@@ -1150,7 +1150,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 write_to_postgres(ds, cache_key, overwrite=True, real_table_name=real_table_name)
                                 #ds = read_from_postgres(cache_path)  # Reopen dataset to truncate the computational path
                         else:
-                            raise ValueError("Only delta and postgres backends are implemented for tabular data")
+                            raise ValueError(f"Only delta, parquet, and postgres backends are implemented for tabular data, not {storage_backend}")
                     elif data_type == 'basic':
                         if backend == 'pickle':
                             if fs.exists(cache_path) and force_overwrite is None:
