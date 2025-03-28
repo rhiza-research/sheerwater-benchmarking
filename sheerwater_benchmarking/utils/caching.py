@@ -362,7 +362,7 @@ def check_exists_postgres(table_name):
                            the tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def write_to_postgres(df, table_name, overwrite=False, real_cache_name=False):
+def write_to_postgres(df, table_name, overwrite=False, real_table_name=False):
     """Writes a pandas df as a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
