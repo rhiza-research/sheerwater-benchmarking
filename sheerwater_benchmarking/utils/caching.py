@@ -362,7 +362,7 @@ def check_exists_postgres(table_name):
                            the tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def write_to_postgres(df, table_name, overwrite=False):
+def write_to_postgres(df, table_name, overwrite=False, real_cache_name=False):
     """Writes a pandas df as a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
@@ -376,7 +376,10 @@ def write_to_postgres(df, table_name, overwrite=False):
     # Get the postgres write secret
     pgwrite_pass = postgres_write_password()
 
-    new_table_name = postgres_table_name(table_name)
+    if real_cache_name:
+        new_table_name = table_name
+    else:
+        new_table_name = postgres_table_name(table_name)
 
     try:
         uri = f'postgresql://write:{pgwrite_pass}@35.202.186.38:5432/postgres'
@@ -580,6 +583,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "local": False,
         "verify_cache": None,
         "upsert": False,
+        "real_table_name": False,
     }
 
     def create_cacheable(func):
@@ -598,7 +602,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Calculate the appropriate cache key
             filepath_only, recompute, dont_recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, temporary_intermediate_caches, retry_null_cache, passed_backend, \
-                storage_backend, passed_auto_rechunk, local, passed_verify_cache, upsert = get_cache_args(kwargs, cache_kwargs)
+                storage_backend, passed_auto_rechunk, local, passed_verify_cache, upsert, real_table_name = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
@@ -1143,7 +1147,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_key} in postgres.")
-                                write_to_postgres(ds, cache_key, overwrite=True)
+                                write_to_postgres(ds, cache_key, overwrite=True, real_table_name=real_table_name)
                                 #ds = read_from_postgres(cache_path)  # Reopen dataset to truncate the computational path
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
