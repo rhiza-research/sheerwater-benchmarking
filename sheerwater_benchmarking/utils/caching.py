@@ -499,13 +499,23 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "auto_rechunk":  None,
     }
 
+    nonlocals = locals()
+
     def create_cacheable(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
-            nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
-                auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
-                backend, storage_backend
+            data_type = nonlocals['data_type']
+            cache_args = nonlocals['cache_args']
+            timeseries = nonlocals['timeseries']
+            chunking = nonlocals['chunking']
+            chunk_by_arg = nonlocals['chunk_by_arg']
+            auto_rechunk = nonlocals['auto_rechunk']
+            cache = nonlocals['cache']
+            validate_cache_timeseries = nonlocals['validate_cache_timeseries']
+            cache_disable_if = nonlocals['cache_disable_if']
+            backend = nonlocals['backend']
+            storage_backend = nonlocals['storage_backend']
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
