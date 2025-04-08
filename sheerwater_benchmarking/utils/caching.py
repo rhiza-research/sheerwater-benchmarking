@@ -7,6 +7,7 @@ from inspect import signature, Parameter
 import inspect
 import logging
 import hashlib
+import shutil
 
 import gcsfs
 import fsspec
@@ -993,8 +994,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                         compute_result = True
 
                                         # Delete the corrupted cache
-                                        if fs.exists(cache_path):
-                                            fs.rm(cache_path, recursive=True)
+                                        if local:
+                                            if os.path.exists(cache_path):
+                                                shutil.rmtree(cache_path)
+                                        else:
+                                            if fs.exists(cache_path):
+                                                fs.rm(cache_path, recursive=True)
                                     else:
                                         raise e
 
