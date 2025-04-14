@@ -878,7 +878,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
 
             if not recompute_now and cache:
-                if cache_exists(backend, cache_path, verify_path, local=local, verify_cache=verify_cache):
+                if cache_exists(backend, cache_path, verify_path, local=local, verify_cache=verify_cache, real_table_name=real_table_name):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
                     if data_type == 'array':
