@@ -316,7 +316,7 @@ def postgres_table_name(table_name):
     return hashlib.md5(table_name.encode()).hexdigest()
 
 
-def read_from_postgres(table_name, hash_table_name=True):
+def read_from_postgres(table_name, real_table_name=False):
     """Read a pandas df from a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
@@ -324,12 +324,12 @@ def read_from_postgres(table_name, hash_table_name=True):
 
     Args:
         table_name (str): The table name to read from
-        hash_table_name (bool): whether to hash the table name. Default true
+        real_table_name (bool): whether not to hash the table name. Default False.
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
-    if hash_table_name:
+    if not real_table_name:
         table_name = postgres_table_name(table_name)
 
     try:
@@ -342,7 +342,7 @@ def read_from_postgres(table_name, hash_table_name=True):
                            tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def check_exists_postgres(table_name):
+def check_exists_postgres(table_name, real_table_name=False):
     """Check if table exists in postgres.
 
     Args:
@@ -351,7 +351,8 @@ def check_exists_postgres(table_name):
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
-    table_name = postgres_table_name(table_name)
+    if not real_table_name:
+        table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
@@ -495,7 +496,7 @@ def write_to_terracotta(cache_key, ds):
             write_individual_raster(driver, bucket, ds, cache_key)
 
 
-def cache_exists(backend, cache_path, verify_path=None, local=False, verify_cache=True):
+def cache_exists(backend, cache_path, verify_path=None, local=False, verify_cache=True, real_table_name=False):
     """Check if a cache exists generically."""
     if local:
         assert backend == "parquet", "local storage is only supported for parquet files"
@@ -514,7 +515,7 @@ def cache_exists(backend, cache_path, verify_path=None, local=False, verify_cach
         else:
             return fs.exists(cache_path)
     elif backend == 'postgres':
-        return check_exists_postgres(cache_path)
+        return check_exists_postgres(cache_path, real_table_name=real_table_name)
     else:
         raise ValueError(f'Unknown backend {backend}')
 
@@ -780,7 +781,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     supports_filepath = True
                 elif backend == 'postgres':
                     cache_path = temp + cache_key
-                    null_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
+                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    null_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                     supports_filepath = False
                 else:
                     raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
@@ -1005,7 +1007,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
 
                         elif backend == 'postgres':
-                            ds = read_from_postgres(cache_key)
+                            ds = read_from_postgres(cache_key, real_table_name=real_table_name)
                             if validate_cache_timeseries and timeseries is not None:
                                 raise NotImplementedError("""Timeseries validation is not currently implemented
                                                           for tabular datasets""")
@@ -1152,7 +1154,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 ds = read_from_parquet(cache_write_path) # Reopen dataset to truncate the computational path
 
                         elif storage_backend == 'postgres':
-                            if check_exists_postgres(cache_key) and force_overwrite is None:
+                            if check_exists_postgres(cache_key, real_table_name=real_table_name) and force_overwrite is None:
                                 inp = input(f'A postgres cache already exists at {
                                             cache_key}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -1165,7 +1167,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_key} in postgres.")
                                 write_to_postgres(ds, cache_key, overwrite=True, real_table_name=real_table_name)
-                                #ds = read_from_postgres(cache_path)  # Reopen dataset to truncate the computational path
+                                #ds = read_from_postgres(cache_path, real_table_name=real_table_name)  # Reopen dataset to truncate the computational path
                         else:
                             raise ValueError(f"Only delta, parquet, and postgres backends are implemented for tabular data, not {storage_backend}")
                     elif data_type == 'basic':
