@@ -526,7 +526,7 @@ global_temp_caches = None
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, validate_cache_timeseries=False, cache_disable_if=None,
-              backend=None, storage_backend=None, verify_cache=True, primary_keys=None):
+              backend=None, storage_backend=None, verify_cache=True, primary_keys=None, real_table_name=None):
     """Decorator for caching function results.
 
     Args:
@@ -585,7 +585,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "local": False,
         "verify_cache": None,
         "upsert": False,
-        "real_table_name": False,
+        "real_table_name": None,
     }
 
     nonlocals = locals()
@@ -612,11 +612,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             storage_backend = nonlocals['storage_backend']
             verify_cache = nonlocals['verify_cache']
             primary_keys = nonlocals['primary_keys']
+            real_table_name = nonlocals['real_table_name']
 
             # Calculate the appropriate cache key
             filepath_only, recompute, dont_recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, temporary_intermediate_caches, retry_null_cache, passed_backend, \
-                storage_backend, passed_auto_rechunk, local, passed_verify_cache, upsert, real_table_name = get_cache_args(kwargs, cache_kwargs)
+                storage_backend, passed_auto_rechunk, local, passed_verify_cache, upsert, passed_real_table_name = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
@@ -628,6 +629,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 backend = passed_backend
             if passed_verify_cache is not None:
                 verify_cache = passed_verify_cache
+            if passed_real_table_name is not None:
+                real_table_name = passed_real_table_name
 
             # Check to see if we are nested! if we are not then reset the global variables
             reset = True
