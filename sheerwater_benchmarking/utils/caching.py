@@ -600,6 +600,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             Only supported for Parquet files right now. Default is False.
         retry_null_cache(bool): If True, ignore and delete the null caches and attempts to recompute
             result for null values. If False (default), will return None for null caches.
+        fail_if_no_cache(bool): Default is False. If True, then if the function hasn't been cached,
+            raise a RuntimeError instead of running it.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -607,6 +609,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "recompute": False,
         "dont_recompute": None,
         "cache": None,
+        "fail_if_no_cache": False,
         "validate_cache_timeseries": None,
         "force_overwrite": None,
         "temporary_intermediate_caches": False,
@@ -647,10 +650,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             real_table_name = nonlocals['real_table_name']
 
             # Calculate the appropriate cache key
-            filepath_only, recompute, dont_recompute, passed_cache, passed_validate_cache_timeseries, \
-                force_overwrite, temporary_intermediate_caches, retry_null_cache, passed_backend, \
-                storage_backend, passed_auto_rechunk, local, passed_verify_cache, upsert, \
-                passed_real_table_name = get_cache_args(kwargs, cache_kwargs)
+            filepath_only, recompute, dont_recompute, passed_cache, fail_if_no_cache, \
+                passed_validate_cache_timeseries, force_overwrite, temporary_intermediate_caches, \
+                retry_null_cache, passed_backend, storage_backend, passed_auto_rechunk, local, \
+                passed_verify_cache, upsert, passed_real_table_name = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
@@ -1106,6 +1109,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         # The function isn't cacheable, recomputing
                         pass
                     else:
+                        if fail_if_no_cache:
+                            raise RuntimeError(f"Cache doesn't exist for {cache_key}.")
                         print(f"Cache doesn't exist for {cache_key}. Running function")
 
                     if timeseries is not None and (start_time is None or end_time is None):
