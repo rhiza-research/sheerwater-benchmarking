@@ -1308,9 +1308,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                     # Assign start and end times if None are passed
                     if start_time is None:
-                        start_time = ds[time_col].min().values
+                        start_time = pd.Timestamp("1900")
                     if end_time is None:
-                        end_time = ds[time_col].max().values
+                        end_time = pd.Timestamp("2100")
 
                     if data_type == 'array' and isinstance(ds, xr.Dataset):
                         ds = ds.sel({time_col: slice(start_time, end_time)})
