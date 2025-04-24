@@ -5,10 +5,12 @@ import terracotta as tc
 import re
 import sqlalchemy
 from sqlalchemy import text
+import sqlalchemy
+import pandas as pd
 import xarray as xr
 
 from sheerwater_benchmarking.utils import dask_remote
-from sheerwater_benchmarking.utils.secrets import postgres_write_password
+from sheerwater_benchmarking.utils.secrets import postgres_write_password, postgres_admin_password
 from sheerwater_benchmarking.utils.caching import read_from_postgres
 
 
@@ -124,6 +126,29 @@ def cache_list(backend, name, glob):
     else:
         raise ValueError("Unsupported backend.")
 
+def cache_cleanup(backend):
+    if backend == 'postgres':
+        # Get the cache names table
+        df = read_from_postgres('cache_tables', hash_table_name=False)
+
+        # Get all the tables we know about
+        pgadmin_pass = postgres_admin_password()
+
+        engine = sqlalchemy.create_engine(
+            f'postgresql://postgres:{pgadmin_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+        all_df = pd.read_sql_query(f'select * from "information_schema.tables"', con=engine)
+        all_df = all_df[all_df['table_schema'] == 'public']
+        all_df = all_df[all_df['table_type'] == 'BASE_TABLE']
+
+        print(df)
+        print(all_df)
+        print(len(df))
+        print(len(all_df))
+
+        # Remove the cache table names
+
+    else:
+        raise ValueError("Can only cleanup postgres caches")
 
 def cache_delete(backend, name, glob):
     """Delete all the caches that match the given name and glob pattern.

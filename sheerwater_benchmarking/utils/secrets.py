@@ -38,6 +38,17 @@ def postgres_read_password():
 
     return key
 
+def postgres_admin_password():
+    """Get a postgres read password."""
+    client = secretmanager.SecretManagerServiceClient()
+
+    response = client.access_secret_version(
+        request={"name": "projects/750045969992/secrets/sheerwater-postgres-admin-password/versions/latest"})
+    key = response.payload.data.decode("UTF-8")
+
+    return key
+
+
 
 def cdsapi_secret():
     """Fetches the CDS API secret from the secret manager."""
