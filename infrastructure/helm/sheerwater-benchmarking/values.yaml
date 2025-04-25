@@ -27,12 +27,10 @@ grafana:
       memory: 1Gi
 
 
-postgres:
+timescale:
   image: 
-    #repository: timescale/timescaledb
-      #tag: "2.19.0-pg15"
-    repository: postgres
-    tag: "15.12"
+   repository: timescale/timescaledb
+   tag: "2.19.0-pg15"
 
   pv:
     name: name
@@ -46,6 +44,7 @@ postgres:
     requests:
       cpu: 250m
       memory: 1Gi
+
 
 terracotta:
   image: 
