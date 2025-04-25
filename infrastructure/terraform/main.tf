@@ -193,6 +193,47 @@ resource "google_compute_disk" "sheerwater_benchmarking_db_ssd" {
 }
 
 
+### New timescale disk and policy
+resource "google_compute_resource_policy" "timescaledb_snapshot_policy" {
+  name = "sheerwater-benchmarking-timescaledb-snapshot-policy"
+  region = "us-central1"
+  snapshot_schedule_policy {
+    schedule {
+      daily_schedule {
+        days_in_cycle = 1
+        start_time = "04:00"
+      }
+    }
+    retention_policy {
+      max_retention_days    = 30
+      on_source_disk_delete = "KEEP_AUTO_SNAPSHOTS"
+    }
+  }
+  project = "rhiza-shared"
+}
+
+resource "google_compute_disk_resource_policy_attachment" "timescale_attachment" {
+  name = google_compute_resource_policy.timescaledb_snapshot_policy.name
+  disk = google_compute_disk.sheerwater_benchmarking_timescaledb_ssd.name
+  zone = "us-central1-a"
+  project = "rhiza-shared"
+}
+
+# Create new disk from the specific snapshot
+resource "google_compute_disk" "sheerwater_benchmarking_timescaledb_ssd" {
+  name     = "sheerwater-benchmarking-timescaledb-ssd"
+  type     = "pd-ssd"
+  zone     = "us-central1-a"
+  size     = 200
+  project  = "rhiza-shared"
+
+  # Prevent accidental deletion
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+
 #################
 # Grafana
 #################
@@ -304,17 +345,17 @@ resource "helm_release" "sheerwater_benchmarking" {
     value = data.google_secret_manager_secret_version.sheerwater_sendgrid_api_key.secret_data
   }
 
-  # Postgres settings
+  # Timescale settings
   set {
-    name = "postgres.pv.name"
-    value = google_compute_disk.sheerwater_benchmarking_db_ssd.name
+    name = "timescale.pv.name"
+    value = google_compute_disk.sheerwater_benchmarking_timescaledb_ssd.name
   }
   set {
-    name = "postgres.pv.size"
-    value = google_compute_disk.sheerwater_benchmarking_db_ssd.size
+    name = "timescale.pv.size"
+    value = google_compute_disk.sheerwater_benchmarking_timescaledb_ssd.size
   }
   set_sensitive {
-    name = "postgres.admin_password"
+    name = "timescale.admin_password"
     value = random_password.db_admin_password.result
   }
 
