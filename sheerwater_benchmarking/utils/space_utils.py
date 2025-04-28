@@ -31,17 +31,27 @@ def get_grid(grid, base="base180"):
     """
     if grid == "global1_5":
         grid_size = 1.5
-        lons = np.arange(-180, 180, 1.5)
-        lats = np.arange(-90, 90+grid_size, 1.5)
+        lons = np.arange(-180, 180, grid_size)
+        lats = np.arange(-90, 90+grid_size, grid_size)
+    elif grid == "chirps":
+        grid_size = 0.05
+        offset = 0.025
+        lons = np.arange(-180.0+offset, 180.0, grid_size)
+        lats = np.arange(-90.0+offset, 90.0, grid_size)
+    elif grid == "imerg":
+        grid_size = 0.1
+        offset = 0.05
+        lons = np.arange(-180.0+offset, 180.0, grid_size)
+        lats = np.arange(-90.0+offset, 90.0, grid_size)
     elif grid == "global0_25":
         grid_size = 0.25
         lons = np.arange(-180, 180, 0.25)
-        lats = np.arange(-90, 90+grid_size, 0.25)
+        lats = np.arange(-90, 90+grid_size, grid_size)
     elif grid == "salient0_25":
         grid_size = 0.25
         offset = 0.125
-        lons = np.arange(-180.0+offset, 180.0, 0.25)
-        lats = np.arange(-90.0+offset, 90.0, 0.25)
+        lons = np.arange(-180.0+offset, 180.0, grid_size)
+        lats = np.arange(-90.0+offset, 90.0, grid_size)
     else:
         raise NotImplementedError(
             f"Grid {grid} has not been implemented.")

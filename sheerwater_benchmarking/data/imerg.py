@@ -44,7 +44,8 @@ def imerg_gridded(start_time, end_time, grid):
     ds = ds.rename({'precipitation': 'precip'})
 
     # regrid
-    ds = regrid(ds, grid, base='base180', method='conservative')
+    if grid != 'imerg':
+        ds = regrid(ds, grid, base='base180', method='conservative')
 
     return ds
 

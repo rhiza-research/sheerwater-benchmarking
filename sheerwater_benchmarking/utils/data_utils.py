@@ -203,7 +203,12 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
     if mask == 'lsm':
         # Import here to avoid circular imports
         from sheerwater_benchmarking.masks import land_sea_mask
-        mask_ds = land_sea_mask(grid=grid).compute()
+
+        if grid == 'global1_5' or grid == 'global0_25':
+            mask_ds = land_sea_mask(grid=grid).compute()
+        else:
+            mask_ds = land_sea_mask(grid='global0_25')
+            mask_ds = regrid(mask_ds, grid, method='nearest').compute()
     else:
         raise NotImplementedError("Only land-sea mask is implemented.")
 
@@ -213,6 +218,13 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
 
     if check_bases(ds, mask_ds) == -1:
         raise ValueError("Datasets have different longitude bases. Cannot mask.")
+
+    # This MUST be np.float32 as of 4/28/25...unsure why?
+    # Otherwise the mask doesn't match and lat/lons get dropped
+    mask_ds['lon'] = np.round(mask_ds.lon, 5).astype(np.float32)
+    mask_ds['lat'] = np.round(mask_ds.lat, 5).astype(np.float32)
+    ds['lon'] = np.round(ds.lon, 5).astype(np.float32)
+    ds['lat'] = np.round(ds.lat, 5).astype(np.float32)
 
     if isinstance(var, str):
         # Mask a single variable
