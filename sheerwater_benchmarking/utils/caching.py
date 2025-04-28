@@ -381,7 +381,7 @@ def check_exists_postgres(table_name, real_table_name=False):
 
     try:
         engine = sqlalchemy.create_engine(
-            f'postgresql://read:{pgread_pass}@35.202.186.38:5432/postgres')
+            f'postgresql://read:{pgread_pass}@34.59.163.82:5432/postgres')
         insp = sqlalchemy.inspect(engine)
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
@@ -412,7 +412,7 @@ def write_to_postgres(df, table_name, overwrite=False, real_table_name=False):
         new_table_name = postgres_table_name(table_name)
 
     try:
-        uri = f'postgresql://write:{pgwrite_pass}@35.202.186.38:5432/postgres'
+        uri = f'postgresql://write:{pgwrite_pass}@34.59.163.82:5432/postgres'
         engine = sqlalchemy.create_engine(uri)
 
         exists = 'fail'
