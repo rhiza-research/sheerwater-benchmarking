@@ -1,17 +1,20 @@
 """Automated dataframe caching utilities."""
+import os
 import datetime
 import dateparser
 from functools import wraps
 from inspect import signature, Parameter
+import inspect
 import logging
 import hashlib
+import shutil
 
 import gcsfs
+import fsspec
 from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
 from rasterio.enums import Resampling
 from google.cloud import storage
-import terracotta as tc
 import sqlalchemy
 import pickle
 
@@ -27,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 CHUNK_SIZE_UPPER_LIMIT_MB = 300
 CHUNK_SIZE_LOWER_LIMIT_MB = 30
+
+LOCAL_CACHE_DIR = os.path.expanduser("~/.cache/sheerwater/")
 
 
 def get_cache_args(kwargs, cache_kwargs):
@@ -171,21 +176,98 @@ def read_from_delta(cache_path):
 
 def read_from_parquet(cache_path):
     """Read from a deltatable into a pandas dataframe."""
-    return dd.read_parquet(cache_path, engine='pyarrow')
+    return dd.read_parquet(cache_path, engine='pyarrow', ignore_metadata_file=True)
 
 
-def write_to_parquet(cache_path, df, overwrite=False):
+def write_to_parquet(cache_path, verify_path, df, mkdir=False, overwrite=False, upsert=False, primary_keys=None):
     """Write a pandas or dask dataframe to a parquet."""
     part = None
     if hasattr(df, 'cache_partition'):
         part = df.cache_partition
 
-    if isinstance(df, dd.DataFrame):
-        df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
-    elif isinstance(df, pd.DataFrame):
-        df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
+    if 'gs://' in cache_path:
+        fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
     else:
-        raise ValueError("Can only write dask and pandas dataframes to parquet.")
+        fs = fsspec.filesystem('file')
+
+
+    if upsert:
+        if primary_keys is None:
+            raise ValueError("Upsert may only be performed with primary keys specified")
+
+        if not isinstance(df, dd.DataFrame):
+            raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
+
+        # Check to see if the cache exists
+        fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+        if fs.exists(verify_path) and fs.exists(cache_path):
+            if fs.exists(verify_path):
+                fs.rm(verify_path, recursive=True)
+
+            print("Found existing cache for upsert.")
+            existing_df = read_from_parquet(cache_path)
+
+            # remove any rows already in t
+            outer_join = existing_df.merge(df, how = 'outer', indicator = True)
+            new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
+
+            # Coearce dtypes
+            #new_rows = new_rows.astype(existing_df.dtypes)
+
+            # write in append mode
+            print("Appending new rows to existing parquet.")
+            new_rows.to_parquet(
+                cache_path,
+                overwrite=False,
+                append=True,
+                partition_on=part,
+                engine="pyarrow",
+                write_metadata_file=True,
+                write_index=False,
+            )
+
+            fs.touch(verify_path)
+        else:
+            if fs.exists(verify_path):
+                fs.rm(verify_path, recursive=True)
+
+            # If it doesn't just write
+            print(f"Cache {cache_path} doesn't exist for upsert.")
+            df.to_parquet(
+                cache_path,
+                overwrite=overwrite,
+                partition_on=part,
+                engine="pyarrow",
+                write_metadata_file=True,
+                write_index=False,
+            )
+
+            fs.touch(verify_path)
+    else:
+        if fs.exists(verify_path):
+            fs.rm(verify_path, recursive=True)
+
+        if fs.exists(cache_path):
+            fs.rm(cache_path, recursive=True)
+
+
+        if isinstance(df, dd.DataFrame):
+            df.to_parquet(
+                cache_path,
+                overwrite=overwrite,
+                partition_on=part,
+                engine="pyarrow",
+                write_metadata_file=True,
+                write_index=False,
+            )
+        elif isinstance(df, pd.DataFrame):
+            if mkdir and not os.path.exists(os.path.dirname(cache_path)):
+                os.makedirs(os.path.dirname(cache_path))
+            df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
+        else:
+            raise ValueError("Can only write dask and pandas dataframes to parquet.")
+
+        fs.touch(verify_path)
 
 
 def write_to_delta(cache_path, df, overwrite=False):
@@ -256,7 +338,7 @@ def postgres_table_name(table_name):
     return hashlib.md5(table_name.encode()).hexdigest()
 
 
-def read_from_postgres(table_name, hash_table_name=True):
+def read_from_postgres(table_name, real_table_name=False):
     """Read a pandas df from a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
@@ -264,12 +346,12 @@ def read_from_postgres(table_name, hash_table_name=True):
 
     Args:
         table_name (str): The table name to read from
-        hash_table_name (bool): whether to hash the table name. Default true
+        real_table_name (bool): whether not to hash the table name. Default False.
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
-    if hash_table_name:
+    if not real_table_name:
         table_name = postgres_table_name(table_name)
 
     try:
@@ -282,20 +364,24 @@ def read_from_postgres(table_name, hash_table_name=True):
                            tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def check_exists_postgres(table_name):
+def check_exists_postgres(table_name, real_table_name=False):
     """Check if table exists in postgres.
 
     Args:
         table_name: The table name to check
+        real_table_name(bool): Use the function name and arguments as the name of the table, instead
+            of hashing them first. This will fail if any argument has a character that Postgres
+            doesn't allow in a table name.
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
-    table_name = postgres_table_name(table_name)
+    if not real_table_name:
+        table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
-            f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+            f'postgresql://read:{pgread_pass}@34.59.163.82:5432/postgres')
         insp = sqlalchemy.inspect(engine)
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
@@ -303,29 +389,42 @@ def check_exists_postgres(table_name):
                            the tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def write_to_postgres(pandas_df, table_name, overwrite=False):
+def write_to_postgres(df, table_name, overwrite=False, real_table_name=False):
     """Writes a pandas df as a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
     we'll just hard code a connection to the running sheerwater database.
 
     Args:
-        pandas_df: A pandas dataframe
+        df: A pandas dataframe
         table_name: The table name to write to
         overwrite (bool): whether to overwrite an existing table
+        real_table_name(bool): Use the function name and arguments as the name of the table, instead
+            of hashing them first. This will fail if any argument has a character that Postgres
+            doesn't allow in a table name.
     """
     # Get the postgres write secret
     pgwrite_pass = postgres_write_password()
 
-    new_table_name = postgres_table_name(table_name)
+    if real_table_name:
+        new_table_name = table_name
+    else:
+        new_table_name = postgres_table_name(table_name)
 
     try:
-        engine = sqlalchemy.create_engine(
-            f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+        uri = f'postgresql://write:{pgwrite_pass}@34.59.163.82:5432/postgres'
+        engine = sqlalchemy.create_engine(uri)
+
+        exists = 'fail'
         if overwrite:
-            pandas_df.to_sql(new_table_name, engine, if_exists='replace')
+            exists = 'replace'
+
+        if isinstance(df, pd.DataFrame):
+            df.to_sql(new_table_name, engine, if_exists=exists, index=False)
+        elif isinstance(df, dd.DataFrame):
+            df.to_sql(new_table_name, uri=uri, if_exists=exists, index=False, parallel=True, chunksize=10000)
         else:
-            pandas_df.to_sql(new_table_name, engine)
+            raise RuntimeError("Did not return dataframe type.")
 
         # Also log the table name in the tables table
         pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
@@ -346,6 +445,8 @@ def write_to_terracotta(cache_key, ds):
         clip_extreme_quantile(float): The quantile to clip the data at
     """
     # Check to make sure this is geospatial data
+    import terracotta as tc
+
     lats = ['lat', 'y', 'latitude']
     lons = ['lon', 'x', 'longitude']
     if len(ds.dims) != 2:
@@ -423,12 +524,15 @@ def write_to_terracotta(cache_key, ds):
             write_individual_raster(driver, bucket, ds, cache_key)
 
 
-def cache_exists(backend, cache_path, verify_path=None):
+def cache_exists(backend, cache_path, verify_path=None, local=False, verify_cache=True, real_table_name=False):
     """Check if a cache exists generically."""
+    if local:
+        assert backend == "parquet", "local storage is only supported for parquet files"
+        return os.path.exists(cache_path)
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-        if backend == 'zarr':
+        if (backend == 'zarr' or backend == 'parquet') and verify_cache:
             if not fs.exists(verify_path) and fs.exists(cache_path):
                 print("Found cache, but it appears to be corrupted. Recomputing.")
                 return False
@@ -439,14 +543,18 @@ def cache_exists(backend, cache_path, verify_path=None):
         else:
             return fs.exists(cache_path)
     elif backend == 'postgres':
-        return check_exists_postgres(cache_path)
+        return check_exists_postgres(cache_path, real_table_name=real_table_name)
     else:
         raise ValueError(f'Unknown backend {backend}')
 
+global_recompute = None
+global_force_overwrite = None
+global_dont_recompute= None
+global_temp_caches = None
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
-              auto_rechunk=False, cache=True, validate_cache_timeseries=True, cache_disable_if=None,
-              backend=None, storage_backend=None):
+              auto_rechunk=False, cache=True, validate_cache_timeseries=False, cache_disable_if=None,
+              backend=None, storage_backend=None, verify_cache=True, primary_keys=None, real_table_name=None):
     """Decorator for caching function results.
 
     Args:
@@ -468,14 +576,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             will modify the chunking dict values for lat, lon, and time, depending
             on the value of the 'grid' argument. If multiple cache arguments specify
             modifiers for the same chunking dimension, the last one specified will prevail.
-        auto_rechunk(bool): If True will aggressively rechunk a cache on load.
+        auto_rechunk(bool): If True, will rechunk the cache on load if the cache chunking
+            does not match the requested chunking. Default is False.
         cache(bool): Whether to cache the result.
         validate_cache_timeseries(bool): Whether to validate the cache timeseries against the
             requested timeseries. If False, will not validate the cache timeseries.
-        force_overwrite(bool): Whether to overwrite the cache if it
-            already exists (if False, will prompt the user before overwriting).
-        retry_null_cache(bool): If True, ignore and delete the null caches and attempts to recompute
-            result for null values. If False (default), will return None for null caches.
         cache_disable_if(dict, list): If the cache arguments match the dict or list of dicts
             then the cache will be disabled. This is useful for disabling caching based on
             certain arguments. Defaults to None.
@@ -483,34 +588,72 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             default, zarr, delta, postgres, terracotta.
         storage_backend(str): The name of the backend to use for cache storage only. None
             to match backend. Useful for pulling from one backend and writing to another.
-        auto_rechunk(bool): If True, will rechunk the cache on load if the cache chunking
-            does not match the requested chunking. Default is False.
+        real_table_name(bool): Only for Postgres. Use the function name and arguments as the name of
+            the table, instead of hashing them first. This will fail if any argument has a character
+            that Postgres doesn't allow in a table name.
+
+    Additional arguments for the decorated function:
+        force_overwrite(bool): Whether to overwrite the cache if it
+            already exists (if False, will prompt the user before overwriting).
+        local(bool): Cache locally (in ~/.cache/sheerwater), instead of in Google Cloud. This
+            changes both where the decorator looks to load the cache, and where it will save it.
+            Only supported for Parquet files right now. Default is False.
+        retry_null_cache(bool): If True, ignore and delete the null caches and attempts to recompute
+            result for null values. If False (default), will return None for null caches.
+        fail_if_no_cache(bool): Default is False. If True, then if the function hasn't been cached,
+            raise a RuntimeError instead of running it.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
         "filepath_only": False,
         "recompute": False,
+        "dont_recompute": None,
         "cache": None,
+        "fail_if_no_cache": False,
         "validate_cache_timeseries": None,
-        "force_overwrite": False,
+        "force_overwrite": None,
+        "temporary_intermediate_caches": False,
         "retry_null_cache": False,
         "backend": None,
         "storage_backend": None,
         "auto_rechunk":  None,
+        "local": False,
+        "verify_cache": None,
+        "upsert": False,
+        "real_table_name": None,
     }
+
+    nonlocals = locals()
 
     def create_cacheable(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
-            nonlocal data_type, cache_args, timeseries, chunking, chunk_by_arg, \
-                auto_rechunk, cache, validate_cache_timeseries, cache_disable_if, \
-                backend, storage_backend
+            global global_recompute
+            global global_dont_recompute
+            global global_force_overwrite
+            global global_temp_caches
+
+            data_type = nonlocals['data_type']
+            cache_args = nonlocals['cache_args']
+            timeseries = nonlocals['timeseries']
+            chunking = nonlocals['chunking']
+            chunk_by_arg = nonlocals['chunk_by_arg']
+            auto_rechunk = nonlocals['auto_rechunk']
+            cache = nonlocals['cache']
+            validate_cache_timeseries = nonlocals['validate_cache_timeseries']
+            cache_disable_if = nonlocals['cache_disable_if']
+            backend = nonlocals['backend']
+            storage_backend = nonlocals['storage_backend']
+            verify_cache = nonlocals['verify_cache']
+            primary_keys = nonlocals['primary_keys']
+            real_table_name = nonlocals['real_table_name']
 
             # Calculate the appropriate cache key
-            filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
-                force_overwrite, retry_null_cache, passed_backend, \
-                storage_backend, passed_auto_rechunk = get_cache_args(kwargs, cache_kwargs)
+            filepath_only, recompute, dont_recompute, passed_cache, fail_if_no_cache, \
+                passed_validate_cache_timeseries, force_overwrite, temporary_intermediate_caches, \
+                retry_null_cache, passed_backend, storage_backend, passed_auto_rechunk, local, \
+                passed_verify_cache, upsert, passed_real_table_name = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
@@ -520,6 +663,41 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 validate_cache_timeseries = passed_validate_cache_timeseries
             if passed_backend is not None:
                 backend = passed_backend
+            if passed_verify_cache is not None:
+                verify_cache = passed_verify_cache
+            if passed_real_table_name is not None:
+                real_table_name = passed_real_table_name
+
+            # Check to see if we are nested! if we are not then reset the global variables
+            reset = True
+            first = 0
+            for f in inspect.stack():
+                if first <= 1:
+                    first += 1
+                    continue
+
+                first += 1
+
+                if inspect.getframeinfo(f[0]).function == 'wrapper':
+                    reset = False
+
+            if reset:
+                print("Resetting recompute and force overwrite")
+                global_force_overwrite = None
+                global_recompute = None
+                global_dont_recompute = None
+                global_temp_caches = None
+
+            if force_overwrite is not None:
+                global_force_overwrite = force_overwrite
+            elif global_force_overwrite is not None:
+                force_overwrite= global_force_overwrite
+
+            if global_temp_caches is True and temporary_intermediate_caches is False:
+                temporary_intermediate_caches = True
+            elif global_temp_caches is None and temporary_intermediate_caches is True:
+                global_temp_caches = True
+                temporary_intermediate_caches = False
 
             params = signature(func).parameters
 
@@ -600,6 +778,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     flat_values.append(str(val))
 
             cache_key = func.__name__ + '/' + '_'.join(flat_values)
+
+            temp = ''
+            if temporary_intermediate_caches is True:
+                print(f"Setting temp caches for func {func.__name__}")
+                temp = 'temp/'
+
             verify_path = None
             if data_type == 'array':
                 backend = "zarr" if backend is None else backend
@@ -607,8 +791,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     storage_backend = backend
 
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
+                cache_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.zarr'
                 verify_path = "gs://sheerwater-datalake/caches/" + cache_key + '.verify'
+                verify_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.verify'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                null_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
                 # Set the default
@@ -618,15 +805,23 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                 if backend == 'delta':
                     cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.delta'
+                    cache_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.delta'
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    null_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'parquet':
-                    cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.parquet'
-                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    prefix = LOCAL_CACHE_DIR if local else "gs://sheerwater-datalake/caches/"
+                    cache_path = prefix + cache_key + '.parquet'
+                    cache_write_path = prefix + temp + cache_key + '.parquet'
+                    verify_path = prefix + cache_key + '.verify'
+                    verify_write_path = prefix + temp + cache_key + '.verify'
+                    null_path = prefix + cache_key + '.null'
+                    null_write_path = prefix + temp + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'postgres':
-                    cache_path = cache_key
+                    cache_path = temp + cache_key
                     null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    null_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                     supports_filepath = False
                 else:
                     raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
@@ -635,7 +830,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if storage_backend is None:
                     storage_backend = backend
                 cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.pkl'
+                cache_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.pkl'
                 null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                null_write_path = "gs://sheerwater-datalake/caches/" + temp + cache_key + '.null'
                 supports_filepath = True
             else:
                 raise ValueError("Caching currently only supports the 'array', 'tabular', and 'basic' datatypes")
@@ -645,15 +842,90 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             ds = None
             compute_result = True
-            fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
-            # Delete the null cache if retry null cache is passed
-            if fs.exists(null_path) and retry_null_cache:
-                print(f"Removing and retrying null cache {null_path}.")
-                fs.rm(null_path, recursive=True)
+            if local:
+                # Don't define fs if local. This will throw a NameError or UnboundLocalError if we
+                # try to talk to Google Cloud.
 
-            if not recompute and cache:
-                if cache_exists(backend, cache_path, verify_path):
+                # Delete the null cache if retry null cache is passed
+                if os.path.exists(null_path) and retry_null_cache:
+                    print(f"Removing and retrying null cache {null_path}.")
+                    os.unlink(null_path, recursive=True)
+            else:
+                fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+
+                # Delete the null cache if retry null cache is passed
+                if fs.exists(null_path) and retry_null_cache:
+                    print(f"Removing and retrying null cache {null_path}.")
+                    fs.rm(null_path, recursive=True)
+
+
+            # If recompute is True -> recompute once -> don't set global flag, act like normal.
+            # If recompute is a string or list -> recompute until function matches then set to false
+            # -> set recompute flag until match.
+
+            recompute_now = False
+
+
+            if global_recompute is None:
+                if recompute is False:
+                    pass
+                elif recompute is True:
+                    print("Top level recompute requested. Recomputing once.")
+                    recompute_now = True
+                elif isinstance(recompute, str) or isinstance(recompute, list):
+                    if isinstance(recompute, str):
+                        recompute = [recompute]
+
+                    print(f'Recomputation of functions {recompute} requested. Recomputing until found')
+                    recompute_now = True
+
+                    # Check to see if we are one of the functions
+                    if func.__name__ in recompute:
+                        recompute.remove(func.__name__)
+
+                    # Set the global_recompute
+                    global_recompute = recompute
+
+                    if len(global_recompute) == 0:
+                        print("Done recomputing after this function.")
+                        global_recompute = None
+            elif global_recompute:
+                print(f"Global recompute var set to {global_recompute}. recomputing.")
+
+                recompute_now = True
+
+                # Check to see if we are one of the functions
+                if func.__name__ in global_recompute:
+                    global_recompute.remove(func.__name__)
+
+                if len(global_recompute) == 0:
+                    print("Done recomputing after this function.")
+                    global_recompute = None
+
+            if global_dont_recompute is None:
+                if isinstance(dont_recompute, str) or isinstance(dont_recompute, list):
+                    if isinstance(dont_recompute, str):
+                        dont_recompute = [dont_recompute]
+
+                    global_dont_recompute = dont_recompute
+
+            # also don't recompute if need
+            if global_dont_recompute is not None:
+                if func.__name__ in global_dont_recompute:
+                    print(f"Function {func.__name__} in dont recompute. Not recomputing.")
+                    recompute_now = False
+
+
+            if not recompute_now and cache:
+                if cache_exists(
+                    backend,
+                    cache_path,
+                    verify_path,
+                    local=local,
+                    verify_cache=verify_cache,
+                    real_table_name=real_table_name,
+                ):
                     # Read the cache
                     print(f"Found cache for {cache_path}")
                     if data_type == 'array':
@@ -695,11 +967,16 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     if fs.exists(cache_path):
                                         fs.rm(cache_path, recursive=True)
 
-                                    fs.mv(temp_cache_path, cache_path, recursive=True)
-                                    fs.mv(temp_verify_path, verify_path, recursive=True)
+                                    fs.mv(temp_cache_path, cache_write_path, recursive=True)
+                                    fs.mv(temp_verify_path, verify_write_path, recursive=True)
 
                                     # Reopen the dataset
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                    ds = xr.open_dataset(
+                                        cache_write_path,
+                                        engine="zarr",
+                                        chunks={},
+                                        decode_timedelta=True,
+                                    )
                                 else:
                                     # Requested chunks already match rechunk.
                                     pass
@@ -754,16 +1031,35 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 return cache_path
                             else:
                                 print(f"Opening cache {cache_path}")
-                                ds = read_from_parquet(cache_path)
+                                try:
+                                    ds = read_from_parquet(cache_path)
 
-                                if validate_cache_timeseries and timeseries is not None:
-                                    raise NotImplementedError("""Timeseries validation is not currently implemented
-                                                              for tabular datasets.""")
-                                else:
-                                    compute_result = False
+                                    if validate_cache_timeseries and timeseries is not None:
+                                        raise NotImplementedError("""Timeseries validation is not currently implemented
+                                                                  for tabular datasets.""")
+                                    else:
+                                        compute_result = False
+                                except ValueError as e:
+                                    if (
+                                        "No files satisfy the `parquet_file_extension` criteria"
+                                        in str(e)
+                                    ) or ("the file is corrupted" in str(e)):
+                                        print("Detected corrupted parquet cache. Deleting and Recomputing.")
+                                        compute_result = True
+
+                                        # Delete the corrupted cache
+                                        if local:
+                                            if os.path.exists(cache_path):
+                                                shutil.rmtree(cache_path)
+                                        else:
+                                            if fs.exists(cache_path):
+                                                fs.rm(cache_path, recursive=True)
+                                    else:
+                                        raise e
+
 
                         elif backend == 'postgres':
-                            ds = read_from_postgres(cache_key)
+                            ds = read_from_postgres(cache_key, real_table_name=real_table_name)
                             if validate_cache_timeseries and timeseries is not None:
                                 raise NotImplementedError("""Timeseries validation is not currently implemented
                                                           for tabular datasets""")
@@ -792,22 +1088,36 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             raise ValueError("Only pickle backend supported for basic types.")
                     else:
                         print("Auto caching currently only supports array, tabular, and basic types.")
-                elif fs.exists(null_path) and not recompute and cache and not retry_null_cache:
+                elif (
+                    (
+                        (local and os.path.exists(null_path))
+                        or (not local and fs.exists(null_path))
+                    )
+                    and not recompute
+                    and cache
+                    and not retry_null_cache
+                ):
                     print(f"Found null cache for {null_path}. Skipping computation.")
                     return None
 
             if compute_result or backend != storage_backend:
                 if compute_result:
-                    if recompute:
-                        print(f"Recompute for {cache_key} requested. Not checking for cached result.")
+                    if recompute_now:
+                        #print(f"Recompute for {cache_key} requested. Not checking for cached result.")
+                        pass
                     elif not cache:
                         # The function isn't cacheable, recomputing
                         pass
                     else:
+                        if fail_if_no_cache:
+                            raise RuntimeError(f"Cache doesn't exist for {cache_key}.")
                         print(f"Cache doesn't exist for {cache_key}. Running function")
 
                     if timeseries is not None and (start_time is None or end_time is None):
                         raise ValueError('Need to pass start and end time arguments when recomputing function.')
+
+
+                    print(f"Running {func.__name__}")
 
                     ##### IF NOT EXISTS ######
                     ds = func(*args, **kwargs)
@@ -816,30 +1126,55 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 # Store the result
                 if cache:
                     if ds is None:
-                        print(f"Autocaching null result for {null_path}.")
-                        with fs.open(null_path, 'wb') as f:
-                            f.write(b'')
-                            return None
+                        print(f"Autocaching null result for {null_write_path}.")
+                        if not upsert:
+                            if local:
+                                with open(null_write_path, 'wb') as f:
+                                    f.write(b'')
+                            else:
+                                with fs.open(null_write_path, 'wb') as f:
+                                    f.write(b'')
+                        return None
 
                     write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            if cache_exists(storage_backend, cache_path, verify_path) and not force_overwrite:
+                            if (
+                                cache_exists(
+                                    storage_backend,
+                                    cache_path,
+                                    verify_path,
+                                    verify_cache=verify_cache,
+                                )
+                                and force_overwrite is None
+                            ):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path} as zarr.")
+                                print(f"Caching result for {cache_write_path} as zarr.")
                                 if isinstance(ds, xr.Dataset):
                                     cache_map = fs.get_mapper(cache_path)
-                                    chunk_config = chunking if chunking else 'auto'
-                                    chunk_to_zarr(ds, cache_path, verify_path, chunk_config)
+
+                                    if chunking:
+                                        # If we aren't doing auto chunking delete the encoding chunks
+                                        chunk_to_zarr(ds, cache_write_path, verify_write_path, chunking)
+                                    else:
+                                        chunk_to_zarr(ds, cache_write_path, verify_write_path, 'auto')
+
                                     # Reopen the dataset to truncate the computational path
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                    ds = xr.open_dataset(
+                                        cache_write_path,
+                                        engine="zarr",
+                                        chunks={},
+                                        decode_timedelta=True,
+                                    )
                                 else:
                                     raise RuntimeError(
                                         f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
@@ -853,55 +1188,88 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                or none instead of {type(ds)}""")
 
                         # TODO: combine repeated code
+                        write = False
                         if storage_backend == 'delta':
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if fs.exists(cache_path) and force_overwrite is None:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path} in delta.")
-                                write_to_delta(cache_path, ds, overwrite=True)
-                                ds = read_from_delta(cache_path)  # Reopen dataset to truncate the computational path
+                                print(f"Caching result for {cache_write_path} in delta.")
+                                write_to_delta(cache_write_path, ds, overwrite=True)
+                                # Reopen dataset to truncate the computational path
+                                ds = read_from_delta(cache_write_path)
                         elif storage_backend == 'parquet':
-                            if fs.exists(cache_path) and not force_overwrite:
-                                inp = input(f'A cache already exists at {
+                            if (
+                                cache_exists(
+                                    storage_backend,
+                                    cache_path,
+                                    verify_path,
+                                    local=local,
+                                    verify_cache=verify_cache,
+                                )
+                                and force_overwrite is None
+                            ):
+                                inp = input(f'A parquet cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
                             if write:
-                                print(f"Caching result for {cache_path} in parquet.")
-                                write_to_parquet(cache_path, ds, overwrite=True)
-                                ds = read_from_parquet(cache_path)  # Reopen dataset to truncate the computational path
+                                print(f"Caching result for {cache_write_path} in parquet.")
+                                write_to_parquet(
+                                    cache_write_path,
+                                    verify_write_path,
+                                    ds,
+                                    mkdir=local,
+                                    overwrite=True,
+                                    upsert=upsert,
+                                    primary_keys=primary_keys,
+                                )
+                                 # Reopen dataset to truncate the computational path
+                                ds = read_from_parquet(cache_write_path)
 
                         elif storage_backend == 'postgres':
-                            if check_exists_postgres(cache_key) and not force_overwrite:
-                                inp = input(f'A cache already exists at {
-                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                            if (
+                                check_exists_postgres(cache_key, real_table_name=real_table_name)
+                                and force_overwrite is None
+                            ):
+                                inp = input(f'A postgres cache already exists at {
+                                            cache_key}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
                             if write:
                                 print(f"Caching result for {cache_key} in postgres.")
-                                write_to_postgres(ds, cache_key, overwrite=True)
-                                ds = read_from_postgres(cache_path)  # Reopen dataset to truncate the computational path
+                                write_to_postgres(ds, cache_key, overwrite=True, real_table_name=real_table_name)
                         else:
-                            raise ValueError("Only delta and postgres backends are implemented for tabular data")
+                            raise ValueError(
+                                f"Only delta, parquet, and postgres backends are implemented for\
+                                    tabular data, not {storage_backend}"
+                            )
                     elif data_type == 'basic':
                         if backend == 'pickle':
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if fs.exists(cache_path) and force_overwrite is None:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
@@ -938,16 +1306,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                     time_col = match_time[0]
 
-                    # Assign start and end times if None are passed
-                    if start_time is None:
-                        start_time = ds[time_col].min().values
-                    if end_time is None:
-                        end_time = ds[time_col].max().values
-
                     if data_type == 'array' and isinstance(ds, xr.Dataset):
                         ds = ds.sel({time_col: slice(start_time, end_time)})
                     elif data_type == 'tabular' and (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
-                        ds = ds[(ds[time_col] >= start_time) & (ds[time_col] <= end_time)]
+                        if start_time is not None:
+                            ds = ds[ds[time_col] >= start_time]
+                        if end_time is not None:
+                            ds = ds[ds[time_col] <= end_time]
 
                 return ds
 

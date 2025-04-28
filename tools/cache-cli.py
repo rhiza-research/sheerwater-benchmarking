@@ -1,12 +1,23 @@
 """CLI for managing caches."""
 import click
-from cache_utils import cache_delete, cache_list
+from cache_utils import cache_delete, cache_list, cache_cleanup
 
 
 @click.group()
 def cache():
     """CLI for managing caches."""
     pass
+
+@cache.command()
+@click.option('--backend', '-b',
+              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle']),
+              default='zarr',
+              help="The backend to find the cache")
+def cleanup(backend):
+    """Delete all the caches that match the given name and glob pattern."""
+    num = cache_cleanup(backend)
+    #if num is not None:
+    #    click.echo(f"Successfully deleted {num} files")
 
 
 @cache.command()

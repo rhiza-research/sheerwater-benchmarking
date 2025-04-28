@@ -84,7 +84,7 @@ dependencies = [
     "ruff",
     "pytest",
     "scikit-learn",
-    "terracotta",
+    "terracotta==0.8.3",
     "sqlalchemy",
     "psycopg2-binary",
     "xarray-regrid",

@@ -123,6 +123,34 @@ def test_tabular_timeseries():
     assert len(ds3) < len(ds1)
 
 
+
+
+def test_local_timeseries():
+    """Test timeseries caching with data_type='tabular' and local=True.
+
+    Requesting more days of data should return the same thing, because we can't yet
+    validate_cache_timeseries. Requesting fewer should return less data, though.
+
+    We can tell that a function is cached by having it return random data, and checking if the
+    randomness is consistent between calls.
+    """
+    start_time = '2020-01-01'
+    end_time = '2020-01-10'
+
+    ds1 = tabular_timeseries(start_time, end_time, recompute=True, force_overwrite=True, backend="parquet", local=True)
+
+    end_time = '2020-01-15'
+    # Without validate_cache_timeseries, this should return only the original 10 days (and the same values, not
+    # new random numbers).
+    ds2 = tabular_timeseries(start_time, end_time, local=True)
+
+    assert ds1.compute().equals(ds2.compute())
+
+    end_time = '2020-01-07'
+    ds3 = tabular_timeseries(start_time, end_time, local=True)
+    assert len(ds3) < len(ds1)
+
+
 def test_cache_disable_if():
     """Test cache_disable_if argument."""
     @cacheable(data_type='basic',
@@ -182,8 +210,37 @@ def test_cache_disable_if():
     dsp = cached_func3(agg_days=14)
     assert ds == dsp
 
+def test_cache_arg_scope():
+    """Test cache_disable_if argument."""
+    @cacheable(data_type='basic',
+               cache_args=['agg_days'],
+               cache_disable_if={'agg_days': 7})
+    def cached_func(agg_days=7):  # noqa: ARG001
+        return np.random.randint(1000)
+
+    # Instantiate the cache
+    ds = cached_func(agg_days=1)
+    #  Cache should be enabled - these should be equal
+    dsp = cached_func(agg_days=1)
+    assert ds == dsp
+
+    # Instantiate the cache
+    ds = cached_func(agg_days=7)
+    #  Cache should be disabled - these should be different random numbers
+    dsp = cached_func(agg_days=7)
+    assert ds != dsp
+
+    # Retest with agg days 1
+    ds = cached_func(agg_days=1)
+    #  Cache should be disabled - these should be different random numbers
+    dsp = cached_func(agg_days=1)
+    assert ds == dsp
+
 
 if __name__ == "__main__":
     test_null_time_caching()
     test_validate_timeseries()
     test_tabular_timeseries()
+    test_local_timeseries()
+    test_cache_disable_if()
+    test_cache_arg_scope()
