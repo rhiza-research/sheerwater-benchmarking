@@ -331,12 +331,12 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
             print("Found existing cache for upsert.")
             existing_df = read_from_parquet(cache_path)
 
-            # remove any rows already in t
+            # remove any rows already in the dataframe
             outer_join = existing_df.merge(df, how = 'outer', indicator = True)
             new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
 
-            # Coearce dtypes
-            #new_rows = new_rows.astype(existing_df.dtypes)
+            # Coearce dtypes - may not be necessary?
+            # new_rows = new_rows.astype(existing_df.dtypes)
 
             # write in append mode
             print("Appending new rows to existing parquet.")
