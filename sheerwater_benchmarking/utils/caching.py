@@ -305,28 +305,90 @@ def read_from_delta(cache_path):
 
 def read_from_parquet(cache_path):
     """Read from a deltatable into a pandas dataframe."""
-    return dd.read_parquet(cache_path, engine='pyarrow')
+    return dd.read_parquet(cache_path, engine='pyarrow', ignore_metadata_file=True)
 
 
-def write_to_parquet(df, cache_path, verify_path, overwrite=False):
+def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False, primary_keys=None):
     """Write a pandas or dask dataframe to a parquet."""
-    fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
-    if fs.exists(verify_path):
-        fs.rm(verify_path, recursive=True)
-
     part = None
     if hasattr(df, 'cache_partition'):
         part = df.cache_partition
 
-    if isinstance(df, dd.DataFrame):
-        df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
-    elif isinstance(df, pd.DataFrame):
-        df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
-    else:
-        raise ValueError("Can only write dask and pandas dataframes to parquet.")
+    fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
 
-    # Add a lock file to the cache to verify cache integrity, with the current timestamp
-    fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
+    if upsert:
+        if primary_keys is None:
+            raise ValueError("Upsert may only be performed with primary keys specified")
+
+        if not isinstance(df, dd.DataFrame):
+            raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
+
+        # Check to see if the cache exists
+        if fs.exists(verify_path) and fs.exists(cache_path):
+            if fs.exists(verify_path):
+                fs.rm(verify_path, recursive=True)
+
+            print("Found existing cache for upsert.")
+            existing_df = read_from_parquet(cache_path)
+
+            # remove any rows already in t
+            outer_join = existing_df.merge(df, how = 'outer', indicator = True)
+            new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
+
+            # Coearce dtypes
+            #new_rows = new_rows.astype(existing_df.dtypes)
+
+            # write in append mode
+            print("Appending new rows to existing parquet.")
+            new_rows.to_parquet(
+                cache_path,
+                overwrite=False,
+                append=True,
+                partition_on=part,
+                engine="pyarrow",
+                write_metadata_file=True,
+                write_index=False,
+            )
+
+            fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
+        else:
+            if fs.exists(verify_path):
+                fs.rm(verify_path, recursive=True)
+
+            # If it doesn't just write
+            print(f"Cache {cache_path} doesn't exist for upsert.")
+            df.to_parquet(
+                cache_path,
+                overwrite=overwrite,
+                partition_on=part,
+                engine="pyarrow",
+                write_metadata_file=True,
+                write_index=False,
+            )
+
+            fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
+    else:
+        if fs.exists(verify_path):
+            fs.rm(verify_path, recursive=True)
+
+        if fs.exists(cache_path):
+            fs.rm(cache_path, recursive=True)
+
+        if isinstance(df, dd.DataFrame):
+            df.to_parquet(
+                cache_path,
+                overwrite=overwrite,
+                partition_on=part,
+                engine="pyarrow",
+                write_metadata_file=True,
+                write_index=False,
+            )
+        elif isinstance(df, pd.DataFrame):
+            df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
+        else:
+            raise ValueError("Can only write dask and pandas dataframes to parquet.")
+
+        fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
 
 
 def write_to_delta(df, cache_path, overwrite=False):
@@ -563,13 +625,12 @@ def write_to_terracotta(cache_key, ds):
         else:
             write_individual_raster(driver, bucket, ds, cache_key)
 
-
-def cache_exists(backend, cache_path, verify_path=None):
-    """Helper function to check if a cache at a specific cache path exists across backends."""
+def cache_exists(backend, cache_path, verify_path=None, verify_cache=True):
+    """Check if a cache exists generically."""
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
-        if backend in SUPPORTS_VERIFY_FILE:
+        if backend in SUPPORTS_VERIFY_FILE and verify_cache:
             if not fs.exists(verify_path) and fs.exists(cache_path):
                 print("Found cache, but it appears to be corrupted. Recomputing.")
                 return False
@@ -586,8 +647,8 @@ def cache_exists(backend, cache_path, verify_path=None):
 
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
-              auto_rechunk=False, cache=True, validate_cache_timeseries=True, cache_disable_if=None,
-              backend=None, storage_backend=None, cache_local=False):
+              auto_rechunk=False, cache=True, validate_cache_timeseries=False, cache_disable_if=None,
+              backend=None, storage_backend=None, cache_local=False, verify_cache=True, primary_keys=None):
     """Decorator for caching function results.
 
     Args:
@@ -628,6 +689,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             does not match the requested chunking. Default is False.
         cache_local (bool): If True, will mirror the result locally, at the location
             specified by the LOCAL_CACHE_ROOT_DIR variable. Default is False.
+        verify_cache (bool): Verify cache writes complete using a temporary file mechanism.
+        primary_keys (list(str)): Column names of the primary keys to user for upsert.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -641,6 +704,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "storage_backend": None,
         "auto_rechunk":  None,
         "cache_local": False,
+        "verify_cache": None,
+        "upsert": False,
     }
 
     nonlocals = locals()
@@ -661,11 +726,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             backend = nonlocals['backend']
             storage_backend = nonlocals['storage_backend']
             cache_local = nonlocals['cache_local']
+            verify_cache = nonlocals['verify_cache']
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \
-                storage_backend, passed_auto_rechunk, passed_cache_local = get_cache_args(kwargs, cache_kwargs)
+                storage_backend, passed_auto_rechunk, passed_cache_local, \
+                passed_verify_cache, upsert = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
@@ -673,6 +740,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 auto_rechunk = passed_auto_rechunk
             if passed_validate_cache_timeseries is not None:
                 validate_cache_timeseries = passed_validate_cache_timeseries
+            if passed_verify_cache is not None:
+                verify_cache = passed_verify_cache
             if passed_backend is not None:
                 backend = passed_backend
             if passed_cache_local is not None:
@@ -853,7 +922,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             # Now check if the cache exists
             if not recompute and cache:
-                if cache_exists(backend, cache_path, verify_path):
+                if cache_exists(backend, cache_path, verify_path, verify_cache=verify_cache):
                     # Sync the cache from the remote to the local
                     sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
                     print(f"Found cache for {read_cache_path}")
@@ -1020,15 +1089,19 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if cache:
                     if ds is None:
                         print(f"Autocaching null result for {null_path}.")
-                        with fs.open(null_path, 'wb') as f:
-                            f.write(b'')
-                            sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
-                            return None
+                        if not upsert:
+                            with fs.open(null_path, 'wb') as f:
+                                f.write(b'')
+                                sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path,
+                                                  verify_path, null_path)
+
+                        return None
 
                     write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            if cache_exists(storage_backend, cache_path, verify_path) and not force_overwrite:
+                            if (cache_exists(storage_backend, cache_path, verify_path, verify_cache=verify_cache)
+                                and not force_overwrite):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -1074,7 +1147,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 # Reopen dataset to truncate the computational path
                                 ds = read_from_delta(read_cache_path)
                         elif storage_backend == 'parquet':
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if (
+                                cache_exists(
+                                    storage_backend,
+                                    cache_path,
+                                    verify_path,
+                                    verify_cache=verify_cache,
+                                )
+                                and force_overwrite is None
+                            ):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -1084,7 +1165,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_path} in parquet.")
-                                write_to_parquet(ds, cache_path, verify_path, overwrite=True)
+                                write_to_parquet(ds, cache_path, verify_path, overwrite=True,
+                                                 upsert=upsert, primary_keys=primary_keys)
                                 sync_local_remote(backend, fs, read_fs, cache_path,
                                                   read_cache_path, verify_path, null_path)
                                 # Reopen dataset to truncate the computational path
