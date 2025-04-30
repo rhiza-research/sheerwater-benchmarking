@@ -921,7 +921,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 read_fs = fsspec.core.url_to_fs(read_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
 
             # Now check if the cache exists
-            if not recompute and cache:
+            if not recompute and not upsert and cache:
                 if cache_exists(backend, cache_path, verify_path, verify_cache=verify_cache):
                     # Sync the cache from the remote to the local
                     sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
@@ -1072,6 +1072,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if compute_result:
                     if recompute:
                         print(f"Recompute for {cache_key} requested. Not checking for cached result.")
+                    elif upsert:
+                        print("Running function for upsert.")
                     elif not cache:
                         # The function isn't cacheable, recomputing
                         pass
