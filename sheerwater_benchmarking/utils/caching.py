@@ -1,12 +1,13 @@
 """Automated dataframe caching utilities."""
+import os
 import datetime
 import dateparser
 from functools import wraps
 from inspect import signature, Parameter
 import logging
 import hashlib
+import fsspec
 
-import gcsfs
 from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
 from rasterio.enums import Resampling
@@ -27,6 +28,32 @@ logger = logging.getLogger(__name__)
 
 CHUNK_SIZE_UPPER_LIMIT_MB = 300
 CHUNK_SIZE_LOWER_LIMIT_MB = 30
+
+# Global variables for caching configuration
+global_recompute = None
+global_force_overwrite = None
+global_dont_recompute = None
+global_temp_caches = None
+global_cache_local = None
+
+
+def get_fs(cache_path):
+    """Get the appropriate fsspec filesystem for the given cache path.
+
+    Args:
+        cache_path (str): Path to cache file, either local or GCS path
+
+    Returns:
+        fsspec.AbstractFileSystem: Filesystem object for the given path
+    """
+    if cache_path.startswith('gs://'):
+        fs = fsspec.filesystem('gcs', project='sheerwater', token='google_default')
+    elif cache_path.startswith('file://') or not '://' in cache_path:
+        fs = fsspec.filesystem('file')
+    else:
+        raise ValueError("Unsupported protocol in cache_path: must be 'gs://' or local path.")
+
+    return fs
 
 
 def get_cache_args(kwargs, cache_kwargs):
@@ -189,7 +216,7 @@ def write_to_parquet(cache_path, df, overwrite=False):
 
 
 def write_to_delta(cache_path, df, overwrite=False):
-    """Write a pandas dataframe to a delta table."""
+    """Wite a pandas dataframe to a delta table."""
     if isinstance(df, dd.DataFrame):
         print("""Warning: Dask datafame passed to delta backend. Will run `compute()`
                   on the dataframe prior to storage. This will fail if the dataframe
@@ -218,8 +245,7 @@ def write_to_zarr(ds, cache_path, verify_path):
 
     fs.rm(lock)
     """
-    fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-
+    fs = get_fs(cache_path)
     if fs.exists(verify_path):
         fs.rm(verify_path, recursive=True)
 
@@ -427,7 +453,7 @@ def cache_exists(backend, cache_path, verify_path=None):
     """Check if a cache exists generically."""
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
-        fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+        fs = get_fs(cache_path)
         if backend == 'zarr':
             if not fs.exists(verify_path) and fs.exists(cache_path):
                 print("Found cache, but it appears to be corrupted. Recomputing.")
@@ -485,6 +511,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             to match backend. Useful for pulling from one backend and writing to another.
         auto_rechunk(bool): If True, will rechunk the cache on load if the cache chunking
             does not match the requested chunking. Default is False.
+        cache_local (bool): Cache locally (in $SHEERWATER_LOCAL_CACHE), instead of remote cache on 
+            GCS. This changes both where the decorator looks to load the cache, and where it will 
+            save it. Only supported for Parquet files right now. Default is False.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -497,6 +526,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "backend": None,
         "storage_backend": None,
         "auto_rechunk":  None,
+        "cache_local": False,
     }
 
     nonlocals = locals()
@@ -655,7 +685,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             ds = None
             compute_result = True
-            fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+            fs = get_fs(cache_path)
 
             # Delete the null cache if retry null cache is passed
             if fs.exists(null_path) and retry_null_cache:
