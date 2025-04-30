@@ -183,7 +183,7 @@ def test_cache_disable_if():
     assert ds == dsp
 
 def test_cache_arg_scope():
-    """Test that argument scope is not improperly global/inherited between calls"""
+    """Test that argument scope is not improperly global/inherited between calls."""
     @cacheable(data_type='basic',
                cache_args=['agg_days'],
                cache_disable_if={'agg_days': 7})
