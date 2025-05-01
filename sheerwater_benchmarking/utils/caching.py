@@ -572,15 +572,14 @@ def cache_exists(backend, cache_path, verify_path=None, cache_local=False):
     # If local caching is enabled, check the local cache first
     fs = get_fs(cache_path)
     if cache_local and backend not in ['postgres', 'terracotta', 'delta']:
-        # If the local cache exists, return True
         local_cache_path = get_modified_cache_path(cache_path, modification='local')
         local_verify_path = get_modified_cache_path(verify_path, modification='local')
         local_fs = get_fs(local_cache_path)
-        # If both remote and local cache exist, check the verify timestamp (handles corrupt remote cache)
+        # If the local cache exists, AND the remote cache exists (not corrupted), return True
         if _cache_exists(backend, local_cache_path, local_verify_path) and \
                 _cache_exists(backend, cache_path, verify_path):
-            # If we have a local cache, check and make sure the verify timestamp is the same
             if backend in ['zarr', 'parquet', 'pickle']:
+                # If we have a local cache, check and make sure the verify timestamp is the same
                 local_verify_ts = local_fs.open(local_verify_path, 'r').read()
                 remote_verify_ts = fs.open(verify_path, 'r').read()
                 if local_verify_ts == remote_verify_ts:
