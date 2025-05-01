@@ -115,8 +115,6 @@ def get_modified_cache_path(cache_path, modification='local'):
         raise ValueError("Cache path must start with CACHE_ROOT_DIR")
 
 
-
-
 def sync_local_remote(cache_path=None, verify_path=None, null_path=None):
     """Sync a remote cache to a local cache.
 
@@ -726,9 +724,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 # Inherit global cache variables
                 global global_recompute, global_force_overwrite, \
                     global_validate_cache_timeseries, global_retry_null_cache
-                force_overwrite = global_force_overwrite if global_force_overwrite is not None else force_overwrite
-                validate_cache_timeseries = global_validate_cache_timeseries if global_validate_cache_timeseries is not None else validate_cache_timeseries
-                retry_null_cache = global_retry_null_cache if global_retry_null_cache is not None else retry_null_cache
+
+                # Set all global variables
+                if global_force_overwrite is not None:
+                    force_overwrite = global_force_overwrite
+                if global_validate_cache_timeseries is not None:
+                    validate_cache_timeseries = global_validate_cache_timeseries
+                if global_retry_null_cache is not None:
+                    retry_null_cache = global_retry_null_cache
                 if global_recompute:
                     if func.__name__ in global_recompute or global_recompute == '_all':
                         recompute = True
