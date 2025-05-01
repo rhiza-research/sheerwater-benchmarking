@@ -43,8 +43,13 @@ LOCAL_CACHE_ROOT_DIR = os.path.expanduser("~/.cache/sheerwater/caches/")
 def set_global_cache_variables(recompute=None, cache_local=None):
     """Reset all global variables to defaults and set the new values."""
     global global_recompute, global_cache_local
-    global_recompute = recompute
     global_cache_local = cache_local
+
+    # Handle recompute logic, different for top level and nested functions
+    if recompute == True:
+        global_recompute = False
+    else:
+        global_recompute = recompute  # if recompute is false or a list
 
 
 def check_if_nested_fn():
@@ -709,11 +714,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             if not check_if_nested_fn():
                 # This is a top level cacheable function, reset global cache variables
                 set_global_cache_variables(recompute=recompute, cache_local=cache_local)
-
-            # Inherit global cache variables
-            global global_cache_local, global_recompute
-            recompute = global_recompute if global_recompute is not None else recompute
-            cache_local = global_cache_local if global_cache_local is not None else cache_local
+            else:
+                # Inherit global cache variables
+                global global_cache_local, global_recompute
+                cache_local = global_cache_local if global_cache_local is not None else cache_local
+                if global_recompute:
+                    if func.__name__ in global_recompute:
+                        recompute = True
 
             params = signature(func).parameters
 
