@@ -54,7 +54,7 @@ def set_global_cache_variables(recompute=None, force_overwrite=None):
     global_force_overwrite = force_overwrite
 
     # More complex logic for recompute
-    if recompute:
+    if recompute == True:  # noqa: E712
         global_recompute = False
     elif isinstance(recompute, str) and recompute != 'all':
         global_recompute = [recompute]
