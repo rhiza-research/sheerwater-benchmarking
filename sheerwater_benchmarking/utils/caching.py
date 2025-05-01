@@ -33,6 +33,7 @@ CHUNK_SIZE_LOWER_LIMIT_MB = 30
 # Global variables for caching configuration
 global_recompute = None
 global_cache_local = None
+global_force_overwrite = None
 
 # Remote dir for all caches, except for postgres and terracotta
 REMOTE_CACHE_ROOT_DIR = "gs://sheerwater-datalake/caches/"
@@ -40,14 +41,17 @@ REMOTE_CACHE_ROOT_DIR = "gs://sheerwater-datalake/caches/"
 LOCAL_CACHE_ROOT_DIR = os.path.expanduser("~/.cache/sheerwater/caches/")
 
 
-def set_global_cache_variables(recompute=None, cache_local=None):
+def set_global_cache_variables(recompute=None, cache_local=None, force_overwrite=None):
     """Reset all global variables to defaults and set the new values."""
-    global global_recompute, global_cache_local
+    global global_recompute, global_cache_local, global_force_overwrite
     global_cache_local = cache_local
+    global_force_overwrite = force_overwrite
 
     # Handle recompute logic, different for top level and nested functions
     if recompute == True:
         global_recompute = False
+    elif isinstance(recompute, str) and recompute != 'all':
+        global_recompute = [recompute]
     else:
         global_recompute = recompute  # if recompute is false or a list
 
@@ -713,13 +717,17 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Check if this is a nested cacheable function
             if not check_if_nested_fn():
                 # This is a top level cacheable function, reset global cache variables
-                set_global_cache_variables(recompute=recompute, cache_local=cache_local)
+                set_global_cache_variables(recompute=recompute, cache_local=cache_local,
+                                           force_overwrite=force_overwrite)
+                if isinstance(recompute, list) or isinstance(recompute, str) or recompute == 'all':
+                    recompute = True
             else:
                 # Inherit global cache variables
-                global global_cache_local, global_recompute
+                global global_cache_local, global_recompute, global_force_overwrite
                 cache_local = global_cache_local if global_cache_local is not None else cache_local
+                force_overwrite = global_force_overwrite if global_force_overwrite is not None else force_overwrite
                 if global_recompute:
-                    if func.__name__ in global_recompute:
+                    if func.__name__ in global_recompute or global_recompute == 'all':
                         recompute = True
 
             params = signature(func).parameters
@@ -833,10 +841,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 else:
                     raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
             elif data_type == 'basic':
+                backend = "pickle" if backend is None else backend
                 if backend is not 'pickle':
                     raise ValueError("Only pickle backend supported for basic types.")
-
-                backend = "pickle" if backend is None else backend
                 if storage_backend is None:
                     storage_backend = backend
                 cache_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.pkl'

@@ -251,7 +251,6 @@ def test_cache_local():
     assert ds1 == ds5
 
 
-
 if __name__ == "__main__":
     test_null_time_caching()
     test_validate_timeseries()
