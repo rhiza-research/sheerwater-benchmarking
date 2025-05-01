@@ -32,19 +32,23 @@ CHUNK_SIZE_LOWER_LIMIT_MB = 30
 
 # Global variables for caching configuration
 global_recompute = None
-global_cache_local = None
 global_force_overwrite = None
 
 # Remote dir for all caches, except for postgres and terracotta
-REMOTE_CACHE_ROOT_DIR = "gs://sheerwater-datalake/caches/"
+CACHE_ROOT_DIR = "gs://sheerwater-datalake/caches/"
 # Local dir for all caches, except for postgres and terracotta
-LOCAL_CACHE_ROOT_DIR = os.path.expanduser("~/.cache/sheerwater/caches/")
+MIRROR_ROOT_DIR = os.path.expanduser("~/.cache/sheerwater/caches/")
+
+# Check if these are defined as environment variables
+if 'CACHE_ROOT_DIR' in os.environ:
+    CACHE_ROOT_DIR = os.environ['CACHE_ROOT_DIR']
+if 'MIRROR_ROOT_DIR' in os.environ:
+    MIRROR_ROOT_DIR = os.environ['MIRROR_ROOT_DIR']
 
 
-def set_global_cache_variables(recompute=None, cache_local=None, force_overwrite=None):
+def set_global_cache_variables(recompute=None, force_overwrite=None):
     """Reset all global variables to defaults and set the new values."""
-    global global_recompute, global_cache_local, global_force_overwrite
-    global_cache_local = cache_local
+    global global_recompute, global_force_overwrite
     global_force_overwrite = force_overwrite
 
     # Handle recompute logic, different for top level and nested functions
@@ -85,16 +89,16 @@ def get_modified_cache_path(cache_path, modification='local'):
     """
     if cache_path is None:
         return None
-    if cache_path.startswith(REMOTE_CACHE_ROOT_DIR):
-        cache_key = cache_path.split(REMOTE_CACHE_ROOT_DIR)[1]
+    if cache_path.startswith(CACHE_ROOT_DIR):
+        cache_key = cache_path.split(CACHE_ROOT_DIR)[1]
         if modification == 'local':
-            return os.path.join(LOCAL_CACHE_ROOT_DIR, cache_key)
+            return os.path.join(MIRROR_ROOT_DIR, cache_key)
         elif modification == 'temp':
-            return os.path.join(REMOTE_CACHE_ROOT_DIR, 'temp/', cache_key)
+            return os.path.join(CACHE_ROOT_DIR, 'temp/', cache_key)
         else:
             raise ValueError("Invalid modification type")
     else:
-        raise ValueError("Cache path must start with REMOTE_CACHE_ROOT_DIR")
+        raise ValueError("Cache path must start with CACHE_ROOT_DIR")
 
 
 def get_fs(cache_path):
@@ -662,7 +666,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         auto_rechunk(bool): If True, will rechunk the cache on load if the cache chunking
             does not match the requested chunking. Default is False.
         cache_local(bool): If True, will cache the result locally, at the location
-            specified by the LOCAL_CACHE_ROOT_DIR variable. Default is False.
+            specified by the MIRROR_ROOT_DIR variable. Default is False.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -716,14 +720,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Check if this is a nested cacheable function
             if not check_if_nested_fn():
                 # This is a top level cacheable function, reset global cache variables
-                set_global_cache_variables(recompute=recompute, cache_local=cache_local,
-                                           force_overwrite=force_overwrite)
+                set_global_cache_variables(recompute=recompute, force_overwrite=force_overwrite)
                 if isinstance(recompute, list) or isinstance(recompute, str) or recompute == 'all':
                     recompute = True
             else:
                 # Inherit global cache variables
-                global global_cache_local, global_recompute, global_force_overwrite
-                cache_local = global_cache_local if global_cache_local is not None else cache_local
+                global global_recompute, global_force_overwrite
                 force_overwrite = global_force_overwrite if global_force_overwrite is not None else force_overwrite
                 if global_recompute:
                     if func.__name__ in global_recompute or global_recompute == 'all':
@@ -814,9 +816,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if storage_backend is None:
                     storage_backend = backend
 
-                cache_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.zarr'
-                verify_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.verify'
-                null_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.null'
+                cache_path = CACHE_ROOT_DIR + cache_key + '.zarr'
+                verify_path = CACHE_ROOT_DIR + cache_key + '.verify'
+                null_path = CACHE_ROOT_DIR + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
                 # Set the default
@@ -825,17 +827,17 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     storage_backend = backend
 
                 if backend == 'delta':
-                    cache_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.delta'
-                    null_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.null'
+                    cache_path = CACHE_ROOT_DIR + cache_key + '.delta'
+                    null_path = CACHE_ROOT_DIR + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'parquet':
-                    cache_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.parquet'
-                    verify_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.verify'
-                    null_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.null'
+                    cache_path = CACHE_ROOT_DIR + cache_key + '.parquet'
+                    verify_path = CACHE_ROOT_DIR + cache_key + '.verify'
+                    null_path = CACHE_ROOT_DIR + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'postgres':
                     cache_path = cache_key
-                    null_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.null'
+                    null_path = CACHE_ROOT_DIR + cache_key + '.null'
                     supports_filepath = False
                 else:
                     raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
@@ -845,9 +847,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     raise ValueError("Only pickle backend supported for basic types.")
                 if storage_backend is None:
                     storage_backend = backend
-                cache_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.pkl'
-                verify_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.verify'
-                null_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.null'
+                cache_path = CACHE_ROOT_DIR + cache_key + '.pkl'
+                verify_path = CACHE_ROOT_DIR + cache_key + '.verify'
+                null_path = CACHE_ROOT_DIR + cache_key + '.null'
                 supports_filepath = True
             else:
                 raise ValueError("Caching currently only supports the 'array', 'tabular', and 'basic' datatypes")
@@ -910,8 +912,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     # writing to temp cache is necessary because if you overwrite
                                     # the original cache map it will write it before reading the
                                     # data leading to corruption.
-                                    temp_cache_path = REMOTE_CACHE_ROOT_DIR + 'temp/' + cache_key + '.temp'
-                                    temp_verify_path = REMOTE_CACHE_ROOT_DIR + 'temp/' + cache_key + '.verify'
+                                    temp_cache_path = CACHE_ROOT_DIR + 'temp/' + cache_key + '.temp'
+                                    temp_verify_path = CACHE_ROOT_DIR + 'temp/' + cache_key + '.verify'
                                     chunk_to_zarr(ds, temp_cache_path, temp_verify_path, chunking)
 
                                     # Remove the old cache and verify files
