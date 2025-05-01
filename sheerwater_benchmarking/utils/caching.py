@@ -785,6 +785,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             specified by the LOCAL_CACHE_ROOT_DIR variable. Default is False.
         verify_cache (bool): Verify cache writes complete using a temporary file mechanism.
         primary_keys (list(str)): Column names of the primary keys to user for upsert.
+        real_table_name (bool): Use the real table name for postgres writes.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -829,7 +830,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \
+<<<<<<< HEAD
                 storage_backend, passed_auto_rechunk, passed_cache_local, \
+=======
+                storage_backend, passed_auto_rechunk, \
+>>>>>>> 9568285 (fix linting)
                 passed_verify_cache, upsert, passed_real_table_name, \
                 fail_if_no_cache = get_cache_args(kwargs, cache_kwargs)
 
@@ -1286,7 +1291,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 ds = read_from_parquet(read_cache_path)
 
                         elif storage_backend == 'postgres':
-                            if check_exists_postgres(cache_key, real_table_name=real_table_name) and force_overwrite is None:
+                            if (check_exists_postgres(cache_key, real_table_name=real_table_name)
+                               and force_overwrite is None):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
