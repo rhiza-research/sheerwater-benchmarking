@@ -1,5 +1,8 @@
 """Test the caching functions in the cacheable decorator."""
+import os
+import datetime
 import pytest
+import fsspec
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -215,24 +218,38 @@ def test_cache_local():
     @cacheable(data_type='basic',
                cache_args=['agg_days'],
                cache_local=True)
-    def cached_func(agg_days=7):  # noqa: ARG001
+    def cached_func_393(agg_days=7):  # noqa: ARG001
         return np.random.randint(1000)
 
-    @cacheable(data_type='basic',
-               cache_args=['agg_days'],
-               cache_local=True)
-    def cached_func2(agg_days=7):  # noqa: ARG001
-        return cached_func(agg_days=agg_days)
+    # Run for the firs time
+    ds1 = cached_func_393(agg_days=1, cache_local=True)
+    local_path = os.path.expanduser("~/.cache/sheerwater/caches/cached_func_393/1.pkl")
+    local_verify = os.path.expanduser("~/.cache/sheerwater/caches/cached_func_393/1.verify")
+    assert os.path.exists(local_path)
+    assert os.path.exists(local_verify)
 
-    import pdb
-    pdb.set_trace()
+    # Run again to ensure you hit the cache
+    ds2 = cached_func_393(agg_days=1)
+    assert ds1 == ds2
 
-    # Run once to ensure simple timeseries is cached
-    ds1 = cached_func(agg_days=1, cache_local=True)
+    # Run again, but hit the remote
+    # Delete the local cache, shouldn't impact anything
+    os.remove(local_path)
+    ds3 = cached_func_393(agg_days=1, cache_local=False)
+    assert ds1 == ds3
 
-    # Run again with null time
-    ds2 = cached_func(agg_days=1)
-    assert ds1.equals(ds2)
+    # Run again, with local true, should copy remote cache to local
+    ds4 = cached_func_393(agg_days=1, cache_local=True)
+    assert ds1 == ds4
+
+    # Now, corrupt the local cache, by making it out of sync with the remote
+    fs = fsspec.filesystem('file')
+    fs.open(local_verify, 'w').write(
+        datetime.datetime.now(datetime.timezone.utc).isoformat())
+    fs.open(local_path, 'w').write(str(np.random.randint(1000)))
+    ds5 = cached_func_393(agg_days=1, cache_local=True)
+    assert ds1 == ds5
+
 
 
 if __name__ == "__main__":
