@@ -321,8 +321,8 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False):
     fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
 
 
-def write_to_delta(cache_path, df, overwrite=False):
-    """Wite a pandas dataframe to a delta table."""
+def write_to_delta(df, cache_path, overwrite=False):
+    """Write a pandas dataframe to a delta table."""
     if isinstance(df, dd.DataFrame):
         print("""Warning: Dask datafame passed to delta backend. Will run `compute()`
                   on the dataframe prior to storage. This will fail if the dataframe
@@ -1097,7 +1097,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_path} in delta.")
-                                write_to_delta(cache_path, ds, overwrite=True)
+                                write_to_delta(ds, cache_path, overwrite=True)
                                 if cache_local:
                                     sync_local_remote(cache_path=cache_path)
                                 # Reopen dataset to truncate the computational path
