@@ -36,7 +36,6 @@ def test_upsert():
 
     # Call with a random int - should add a row
     r = np.random.randint(10,1000000)
-    print(r)
     df = tabular_timeseries(r, upsert=True)
     ncount = df.shape[0].compute()
     print(ncount)
@@ -49,5 +48,37 @@ def test_upsert():
     assert ncount == npcount
     assert ncount == (scount + 1)
 
+def test_postgres_upsert():
+    # Call to make sure it is in place and count rows
+    # should have some number of rows
+    df = tabular_timeseries(0, backend='postgres', upsert=True)
+
+    # read
+    df = tabular_timeseries(0, backend='postgres')
+    scount = df.shape[0]
+    print(scount)
+
+    # Call with a random int - should add a row
+    r = np.random.randint(10,1000000)
+    df = tabular_timeseries(r, backend='postgres', upsert=True)
+
+    # read
+    df = tabular_timeseries(0, backend='postgres')
+    ncount = df.shape[0]
+    print(ncount)
+
+    # Call with the same random int - should not add a row
+    df = tabular_timeseries(r, backend='postgres', upsert=True)
+
+    # read
+    df = tabular_timeseries(0, backend='postgres')
+    npcount = df.shape[0]
+    print(npcount)
+
+    assert ncount == npcount
+    assert ncount == (scount + 1)
+
+
 if __name__ == "__main__":
-    test_upsert()
+    #test_upsert()
+    test_postgres_upsert()

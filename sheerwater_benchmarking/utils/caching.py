@@ -7,7 +7,11 @@ from functools import wraps
 from inspect import signature, Parameter
 import logging
 import hashlib
+<<<<<<< HEAD
 import fsspec
+=======
+import uuid
+>>>>>>> 24f3408 (add postgres upsert. Enable postgres writing of dask dataframes)
 
 from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
@@ -476,10 +480,12 @@ def read_from_postgres(table_name, hash_table_name=True):
         table_name = postgres_table_name(table_name)
 
     try:
-        engine = sqlalchemy.create_engine(
-            f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+        uri = f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres'
+        engine = sqlalchemy.create_engine(uri)
+
         df = pd.read_sql_query(f'select * from "{table_name}"', con=engine)
         return df
+
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on the
                            tailnet and can see sheerwater-benchmarking-postgres.""")
@@ -506,38 +512,122 @@ def check_exists_postgres(table_name):
                            the tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def write_to_postgres(pandas_df, table_name, overwrite=False):
+def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_keys=None):
     """Writes a pandas df as a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
     we'll just hard code a connection to the running sheerwater database.
 
     Args:
-        pandas_df: A pandas dataframe
+        df: A pandas dataframe
         table_name: The table name to write to
         overwrite (bool): whether to overwrite an existing table
+        upsert (bool): whether to upsert into table
+        primary_keys (list(str)): column names of primary keys for upsert
     """
     # Get the postgres write secret
     pgwrite_pass = postgres_write_password()
 
     new_table_name = postgres_table_name(table_name)
 
-    try:
-        engine = sqlalchemy.create_engine(
-            f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
-        if overwrite:
-            pandas_df.to_sql(new_table_name, engine, if_exists='replace')
-        else:
-            pandas_df.to_sql(new_table_name, engine)
+    if upsert:
+        if primary_keys is None or not isinstance(primary_keys, list):
+            raise ValueError("Upsert may only be performed with primary keys specified as a list.")
 
-        # Also log the table name in the tables table
-        pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
-        pd_name = pd.DataFrame(pd_name)
-        pd_name.to_sql('cache_tables', engine, if_exists='append')
+        if not isinstance(df, dd.DataFrame):
+            raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
 
-    except sqlalchemy.exc.InterfaceError:
-        raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
-                           and can see sheerwater-benchmarking-postgres.""")
+        uri = f'postgresql://write:{pgwrite_pass}@34.59.163.82:5432/postgres'
+        engine = sqlalchemy.create_engine(uri)
+
+        with engine.begin() as conn:
+            # If the table doesn't exist then create it
+            if not conn.exec_driver_sql(f"""SELECT EXISTS (
+                                SELECT FROM information_schema.tables
+                                WHERE  table_schema = 'public'
+                                AND    table_name   = '{new_table_name}');
+                                """).first()[0]:
+
+                print("Postgres cache doesn't exist for upsert. Writing full table.")
+                if isinstance(df, pd.DataFrame):
+                    df.to_sql(new_table_name, engine, index=False)
+                elif isinstance(df, dd.DataFrame):
+                    df.to_sql(new_table_name, uri=uri, index=False, parallel=True, chunksize=10000)
+                else:
+                    raise RuntimeError("Did not return dataframe type.")
+
+                pd_name = {'table_name': [table_name], 'table_key': [new_table_name],
+                           'created_at': [pd.Timestamp.now()]}
+                pd_name = pd.DataFrame(pd_name)
+                pd_name.to_sql('cache_tables', engine, if_exists='append')
+
+            else:
+                print("Postgres cache exists for upsert.")
+                # If it already exists...
+
+                # Write a temporary table
+                temp_table_name = f"temp_{uuid.uuid4().hex[:6]}"
+
+                if isinstance(df, pd.DataFrame):
+                    df.to_sql(temp_table_name, engine, index=False)
+                elif isinstance(df, dd.DataFrame):
+                    df.to_sql(temp_table_name, uri=uri, index=False, parallel=True, chunksize=10000)
+                else:
+                    raise RuntimeError("Did not return dataframe type.")
+
+                # Extract the primary key columns for SQL constraint
+                for key in primary_keys:
+                    if key not in df.columns:
+                        raise ValueError("Dataframe MUST contain all primary keys as columns")
+
+                index_sql_txt = ", ".join([f'"{i}"' for i in primary_keys])
+                columns = list(df.columns)
+                headers = primary_keys + list(set(columns) - set(primary_keys))
+                headers_sql_txt = ", ".join(
+                    [f'"{i}"' for i in headers]
+                )  # index1, index2, ..., column 1, col2, ...
+
+                # col1 = exluded.col1, col2=excluded.col2
+                update_column_stmt = ", ".join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
+
+                # For the ON CONFLICT clause, postgres requires that the columns have unique constraint
+                query_pk = f"""
+                ALTER TABLE "{new_table_name}" DROP CONSTRAINT IF EXISTS unique_constraint_for_upsert;
+                ALTER TABLE "{new_table_name}" ADD CONSTRAINT unique_constraint_for_upsert UNIQUE ({index_sql_txt});
+                """
+                print("Adding a unique to contraint to table if it doesn't exist.")
+                conn.exec_driver_sql(query_pk)
+
+                # Compose and execute upsert query
+                query_upsert = f"""INSERT INTO "{new_table_name}" ({headers_sql_txt})
+                                   SELECT {headers_sql_txt} FROM "{temp_table_name}"
+                                   ON CONFLICT ({index_sql_txt}) DO UPDATE
+                                   SET {update_column_stmt};
+                                   """
+                print("Upserting.")
+                conn.exec_driver_sql(query_upsert)
+                conn.exec_driver_sql(f"DROP TABLE {temp_table_name}")
+    else:
+        try:
+            exists = 'fail'
+            if overwrite:
+                exists = 'replace'
+
+            if isinstance(df, pd.DataFrame):
+                df.to_sql(new_table_name, engine, if_exists=exists, index=False)
+            elif isinstance(df, dd.DataFrame):
+                df.to_sql(new_table_name, uri=uri, if_exists=exists, index=False, parallel=True, chunksize=10000)
+            else:
+                raise RuntimeError("Did not return dataframe type.")
+
+            # Also log the table name in the tables table
+            pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
+            pd_name = pd.DataFrame(pd_name)
+            pd_name.to_sql('cache_tables', engine, if_exists='append')
+
+        except sqlalchemy.exc.InterfaceError:
+            raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
+                               and can see sheerwater-benchmarking-postgres.""")
 
 
 def write_to_terracotta(cache_key, ds):
@@ -1175,7 +1265,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 ds = read_from_parquet(read_cache_path)
 
                         elif storage_backend == 'postgres':
-                            if check_exists_postgres(cache_key) and not force_overwrite:
+                            if check_exists_postgres(cache_key) and force_overwrite is None:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -1185,9 +1275,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_key} in postgres.")
-                                write_to_postgres(ds, cache_key, overwrite=True)
-                                # Reopen dataset to truncate the computational path
-                                ds = read_from_postgres(read_cache_path)
+                                write_to_postgres(ds, cache_key, overwrite=True, upsert=upsert,
+                                                  primary_keys=primary_keys)
+                                # Don't support computation path truncation because dask read sql function
+                                # requires knowledge of indexes we don't have generically
+                                # ds = read_from_postgres(cache_path)
+                                return ds
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
                     elif data_type == 'basic':
