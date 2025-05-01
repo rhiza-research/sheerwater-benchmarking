@@ -1,5 +1,6 @@
 """Automated dataframe caching utilities."""
 import os
+import inspect
 import datetime
 import dateparser
 from functools import wraps
@@ -31,10 +32,61 @@ CHUNK_SIZE_LOWER_LIMIT_MB = 30
 
 # Global variables for caching configuration
 global_recompute = None
-global_force_overwrite = None
-global_dont_recompute = None
-global_temp_caches = None
 global_cache_local = None
+
+# Remote dir for all caches, except for postgres and terracotta
+REMOTE_CACHE_ROOT_DIR = "gs://sheerwater-datalake/caches/"
+# Local dir for all caches, except for postgres and terracotta
+LOCAL_CACHE_ROOT_DIR = os.path.expanduser("~/.cache/sheerwater/caches/")
+
+
+def set_global_cache_variables(recompute=None, cache_local=None):
+    """Reset all global variables to defaults and set the new values."""
+    global global_recompute, global_cache_local
+    global_recompute = recompute
+    global_cache_local = cache_local
+
+
+def check_if_nested_fn():
+    """Check if the current scope downstream from another cached function.
+    """
+    # Get the current frame
+    stack = inspect.stack()
+    # skip the first two frames (this function and the current cacheable function)
+    for frame_info in stack[2:]:
+        frame = frame_info.frame
+        func_name = frame.f_code.co_name
+        if 'wrapper' in func_name:
+            # There is a cachable function upstream of this one
+            return True
+    # No cachable function upstream of this one
+    return False
+
+
+def get_modified_cache_path(cache_path, modification='local'):
+    """Get the local cache path for the given cache path.
+
+    Args:
+        cache_path (str): Path to cache file, either local or GCS path
+        modification (str): The modification to make to the cache path. One of:
+            'local': return the local cache path
+            'temp': return the remote temp cache path
+
+    Returns:
+        str: Local cache path
+    """
+    if cache_path is None:
+        return None
+    if cache_path.startswith(REMOTE_CACHE_ROOT_DIR):
+        cache_key = cache_path.split(REMOTE_CACHE_ROOT_DIR)[1]
+        if modification == 'local':
+            return os.path.join(LOCAL_CACHE_ROOT_DIR, cache_key)
+        elif modification == 'temp':
+            return os.path.join(REMOTE_CACHE_ROOT_DIR, 'temp/', cache_key)
+        else:
+            raise ValueError("Invalid modification type")
+    else:
+        raise ValueError("Cache path must start with REMOTE_CACHE_ROOT_DIR")
 
 
 def get_fs(cache_path):
@@ -54,6 +106,45 @@ def get_fs(cache_path):
         raise ValueError("Unsupported protocol in cache_path: must be 'gs://' or local path.")
 
     return fs
+
+
+def sync_local_remote(cache_path=None, verify_path=None, null_path=None):
+    """Sync a remote cache to a local cache.
+
+    Args:
+        cache_path (str): The path to the cache, if None, will not sync the cache
+        verify_path (str): The path to the verify file, if None, will not sync the verify
+        null_path (str): The path to the null cache, if None, will not sync the null
+    """
+    # Check that remote exists
+    fs = get_fs(cache_path)
+    if cache_path and not fs.exists(cache_path):
+        cache_path = None
+    if verify_path and not fs.exists(verify_path):
+        verify_path = None
+    if null_path and not fs.exists(null_path):
+        null_path = None
+
+    local_cache_path = get_modified_cache_path(cache_path, modification='local')
+    local_verify_path = get_modified_cache_path(verify_path, modification='local')
+    local_null_path = get_modified_cache_path(null_path, modification='local')
+
+    # Remove the local cache, verify, and null caches if they exist
+    fs_local = get_fs(local_cache_path)
+    if cache_path and fs_local.exists(local_cache_path):
+        fs_local.rm(local_cache_path, recursive=True)
+    if verify_path and fs_local.exists(local_verify_path):
+        fs_local.rm(local_verify_path, recursive=True)
+    if null_path and fs_local.exists(local_null_path):
+        fs_local.rm(local_null_path, recursive=True)
+
+    # Copy from the remote cache to the local cache
+    if cache_path:
+        fs.get(cache_path, local_cache_path, recursive=True)
+    if verify_path:
+        fs.get(verify_path, local_verify_path, recursive=True)
+    if null_path:
+        fs.get(null_path, local_null_path, recursive=True)
 
 
 def get_cache_args(kwargs, cache_kwargs):
@@ -255,6 +346,7 @@ def write_to_zarr(ds, cache_path, verify_path):
     cache_map = fs.get_mapper(cache_path)
     ds.to_zarr(store=cache_map, mode='w')
 
+    # Add a lock file to the cache to verify cache integrity
     fs.touch(verify_path)
 
 
@@ -449,8 +541,109 @@ def write_to_terracotta(cache_key, ds):
             write_individual_raster(driver, bucket, ds, cache_key)
 
 
+def delete_null_cache(null_path):
+    """Delete the null cache if retry null cache is passed. Handles local.
+
+    Args:
+        null_path (str): The path to the null cache
+        retry_null_cache (bool): Whether to retry the null cache
+    """
+    # Remove the local null cache if it exists
+    global global_cache_local
+    if global_cache_local:
+        local_null_path = get_modified_cache_path(null_path, modification='local')
+        fs_local = get_fs(local_null_path)
+        if fs_local.exists(local_null_path):
+            fs_local.rm(local_null_path, recursive=True)
+
+    # Remove the remote null cache if it exists
+    fs = get_fs(null_path)
+    if fs.exists(null_path):
+        print(f"Removing and retrying null cache {null_path}.")
+        fs.rm(null_path, recursive=True)
+
+
+def rechunk_zarr_cache(ds, cache_path, verify_path, chunking):
+    """Rechunk a zarr cache.
+
+    Args:
+        backend (str): The backend to rechunk
+        cache_path (str): The path to the cache
+        verify_path (str): The path to the verify file
+        chunking (dict): The chunking to use
+    """
+    """ write to a temp cache map
+    writing to temp cache is necessary because if you overwrite
+    the original cache map it will write it before reading the
+    data leading to corruption.
+    """
+    # Create the temporary rechunked data
+    temp_cache_path = get_modified_cache_path(cache_path, modification='temp')
+    temp_verify_path = get_modified_cache_path(verify_path, modification='temp')
+    chunk_to_zarr(ds, temp_cache_path, temp_verify_path, chunking)
+
+    # Invalidate the local cache
+    if global_cache_local:
+        local_cache_path = get_modified_cache_path(cache_path, modification='local')
+        local_verify_path = get_modified_cache_path(verify_path, modification='local')
+        fs_local = get_fs(local_cache_path)
+        if fs_local.exists(local_verify_path):
+            fs_local.rm(local_verify_path, recursive=True)
+        if fs_local.exists(local_cache_path):
+            fs_local.rm(local_cache_path, recursive=True)
+
+    # Invalidate the remote cache
+    fs = get_fs(cache_path)
+    if fs.exists(verify_path):
+        fs.rm(verify_path, recursive=True)
+    if fs.exists(cache_path):
+        fs.rm(cache_path, recursive=True)
+
+    # Move the temporary rechunked data to the cache
+    fs.mv(temp_cache_path, cache_path, recursive=True)
+    fs.mv(temp_verify_path, verify_path, recursive=True)
+
+    # If local caching is enabled, copy the cache to the local cache
+    if global_cache_local:
+        # Copy the remote cache to the local cache, between two filesystems
+        fs.cp(cache_path, local_cache_path)
+        fs.cp(verify_path, local_verify_path)
+
+
 def cache_exists(backend, cache_path, verify_path=None):
-    """Check if a cache exists generically."""
+    """Check if a cache exists, with local cache support.
+
+    Args:
+        backend (str): The backend to check
+        cache_path (str): The path to the cache (either cache path or null path)
+        verify_path (str): The path to the verify file
+
+    Returns:
+        tuple: A tuple containing a boolean indicating if the cache exists and 
+            appropriate cache path
+    """
+    # If local caching is enabled, check the local cache first
+    if global_cache_local and backend not in ['postgres', 'terracotta']:
+        # If the local cache exists, return True
+        local_cache_path = get_modified_cache_path(cache_path, modification='local')
+        local_verify_path = get_modified_cache_path(verify_path, modification='local')
+
+        if _cache_exists(backend, local_cache_path, local_verify_path):
+            return True
+        # If the remote cache exists, copy the remote cache to the local cache
+        elif _cache_exists(backend, cache_path, verify_path):
+            fs = get_fs(cache_path)
+            fs.put(cache_path, local_cache_path, recursive=True)
+            fs.put(verify_path, local_verify_path, recursive=True)
+            return True
+        else:
+            return False
+    # If local caching is disabled, just check the remote cache
+    return _cache_exists(backend, cache_path, verify_path)
+
+
+def _cache_exists(backend, cache_path, verify_path=None):
+    """Helper function to check if a cache at a specific cache path exists across backends."""
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = get_fs(cache_path)
@@ -463,7 +656,7 @@ def cache_exists(backend, cache_path, verify_path=None):
             else:
                 return False
         else:
-            return fs.exists(cache_path)
+            return fs.exists(cache_path), None
     elif backend == 'postgres':
         return check_exists_postgres(cache_path)
     else:
@@ -472,7 +665,7 @@ def cache_exists(backend, cache_path, verify_path=None):
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, validate_cache_timeseries=True, cache_disable_if=None,
-              backend=None, storage_backend=None):
+              backend=None, storage_backend=None, cache_local=False):
     """Decorator for caching function results.
 
     Args:
@@ -511,9 +704,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             to match backend. Useful for pulling from one backend and writing to another.
         auto_rechunk(bool): If True, will rechunk the cache on load if the cache chunking
             does not match the requested chunking. Default is False.
-        cache_local (bool): Cache locally (in $SHEERWATER_LOCAL_CACHE), instead of remote cache on 
-            GCS. This changes both where the decorator looks to load the cache, and where it will 
-            save it. Only supported for Parquet files right now. Default is False.
+        cache_local(bool): If True, will cache the result locally, at the location
+            specified by the LOCAL_CACHE_ROOT_DIR variable. Default is False.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -546,11 +738,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             cache_disable_if = nonlocals['cache_disable_if']
             backend = nonlocals['backend']
             storage_backend = nonlocals['storage_backend']
+            cache_local = nonlocals['cache_local']
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \
-                storage_backend, passed_auto_rechunk = get_cache_args(kwargs, cache_kwargs)
+                storage_backend, passed_auto_rechunk, passed_cache_local = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
@@ -560,6 +753,17 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 validate_cache_timeseries = passed_validate_cache_timeseries
             if passed_backend is not None:
                 backend = passed_backend
+            if passed_cache_local is not None:
+                cache_local = passed_cache_local
+
+            # Check if this is a nested cacheable function
+            if not check_if_nested_fn():
+                # This is a top level cacheable function, reset global cache variables
+                set_global_cache_variables(recompute=recompute, cache_local=cache_local)
+
+            # Inherit global cache variables
+            recompute = global_recompute if global_recompute is not None else recompute
+            cache_local = global_cache_local if global_cache_local is not None else cache_local
 
             params = signature(func).parameters
 
@@ -646,9 +850,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if storage_backend is None:
                     storage_backend = backend
 
-                cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.zarr'
-                verify_path = "gs://sheerwater-datalake/caches/" + cache_key + '.verify'
-                null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                cache_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.zarr'
+                verify_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.verify'
+                null_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.null'
                 supports_filepath = True
             elif data_type == 'tabular':
                 # Set the default
@@ -657,16 +861,16 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     storage_backend = backend
 
                 if backend == 'delta':
-                    cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.delta'
-                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    cache_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.delta'
+                    null_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'parquet':
-                    cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.parquet'
-                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    cache_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.parquet'
+                    null_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.null'
                     supports_filepath = True
                 elif backend == 'postgres':
                     cache_path = cache_key
-                    null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                    null_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.null'
                     supports_filepath = False
                 else:
                     raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
@@ -674,35 +878,43 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 backend = "pickle" if backend is None else backend
                 if storage_backend is None:
                     storage_backend = backend
-                cache_path = "gs://sheerwater-datalake/caches/" + cache_key + '.pkl'
-                null_path = "gs://sheerwater-datalake/caches/" + cache_key + '.null'
+                cache_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.pkl'
+                null_path = REMOTE_CACHE_ROOT_DIR + cache_key + '.null'
                 supports_filepath = True
             else:
                 raise ValueError("Caching currently only supports the 'array', 'tabular', and 'basic' datatypes")
 
             if filepath_only and not supports_filepath:
                 raise ValueError(f"{backend} backend does not support filepath_only flag")
-
+            # Set up cached computation
             ds = None
             compute_result = True
             fs = get_fs(cache_path)
+            cache_map = fs.get_mapper(cache_path)
+            if global_cache_local:
+                # If local, active cache can differ from the cache path
+                active_cache_path = get_modified_cache_path(cache_path, modification='local')
+                active_cache_map = fs.get_mapper(active_cache_path)
 
-            # Delete the null cache if retry null cache is passed
-            if fs.exists(null_path) and retry_null_cache:
-                print(f"Removing and retrying null cache {null_path}.")
-                fs.rm(null_path, recursive=True)
+            # First remove null caches if retry null cache is passed
+            if retry_null_cache:
+                # Remove the remote null cache if it exists
+                if fs.exists(null_path):
+                    print(f"Removing and retrying null cache {null_path}.")
+                    fs.rm(null_path, recursive=True)
+                # Sync the null cache from the remote to the local
+                sync_local_remote(null_path=null_path)
 
+            # Now check if the cache exists
             if not recompute and cache:
                 if cache_exists(backend, cache_path, verify_path):
                     # Read the cache
-                    print(f"Found cache for {cache_path}")
+                    print(f"Found cache for {active_cache_path}")
                     if data_type == 'array':
-                        cache_map = fs.get_mapper(cache_path)
-
                         if filepath_only:
-                            return cache_map
+                            return active_cache_map
                         else:
-                            print(f"Opening cache {cache_path}")
+                            print(f"Opening cache {active_cache_path}")
                             # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
                             # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
                             # every chunk is only 4B!
@@ -725,21 +937,26 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     # writing to temp cache is necessary because if you overwrite
                                     # the original cache map it will write it before reading the
                                     # data leading to corruption.
-                                    temp_cache_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.temp'
-                                    temp_verify_path = 'gs://sheerwater-datalake/caches/temp/' + cache_key + '.verify'
+                                    temp_cache_path = REMOTE_CACHE_ROOT_DIR + 'temp/' + cache_key + '.temp'
+                                    temp_verify_path = REMOTE_CACHE_ROOT_DIR + 'temp/' + cache_key + '.verify'
                                     chunk_to_zarr(ds, temp_cache_path, temp_verify_path, chunking)
 
+                                    # Remove the old cache and verify files
                                     if fs.exists(verify_path):
                                         fs.rm(verify_path, recursive=True)
-
                                     if fs.exists(cache_path):
                                         fs.rm(cache_path, recursive=True)
 
                                     fs.mv(temp_cache_path, cache_path, recursive=True)
                                     fs.mv(temp_verify_path, verify_path, recursive=True)
 
-                                    # Reopen the dataset
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                    # Sync the cache from the remote to the local
+                                    if global_cache_local:
+                                        sync_local_remote(cache_path=cache_path, verify_path=verify_path)
+
+                                    # Reopen the dataset - will use the appropriate global or local cache
+                                    ds = xr.open_dataset(active_cache_map, engine='zarr',
+                                                         chunks={}, decode_timedelta=True)
                                 else:
                                     # Requested chunks already match rechunk.
                                     pass
@@ -777,12 +994,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     elif data_type == 'tabular':
                         if backend == 'delta':
                             if filepath_only:
-                                cache_map = fs.get_mapper(cache_path)
-
-                                return cache_map
+                                return active_cache_map
                             else:
-                                print(f"Opening cache {cache_path}")
-                                ds = read_from_delta(cache_path)
+                                print(f"Opening cache {active_cache_path}")
+                                ds = read_from_delta(active_cache_path)
 
                                 if validate_cache_timeseries and timeseries is not None:
                                     raise NotImplementedError("""Timeseries validation is not currently implemented
@@ -791,10 +1006,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     compute_result = False
                         elif backend == 'parquet':
                             if filepath_only:
-                                return cache_path
+                                return active_cache_path
                             else:
-                                print(f"Opening cache {cache_path}")
-                                ds = read_from_parquet(cache_path)
+                                print(f"Opening cache {active_cache_path}")
+                                ds = read_from_parquet(active_cache_path)
 
                                 if validate_cache_timeseries and timeseries is not None:
                                     raise NotImplementedError("""Timeseries validation is not currently implemented
@@ -815,12 +1030,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     elif data_type == 'basic':
                         if backend == 'pickle':
                             if filepath_only:
-                                cache_map = fs.get_mapper(cache_path)
-
-                                return cache_map
+                                return active_cache_map
                             else:
-                                print(f"Opening cache {cache_path}")
-                                with fs.open(cache_path) as f:
+                                print(f"Opening cache {active_cache_path}")
+                                with fs.open(active_cache_path, 'rb') as f:
                                     ds = pickle.load(f)
 
                                 if validate_cache_timeseries and timeseries is not None:
@@ -836,6 +1049,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     print(f"Found null cache for {null_path}. Skipping computation.")
                     return None
 
+            # If the cache doesn't exist or we are recomputing, compute the result
             if compute_result or backend != storage_backend:
                 if compute_result:
                     if recompute:
@@ -859,6 +1073,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         print(f"Autocaching null result for {null_path}.")
                         with fs.open(null_path, 'wb') as f:
                             f.write(b'')
+                            if global_cache_local:
+                                sync_local_remote(null_path=null_path)
                             return None
 
                     write = False  # boolean to determine if we should write to the cache
@@ -875,11 +1091,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_path} as zarr.")
                                 if isinstance(ds, xr.Dataset):
-                                    cache_map = fs.get_mapper(cache_path)
                                     chunk_config = chunking if chunking else 'auto'
                                     chunk_to_zarr(ds, cache_path, verify_path, chunk_config)
+                                    if global_cache_local:
+                                        sync_local_remote(cache_path=cache_path, verify_path=verify_path)
                                     # Reopen the dataset to truncate the computational path
-                                    ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                    ds = xr.open_dataset(active_cache_map, engine='zarr',
+                                                         chunks={}, decode_timedelta=True)
                                 else:
                                     raise RuntimeError(
                                         f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
@@ -905,7 +1123,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_path} in delta.")
                                 write_to_delta(cache_path, ds, overwrite=True)
-                                ds = read_from_delta(cache_path)  # Reopen dataset to truncate the computational path
+                                if global_cache_local:
+                                    sync_local_remote(cache_path=cache_path)
+                                # Reopen dataset to truncate the computational path
+                                ds = read_from_delta(active_cache_path)
                         elif storage_backend == 'parquet':
                             if fs.exists(cache_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
@@ -918,7 +1139,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_path} in parquet.")
                                 write_to_parquet(cache_path, ds, overwrite=True)
-                                ds = read_from_parquet(cache_path)  # Reopen dataset to truncate the computational path
+                                if global_cache_local:
+                                    sync_local_remote(cache_path=cache_path)
+                                # Reopen dataset to truncate the computational path
+                                ds = read_from_parquet(active_cache_path)
 
                         elif storage_backend == 'postgres':
                             if check_exists_postgres(cache_key) and not force_overwrite:
@@ -932,7 +1156,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_key} in postgres.")
                                 write_to_postgres(ds, cache_key, overwrite=True)
-                                ds = read_from_postgres(cache_path)  # Reopen dataset to truncate the computational path
+                                ds = read_from_postgres(active_cache_path)  # Reopen dataset to truncate the computational path
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
                     elif data_type == 'basic':
@@ -949,15 +1173,16 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 print(f"Caching result for {cache_path}.")
                                 with fs.open(cache_path, 'wb') as f:
                                     pickle.dump(ds, f)
+                                if global_cache_local:
+                                    sync_local_remote(cache_path=cache_path)
                         else:
                             raise ValueError("Only pickle backend is implemented for basic data data")
 
             if filepath_only:
                 if backend == 'parquet':
-                    return cache_path
+                    return active_cache_path
                 else:
-                    cache_map = fs.get_mapper(cache_path)
-                    return cache_map
+                    return active_cache_map
             else:
                 # Do the time series filtering
                 if timeseries is not None:

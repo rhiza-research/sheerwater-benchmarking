@@ -182,6 +182,7 @@ def test_cache_disable_if():
     dsp = cached_func3(agg_days=14)
     assert ds == dsp
 
+
 def test_cache_arg_scope():
     """Test that argument scope is not improperly global/inherited between calls."""
     @cacheable(data_type='basic',
@@ -207,6 +208,31 @@ def test_cache_arg_scope():
     #  Cache should be disabled - these should be different random numbers
     dsp = cached_func(agg_days=1)
     assert ds == dsp
+
+
+def test_cache_local():
+    """Test that cache_local argument works."""
+    @cacheable(data_type='basic',
+               cache_args=['agg_days'],
+               cache_local=True)
+    def cached_func(agg_days=7):  # noqa: ARG001
+        return np.random.randint(1000)
+
+    @cacheable(data_type='basic',
+               cache_args=['agg_days'],
+               cache_local=True)
+    def cached_func2(agg_days=7):  # noqa: ARG001
+        return cached_func(agg_days=agg_days)
+
+    import pdb
+    pdb.set_trace()
+
+    # Run once to ensure simple timeseries is cached
+    ds1 = cached_func(agg_days=1, cache_local=True)
+
+    # Run again with null time
+    ds2 = cached_func(agg_days=1)
+    assert ds1.equals(ds2)
 
 
 if __name__ == "__main__":
