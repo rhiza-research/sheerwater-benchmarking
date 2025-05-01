@@ -37,21 +37,23 @@ global_force_overwrite = None
 # Remote dir for all caches, except for postgres and terracotta
 CACHE_ROOT_DIR = "gs://sheerwater-datalake/caches/"
 # Local dir for all caches, except for postgres and terracotta
-MIRROR_ROOT_DIR = os.path.expanduser("~/.cache/sheerwater/caches/")
+LOCAL_CACHE_ROOT_DIR = os.path.expanduser("~/.cache/sheerwater/caches/")
 
 # Check if these are defined as environment variables
-if 'CACHE_ROOT_DIR' in os.environ:
-    CACHE_ROOT_DIR = os.environ['CACHE_ROOT_DIR']
-if 'MIRROR_ROOT_DIR' in os.environ:
-    MIRROR_ROOT_DIR = os.environ['MIRROR_ROOT_DIR']
+if 'SHEERWATER_CACHE_ROOT_DIR' in os.environ:
+    CACHE_ROOT_DIR = os.environ['SHEERWATER_CACHE_ROOT_DIR']
+if 'SHEERWATER_LOCAL_CACHE_ROOT_DIR' in os.environ:
+    LOCAL_CACHE_ROOT_DIR = os.environ['SHEERWATER_LOCAL_CACHE_ROOT_DIR']
 
 
 def set_global_cache_variables(recompute=None, force_overwrite=None):
     """Reset all global variables to defaults and set the new values."""
     global global_recompute, global_force_overwrite
+
+    # Simple logic for global variables
     global_force_overwrite = force_overwrite
 
-    # Handle recompute logic, different for top level and nested functions
+    # More complex logic for recompute
     if recompute:
         global_recompute = False
     elif isinstance(recompute, str) and recompute != 'all':
@@ -76,7 +78,7 @@ def check_if_nested_fn():
 
 
 def get_modified_cache_path(cache_path, modification='local'):
-    """Get the local cache path for the given cache path.
+    """Get a modified cache path based on the cache path and the modification type.
 
     Args:
         cache_path (str): Path to cache file, either local or GCS path
@@ -92,7 +94,7 @@ def get_modified_cache_path(cache_path, modification='local'):
     if cache_path.startswith(CACHE_ROOT_DIR):
         cache_key = cache_path.split(CACHE_ROOT_DIR)[1]
         if modification == 'local':
-            return os.path.join(MIRROR_ROOT_DIR, cache_key)
+            return os.path.join(LOCAL_CACHE_ROOT_DIR, cache_key)
         elif modification == 'temp':
             return os.path.join(CACHE_ROOT_DIR, 'temp/', cache_key)
         else:
@@ -666,7 +668,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         auto_rechunk(bool): If True, will rechunk the cache on load if the cache chunking
             does not match the requested chunking. Default is False.
         cache_local(bool): If True, will cache the result locally, at the location
-            specified by the MIRROR_ROOT_DIR variable. Default is False.
+            specified by the LOCAL_CACHE_ROOT_DIR variable. Default is False.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
