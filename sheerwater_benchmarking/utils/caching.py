@@ -56,10 +56,11 @@ def set_global_cache_variables(recompute=None, force_overwrite=None):
     # More complex logic for recompute
     if recompute == True:  # noqa: E712
         global_recompute = False
-    elif isinstance(recompute, str) and recompute != 'all':
+    elif isinstance(recompute, str) and recompute != '_all':
+        # if a single function's name is passed, convert to a list
         global_recompute = [recompute]
     else:
-        global_recompute = recompute  # if recompute is false or a list
+        global_recompute = recompute  # if recompute is false, '_all' or a list
 
 
 def check_if_nested_fn():
@@ -723,14 +724,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             if not check_if_nested_fn():
                 # This is a top level cacheable function, reset global cache variables
                 set_global_cache_variables(recompute=recompute, force_overwrite=force_overwrite)
-                if isinstance(recompute, list) or isinstance(recompute, str) or recompute == 'all':
+                if isinstance(recompute, list) or isinstance(recompute, str) or recompute == '_all':
                     recompute = True
             else:
                 # Inherit global cache variables
                 global global_recompute, global_force_overwrite
                 force_overwrite = global_force_overwrite if global_force_overwrite is not None else force_overwrite
                 if global_recompute:
-                    if func.__name__ in global_recompute or global_recompute == 'all':
+                    if func.__name__ in global_recompute or global_recompute == '_all':
                         recompute = True
 
             params = signature(func).parameters
