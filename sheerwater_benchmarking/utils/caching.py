@@ -33,6 +33,8 @@ CHUNK_SIZE_LOWER_LIMIT_MB = 30
 # Global variables for caching configuration
 global_recompute = None
 global_force_overwrite = None
+global_validate_cache_timeseries = None
+global_retry_null_cache = None
 
 # Remote dir for all caches, except for postgres and terracotta
 CACHE_ROOT_DIR = "gs://sheerwater-datalake/caches/"
@@ -46,12 +48,16 @@ if 'SHEERWATER_LOCAL_CACHE_ROOT_DIR' in os.environ:
     LOCAL_CACHE_ROOT_DIR = os.environ['SHEERWATER_LOCAL_CACHE_ROOT_DIR']
 
 
-def set_global_cache_variables(recompute=None, force_overwrite=None):
+def set_global_cache_variables(recompute=None, force_overwrite=None,
+                               validate_cache_timeseries=None, retry_null_cache=None):
     """Reset all global variables to defaults and set the new values."""
-    global global_recompute, global_force_overwrite
+    global global_recompute, global_force_overwrite, \
+        global_validate_cache_timeseries, global_retry_null_cache
 
     # Simple logic for global variables
     global_force_overwrite = force_overwrite
+    global_validate_cache_timeseries = validate_cache_timeseries
+    global_retry_null_cache = retry_null_cache
 
     # More complex logic for recompute
     if recompute == True:  # noqa: E712
@@ -668,7 +674,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             to match backend. Useful for pulling from one backend and writing to another.
         auto_rechunk(bool): If True, will rechunk the cache on load if the cache chunking
             does not match the requested chunking. Default is False.
-        cache_local(bool): If True, will cache the result locally, at the location
+        cache_local (bool): If True, will mirror the result locally, at the location
             specified by the LOCAL_CACHE_ROOT_DIR variable. Default is False.
     """
     # Valid configuration kwargs for the cacheable decorator
@@ -723,13 +729,19 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Check if this is a nested cacheable function
             if not check_if_nested_fn():
                 # This is a top level cacheable function, reset global cache variables
-                set_global_cache_variables(recompute=recompute, force_overwrite=force_overwrite)
+                set_global_cache_variables(recompute=recompute,
+                                           force_overwrite=force_overwrite,
+                                           validate_cache_timeseries=validate_cache_timeseries,
+                                           retry_null_cache=retry_null_cache)
                 if isinstance(recompute, list) or isinstance(recompute, str) or recompute == '_all':
                     recompute = True
             else:
                 # Inherit global cache variables
-                global global_recompute, global_force_overwrite
+                global global_recompute, global_force_overwrite, \
+                    global_validate_cache_timeseries, global_retry_null_cache
                 force_overwrite = global_force_overwrite if global_force_overwrite is not None else force_overwrite
+                validate_cache_timeseries = global_validate_cache_timeseries if global_validate_cache_timeseries is not None else validate_cache_timeseries
+                retry_null_cache = global_retry_null_cache if global_retry_null_cache is not None else retry_null_cache
                 if global_recompute:
                     if func.__name__ in global_recompute or global_recompute == '_all':
                         recompute = True
