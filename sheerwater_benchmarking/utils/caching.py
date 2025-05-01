@@ -48,7 +48,7 @@ def set_global_cache_variables(recompute=None, cache_local=None, force_overwrite
     global_force_overwrite = force_overwrite
 
     # Handle recompute logic, different for top level and nested functions
-    if recompute == True:
+    if recompute:
         global_recompute = False
     elif isinstance(recompute, str) and recompute != 'all':
         global_recompute = [recompute]
@@ -57,8 +57,7 @@ def set_global_cache_variables(recompute=None, cache_local=None, force_overwrite
 
 
 def check_if_nested_fn():
-    """Check if the current scope downstream from another cached function.
-    """
+    """Check if the current scope downstream from another cached function."""
     # Get the current frame
     stack = inspect.stack()
     # skip the first two frames (this function and the current cacheable function)
@@ -109,7 +108,7 @@ def get_fs(cache_path):
     """
     if cache_path.startswith('gs://'):
         fs = fsspec.filesystem('gcs', project='sheerwater', token='google_default')
-    elif cache_path.startswith('file://') or not '://' in cache_path:
+    elif cache_path.startswith('file://') or '://' not in cache_path:
         fs = fsspec.filesystem('file')
     else:
         raise ValueError("Unsupported protocol in cache_path: must be 'gs://' or local path.")
@@ -564,9 +563,10 @@ def cache_exists(backend, cache_path, verify_path=None, cache_local=False):
         backend (str): The backend to check
         cache_path (str): The path to the cache (either cache path or null path)
         verify_path (str): The path to the verify file
+        cache_local (bool): Whether to check the local cache
 
     Returns:
-        tuple: A tuple containing a boolean indicating if the cache exists and 
+        tuple: A tuple containing a boolean indicating if the cache exists and
             appropriate cache path
     """
     # If local caching is enabled, check the local cache first
@@ -842,7 +842,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
             elif data_type == 'basic':
                 backend = "pickle" if backend is None else backend
-                if backend is not 'pickle':
+                if backend != 'pickle':
                     raise ValueError("Only pickle backend supported for basic types.")
                 if storage_backend is None:
                     storage_backend = backend
@@ -1054,7 +1054,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            if cache_exists(storage_backend, cache_path, verify_path, cache_local) and not force_overwrite:
+                            if cache_exists(storage_backend, cache_path, verify_path, cache_local) \
+                                    and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':

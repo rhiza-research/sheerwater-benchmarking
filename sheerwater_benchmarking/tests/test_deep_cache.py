@@ -1,12 +1,10 @@
 """Test the caching functions in the cacheable decorator."""
-import pytest
 import numpy as np
-import pandas as pd
-import xarray as xr
-from sheerwater_benchmarking.utils import cacheable, get_dates
+from sheerwater_benchmarking.utils import cacheable
 
 
 def test_deep_cache():
+    """Test the deep cache recompute functionality."""
     @cacheable(data_type='basic',
                cache_args=[])
     def deep_cached_func():  # noqa: ARG001
@@ -47,4 +45,3 @@ def test_deep_cache():
 
 if __name__ == "__main__":
     test_deep_cache()
-
