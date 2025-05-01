@@ -251,6 +251,42 @@ def test_cache_local():
     assert ds1 == ds5
 
 
+def test_cache_local_recursive():
+    """Test that cache_local argument works for a recursive parquet."""
+    @cacheable(data_type='tabular', cache_args=['name'])
+    def tab(name='bob'):
+        """Test function for tabular data."""
+        import pandas as pd
+
+        data = [[name, np.random.randint(1000)], ['nick', np.random.randint(1000)], ['juli', np.random.randint(1000)]]
+        df = pd.DataFrame(data, columns=['Name', 'Age'])
+        return df
+
+    local_path = os.path.expanduser("~/.cache/sheerwater/caches/tab/susie.parquet")
+    local_verify = os.path.expanduser("~/.cache/sheerwater/caches/tab/susie.verify")
+    # Ensure no local before testing
+    os.remove(local_path)
+    os.remove(local_verify)
+
+    # Path 1: Run remote
+    df = tab(name='susie', backend='parquet').compute()
+    assert not os.path.exists(local_path)
+
+    # Path 2: Run local
+    df2 = tab(name='susie', backend='parquet', cache_local=True).compute()
+    assert os.path.exists(local_path)
+    assert os.path.exists(local_verify)
+    assert df.equals(df2)
+
+    # Path 3: Re-run both
+    df3 = tab(name='susie', backend='parquet',
+              recompute=True, force_overwrite=True).compute()
+    assert not df3.equals(df)
+    df4 = tab(name='susie', backend='parquet', cache_local=True).compute()
+    assert not df4.equals(df2)
+    assert df4.equals(df3)
+
+
 if __name__ == "__main__":
     test_null_time_caching()
     test_validate_timeseries()
