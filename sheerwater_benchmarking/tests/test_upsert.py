@@ -1,7 +1,6 @@
-import pytest
+"""Test cacheable upsert functionality."""
 import numpy as np
 import dask.dataframe as dd
-import xarray as xr
 from sheerwater_benchmarking.utils import cacheable, get_dates
 
 @cacheable(data_type='tabular',
@@ -28,6 +27,7 @@ def tabular_timeseries(random):  # noqa: ARG001
     return ds
 
 def test_upsert():
+    """Test upsert on parquet."""
     # Call to make sure it is in place and count rows
     # should have some number of rows
     df = tabular_timeseries(0, upsert=True)
@@ -49,6 +49,7 @@ def test_upsert():
     assert ncount == (scount + 1)
 
 def test_postgres_upsert():
+    """Test upsert on postgres."""
     # Call to make sure it is in place and count rows
     # should have some number of rows
     df = tabular_timeseries(0, backend='postgres', upsert=True)
@@ -80,5 +81,5 @@ def test_postgres_upsert():
 
 
 if __name__ == "__main__":
-    #test_upsert()
+    test_upsert()
     test_postgres_upsert()
