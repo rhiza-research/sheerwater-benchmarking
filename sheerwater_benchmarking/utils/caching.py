@@ -124,34 +124,26 @@ def sync_local_remote(cache_path=None, verify_path=None, null_path=None):
         null_path (str): The path to the null cache, if None, will not sync the null
     """
     # Check that remote exists
-    fs = fsspec.core.url_to_fs(cache_path, storage_options=CACHE_STORAGE_OPTIONS)[0]
-    if cache_path and not fs.exists(cache_path):
-        cache_path = None
-    if verify_path and not fs.exists(verify_path):
-        verify_path = None
-    if null_path and not fs.exists(null_path):
-        null_path = None
-
     local_cache_path = get_modified_cache_path(cache_path, modification='local')
     local_verify_path = get_modified_cache_path(verify_path, modification='local')
     local_null_path = get_modified_cache_path(null_path, modification='local')
 
-    # Remove the local cache, verify, and null caches if they exist
-    fs_local = fsspec.core.url_to_fs(local_cache_path, storage_options=LOCAL_CACHE_STORAGE_OPTIONS)[0]
-    if cache_path and fs_local.exists(local_cache_path):
-        fs_local.rm(local_cache_path, recursive=True)
-    if verify_path and fs_local.exists(local_verify_path):
-        fs_local.rm(local_verify_path, recursive=True)
-    if null_path and fs_local.exists(local_null_path):
-        fs_local.rm(local_null_path, recursive=True)
+    fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
+    fs_local = fsspec.core.url_to_fs(local_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
 
-    # Copy from the remote cache to the local cache
-    if cache_path:
-        fs.get(cache_path, local_cache_path, recursive=True)
-    if verify_path:
-        fs.get(verify_path, local_verify_path, recursive=True)
-    if null_path:
-        fs.get(null_path, local_null_path, recursive=True)
+    # Remove the local caches if overwriting, or if they don't exist on remote
+    if not fs.exists(cache_path) or cache_path:
+        fs_local.rm(local_cache_path, recursive=True)
+        if cache_path:
+            fs.get(cache_path, local_cache_path, recursive=True)
+    if not fs.exists(verify_path) or verify_path:
+        fs_local.rm(local_verify_path, recursive=True)
+        if verify_path:
+            fs.get(verify_path, local_verify_path, recursive=True)
+    if not fs.exists(null_path) or null_path:
+        fs_local.rm(local_null_path, recursive=True)
+        if null_path:
+            fs.get(null_path, local_null_path, recursive=True)
 
 
 def get_cache_args(kwargs, cache_kwargs):
@@ -301,7 +293,7 @@ def read_from_parquet(cache_path):
 
 def write_to_parquet(df, cache_path, verify_path, overwrite=False):
     """Write a pandas or dask dataframe to a parquet."""
-    fs = fsspec.core.url_to_fs(cache_path, storage_options=CACHE_STORAGE_OPTIONS)[0]
+    fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
     if fs.exists(verify_path):
         fs.rm(verify_path, recursive=True)
 
@@ -350,7 +342,7 @@ def write_to_zarr(ds, cache_path, verify_path):
 
     fs.rm(lock)
     """
-    fs = fsspec.core.url_to_fs(cache_path, storage_options=CACHE_STORAGE_OPTIONS)[0]
+    fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
     if fs.exists(verify_path):
         fs.rm(verify_path, recursive=True)
 
@@ -569,11 +561,11 @@ def cache_exists(backend, cache_path, verify_path=None, cache_local=False):
             appropriate cache path
     """
     # If local caching is enabled, check the local cache first
-    fs = fsspec.core.url_to_fs(cache_path, storage_options=CACHE_STORAGE_OPTIONS)[0]
+    fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
     if cache_local and backend not in ['postgres', 'terracotta', 'delta']:
         local_cache_path = get_modified_cache_path(cache_path, modification='local')
         local_verify_path = get_modified_cache_path(verify_path, modification='local')
-        local_fs = fsspec.core.url_to_fs(local_cache_path, storage_options=LOCAL_CACHE_STORAGE_OPTIONS)
+        local_fs = fsspec.core.url_to_fs(local_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
         # If the local cache exists, AND the remote cache exists (not corrupted), return True
         if _cache_exists(backend, local_cache_path, local_verify_path) and \
                 _cache_exists(backend, cache_path, verify_path):
@@ -601,7 +593,7 @@ def _cache_exists(backend, path, verify_path=None):
     """Helper function to check if a cache at a specific cache path exists across backends."""
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
-        fs = fsspec.core.url_to_fs(path, storage_options=CACHE_STORAGE_OPTIONS)[0]
+        fs = fsspec.core.url_to_fs(path, **CACHE_STORAGE_OPTIONS)[0]
         if backend in ['zarr', 'parquet', 'pickle']:
             if not fs.exists(verify_path) and fs.exists(path):
                 print("Found cache, but it appears to be corrupted. Recomputing.")
@@ -865,13 +857,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Set up cached computation
             ds = None
             compute_result = True
-            fs = fsspec.core.url_to_fs(cache_path, storage_options=CACHE_STORAGE_OPTIONS)[0]
+            fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
             cache_map = fs.get_mapper(cache_path)
             if cache_local:
                 # If local, active cache can differ from the cache path
                 active_cache_path = get_modified_cache_path(cache_path, modification='local')
                 active_cache_map = fs.get_mapper(active_cache_path)
-                active_fs = fsspec.core.url_to_fs(active_cache_path, storage_options=LOCAL_CACHE_STORAGE_OPTIONS)[0]
+                active_fs = fsspec.core.url_to_fs(active_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
             else:
                 active_cache_path = cache_path
                 active_cache_map = cache_map
