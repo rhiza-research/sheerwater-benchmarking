@@ -320,48 +320,35 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
     if fs.exists(verify_path):
         fs.rm(verify_path)
 
-    if upsert:
+    if upsert and cache_exists('parquet', cache_path, verify_path):
+        print("Found existing cache for upsert.")
+
         if primary_keys is None:
             raise ValueError("Upsert may only be performed with primary keys specified")
 
         if not isinstance(df, dd.DataFrame):
             raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
 
-        # Check to see if the cache exists
-        if cache_exists('parquet', cache_path, verify_path):
-            print("Found existing cache for upsert.")
-            existing_df = read_from_parquet(cache_path)
+        existing_df = read_from_parquet(cache_path)
 
-            # remove any rows already in the dataframe
-            outer_join = existing_df.merge(df, how = 'outer', indicator = True)
-            new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
+        # remove any rows already in the dataframe
+        outer_join = existing_df.merge(df, how = 'outer', indicator = True)
+        new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
 
-            # Coearce dtypes - may not be necessary?
-            # new_rows = new_rows.astype(existing_df.dtypes)
+        # Coearce dtypes - may not be necessary?
+        # new_rows = new_rows.astype(existing_df.dtypes)
 
-            # write in append mode
-            print("Appending new rows to existing parquet.")
-            new_rows.to_parquet(
-                cache_path,
-                overwrite=False,
-                append=True,
-                partition_on=part,
-                engine="pyarrow",
-                write_metadata_file=True,
-                write_index=False,
-            )
-        else:
-            # If it doesn't just write
-            print(f"Cache {cache_path} doesn't exist for upsert.")
-            df.to_parquet(
-                cache_path,
-                overwrite=overwrite,
-                partition_on=part,
-                engine="pyarrow",
-                write_metadata_file=True,
-                write_index=False,
-            )
-
+        # write in append mode
+        print("Appending new rows to existing parquet.")
+        new_rows.to_parquet(
+            cache_path,
+            overwrite=False,
+            append=True,
+            partition_on=part,
+            engine="pyarrow",
+            write_metadata_file=True,
+            write_index=False,
+        )
     else:
         if fs.exists(cache_path):
             fs.rm(cache_path, recursive=True)
@@ -524,83 +511,65 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
     else:
         new_table_name = postgres_table_name(table_name)
 
-    if upsert:
+    uri = f'postgresql://write:{pgwrite_pass}@34.59.163.82:5432/postgres'
+    engine = sqlalchemy.create_engine(uri)
+
+
+    if upsert and check_exists_postgres(table_name, real_table_name=real_table_name):
         if primary_keys is None or not isinstance(primary_keys, list):
             raise ValueError("Upsert may only be performed with primary keys specified as a list.")
 
         if not isinstance(df, dd.DataFrame):
             raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
 
-        uri = f'postgresql://write:{pgwrite_pass}@34.59.163.82:5432/postgres'
-        engine = sqlalchemy.create_engine(uri)
-
         with engine.begin() as conn:
-            # If the table doesn't exist then create it
-            if not conn.exec_driver_sql(f"""SELECT EXISTS (
-                                SELECT FROM information_schema.tables
-                                WHERE  table_schema = 'public'
-                                AND    table_name   = '{new_table_name}');
-                                """).first()[0]:
+            print("Postgres cache exists for upsert.")
+            # If it already exists...
 
-                print("Postgres cache doesn't exist for upsert. Writing full table.")
-                if isinstance(df, pd.DataFrame):
-                    df.to_sql(new_table_name, engine, index=False)
-                elif isinstance(df, dd.DataFrame):
-                    df.to_sql(new_table_name, uri=uri, index=False, parallel=True, chunksize=10000)
-                else:
-                    raise RuntimeError("Did not return dataframe type.")
+            # Extract the primary key columns for SQL constraint
+            for key in primary_keys:
+                if key not in df.columns:
+                    raise ValueError("Dataframe MUST contain all primary keys as columns")
 
-                pd_name = {'table_name': [table_name], 'table_key': [new_table_name],
-                           'created_at': [pd.Timestamp.now()]}
-                pd_name = pd.DataFrame(pd_name)
-                pd_name.to_sql('cache_tables', engine, if_exists='append')
+            # Write a temporary table
+            temp_table_name = f"temp_{uuid.uuid4().hex[:6]}"
 
+            if isinstance(df, pd.DataFrame):
+                df.to_sql(temp_table_name, engine, index=False)
+            elif isinstance(df, dd.DataFrame):
+                df.to_sql(temp_table_name, uri=uri, index=False, parallel=True, chunksize=10000)
             else:
-                print("Postgres cache exists for upsert.")
-                # If it already exists...
+                raise RuntimeError("Did not return dataframe type.")
 
-                # Write a temporary table
-                temp_table_name = f"temp_{uuid.uuid4().hex[:6]}"
+            index_sql_txt = ", ".join([f'"{i}"' for i in primary_keys])
+            columns = list(df.columns)
+            headers = primary_keys + list(set(columns) - set(primary_keys))
+            headers_sql_txt = ", ".join(
+                [f'"{i}"' for i in headers]
+            )  # index1, index2, ..., column 1, col2, ...
 
-                if isinstance(df, pd.DataFrame):
-                    df.to_sql(temp_table_name, engine, index=False)
-                elif isinstance(df, dd.DataFrame):
-                    df.to_sql(temp_table_name, uri=uri, index=False, parallel=True, chunksize=10000)
-                else:
-                    raise RuntimeError("Did not return dataframe type.")
+            # col1 = exluded.col1, col2=excluded.col2
+            # Excluded statement updates values of rows where primary keys conflict
+            update_column_stmt = ", ".join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
 
-                # Extract the primary key columns for SQL constraint
-                for key in primary_keys:
-                    if key not in df.columns:
-                        raise ValueError("Dataframe MUST contain all primary keys as columns")
+            # For the ON CONFLICT clause, postgres requires that the columns have unique constraint
+            # To add if not exists must drop if exists and then add. In a transaction this is consistent
+            query_pk = f"""
+            ALTER TABLE "{new_table_name}" DROP CONSTRAINT IF EXISTS unique_constraint_for_upsert;
+            ALTER TABLE "{new_table_name}" ADD CONSTRAINT unique_constraint_for_upsert UNIQUE ({index_sql_txt});
+            """
+            print("Adding a unique to contraint to table if it doesn't exist.")
+            conn.exec_driver_sql(query_pk)
 
-                index_sql_txt = ", ".join([f'"{i}"' for i in primary_keys])
-                columns = list(df.columns)
-                headers = primary_keys + list(set(columns) - set(primary_keys))
-                headers_sql_txt = ", ".join(
-                    [f'"{i}"' for i in headers]
-                )  # index1, index2, ..., column 1, col2, ...
-
-                # col1 = exluded.col1, col2=excluded.col2
-                update_column_stmt = ", ".join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
-
-                # For the ON CONFLICT clause, postgres requires that the columns have unique constraint
-                query_pk = f"""
-                ALTER TABLE "{new_table_name}" DROP CONSTRAINT IF EXISTS unique_constraint_for_upsert;
-                ALTER TABLE "{new_table_name}" ADD CONSTRAINT unique_constraint_for_upsert UNIQUE ({index_sql_txt});
-                """
-                print("Adding a unique to contraint to table if it doesn't exist.")
-                conn.exec_driver_sql(query_pk)
-
-                # Compose and execute upsert query
-                query_upsert = f"""INSERT INTO "{new_table_name}" ({headers_sql_txt})
-                                   SELECT {headers_sql_txt} FROM "{temp_table_name}"
-                                   ON CONFLICT ({index_sql_txt}) DO UPDATE
-                                   SET {update_column_stmt};
-                                   """
-                print("Upserting.")
-                conn.exec_driver_sql(query_upsert)
-                conn.exec_driver_sql(f"DROP TABLE {temp_table_name}")
+            # Compose and execute upsert query
+            query_upsert = f"""INSERT INTO "{new_table_name}" ({headers_sql_txt})
+                               SELECT {headers_sql_txt} FROM "{temp_table_name}"
+                               ON CONFLICT ({index_sql_txt}) DO UPDATE
+                               SET {update_column_stmt};
+                               """
+            print("Upserting.")
+            conn.exec_driver_sql(query_upsert)
+            conn.exec_driver_sql(f"DROP TABLE {temp_table_name}")
     else:
         try:
             exists = 'fail'
