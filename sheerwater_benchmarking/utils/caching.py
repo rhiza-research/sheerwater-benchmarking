@@ -905,7 +905,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                          chunks={}, decode_timedelta=True)
                                 else:
                                     # Requested chunks already match rechunk.
-                                    ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                    ds = xr.open_dataset(read_cache_map, engine='zarr',
+                                                         chunks={}, decode_timedelta=True)
                             else:
                                 ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
 
@@ -1027,8 +1028,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            if cache_exists(storage_backend, cache_path, verify_path) \
-                                    and not force_overwrite:
+                            if cache_exists(storage_backend, cache_path, verify_path) and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -1071,8 +1071,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_path} in delta.")
                                 write_to_delta(ds, cache_path, overwrite=True)
-                                sync_local_remote(backend, fs, read_fs, cache_path,
-                                                  read_cache_path, verify_path, null_path)
                                 # Reopen dataset to truncate the computational path
                                 ds = read_from_delta(read_cache_path)
                         elif storage_backend == 'parquet':
