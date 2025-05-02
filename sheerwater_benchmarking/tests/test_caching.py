@@ -263,7 +263,7 @@ def test_cache_local_recursive():
         data = [[name, np.random.randint(1000)], ['nick', np.random.randint(1000)], ['juli', np.random.randint(1000)]]
         df = pd.DataFrame(data, columns=['Name', 'Age'])
         return df
-    
+
     # Get a random name
     name = ''.join(random.choices(string.ascii_letters, k=10))
 

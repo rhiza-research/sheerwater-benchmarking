@@ -117,6 +117,7 @@ def sync_local_remote(backend, cache_fs, local_fs,
     """Sync a local cache mirror to a remote cache.
 
     Args:
+        backend (str): The backend to use for the cache
         cache_fs (fsspec.core.url_to_fs): The filesystem of the cache
         local_fs (fsspec.core.url_to_fs): The filesystem of the local mirror
         cache_path (str): The path to the cache
@@ -828,16 +829,16 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             if filepath_only and not supports_filepath:
                 raise ValueError(f"{backend} backend does not support filepath_only flag")
 
-            # First remove null caches if retry null cache is passed
-            if retry_null_cache and fs.exists(null_path):
-                print(f"Removing and retrying null cache {null_path}.")
-                fs.rm(null_path, recursive=True)
-
             # Set up cached computation
             ds = None
             compute_result = True
             fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
             cache_map = fs.get_mapper(cache_path)
+
+            # First remove null caches if retry null cache is passed
+            if retry_null_cache and fs.exists(null_path):
+                print(f"Removing and retrying null cache {null_path}.")
+                fs.rm(null_path, recursive=True)
 
             read_cache_path = cache_path
             read_cache_map = cache_map
