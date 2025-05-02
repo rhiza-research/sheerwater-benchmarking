@@ -139,7 +139,7 @@ def sync_local_remote(backend, cache_fs, local_fs,
     if not cache_fs.exists(null_path) and local_fs.exists(local_null_path):
         local_fs.rm(local_null_path, recursive=True)
 
-    # If the cache exists on remote, sync it to local
+    # If the cache exists locally and is valid, we're synced - return!
     if cache_exists(backend, local_cache_path, local_verify_path):
         # If we have a local cache, check and make sure the verify timestamp is the same
         local_verify_ts = local_fs.open(local_verify_path, 'r').read()
@@ -155,12 +155,12 @@ def sync_local_remote(backend, cache_fs, local_fs,
         cache_fs.get(cache_path, local_cache_path, recursive=True)
     if verify_path and cache_fs.exists(verify_path):
         if local_fs.exists(local_verify_path):
-            local_fs.rm(local_verify_path, recursive=True)
-        cache_fs.get(verify_path, local_verify_path, recursive=True)
+            local_fs.rm(local_verify_path)
+        cache_fs.get(verify_path, local_verify_path)
     if null_path and cache_fs.exists(null_path):
         if local_fs.exists(local_null_path):
-            local_fs.rm(local_null_path, recursive=True)
-        cache_fs.get(null_path, local_null_path, recursive=True)
+            local_fs.rm(local_null_path)
+        cache_fs.get(null_path, local_null_path)
 
 
 def get_cache_args(kwargs, cache_kwargs):
