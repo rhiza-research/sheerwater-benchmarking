@@ -317,11 +317,12 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
 
     fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
 
-    if fs.exists(verify_path):
-        fs.rm(verify_path)
 
     if upsert and cache_exists('parquet', cache_path, verify_path):
         print("Found existing cache for upsert.")
+
+        if fs.exists(verify_path):
+            fs.rm(verify_path)
 
         if primary_keys is None:
             raise ValueError("Upsert may only be performed with primary keys specified")
@@ -352,6 +353,9 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
     else:
         if fs.exists(cache_path):
             fs.rm(cache_path, recursive=True)
+
+        if fs.exists(verify_path):
+            fs.rm(verify_path)
 
         if isinstance(df, dd.DataFrame):
             df.to_parquet(
@@ -685,7 +689,7 @@ def cache_exists(backend, cache_path, verify_path=None, hash_postgres_table_name
         fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
         if backend in SUPPORTS_VERIFY_FILE:
             if not fs.exists(verify_path) and fs.exists(cache_path):
-                print("Found cache, but it appears to be corrupted. Recomputing.")
+                print("Found cache, but it appears to be corrupted.")
                 return False
             elif fs.exists(verify_path) and fs.exists(cache_path):
                 return True
@@ -1131,7 +1135,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     if recompute:
                         print(f"Recompute for {cache_key} requested. Not checking for cached result.")
                     elif upsert:
-                        print("Recomputing for {cache_key} to enable data upsert.")
+                        print(f"Recomputing for {cache_key} to enable data upsert.")
                     elif not cache:
                         # The function isn't cacheable, recomputing
                         pass
@@ -1224,6 +1228,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     verify_path,
                                 )
                                 and force_overwrite is None
+                                and not upsert
                             ):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -1243,7 +1248,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                         elif storage_backend == 'postgres':
                             if (check_exists_postgres(cache_key, hash_table_name=hash_postgres_table_name)
-                               and force_overwrite is None):
+                               and force_overwrite is None and not upsert):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
