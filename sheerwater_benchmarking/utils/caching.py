@@ -865,7 +865,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
                             # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
                             # every chunk is only 4B!
-                            ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                             if auto_rechunk:
                                 # If rechunk is passed then check to see if the rechunk array
                                 # matches chunking. If not then rechunk
@@ -875,7 +874,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                         "If auto_rechunk is True, a chunking dict must be supplied.")
 
                                 # Compare the dict to the rechunk dict
-                                if not chunking_compare(ds, chunking):
+                                if not chunking_compare(ds_remote, chunking):
                                     print(
                                         "Rechunk was passed and cached chunks do not match rechunk request. "
                                         "Performing rechunking.")
@@ -906,7 +905,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                          chunks={}, decode_timedelta=True)
                                 else:
                                     # Requested chunks already match rechunk.
-                                    pass
+                                    ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                            else:
+                                ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
 
                             if validate_cache_timeseries and timeseries is not None:
                                 # Check to see if the dataset extends roughly the full time series set
