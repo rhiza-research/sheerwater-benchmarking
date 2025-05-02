@@ -1,5 +1,10 @@
 """Test the caching functions in the cacheable decorator."""
+import os
+import random
+import string
+import datetime
 import pytest
+import fsspec
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -182,6 +187,7 @@ def test_cache_disable_if():
     dsp = cached_func3(agg_days=14)
     assert ds == dsp
 
+
 def test_cache_arg_scope():
     """Test that argument scope is not improperly global/inherited between calls."""
     @cacheable(data_type='basic',
@@ -207,6 +213,98 @@ def test_cache_arg_scope():
     #  Cache should be disabled - these should be different random numbers
     dsp = cached_func(agg_days=1)
     assert ds == dsp
+
+
+def test_cache_local():
+    """Test that cache_local argument works."""
+    @cacheable(data_type='basic',
+               cache_args=['agg_days'],
+               cache_local=True)
+    def cached_func_393(agg_days=7):  # noqa: ARG001
+        return np.random.randint(1000)
+
+    local_path = os.path.expanduser("~/.cache/sheerwater/caches/cached_func_393/1.pkl")
+    local_verify = os.path.expanduser("~/.cache/sheerwater/caches/cached_func_393/1.verify")
+    if os.path.exists(local_path):
+        os.remove(local_path)
+    if os.path.exists(local_verify):
+        os.remove(local_verify)
+
+    # Run for the firs time
+    ds1 = cached_func_393(agg_days=1, cache_local=True)
+    assert os.path.exists(local_path)
+    assert os.path.exists(local_verify)
+
+    # Run again to ensure you hit the cache
+    ds2 = cached_func_393(agg_days=1)
+    assert ds1 == ds2
+
+    # Run again, but hit the remote
+    # Delete the local cache, shouldn't impact anything
+    os.remove(local_path)
+    os.remove(local_verify)
+    ds3 = cached_func_393(agg_days=1, cache_local=False)
+    assert not os.path.exists(local_path)
+    assert not os.path.exists(local_verify)
+    assert ds1 == ds3
+
+    # Run again, with local true, should copy remote cache to local
+    ds4 = cached_func_393(agg_days=1, cache_local=True)
+    assert os.path.exists(local_path)
+    assert os.path.exists(local_verify)
+    assert ds1 == ds4
+
+    # Now, corrupt the local cache, by making it out of sync with the remote
+    fs = fsspec.filesystem('file')
+    before_local_verify = fs.open(local_verify, 'r').read()
+    fs.open(local_verify, 'w').write(
+        datetime.datetime.now(datetime.timezone.utc).isoformat())
+    fs.open(local_path, 'w').write(str(np.random.randint(1000)))
+    ds5 = cached_func_393(agg_days=1, cache_local=True)
+    assert ds1 == ds5
+    # Check that the local verify has been restored to the remote verify
+    assert fs.open(local_verify, 'r').read() == before_local_verify
+
+
+def test_cache_local_recursive():
+    """Test that cache_local argument works for a recursive parquet."""
+    @cacheable(data_type='tabular', cache_args=['name'])
+    def tab(name='bob'):
+        """Test function for tabular data."""
+        import pandas as pd
+
+        data = [[name, np.random.randint(1000)], ['nick', np.random.randint(1000)], ['juli', np.random.randint(1000)]]
+        df = pd.DataFrame(data, columns=['Name', 'Age'])
+        return df
+
+    # Get a random name
+    name = ''.join(random.choices(string.ascii_letters, k=10))
+
+    local_path = os.path.expanduser("~/.cache/sheerwater/caches/tab/{}.parquet".format(name))
+    local_verify = os.path.expanduser("~/.cache/sheerwater/caches/tab/{}.verify".format(name))
+    # Ensure no local before testing
+    if os.path.exists(local_path):
+        os.remove(local_path)
+    if os.path.exists(local_verify):
+        os.remove(local_verify)
+
+    # Path 1: Run remote
+    df = tab(name=name, backend='parquet').compute()
+    assert not os.path.exists(local_path)
+
+    # Path 2: Run local
+    df2 = tab(name=name, backend='parquet', cache_local=True).compute()
+    assert os.path.exists(local_path)
+    assert os.path.exists(local_verify)
+    assert df.equals(df2)
+
+    # Path 3: Re-run both
+    df3 = tab(name=name, backend='parquet',
+              recompute=True, force_overwrite=True).compute()
+    assert not df3.equals(df)
+    df4 = tab(name=name, backend='parquet', cache_local=True).compute()
+    assert not df4.equals(df2)
+    assert df4.equals(df3)
 
 
 if __name__ == "__main__":
