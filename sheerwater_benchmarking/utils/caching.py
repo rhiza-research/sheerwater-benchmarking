@@ -883,7 +883,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             if cache_local and backend in SUPPORTS_LOCAL_CACHING and \
                     cache_exists(backend, cache_path, verify_path):
                 # If local, active cache can differ from the cache path
-                read_cache_path = get_local_cache(cache_path, modification='local')
+                read_cache_path = get_local_cache(cache_path)
                 read_cache_map = fs.get_mapper(read_cache_path)
                 read_fs = fsspec.core.url_to_fs(read_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
 
@@ -892,7 +892,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             # Now check if the cache exists
             if not recompute and cache:
-                if cache_exists(backend, cache_path, verify_path, cache_local):
+                if cache_exists(backend, cache_path, verify_path):
                     print(f"Found cache for {read_cache_path}")
                     if data_type == 'array':
                         if filepath_only:
@@ -1062,7 +1062,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            if cache_exists(storage_backend, cache_path, verify_path, cache_local) \
+                            if cache_exists(storage_backend, cache_path, verify_path) \
                                     and not force_overwrite:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
