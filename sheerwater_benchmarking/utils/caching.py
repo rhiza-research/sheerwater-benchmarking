@@ -830,11 +830,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \
-<<<<<<< HEAD
                 storage_backend, passed_auto_rechunk, passed_cache_local, \
-=======
-                storage_backend, passed_auto_rechunk, \
->>>>>>> 9568285 (fix linting)
                 passed_verify_cache, upsert, passed_real_table_name, \
                 fail_if_no_cache = get_cache_args(kwargs, cache_kwargs)
 
