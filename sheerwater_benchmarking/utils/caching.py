@@ -563,47 +563,6 @@ def write_to_terracotta(cache_key, ds):
             write_individual_raster(driver, bucket, ds, cache_key)
 
 
-# def cache_exists(backend, cache_path, verify_path=None, cache_local=False):
-#     """Check if a cache exists, with local cache support.
-
-#     Args:
-#         backend (str): The backend to check
-#         cache_path (str): The path to the cache (either cache path or null path)
-#         verify_path (str): The path to the verify file
-#         cache_local (bool): Whether to check the local cache
-
-#     Returns:
-#         tuple: A tuple containing a boolean indicating if the cache exists and
-#             appropriate cache path
-#     """
-#     # If local caching is enabled, check the local cache first
-#     fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
-#     if cache_local and backend not in ['postgres', 'terracotta', 'delta']:
-#         local_cache_path = get_modified_cache_path(cache_path, modification='local')
-#         local_verify_path = get_modified_cache_path(verify_path, modification='local')
-#         local_fs = fsspec.core.url_to_fs(local_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
-#         # If the local cache exists, AND the remote cache exists (not corrupted), return True
-#         if _cache_exists(backend, local_cache_path, local_verify_path) and \
-#                 _cache_exists(backend, cache_path, verify_path):
-#             if backend in ['zarr', 'parquet', 'pickle']:
-#                 # If we have a local cache, check and make sure the verify timestamp is the same
-#                 local_verify_ts = local_fs.open(local_verify_path, 'r').read()
-#                 remote_verify_ts = fs.open(verify_path, 'r').read()
-#                 if local_verify_ts == remote_verify_ts:
-#                     return True
-#             else:
-#                 return True
-#         # If the remote cache exists, copy the remote cache to the local cache
-#         if _cache_exists(backend, cache_path, verify_path):
-#             fs.get(cache_path, local_cache_path, recursive=True)
-#             if verify_path:
-#                 fs.get(verify_path, local_verify_path, recursive=True)
-#             return True
-#         else:
-#             return False
-#     # If local caching is disabled, just check the remote cache
-#     return _cache_exists(backend, cache_path, verify_path)
-
 def cache_exists(backend, cache_path, verify_path=None):
     """Helper function to check if a cache at a specific cache path exists across backends."""
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
@@ -901,7 +860,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         if filepath_only:
                             return read_cache_map
                         else:
-                            print(f"Opening cache {read_cache_map}")
+                            print(f"Opening cache {read_cache_path}")
                             # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
                             # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
                             # every chunk is only 4B!
@@ -993,7 +952,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     compute_result = False
                         elif backend == 'parquet':
                             if filepath_only:
-                                return read_cache_map
+                                return read_cache_path
                             else:
                                 print(f"Opening cache {read_cache_path}")
                                 ds = read_from_parquet(read_cache_path)
