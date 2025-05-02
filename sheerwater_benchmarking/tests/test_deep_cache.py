@@ -38,7 +38,6 @@ def test_deep_cache():
     init2 = deep_cached_func()
     assert init == init2
 
-    import pdb; pdb.set_trace()
     first = deep_cached_func3()
     second = deep_cached_func3(force_overwrite=True, recompute='_all')
     assert first != second

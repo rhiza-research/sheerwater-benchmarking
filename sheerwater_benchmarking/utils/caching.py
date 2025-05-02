@@ -865,11 +865,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
                             # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
                             # every chunk is only 4B!
-                            ds = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
-
-                            # If rechunk is passed then check to see if the rechunk array
-                            # matches chunking. If not then rechunk
+                            ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                             if auto_rechunk:
+                                # If rechunk is passed then check to see if the rechunk array
+                                # matches chunking. If not then rechunk
+                                ds_remote = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                 if not isinstance(chunking, dict):
                                     raise ValueError(
                                         "If auto_rechunk is True, a chunking dict must be supplied.")
@@ -886,7 +886,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     # data leading to corruption.
                                     temp_cache_path = CACHE_ROOT_DIR + 'temp/' + cache_key + '.temp'
                                     temp_verify_path = CACHE_ROOT_DIR + 'temp/' + cache_key + '.verify'
-                                    chunk_to_zarr(ds, temp_cache_path, temp_verify_path, chunking)
+                                    chunk_to_zarr(ds_remote, temp_cache_path, temp_verify_path, chunking)
 
                                     # Remove the old cache and verify files
                                     if fs.exists(verify_path):
