@@ -223,10 +223,15 @@ def test_cache_local():
     def cached_func_393(agg_days=7):  # noqa: ARG001
         return np.random.randint(1000)
 
-    # Run for the firs time
-    ds1 = cached_func_393(agg_days=1, cache_local=True)
     local_path = os.path.expanduser("~/.cache/sheerwater/caches/cached_func_393/1.pkl")
     local_verify = os.path.expanduser("~/.cache/sheerwater/caches/cached_func_393/1.verify")
+    if os.path.exists(local_path):
+        os.remove(local_path)
+    if os.path.exists(local_verify):
+        os.remove(local_verify)
+
+    # Run for the firs time
+    ds1 = cached_func_393(agg_days=1, cache_local=True)
     assert os.path.exists(local_path)
     assert os.path.exists(local_verify)
 
@@ -238,10 +243,12 @@ def test_cache_local():
     # Delete the local cache, shouldn't impact anything
     os.remove(local_path)
     ds3 = cached_func_393(agg_days=1, cache_local=False)
+    assert not os.path.exists(local_path)
     assert ds1 == ds3
 
     # Run again, with local true, should copy remote cache to local
     ds4 = cached_func_393(agg_days=1, cache_local=True)
+    assert os.path.exists(local_path)
     assert ds1 == ds4
 
     # Now, corrupt the local cache, by making it out of sync with the remote
