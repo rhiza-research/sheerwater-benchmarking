@@ -30,9 +30,15 @@ def test_upsert():
     """Test upsert on parquet."""
     # Call to make sure it is in place and count rows
     # should have some number of rows
-    df = tabular_timeseries(0, upsert=True)
+    df = tabular_timeseries(0)
     scount = df.shape[0].compute()
     print(scount)
+
+    # Call with a random int - should add a row
+    df = tabular_timeseries(0, upsert=True)
+    samecount = df.shape[0].compute()
+    print(samecount)
+    assert scount == samecount
 
     # Call with a random int - should add a row
     r = np.random.randint(10,1000000)
@@ -52,12 +58,21 @@ def test_postgres_upsert():
     """Test upsert on postgres."""
     # Call to make sure it is in place and count rows
     # should have some number of rows
-    df = tabular_timeseries(0, backend='postgres', upsert=True)
+    df = tabular_timeseries(0, backend='postgres')
 
     # read
     df = tabular_timeseries(0, backend='postgres')
     scount = df.shape[0]
     print(scount)
+
+    # Call same with upsert
+    df = tabular_timeseries(0, backend='postgres', upsert=True)
+
+    # read
+    df = tabular_timeseries(0, backend='postgres')
+    samecount = df.shape[0]
+    print(samecount)
+    assert scount == samecount
 
     # Call with a random int - should add a row
     r = np.random.randint(10,1000000)
