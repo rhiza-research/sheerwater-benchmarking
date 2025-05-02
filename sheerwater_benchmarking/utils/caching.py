@@ -8,6 +8,7 @@ from inspect import signature, Parameter
 import logging
 import hashlib
 import fsspec
+import uuid
 
 from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
@@ -305,27 +306,79 @@ def read_from_delta(cache_path):
 
 def read_from_parquet(cache_path):
     """Read from a deltatable into a pandas dataframe."""
-    return dd.read_parquet(cache_path, engine='pyarrow')
+    return dd.read_parquet(cache_path, engine='pyarrow', ignore_metadata_file=True)
 
 
-def write_to_parquet(df, cache_path, verify_path, overwrite=False):
+def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False, primary_keys=None):
     """Write a pandas or dask dataframe to a parquet."""
-    fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
-    if fs.exists(verify_path):
-        fs.rm(verify_path, recursive=True)
-
     part = None
     if hasattr(df, 'cache_partition'):
         part = df.cache_partition
 
-    if isinstance(df, dd.DataFrame):
-        df.to_parquet(cache_path, overwrite=overwrite, partition_on=part, engine='pyarrow')
-    elif isinstance(df, pd.DataFrame):
-        df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
-    else:
-        raise ValueError("Can only write dask and pandas dataframes to parquet.")
+    fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
 
-    # Add a lock file to the cache to verify cache integrity, with the current timestamp
+
+    if upsert and cache_exists('parquet', cache_path, verify_path):
+        print("Found existing cache for upsert.")
+
+        if fs.exists(verify_path):
+            fs.rm(verify_path)
+
+        if primary_keys is None:
+            raise ValueError("Upsert may only be performed with primary keys specified")
+
+        if not isinstance(df, dd.DataFrame):
+            raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
+
+        existing_df = read_from_parquet(cache_path)
+
+        # Record starting partitions
+        start_parts = df.npartitions
+
+        # remove any rows already in the dataframe
+        outer_join = existing_df.merge(df, how = 'outer', indicator = True)
+        new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
+
+        if len(new_rows.index) > 0:
+            new_rows = new_rows.repartition(npartitions=start_parts)
+
+            # Coearce dtypes - may not be necessary?
+            # new_rows = new_rows.astype(existing_df.dtypes)
+
+            # write in append mode
+            print("Appending new rows to existing parquet.")
+            new_rows.to_parquet(
+                cache_path,
+                overwrite=False,
+                append=True,
+                partition_on=part,
+                engine="pyarrow",
+                write_metadata_file=True,
+                write_index=False,
+            )
+        else:
+            print("No rows to upsert.")
+    else:
+        if fs.exists(cache_path):
+            fs.rm(cache_path, recursive=True)
+
+        if fs.exists(verify_path):
+            fs.rm(verify_path)
+
+        if isinstance(df, dd.DataFrame):
+            df.to_parquet(
+                cache_path,
+                overwrite=overwrite,
+                partition_on=part,
+                engine="pyarrow",
+                write_metadata_file=True,
+                write_index=False,
+            )
+        elif isinstance(df, pd.DataFrame):
+            df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
+        else:
+            raise ValueError("Can only write dask and pandas dataframes to parquet.")
+
     fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
 
 
@@ -405,7 +458,7 @@ def read_from_postgres(table_name, hash_table_name=True):
 
     Args:
         table_name (str): The table name to read from
-        hash_table_name (bool): whether to hash the table name. Default true
+        hash_table_name (bool): whether not to hash the table name. Default False.
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
@@ -414,25 +467,29 @@ def read_from_postgres(table_name, hash_table_name=True):
         table_name = postgres_table_name(table_name)
 
     try:
-        engine = sqlalchemy.create_engine(
-            f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+        uri = f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres'
+        engine = sqlalchemy.create_engine(uri)
+
         df = pd.read_sql_query(f'select * from "{table_name}"', con=engine)
         return df
+
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on the
                            tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def check_exists_postgres(table_name):
+def check_exists_postgres(table_name, hash_table_name=True):
     """Check if table exists in postgres.
 
     Args:
         table_name: The table name to check
+        hash_table_name (bool): whether to hash the table name. Default False
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
-    table_name = postgres_table_name(table_name)
+    if hash_table_name:
+        table_name = postgres_table_name(table_name)
 
     try:
         engine = sqlalchemy.create_engine(
@@ -444,38 +501,108 @@ def check_exists_postgres(table_name):
                            the tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def write_to_postgres(pandas_df, table_name, overwrite=False):
+def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_keys=None, hash_table_name=True):
     """Writes a pandas df as a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
     we'll just hard code a connection to the running sheerwater database.
 
     Args:
-        pandas_df: A pandas dataframe
+        df: A pandas dataframe
         table_name: The table name to write to
         overwrite (bool): whether to overwrite an existing table
+        upsert (bool): whether to upsert into table
+        primary_keys (list(str)): column names of primary keys for upsert
+        hash_table_name (bool): whether to hash the table name. Default false
     """
     # Get the postgres write secret
     pgwrite_pass = postgres_write_password()
 
-    new_table_name = postgres_table_name(table_name)
+    if not hash_table_name:
+        new_table_name = table_name
+    else:
+        new_table_name = postgres_table_name(table_name)
 
-    try:
-        engine = sqlalchemy.create_engine(
-            f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
-        if overwrite:
-            pandas_df.to_sql(new_table_name, engine, if_exists='replace')
-        else:
-            pandas_df.to_sql(new_table_name, engine)
+    uri = f'postgresql://write:{pgwrite_pass}@34.59.163.82:5432/postgres'
+    engine = sqlalchemy.create_engine(uri)
 
-        # Also log the table name in the tables table
-        pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
-        pd_name = pd.DataFrame(pd_name)
-        pd_name.to_sql('cache_tables', engine, if_exists='append')
 
-    except sqlalchemy.exc.InterfaceError:
-        raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
-                           and can see sheerwater-benchmarking-postgres.""")
+    if upsert and check_exists_postgres(table_name, hash_table_name=hash_table_name):
+        if primary_keys is None or not isinstance(primary_keys, list):
+            raise ValueError("Upsert may only be performed with primary keys specified as a list.")
+
+        if not isinstance(df, dd.DataFrame):
+            raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
+
+        with engine.begin() as conn:
+            print("Postgres cache exists for upsert.")
+            # If it already exists...
+
+            # Extract the primary key columns for SQL constraint
+            for key in primary_keys:
+                if key not in df.columns:
+                    raise ValueError("Dataframe MUST contain all primary keys as columns")
+
+            # Write a temporary table
+            temp_table_name = f"temp_{uuid.uuid4().hex[:6]}"
+
+            if isinstance(df, pd.DataFrame):
+                df.to_sql(temp_table_name, engine, index=False)
+            elif isinstance(df, dd.DataFrame):
+                df.to_sql(temp_table_name, uri=uri, index=False, parallel=True, chunksize=10000)
+            else:
+                raise RuntimeError("Did not return dataframe type.")
+
+            index_sql_txt = ", ".join([f'"{i}"' for i in primary_keys])
+            columns = list(df.columns)
+            headers = primary_keys + list(set(columns) - set(primary_keys))
+            headers_sql_txt = ", ".join(
+                [f'"{i}"' for i in headers]
+            )  # index1, index2, ..., column 1, col2, ...
+
+            # col1 = exluded.col1, col2=excluded.col2
+            # Excluded statement updates values of rows where primary keys conflict
+            update_column_stmt = ", ".join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
+
+            # For the ON CONFLICT clause, postgres requires that the columns have unique constraint
+            # To add if not exists must drop if exists and then add. In a transaction this is consistent
+            query_pk = f"""
+            ALTER TABLE "{new_table_name}" DROP CONSTRAINT IF EXISTS unique_constraint_for_upsert;
+            ALTER TABLE "{new_table_name}" ADD CONSTRAINT unique_constraint_for_upsert UNIQUE ({index_sql_txt});
+            """
+            print("Adding a unique to contraint to table if it doesn't exist.")
+            conn.exec_driver_sql(query_pk)
+
+            # Compose and execute upsert query
+            query_upsert = f"""INSERT INTO "{new_table_name}" ({headers_sql_txt})
+                               SELECT {headers_sql_txt} FROM "{temp_table_name}"
+                               ON CONFLICT ({index_sql_txt}) DO UPDATE
+                               SET {update_column_stmt};
+                               """
+            print("Upserting.")
+            conn.exec_driver_sql(query_upsert)
+            conn.exec_driver_sql(f"DROP TABLE {temp_table_name}")
+    else:
+        try:
+            exists = 'fail'
+            if overwrite:
+                exists = 'replace'
+
+            if isinstance(df, pd.DataFrame):
+                df.to_sql(new_table_name, engine, if_exists=exists, index=False)
+            elif isinstance(df, dd.DataFrame):
+                df.to_sql(new_table_name, uri=uri, if_exists=exists, index=False, parallel=True, chunksize=10000)
+            else:
+                raise RuntimeError("Did not return dataframe type.")
+
+            # Also log the table name in the tables table
+            pd_name = {'table_name': [table_name], 'table_key': [new_table_name], 'created_at': [pd.Timestamp.now()]}
+            pd_name = pd.DataFrame(pd_name)
+            pd_name.to_sql('cache_tables', engine, if_exists='append')
+
+        except sqlalchemy.exc.InterfaceError:
+            raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
+                               and can see sheerwater-benchmarking-postgres.""")
 
 
 def write_to_terracotta(cache_key, ds):
@@ -563,15 +690,14 @@ def write_to_terracotta(cache_key, ds):
         else:
             write_individual_raster(driver, bucket, ds, cache_key)
 
-
-def cache_exists(backend, cache_path, verify_path=None):
-    """Helper function to check if a cache at a specific cache path exists across backends."""
+def cache_exists(backend, cache_path, verify_path=None, hash_postgres_table_name=True):
+    """Check if a cache exists generically."""
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
         if backend in SUPPORTS_VERIFY_FILE:
             if not fs.exists(verify_path) and fs.exists(cache_path):
-                print("Found cache, but it appears to be corrupted. Recomputing.")
+                print("Found cache, but it appears to be corrupted.")
                 return False
             elif fs.exists(verify_path) and fs.exists(cache_path):
                 return True
@@ -580,14 +706,15 @@ def cache_exists(backend, cache_path, verify_path=None):
         else:
             return fs.exists(cache_path)
     elif backend == 'postgres':
-        return check_exists_postgres(cache_path)
+        return check_exists_postgres(cache_path, hash_table_name=hash_postgres_table_name)
     else:
         raise ValueError(f'Unknown backend {backend}')
 
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
-              auto_rechunk=False, cache=True, validate_cache_timeseries=True, cache_disable_if=None,
-              backend=None, storage_backend=None, cache_local=False):
+              auto_rechunk=False, cache=True, validate_cache_timeseries=False, cache_disable_if=None,
+              backend=None, storage_backend=None, cache_local=False,
+              primary_keys=None, hash_postgres_table_name=True):
     """Decorator for caching function results.
 
     Args:
@@ -628,6 +755,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             does not match the requested chunking. Default is False.
         cache_local (bool): If True, will mirror the result locally, at the location
             specified by the LOCAL_CACHE_ROOT_DIR variable. Default is False.
+        primary_keys (list(str)): Column names of the primary keys to user for upsert.
+        hash_postgres_table_name (bool): Use the real table name for postgres writes.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -635,12 +764,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "recompute": False,
         "cache": None,
         "validate_cache_timeseries": None,
-        "force_overwrite": False,
+        "force_overwrite": None,
         "retry_null_cache": False,
         "backend": None,
         "storage_backend": None,
         "auto_rechunk":  None,
         "cache_local": False,
+        "upsert": False,
+        "hash_postgres_table_name": True,
+        "fail_if_no_cache": False,
     }
 
     nonlocals = locals()
@@ -661,11 +793,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             backend = nonlocals['backend']
             storage_backend = nonlocals['storage_backend']
             cache_local = nonlocals['cache_local']
+            primary_keys = nonlocals['primary_keys']
+            hash_postgres_table_name = nonlocals['hash_postgres_table_name']
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \
-                storage_backend, passed_auto_rechunk, passed_cache_local = get_cache_args(kwargs, cache_kwargs)
+                storage_backend, passed_auto_rechunk, passed_cache_local, \
+                upsert, passed_hash_postgres_table_name, \
+                fail_if_no_cache = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
                 cache = passed_cache
@@ -677,6 +813,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 backend = passed_backend
             if passed_cache_local is not None:
                 cache_local = passed_cache_local
+            if passed_hash_postgres_table_name is not None:
+                hash_postgres_table_name = passed_hash_postgres_table_name
 
             # Check if this is a nested cacheable function
             if not check_if_nested_fn():
@@ -852,8 +990,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 read_fs = fsspec.core.url_to_fs(read_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
 
             # Now check if the cache exists
-            if not recompute and cache:
-                if cache_exists(backend, cache_path, verify_path):
+            if not recompute and not upsert and cache:
+                if cache_exists(backend, cache_path, verify_path,
+                                hash_postgres_table_name=hash_postgres_table_name):
                     # Sync the cache from the remote to the local
                     sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
                     print(f"Found cache for {read_cache_path}")
@@ -967,7 +1106,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     compute_result = False
 
                         elif backend == 'postgres':
-                            ds = read_from_postgres(cache_key)
+                            ds = read_from_postgres(cache_key, hash_table_name=hash_postgres_table_name)
                             if validate_cache_timeseries and timeseries is not None:
                                 raise NotImplementedError("""Timeseries validation is not currently implemented
                                                           for tabular datasets""")
@@ -1003,10 +1142,16 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if compute_result:
                     if recompute:
                         print(f"Recompute for {cache_key} requested. Not checking for cached result.")
+                    elif upsert:
+                        print(f"Computing {cache_key} to enable data upsert.")
                     elif not cache:
                         # The function isn't cacheable, recomputing
                         pass
                     else:
+                        if fail_if_no_cache:
+                            raise RuntimeError(f"""Computation has been disabled by
+                                                `fail_if_no_cache` and cache doesn't exist for {cache_key}.""")
+
                         print(f"Cache doesn't exist for {cache_key}. Running function")
 
                     if timeseries is not None and (start_time is None or end_time is None):
@@ -1019,20 +1164,28 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 # Store the result
                 if cache:
                     if ds is None:
-                        print(f"Autocaching null result for {null_path}.")
-                        with fs.open(null_path, 'wb') as f:
-                            f.write(b'')
-                            sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
-                            return None
+                        if not upsert:
+                            print(f"Autocaching null result for {null_path}.")
+                            with fs.open(null_path, 'wb') as f:
+                                f.write(b'')
+                                sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path,
+                                                  verify_path, null_path)
+                        else:
+                            print(f"Null result not cached for {null_path} in upsert mode.")
+
+                        return None
 
                     write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            if cache_exists(storage_backend, cache_path, verify_path) and not force_overwrite:
+                            if (cache_exists(storage_backend, cache_path, verify_path)
+                                and force_overwrite is None):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
@@ -1060,11 +1213,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                         # TODO: combine repeated code
                         if storage_backend == 'delta':
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if fs.exists(cache_path) and force_overwrite is None:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
@@ -1074,7 +1229,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 # Reopen dataset to truncate the computational path
                                 ds = read_from_delta(read_cache_path)
                         elif storage_backend == 'parquet':
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if (
+                                cache_exists(
+                                    storage_backend,
+                                    cache_path,
+                                    verify_path,
+                                )
+                                and force_overwrite is None
+                                and not upsert
+                            ):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -1084,35 +1247,44 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_path} in parquet.")
-                                write_to_parquet(ds, cache_path, verify_path, overwrite=True)
+                                write_to_parquet(ds, cache_path, verify_path, overwrite=True,
+                                                 upsert=upsert, primary_keys=primary_keys)
                                 sync_local_remote(backend, fs, read_fs, cache_path,
                                                   read_cache_path, verify_path, null_path)
                                 # Reopen dataset to truncate the computational path
                                 ds = read_from_parquet(read_cache_path)
 
                         elif storage_backend == 'postgres':
-                            if check_exists_postgres(cache_key) and not force_overwrite:
+                            if (check_exists_postgres(cache_key, hash_table_name=hash_postgres_table_name)
+                               and force_overwrite is None and not upsert):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
                             if write:
                                 print(f"Caching result for {cache_key} in postgres.")
-                                write_to_postgres(ds, cache_key, overwrite=True)
-                                # Reopen dataset to truncate the computational path
-                                ds = read_from_postgres(read_cache_path)
+                                write_to_postgres(ds, cache_key, overwrite=True, upsert=upsert,
+                                                  primary_keys=primary_keys, hash_table_name=hash_postgres_table_name)
+                                # Don't support computation path truncation because dask read sql function
+                                # requires knowledge of indexes we don't have generically
+                                # ds = read_from_postgres(cache_path)
+                                return ds
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
                     elif data_type == 'basic':
                         if backend == 'pickle':
-                            if fs.exists(cache_path) and not force_overwrite:
+                            if fs.exists(cache_path) and force_overwrite is None:
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
                                 write = True
 
