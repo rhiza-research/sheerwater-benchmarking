@@ -265,8 +265,10 @@ def test_cache_local_recursive():
     local_path = os.path.expanduser("~/.cache/sheerwater/caches/tab/susie.parquet")
     local_verify = os.path.expanduser("~/.cache/sheerwater/caches/tab/susie.verify")
     # Ensure no local before testing
-    os.remove(local_path)
-    os.remove(local_verify)
+    if os.path.exists(local_path):
+        os.remove(local_path)
+    if os.path.exists(local_verify):
+        os.remove(local_verify)
 
     # Path 1: Run remote
     df = tab(name='susie', backend='parquet').compute()

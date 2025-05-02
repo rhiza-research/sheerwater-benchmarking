@@ -111,20 +111,19 @@ def get_local_cache(cache_path):
     return os.path.join(LOCAL_CACHE_ROOT_DIR, cache_key)
 
 
-def sync_local_remote(backend, cache_fs, local_fs, cache_path=None, verify_path=None, null_path=None):
+def sync_local_remote(backend, cache_fs, local_fs,
+                      cache_path=None, local_cache_path=None,
+                      verify_path=None, null_path=None):
     """Sync a local cache mirror to a remote cache.
 
     Args:
         cache_fs (fsspec.core.url_to_fs): The filesystem of the cache
         local_fs (fsspec.core.url_to_fs): The filesystem of the local mirror
         cache_path (str): The path to the cache
+        local_cache_path (str): The path to the local cache
         verify_path (str): The path to the verify file
         null_path (str): The path to the null file
     """
-    # Check that remote exists
-    local_cache_path = get_local_cache(cache_path)
-    local_verify_path = get_local_cache(verify_path)
-    local_null_path = get_local_cache(null_path)
     if local_cache_path == cache_path:
         return  # don't sync if the read and the remote filesystems are the same
 
@@ -132,8 +131,11 @@ def sync_local_remote(backend, cache_fs, local_fs, cache_path=None, verify_path=
     assert cache_exists(backend, cache_path, verify_path)
     assert backend in SUPPORTS_LOCAL_CACHING
 
+    local_verify_path = get_local_cache(verify_path)
+    local_null_path = get_local_cache(null_path)
+
     # Remove the local null cache if it doesn't exist on remote
-    if not cache_fs.exists(null_path):
+    if not cache_fs.exists(null_path) and local_fs.exists(local_null_path):
         local_fs.rm(local_null_path, recursive=True)
 
     # If the cache exists on remote, sync it to local
@@ -147,13 +149,16 @@ def sync_local_remote(backend, cache_fs, local_fs, cache_path=None, verify_path=
     # If the verify timestamp is different, or it doesn't exist, delete the local cache
     # and sync the remote cache to local
     if cache_path and cache_fs.exists(cache_path):
-        local_fs.rm(local_cache_path, recursive=True)
+        if local_fs.exists(local_cache_path):
+            local_fs.rm(local_cache_path, recursive=True)
         cache_fs.get(cache_path, local_cache_path, recursive=True)
     if verify_path and cache_fs.exists(verify_path):
-        local_fs.rm(local_verify_path, recursive=True)
+        if local_fs.exists(local_verify_path):
+            local_fs.rm(local_verify_path, recursive=True)
         cache_fs.get(verify_path, local_verify_path, recursive=True)
     if null_path and cache_fs.exists(null_path):
-        local_fs.rm(local_null_path, recursive=True)
+        if local_fs.exists(local_null_path):
+            local_fs.rm(local_null_path, recursive=True)
         cache_fs.get(null_path, local_null_path, recursive=True)
 
 
@@ -888,7 +893,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 read_fs = fsspec.core.url_to_fs(read_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
 
             # Sync the cache from the remote to the local
-            sync_local_remote(backend, fs, read_fs, cache_path, verify_path, null_path)
+            sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
 
             # Now check if the cache exists
             if not recompute and cache:
@@ -935,7 +940,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     fs.mv(temp_verify_path, verify_path, recursive=True)
 
                                     # Sync the cache from the remote to the local
-                                    sync_local_remote(backend, fs, read_fs, cache_path, verify_path, null_path)
+                                    sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
 
                                     # Reopen the dataset - will use the appropriate global or local cache
                                     ds = xr.open_dataset(read_cache_map, engine='zarr',
@@ -1056,7 +1061,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         print(f"Autocaching null result for {null_path}.")
                         with fs.open(null_path, 'wb') as f:
                             f.write(b'')
-                            sync_local_remote(backend, fs, read_fs, cache_path, verify_path, null_path)
+                            sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
                             return None
 
                     write = False  # boolean to determine if we should write to the cache
@@ -1076,7 +1081,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 if isinstance(ds, xr.Dataset):
                                     chunk_config = chunking if chunking else 'auto'
                                     chunk_to_zarr(ds, cache_path, verify_path, chunk_config)
-                                    sync_local_remote(backend, fs, read_fs, cache_path, verify_path, null_path)
+                                    sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
                                     # Reopen the dataset to truncate the computational path
                                     ds = xr.open_dataset(read_cache_map, engine='zarr',
                                                          chunks={}, decode_timedelta=True)
@@ -1105,7 +1110,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_path} in delta.")
                                 write_to_delta(ds, cache_path, overwrite=True)
-                                sync_local_remote(backend, fs, read_fs, cache_path, verify_path, null_path)
+                                sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
                                 # Reopen dataset to truncate the computational path
                                 ds = read_from_delta(read_cache_path)
                         elif storage_backend == 'parquet':
@@ -1120,7 +1125,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_path} in parquet.")
                                 write_to_parquet(ds, cache_path, verify_path, overwrite=True)
-                                sync_local_remote(backend, fs, read_fs, cache_path, verify_path, null_path)
+                                sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
                                 # Reopen dataset to truncate the computational path
                                 ds = read_from_parquet(read_cache_path)
 
@@ -1156,7 +1161,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     pickle.dump(ds, f)
                                     fs.open(verify_path, 'w').write(
                                         datetime.datetime.now(datetime.timezone.utc).isoformat())
-                                sync_local_remote(backend, fs, read_fs, cache_path, verify_path, null_path)
+                                sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
                         else:
                             raise ValueError("Only pickle backend is implemented for basic data data")
 
