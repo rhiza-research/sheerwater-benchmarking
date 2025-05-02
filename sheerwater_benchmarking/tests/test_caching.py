@@ -242,22 +242,28 @@ def test_cache_local():
     # Run again, but hit the remote
     # Delete the local cache, shouldn't impact anything
     os.remove(local_path)
+    os.remove(local_verify)
     ds3 = cached_func_393(agg_days=1, cache_local=False)
     assert not os.path.exists(local_path)
+    assert not os.path.exists(local_verify)
     assert ds1 == ds3
 
     # Run again, with local true, should copy remote cache to local
     ds4 = cached_func_393(agg_days=1, cache_local=True)
     assert os.path.exists(local_path)
+    assert os.path.exists(local_verify)
     assert ds1 == ds4
 
     # Now, corrupt the local cache, by making it out of sync with the remote
     fs = fsspec.filesystem('file')
+    before_local_verify = fs.open(local_verify, 'r').read()
     fs.open(local_verify, 'w').write(
         datetime.datetime.now(datetime.timezone.utc).isoformat())
     fs.open(local_path, 'w').write(str(np.random.randint(1000)))
     ds5 = cached_func_393(agg_days=1, cache_local=True)
     assert ds1 == ds5
+    # Check that the local verify has been restored to the remote verify
+    assert fs.open(local_verify, 'r').read() == before_local_verify
 
 
 def test_cache_local_recursive():
