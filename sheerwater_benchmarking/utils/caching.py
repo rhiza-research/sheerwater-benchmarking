@@ -1135,7 +1135,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     if recompute:
                         print(f"Recompute for {cache_key} requested. Not checking for cached result.")
                     elif upsert:
-                        print(f"Recomputing for {cache_key} to enable data upsert.")
+                        print(f"Computing {cache_key} to enable data upsert.")
                     elif not cache:
                         # The function isn't cacheable, recomputing
                         pass
