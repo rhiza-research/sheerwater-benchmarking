@@ -317,6 +317,9 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
 
     fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
 
+    if fs.exists(verify_path):
+        fs.rm(verify_path)
+
     if upsert:
         if primary_keys is None:
             raise ValueError("Upsert may only be performed with primary keys specified")
@@ -325,10 +328,7 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
             raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
 
         # Check to see if the cache exists
-        if fs.exists(verify_path) and fs.exists(cache_path):
-            if fs.exists(verify_path):
-                fs.rm(verify_path, recursive=True)
-
+        if cache_exists('parquet', cache_path, verify_path):
             print("Found existing cache for upsert.")
             existing_df = read_from_parquet(cache_path)
 
@@ -350,12 +350,7 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
                 write_metadata_file=True,
                 write_index=False,
             )
-
-            fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
         else:
-            if fs.exists(verify_path):
-                fs.rm(verify_path, recursive=True)
-
             # If it doesn't just write
             print(f"Cache {cache_path} doesn't exist for upsert.")
             df.to_parquet(
@@ -367,11 +362,7 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
                 write_index=False,
             )
 
-            fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
     else:
-        if fs.exists(verify_path):
-            fs.rm(verify_path, recursive=True)
-
         if fs.exists(cache_path):
             fs.rm(cache_path, recursive=True)
 
@@ -389,7 +380,7 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
         else:
             raise ValueError("Can only write dask and pandas dataframes to parquet.")
 
-        fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
+    fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
 
 
 def write_to_delta(df, cache_path, overwrite=False):
@@ -1178,13 +1169,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     if recompute:
                         print(f"Recompute for {cache_key} requested. Not checking for cached result.")
                     elif upsert:
-                        print("Running function for upsert.")
+                        print("Recomputing for {cache_key} to enable data upsert.")
                     elif not cache:
                         # The function isn't cacheable, recomputing
                         pass
                     else:
                         if fail_if_no_cache:
-                            raise RuntimeError(f"Cache doesn't exist for {cache_key}.")
+                            raise RuntimeError(f"""Computation has been disabled by
+                                                `fail_if_no_cache` and cache doesn't exist for {cache_key}.""")
 
                         print(f"Cache doesn't exist for {cache_key}. Running function")
 
@@ -1198,12 +1190,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 # Store the result
                 if cache:
                     if ds is None:
-                        print(f"Autocaching null result for {null_path}.")
                         if not upsert:
+                            print(f"Autocaching null result for {null_path}.")
                             with fs.open(null_path, 'wb') as f:
                                 f.write(b'')
                                 sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path,
                                                   verify_path, null_path)
+                        else:
+                            print(f"Null result not cached for {null_path} in upsert mode.")
 
                         return None
 
