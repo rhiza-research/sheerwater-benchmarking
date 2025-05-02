@@ -438,7 +438,7 @@ def postgres_table_name(table_name):
     return hashlib.md5(table_name.encode()).hexdigest()
 
 
-def read_from_postgres(table_name, real_table_name=False):
+def read_from_postgres(table_name, hash_table_name=True):
     """Read a pandas df from a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
@@ -446,12 +446,12 @@ def read_from_postgres(table_name, real_table_name=False):
 
     Args:
         table_name (str): The table name to read from
-        real_table_name (bool): whether not to hash the table name. Default False.
+        hash_table_name (bool): whether not to hash the table name. Default False.
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
-    if not real_table_name:
+    if hash_table_name:
         table_name = postgres_table_name(table_name)
 
     try:
@@ -466,17 +466,17 @@ def read_from_postgres(table_name, real_table_name=False):
                            tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def check_exists_postgres(table_name, real_table_name=False):
+def check_exists_postgres(table_name, hash_table_name=True):
     """Check if table exists in postgres.
 
     Args:
         table_name: The table name to check
-        real_table_name (bool): whether to hash the table name. Default False
+        hash_table_name (bool): whether to hash the table name. Default False
     """
     # Get the postgres write secret
     pgread_pass = postgres_read_password()
 
-    if not real_table_name:
+    if hash_table_name:
         table_name = postgres_table_name(table_name)
 
     try:
@@ -489,7 +489,7 @@ def check_exists_postgres(table_name, real_table_name=False):
                            the tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
-def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_keys=None, real_table_name=False):
+def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_keys=None, hash_table_name=True):
     """Writes a pandas df as a table in the sheerwater postgres.
 
     Backends should eventually be flexibly specified, but for now
@@ -501,12 +501,12 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
         overwrite (bool): whether to overwrite an existing table
         upsert (bool): whether to upsert into table
         primary_keys (list(str)): column names of primary keys for upsert
-        real_table_name (bool): whether to hash the table name. Default false
+        hash_table_name (bool): whether to hash the table name. Default false
     """
     # Get the postgres write secret
     pgwrite_pass = postgres_write_password()
 
-    if real_table_name:
+    if not hash_table_name:
         new_table_name = table_name
     else:
         new_table_name = postgres_table_name(table_name)
@@ -515,7 +515,7 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
     engine = sqlalchemy.create_engine(uri)
 
 
-    if upsert and check_exists_postgres(table_name, real_table_name=real_table_name):
+    if upsert and check_exists_postgres(table_name, hash_table_name=hash_table_name):
         if primary_keys is None or not isinstance(primary_keys, list):
             raise ValueError("Upsert may only be performed with primary keys specified as a list.")
 
@@ -678,12 +678,12 @@ def write_to_terracotta(cache_key, ds):
         else:
             write_individual_raster(driver, bucket, ds, cache_key)
 
-def cache_exists(backend, cache_path, verify_path=None, verify_cache=True, real_table_name=False):
+def cache_exists(backend, cache_path, verify_path=None, hash_postgres_table_name=True):
     """Check if a cache exists generically."""
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
         # Check to see if the cache exists for this key
         fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
-        if backend in SUPPORTS_VERIFY_FILE and verify_cache:
+        if backend in SUPPORTS_VERIFY_FILE:
             if not fs.exists(verify_path) and fs.exists(cache_path):
                 print("Found cache, but it appears to be corrupted. Recomputing.")
                 return False
@@ -694,15 +694,15 @@ def cache_exists(backend, cache_path, verify_path=None, verify_cache=True, real_
         else:
             return fs.exists(cache_path)
     elif backend == 'postgres':
-        return check_exists_postgres(cache_path, real_table_name=real_table_name)
+        return check_exists_postgres(cache_path, hash_table_name=hash_postgres_table_name)
     else:
         raise ValueError(f'Unknown backend {backend}')
 
 
 def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_arg=None,
               auto_rechunk=False, cache=True, validate_cache_timeseries=False, cache_disable_if=None,
-              backend=None, storage_backend=None, cache_local=False, verify_cache=True,
-              primary_keys=None, real_table_name=False):
+              backend=None, storage_backend=None, cache_local=False,
+              primary_keys=None, hash_postgres_table_name=True):
     """Decorator for caching function results.
 
     Args:
@@ -743,9 +743,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             does not match the requested chunking. Default is False.
         cache_local (bool): If True, will mirror the result locally, at the location
             specified by the LOCAL_CACHE_ROOT_DIR variable. Default is False.
-        verify_cache (bool): Verify cache writes complete using a temporary file mechanism.
         primary_keys (list(str)): Column names of the primary keys to user for upsert.
-        real_table_name (bool): Use the real table name for postgres writes.
+        hash_postgres_table_name (bool): Use the real table name for postgres writes.
     """
     # Valid configuration kwargs for the cacheable decorator
     cache_kwargs = {
@@ -759,9 +758,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "storage_backend": None,
         "auto_rechunk":  None,
         "cache_local": False,
-        "verify_cache": None,
         "upsert": False,
-        "real_table_name": None,
+        "hash_postgres_table_name": True,
         "fail_if_no_cache": False,
     }
 
@@ -783,15 +781,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             backend = nonlocals['backend']
             storage_backend = nonlocals['storage_backend']
             cache_local = nonlocals['cache_local']
-            verify_cache = nonlocals['verify_cache']
             primary_keys = nonlocals['primary_keys']
-            real_table_name = nonlocals['real_table_name']
+            hash_postgres_table_name = nonlocals['hash_postgres_table_name']
 
             # Calculate the appropriate cache key
             filepath_only, recompute, passed_cache, passed_validate_cache_timeseries, \
                 force_overwrite, retry_null_cache, passed_backend, \
                 storage_backend, passed_auto_rechunk, passed_cache_local, \
-                passed_verify_cache, upsert, passed_real_table_name, \
+                upsert, passed_hash_postgres_table_name, \
                 fail_if_no_cache = get_cache_args(kwargs, cache_kwargs)
 
             if passed_cache is not None:
@@ -800,16 +797,12 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 auto_rechunk = passed_auto_rechunk
             if passed_validate_cache_timeseries is not None:
                 validate_cache_timeseries = passed_validate_cache_timeseries
-            if passed_verify_cache is not None:
-                verify_cache = passed_verify_cache
             if passed_backend is not None:
                 backend = passed_backend
             if passed_cache_local is not None:
                 cache_local = passed_cache_local
-            if passed_verify_cache is not None:
-                verify_cache = passed_verify_cache
-            if passed_real_table_name is not None:
-                real_table_name = passed_real_table_name
+            if passed_hash_postgres_table_name is not None:
+                hash_postgres_table_name = passed_hash_postgres_table_name
 
             # Check if this is a nested cacheable function
             if not check_if_nested_fn():
@@ -986,8 +979,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             # Now check if the cache exists
             if not recompute and not upsert and cache:
-                if cache_exists(backend, cache_path, verify_path, verify_cache=verify_cache,
-                                real_table_name=real_table_name):
+                if cache_exists(backend, cache_path, verify_path,
+                                hash_postgres_table_name=hash_postgres_table_name):
                     # Sync the cache from the remote to the local
                     sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
                     print(f"Found cache for {read_cache_path}")
@@ -1101,7 +1094,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     compute_result = False
 
                         elif backend == 'postgres':
-                            ds = read_from_postgres(cache_key, real_table_name=real_table_name)
+                            ds = read_from_postgres(cache_key, hash_table_name=hash_postgres_table_name)
                             if validate_cache_timeseries and timeseries is not None:
                                 raise NotImplementedError("""Timeseries validation is not currently implemented
                                                           for tabular datasets""")
@@ -1173,7 +1166,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     write = False  # boolean to determine if we should write to the cache
                     if data_type == 'array':
                         if storage_backend == 'zarr':
-                            if (cache_exists(storage_backend, cache_path, verify_path, verify_cache=verify_cache)
+                            if (cache_exists(storage_backend, cache_path, verify_path)
                                 and force_overwrite is None):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -1229,7 +1222,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     storage_backend,
                                     cache_path,
                                     verify_path,
-                                    verify_cache=verify_cache,
                                 )
                                 and force_overwrite is None
                             ):
@@ -1250,7 +1242,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 ds = read_from_parquet(read_cache_path)
 
                         elif storage_backend == 'postgres':
-                            if (check_exists_postgres(cache_key, real_table_name=real_table_name)
+                            if (check_exists_postgres(cache_key, hash_table_name=hash_postgres_table_name)
                                and force_overwrite is None):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
@@ -1264,7 +1256,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             if write:
                                 print(f"Caching result for {cache_key} in postgres.")
                                 write_to_postgres(ds, cache_key, overwrite=True, upsert=upsert,
-                                                  primary_keys=primary_keys, real_table_name=real_table_name)
+                                                  primary_keys=primary_keys, hash_table_name=hash_postgres_table_name)
                                 # Don't support computation path truncation because dask read sql function
                                 # requires knowledge of indexes we don't have generically
                                 # ds = read_from_postgres(cache_path)
