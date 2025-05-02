@@ -332,24 +332,32 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
 
         existing_df = read_from_parquet(cache_path)
 
+        # Record starting partitions
+        start_parts = df.npartitions
+
         # remove any rows already in the dataframe
         outer_join = existing_df.merge(df, how = 'outer', indicator = True)
         new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
 
-        # Coearce dtypes - may not be necessary?
-        # new_rows = new_rows.astype(existing_df.dtypes)
+        if len(new_rows.index) > 0:
+            new_rows = new_rows.repartition(npartitions=start_parts)
 
-        # write in append mode
-        print("Appending new rows to existing parquet.")
-        new_rows.to_parquet(
-            cache_path,
-            overwrite=False,
-            append=True,
-            partition_on=part,
-            engine="pyarrow",
-            write_metadata_file=True,
-            write_index=False,
-        )
+            # Coearce dtypes - may not be necessary?
+            # new_rows = new_rows.astype(existing_df.dtypes)
+
+            # write in append mode
+            print("Appending new rows to existing parquet.")
+            new_rows.to_parquet(
+                cache_path,
+                overwrite=False,
+                append=True,
+                partition_on=part,
+                engine="pyarrow",
+                write_metadata_file=True,
+                write_index=False,
+            )
+        else:
+            print("No rows to upsert.")
     else:
         if fs.exists(cache_path):
             fs.rm(cache_path, recursive=True)

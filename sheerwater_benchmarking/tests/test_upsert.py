@@ -23,7 +23,7 @@ def tabular_timeseries(random):  # noqa: ARG001
     time = get_dates("2024-01-11", "2024-01-11", stride='day', return_string=False)
     times += time
 
-    ds = dd.from_dict({'obs': obs, 'time': times}, npartitions=2)
+    ds = dd.from_dict({'obs': obs, 'time': times}, npartitions=1)
     return ds
 
 def test_upsert():
