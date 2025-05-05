@@ -1062,18 +1062,21 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     time_col = match_time[0]
 
                                     # Assign start and end times if None are passed
-                                    st = dateparser.parse(start_time) if start_time is not None \
-                                        else pd.Timestamp(ds[time_col].min().values)
-                                    et = dateparser.parse(end_time) if end_time is not None \
-                                        else pd.Timestamp(ds[time_col].max().values)
+                                    validated = True
+                                    if start_time is not None:
+                                        st = dateparser.parse(start_time)
+                                        if (pd.Timestamp(ds[time_col].min().values) <
+                                            st + datetime.timedelta(days=365)):
+                                            validated = False
 
-                                    # Check if within 1 year at least
-                                    if (pd.Timestamp(ds[time_col].min().values) <
-                                        st + datetime.timedelta(days=365) and
-                                            pd.Timestamp(ds[time_col].max().values) >
+                                    if end_time is not None:
+                                        et = dateparser.parse(end_time)
+                                        if (pd.Timestamp(ds[time_col].max().values) >
                                             et - datetime.timedelta(days=365)):
-                                        compute_result = False
-                                    else:
+                                            validated = False
+
+                                    if not validated:
+                                        compute_result = True
                                         print("WARNING: The cached array does not have data within "
                                               "1 year of your start or end time. Automatically recomputing. "
                                               "If you do not want to recompute the result set "
