@@ -28,7 +28,7 @@ def simple_timeseries(start_time, end_time, name, species='coraciidae', stride='
            backend='parquet',
            timeseries='time',
            cache_args=['name', 'species', 'stride'])
-def simple_timeseries_tabular(start_time, end_time, name, species='coraciidae', stride='day'):
+def simple_timeseries_tabular(start_time, end_time, name, species='coraciidae', stride='day'):  # noqa: ARG001
     """Generate a simple timeseries dataset for testing."""
     times = get_dates(start_time, end_time, stride=stride, return_string=False)
     obs = np.random.randint(0, 10, size=(len(times),))
