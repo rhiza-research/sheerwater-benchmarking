@@ -1325,15 +1325,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     time_col = match_time[0]
 
                     # Assign start and end times if None are passed
-                    if start_time is None:
-                        start_time = ds[time_col].min().values
-                    if end_time is None:
-                        end_time = ds[time_col].max().values
-
                     if data_type == 'array' and isinstance(ds, xr.Dataset):
                         ds = ds.sel({time_col: slice(start_time, end_time)})
                     elif data_type == 'tabular' and (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
-                        ds = ds[(ds[time_col] >= start_time) & (ds[time_col] <= end_time)]
+                        if start_time is not None:
+                            ds = ds[ds[time_col] >= start_time]
+                        if end_time is not None:
+                            ds = ds[ds[time_col] <= end_time]
 
                 return ds
 
