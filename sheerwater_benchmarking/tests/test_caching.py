@@ -24,6 +24,18 @@ def simple_timeseries(start_time, end_time, name, species='coraciidae', stride='
     return ds
 
 
+@cacheable(data_type='tabular',
+           backend='parquet',
+           timeseries='time',
+           cache_args=['name', 'species', 'stride'])
+def simple_timeseries_tabular(start_time, end_time, name, species='coraciidae', stride='day'):
+    """Generate a simple timeseries dataset for testing."""
+    times = get_dates(start_time, end_time, stride=stride, return_string=False)
+    obs = np.random.randint(0, 10, size=(len(times),))
+    ds = pd.DataFrame({'obs': obs, 'time': times})
+    return ds
+
+
 def test_null_time_caching():
     """Cache a simple timeseries dataset with a null time."""
     start_time = '2020-01-01'
@@ -40,9 +52,18 @@ def test_null_time_caching():
     assert ds1.equals(ds2)
 
     # Test without caching
-    name = 'indian roller'
+    # Generate a random name
+    name = 'indian roller' + ''.join(random.choices(string.ascii_letters, k=10))
     with pytest.raises(ValueError):
         ds1 = simple_timeseries(None, None, name)
+
+    # Run once to ensure simple timeseries is cached
+    name = 'golden winged warbler'
+    ds3 = simple_timeseries_tabular(start_time, end_time, name, backend='parquet')
+    # Run again with null time
+    ds4 = simple_timeseries_tabular(None, None, name, backend='parquet')
+    # Ensure the two datasets are equal
+    assert ds3.compute().equals(ds4.compute())
 
 
 def test_validate_timeseries():
