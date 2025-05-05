@@ -60,7 +60,7 @@ def verify(backend, name, glob):
     """Verify all the caches that match the given name and glob pattern."""
     num = cache_verify(backend, name, glob)
     if num is not None:
-        click.echo(f"Successfully deleted {num} files")
+        click.echo(f"Successfully verified {num} files")
 
 
 @cache.group()
