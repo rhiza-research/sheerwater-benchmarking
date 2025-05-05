@@ -1,6 +1,6 @@
 """CLI for managing caches."""
 import click
-from cache_utils import cache_delete, cache_list
+from cache_utils import cache_delete, cache_list, cache_verify
 
 
 @click.group()
@@ -11,7 +11,7 @@ def cache():
 
 @cache.command()
 @click.option('--backend', '-b',
-              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle']),
+              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle', 'parquet']),
               default='zarr',
               help="The backend to find the cache")
 @click.option('--name', '-n', type=str,
@@ -27,7 +27,7 @@ def delete(backend, name, glob):
 
 @cache.command()
 @click.option('--backend', '-b',
-              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle']),
+              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle', 'parquet']),
               default='zarr',
               help="The backend to find the cache")
 @click.option('--name', '-n', type=str,
@@ -43,6 +43,24 @@ def list(backend, name, glob):
     files = [f"Found {len(files)} caches:\n"] + files
     click.echo_via_pager(files)
     click.echo(f"Found {len(files)-1} caches.")
+
+
+@cache.command()
+@click.option('--backend', '-b',
+              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle', 'parquet']),
+              default='zarr',
+              help="The backend to find the cache")
+@click.option('--name', '-n', type=str,
+              help="Name of the cache - this is the name of the cacheable function",
+              required=True)
+@click.option('--glob', '-g', type=str,
+              help="Globable regex of the cache key to list - pass '*' to list all caches",
+              required=True)
+def verify(backend, name, glob):
+    """Verify all the caches that match the given name and glob pattern."""
+    num = cache_verify(backend, name, glob)
+    if num is not None:
+        click.echo(f"Successfully deleted {num} files")
 
 
 @cache.group()

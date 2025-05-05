@@ -66,7 +66,7 @@ def cache_list(backend, name, glob):
         name (str): The name of the cache.
         glob (str): The glob pattern to search for.
     """
-    if backend in ['zarr', 'delta', 'pickle']:
+    if backend in ['zarr', 'delta', 'pickle', 'parquet']:
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
         name = name.rstrip('/')
@@ -137,6 +137,7 @@ def cache_delete(backend, name, glob):
     return _gui_cache_delete(to_delete, backend)
 
 
+
 def _gui_cache_delete(to_delete, backend):
     """Delete all the caches in a given list and return the number of caches deleted."""
     if len(to_delete) == 0:
@@ -198,3 +199,30 @@ def _gui_cache_delete(to_delete, backend):
         pass
 
     print("Files successfully deleted!")
+
+
+def cache_verify(backend, name, glob):
+    """Delete all the caches that match the given name and glob pattern.
+
+    Args:
+        backend (str): The backend to use. One of: 'zarr', 'delta', 'pickle', 'terracotta', 'postgres'.
+        name (str): The name of the cache.
+        glob (str): The glob pattern to search for.
+    """
+    to_verify = cache_list(backend, name, glob)
+
+    verified = 0
+    for f in to_verify:
+        base = '.'.join(f.split('.')[:-1])
+        end = f.split('.')[-1]
+        verify = base + '.verify'
+
+        if end == backend:
+            fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+            fs.touch(verify)
+            verified += 1
+
+    return verified
+
+
+
