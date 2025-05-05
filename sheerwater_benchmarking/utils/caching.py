@@ -1074,8 +1074,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                             et - datetime.timedelta(days=365)):
                                             validated = False
 
-                                    if not validated:
-                                        compute_result = True
+                                    if validated:
+                                        compute_result = False
+                                    else:
                                         print("WARNING: The cached array does not have data within "
                                               "1 year of your start or end time. Automatically recomputing. "
                                               "If you do not want to recompute the result set "
