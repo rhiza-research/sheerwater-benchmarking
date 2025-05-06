@@ -467,7 +467,7 @@ def read_from_postgres(table_name, hash_table_name=True):
         table_name = postgres_table_name(table_name)
 
     try:
-        uri = f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres'
+        uri = f'postgresql://read:{pgread_pass}@34.59.163.82:5432/postgres'
         engine = sqlalchemy.create_engine(uri)
 
         df = pd.read_sql_query(f'select * from "{table_name}"', con=engine)
@@ -493,7 +493,7 @@ def check_exists_postgres(table_name, hash_table_name=True):
 
     try:
         engine = sqlalchemy.create_engine(
-            f'postgresql://read:{pgread_pass}@sheerwater-benchmarking-postgres:5432/postgres')
+            f'postgresql://read:{pgread_pass}@34.59.163.82:5432/postgres')
         insp = sqlalchemy.inspect(engine)
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
@@ -663,7 +663,7 @@ def write_to_terracotta(cache_key, ds):
     # Register with terracotta
     tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
     if not hasattr(write_to_terracotta, 'driver'):
-        driver = tc.get_driver("postgresql://sheerwater-benchmarking-postgres:5432/terracotta")
+        driver = tc.get_driver("postgresql://34.59.163.82:5432/terracotta")
         write_to_terracotta.driver = driver
     else:
         driver = write_to_terracotta.driver
@@ -771,7 +771,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "auto_rechunk":  None,
         "cache_local": False,
         "upsert": False,
-        "hash_postgres_table_name": True,
+        "hash_postgres_table_name": None,
         "fail_if_no_cache": False,
     }
 
