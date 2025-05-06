@@ -20,6 +20,7 @@ import pickle
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 import dask.dataframe as dd
 import xarray as xr
 
