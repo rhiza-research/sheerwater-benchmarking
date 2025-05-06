@@ -356,6 +356,15 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
         # Record starting partitions
         start_parts = df.npartitions
 
+        # Coearce dtypes before joining
+        for key in primary_keys:
+            if df[key].dtype != existing_df[key].dtype:
+                if is_datetime(existing_df[key]):
+                    # Doesn't seem that dask has timezones on parquet reads?
+                    df[key] = df[key].dt.tz_localize(None)
+                else:
+                    df[key] = df[key].astype(existing_df[key].dtype)
+
         # remove any rows already in the dataframe
         outer_join = existing_df.merge(df, how = 'outer', on=primary_keys, indicator = True, suffixes=('_drop',''))
         new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
