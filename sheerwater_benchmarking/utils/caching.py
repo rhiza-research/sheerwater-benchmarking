@@ -47,6 +47,7 @@ CACHE_STORAGE_OPTIONS = {
     'project': 'sheerwater',
     'token': 'google_default'
 }
+POSTGRES_IP = "34.59.163.82"
 # Local dir for all caches, except for postgres and terracotta
 LOCAL_CACHE_ROOT_DIR = os.path.expanduser("~/.cache/sheerwater/caches/")
 LOCAL_CACHE_STORAGE_OPTIONS = {}
@@ -467,7 +468,7 @@ def read_from_postgres(table_name, hash_table_name=True):
         table_name = postgres_table_name(table_name)
 
     try:
-        uri = f'postgresql://read:{pgread_pass}@34.59.163.82:5432/postgres'
+        uri = f'postgresql://read:{pgread_pass}@{POSTGRES_IP}:5432/postgres'
         engine = sqlalchemy.create_engine(uri)
 
         df = pd.read_sql_query(f'select * from "{table_name}"', con=engine)
@@ -493,7 +494,7 @@ def check_exists_postgres(table_name, hash_table_name=True):
 
     try:
         engine = sqlalchemy.create_engine(
-            f'postgresql://read:{pgread_pass}@34.59.163.82:5432/postgres')
+            f'postgresql://read:{pgread_pass}@{POSTGRES_IP}:5432/postgres')
         insp = sqlalchemy.inspect(engine)
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
@@ -523,7 +524,7 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
     else:
         new_table_name = postgres_table_name(table_name)
 
-    uri = f'postgresql://write:{pgwrite_pass}@34.59.163.82:5432/postgres'
+    uri = f'postgresql://write:{pgwrite_pass}@{POSTGRES_IP}:5432/postgres'
     engine = sqlalchemy.create_engine(uri)
 
 
@@ -663,7 +664,7 @@ def write_to_terracotta(cache_key, ds):
     # Register with terracotta
     tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
     if not hasattr(write_to_terracotta, 'driver'):
-        driver = tc.get_driver("postgresql://34.59.163.82:5432/terracotta")
+        driver = tc.get_driver("postgresql://{POSTGRES_IP}:5432/terracotta")
         write_to_terracotta.driver = driver
     else:
         driver = write_to_terracotta.driver
@@ -1257,8 +1258,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         elif storage_backend == 'postgres':
                             if (check_exists_postgres(cache_key, hash_table_name=hash_postgres_table_name)
                                and force_overwrite is None and not upsert):
-                                inp = input(f'A cache already exists at {
-                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                inp = input(f'A cache already exists for {
+                                            cache_key}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
                                     write = True
                             elif force_overwrite is False:
