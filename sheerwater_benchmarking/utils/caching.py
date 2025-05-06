@@ -343,7 +343,7 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
         if primary_keys is None:
             raise ValueError("Upsert may only be performed with primary keys specified")
 
-        if isinstance(df, pd.Dataframe):
+        if isinstance(df, pd.DataFrame):
             print("Auto converting pandas to dask dataframe.")
             df = dd.from_pandas(df)
 
