@@ -353,8 +353,10 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
         start_parts = df.npartitions
 
         # remove any rows already in the dataframe
-        outer_join = existing_df.merge(df, how = 'outer', on=primary_keys, indicator = True)
+        outer_join = existing_df.merge(df, how = 'outer', on=primary_keys, indicator = True, suffixes=('_drop',''))
         new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
+        cols_to_drop = [x for x in new_rows.columns if x.endswith('_drop')]
+        new_rows = new_rows.drop(columns=cols_to_drop)
 
         if len(new_rows.index) > 0:
             new_rows = new_rows.repartition(npartitions=start_parts)
@@ -362,8 +364,15 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
             # Coearce dtypes - may not be necessary?
             new_rows = new_rows.astype(existing_df.dtypes)
 
+            # Make the columns the same order
+            new_rows = new_rows[list(existing_df.columns)]
+
             print("Copying cache for ``consistent'' upsert.")
             temp_cache_path = get_temp_cache(cache_path)
+
+            if fs.exists(temp_cache_path):
+                fs.rm(temp_cache_path, recursive=True)
+
             fs.cp(cache_path, temp_cache_path, recursive=True)
 
             # write in append mode
@@ -376,6 +385,7 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
                 engine="pyarrow",
                 write_metadata_file=True,
                 write_index=False,
+                schema='infer',
             )
 
             print("Successfully appended rows to temp parquet. Overwriting existing cache.")
@@ -383,9 +393,11 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
                 fs.rm(verify_path)
 
             if fs.exists(cache_path):
-                fs.rm(cache_path)
+                fs.rm(cache_path, recursive=True)
 
             fs.cp(temp_cache_path, cache_path, recursive=True)
+
+
 
         else:
             print("No rows to upsert.")
