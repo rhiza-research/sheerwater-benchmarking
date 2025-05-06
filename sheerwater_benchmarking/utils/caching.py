@@ -96,6 +96,24 @@ def check_if_nested_fn():
     return False
 
 
+def get_temp_cache(cache_path):
+    """Get the local cache path based on the file system.
+
+    Args:
+        cache_path (str): Path to cache file
+
+    Returns:
+        str: Local cache path
+    """
+    if cache_path is None:
+        return None
+    if not cache_path.startswith(CACHE_ROOT_DIR):
+        raise ValueError("Cache path must start with CACHE_ROOT_DIR")
+
+    cache_key = cache_path.split(CACHE_ROOT_DIR)[1]
+    return os.path.join(CACHE_ROOT_DIR, 'temp', cache_key)
+
+
 def get_local_cache(cache_path):
     """Get the local cache path based on the file system.
 
@@ -322,15 +340,12 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
 
     if upsert and cache_exists('parquet', cache_path, verify_path):
         print("Found existing cache for upsert.")
-
-        if fs.exists(verify_path):
-            fs.rm(verify_path)
-
         if primary_keys is None:
             raise ValueError("Upsert may only be performed with primary keys specified")
 
         if not isinstance(df, dd.DataFrame):
             raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
+
 
         existing_df = read_from_parquet(cache_path)
 
@@ -347,10 +362,15 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
             # Coearce dtypes - may not be necessary?
             new_rows = new_rows.astype(existing_df.dtypes)
 
+
+            print("Copying cache for ``consistent'' upsert.")
+            temp_cache_path = get_temp_cache(cache_path)
+            fs.cp(cache_path, temp_cache_path, recursive=True)
+
             # write in append mode
-            print("Appending new rows to existing parquet.")
+            print("Appending new rows to temp parquet.")
             new_rows.to_parquet(
-                cache_path,
+                temp_cache_path,
                 overwrite=False,
                 append=True,
                 partition_on=part,
@@ -358,6 +378,16 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
                 write_metadata_file=True,
                 write_index=False,
             )
+
+            print("Successfully appended rows to temp parquet. Overwriting existing cache.")
+            if fs.exists(verify_path):
+                fs.rm(verify_path)
+
+            if fs.exists(cache_path):
+                fs.rm(cache_path)
+
+            fs.cp(temp_cache_path, cache_path, recursive=True)
+
         else:
             print("No rows to upsert.")
     else:
