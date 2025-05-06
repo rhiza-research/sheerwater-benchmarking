@@ -344,7 +344,7 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
             new_rows = new_rows.repartition(npartitions=start_parts)
 
             # Coearce dtypes - may not be necessary?
-            # new_rows = new_rows.astype(existing_df.dtypes)
+            new_rows = new_rows.astype(existing_df.dtypes)
 
             # write in append mode
             print("Appending new rows to existing parquet.")
