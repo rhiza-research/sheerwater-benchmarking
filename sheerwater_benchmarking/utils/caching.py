@@ -380,6 +380,10 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
             # Make the columns the same order
             new_rows = new_rows[list(existing_df.columns)]
 
+            # Add an index if it exists
+            if '__null_dask_index__' in existing_df.columns:
+                new_rows['__null_dask_index__'] = None
+
             print("Copying cache for ``consistent'' upsert.")
             temp_cache_path = get_temp_cache(cache_path)
 
