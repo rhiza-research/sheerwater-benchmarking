@@ -45,7 +45,8 @@ global_retry_null_cache = None
 CACHE_ROOT_DIR = "gs://sheerwater-datalake/caches/"
 CACHE_STORAGE_OPTIONS = {
     'project': 'sheerwater',
-    'token': 'google_default'
+    'token': 'google_default',
+    'cache_timeout': 0
 }
 POSTGRES_IP = "34.59.163.82"
 # Local dir for all caches, except for postgres and terracotta
