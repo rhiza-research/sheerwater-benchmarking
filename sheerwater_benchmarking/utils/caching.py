@@ -353,7 +353,7 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
         start_parts = df.npartitions
 
         # remove any rows already in the dataframe
-        outer_join = existing_df.merge(df, how = 'outer', indicator = True)
+        outer_join = existing_df.merge(df, how = 'outer', on=primary_keys, indicator = True)
         new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
 
         if len(new_rows.index) > 0:
@@ -361,7 +361,6 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
 
             # Coearce dtypes - may not be necessary?
             new_rows = new_rows.astype(existing_df.dtypes)
-
 
             print("Copying cache for ``consistent'' upsert.")
             temp_cache_path = get_temp_cache(cache_path)
