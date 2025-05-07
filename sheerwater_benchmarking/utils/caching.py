@@ -395,16 +395,31 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
 
             # write in append mode
             print("Appending new rows to temp parquet.")
-            new_rows.to_parquet(
-                temp_cache_path,
-                overwrite=False,
-                append=True,
-                partition_on=part,
-                engine="pyarrow",
-                write_metadata_file=True,
-                write_index=False,
-                schema='infer',
-            )
+            try:
+                new_rows.to_parquet(
+                    temp_cache_path,
+                    overwrite=False,
+                    append=True,
+                    partition_on=part,
+                    engine="pyarrow",
+                    write_metadata_file=True,
+                    write_index=False,
+                    schema='infer',
+                )
+            except ValueError as e:
+                if '__null_dask_index__' in str(e):
+                    new_rows.to_parquet(
+                        temp_cache_path,
+                        overwrite=False,
+                        append=True,
+                        partition_on=part,
+                        engine="pyarrow",
+                        write_metadata_file=True,
+                        write_index=True,
+                        schema='infer',
+                    )
+                else:
+                    raise e
 
             print("Successfully appended rows to temp parquet. Overwriting existing cache.")
             if fs.exists(verify_path):
