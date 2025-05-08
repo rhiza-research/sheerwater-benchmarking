@@ -88,7 +88,7 @@ def check_if_nested_fn():
     for frame_info in stack[2:]:
         frame = frame_info.frame
         func_name = frame.f_code.co_name
-        if 'wrapper' in func_name:
+        if func_name == "cacheable_wrapper":
             # There is a cachable function upstream of this one
             return True
     # No cachable function upstream of this one
@@ -780,7 +780,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
     def create_cacheable(func):
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def cacheable_wrapper(*args, **kwargs):
             # Proper variable scope for the decorator args
             data_type = nonlocals['data_type']
             cache_args = nonlocals['cache_args']
@@ -1336,5 +1336,5 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                 return ds
 
-        return wrapper
+        return cacheable_wrapper
     return create_cacheable
