@@ -8,19 +8,18 @@ def test_deep_cache():
     @cacheable(data_type='basic',
                cache_args=[])
     def deep_cached_func():  # noqa: ARG001
-        return np.random.randint(1000)
+        return np.random.randint(1000000)
 
     @cacheable(data_type='basic',
                cache_args=[])
     def deep_cached_func2():  # noqa: ARG001
-        return deep_cached_func() + np.random.randint(1000)
+        return deep_cached_func() + np.random.randint(1000000)
 
     @cacheable(data_type='basic',
                cache_args=[])
     def deep_cached_func3():  # noqa: ARG001
         return deep_cached_func2()
 
-    print("should match")
     first = deep_cached_func3()
     second = deep_cached_func3()
     assert first == second
@@ -38,9 +37,20 @@ def test_deep_cache():
     init2 = deep_cached_func()
     assert init == init2
 
+    # verify that recompute="_all" recomputes nested functions.
     first = deep_cached_func3()
-    second = deep_cached_func3(force_overwrite=True, recompute='_all')
+    second = deep_cached_func3(recompute='_all', force_overwrite=True)
     assert first != second
+
+    # verify that recompute=[f,g] recomputes both f and g.
+    first = deep_cached_func3()
+    second = deep_cached_func3(recompute=["deep_cached_func3", "deep_cached_func2"], force_overwrite=True)
+    assert first != second
+
+    # verify that recompute=[f,g] doesn't recompute anything but f and g.
+    first = deep_cached_func3()
+    second = deep_cached_func3(recompute=["deep_cached_func3", "deep_cached_func1"], force_overwrite=True)
+    assert first == second
 
 
 if __name__ == "__main__":
