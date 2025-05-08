@@ -70,6 +70,9 @@ def set_global_cache_variables(recompute=None, force_overwrite=None,
     global_validate_cache_timeseries = validate_cache_timeseries
     global_retry_null_cache = retry_null_cache
 
+    # XXX
+    print("Before set, global_recompute was:", global_recompute)
+
     # More complex logic for recompute
     if recompute == True:  # noqa: E712
         global_recompute = False
@@ -805,6 +808,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Check if this is a nested cacheable function
             global global_is_top_level
             if global_is_top_level:
+                print(func.__name__, "is top level") # XXX
+                print("recompute:", recompute)
+
                 # This is a top level cacheable function, reset global cache variables
                 is_top_level = True
                 global_is_top_level = False  # So that nested calls don't think they're top-level
@@ -819,6 +825,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 # Inherit global cache variables
                 global global_recompute, global_force_overwrite, \
                     global_validate_cache_timeseries, global_retry_null_cache
+
+                # XXX
+                print(func.__name__, "is NOT top level")
+                print("Global recompute:", global_recompute)
 
                 # Set all global variables
                 if global_force_overwrite is not None:
@@ -1353,7 +1363,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
             finally:
                 if is_top_level:
-                    global_is_top_level = True
+                    # global_is_top_level = True
+                    pass # XXX
 
         return cacheable_wrapper
     return create_cacheable
