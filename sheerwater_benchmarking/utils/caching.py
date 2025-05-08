@@ -1,5 +1,6 @@
 """Automated dataframe caching utilities."""
 import os
+import inspect
 import datetime
 import dateparser
 from functools import wraps
@@ -1001,12 +1002,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 if auto_rechunk:
                                     # If rechunk is passed then check to see if the rechunk array
                                     # matches chunking. If not then rechunk
-                                    ds_remote = xr.open_dataset(
-                                        cache_map,
-                                        engine="zarr",
-                                        chunks={},
-                                        decode_timedelta=True,
-                                    )
+                                    ds_remote = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
                                     if not isinstance(chunking, dict):
                                         raise ValueError(
                                             "If auto_rechunk is True, a chunking dict must be supplied.")
@@ -1043,19 +1039,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                              chunks={}, decode_timedelta=True)
                                     else:
                                         # Requested chunks already match rechunk.
-                                        ds = xr.open_dataset(
-                                            read_cache_map,
-                                            engine="zarr",
-                                            chunks={},
-                                            decode_timedelta=True,
-                                        )
+                                        ds = xr.open_dataset(read_cache_map, engine='zarr',
+                                                             chunks={}, decode_timedelta=True)
                                 else:
-                                    ds = xr.open_dataset(
-                                        read_cache_map,
-                                        engine="zarr",
-                                        chunks={},
-                                        decode_timedelta=True,
-                                    )
+                                    ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
 
                                 if validate_cache_timeseries and timeseries is not None:
                                     # Check to see if the dataset extends roughly the full time series set
@@ -1209,10 +1196,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                              chunks={}, decode_timedelta=True)
                                     else:
                                         raise RuntimeError(
-                                            f"Array datatypes must return xarray datasets or None instead of {type(ds)}"
-                                        )
-                            # Either way if terracotta is specified as a backend try to write the
-                            # result array to terracotta
+                                            f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
+                            # Either way if terracotta is specified as a backend try to write the result array to terracotta
                             elif storage_backend == 'terracotta':
                                 print(f"Also caching {cache_key} to terracotta.")
                                 write_to_terracotta(cache_key, ds)
@@ -1278,14 +1263,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                                 if write:
                                     print(f"Caching result for {cache_key} in postgres.")
-                                    write_to_postgres(
-                                        ds,
-                                        cache_key,
-                                        overwrite=True,
-                                        upsert=upsert,
-                                        primary_keys=primary_keys,
-                                        hash_table_name=hash_postgres_table_name,
-                                    )
+                                    write_to_postgres(ds, cache_key, overwrite=True, upsert=upsert,
+                                                      primary_keys=primary_keys, hash_table_name=hash_postgres_table_name)
                                     # Don't support computation path truncation because dask read sql function
                                     # requires knowledge of indexes we don't have generically
                                     # ds = read_from_postgres(cache_path)
