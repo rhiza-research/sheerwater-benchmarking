@@ -330,14 +330,52 @@ def read_from_parquet(cache_path):
     return dd.read_parquet(cache_path, engine='pyarrow', ignore_metadata_file=True)
 
 
-def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False, primary_keys=None):
+def append_parquet_helper(df, path, partition_on=None):
+    """Helper to append to parquets."""
+    df.to_parquet(
+        path,
+        overwrite=False,
+        append=True,
+        partition_on=partition_on,
+        engine="pyarrow",
+        write_metadata_file=None,
+        write_index=False,
+        schema='infer',
+    )
+
+
+def write_parquet_helper(df, path, partition_on=None):
+    """Helper to write parquets."""
+    df.to_parquet(
+        path,
+        overwrite=True,
+        partition_on=partition_on,
+        engine="pyarrow",
+        write_metadata_file=True,
+        write_index=False,
+        schema='infer',
+    )
+
+def rewrite_parquet(original_path, new_path, partition_on=None, strip_timezone=False):
+    """Rewrites parquets given a path and new location."""
+    print("Parquet stored as root file. Transitioning to directory for append.")
+    cp_df = dd.read_parquet(original_path, engine='pyarrow', ignore_metadata_file=True)
+
+    if strip_timezone:
+        for key in cp_df.columns:
+            if is_datetime(cp_df[key].dtype):
+                cp_df[key] = cp_df[key].dt.tz_localize(None)
+                cp_df[key] = dd.to_datetime(cp_df[key], utc=False)
+
+    write_parquet_helper(cp_df, new_path, partition_on)
+
+def write_to_parquet(df, cache_path, verify_path, upsert=False, primary_keys=None):
     """Write a pandas or dask dataframe to a parquet."""
     part = None
     if hasattr(df, 'cache_partition'):
         part = df.cache_partition
 
     fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
-
 
     if upsert and cache_exists('parquet', cache_path, verify_path):
         print("Found existing cache for upsert.")
@@ -351,7 +389,6 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
         if not isinstance(df, dd.DataFrame):
             raise RuntimeError("Upsert is only supported by dask dataframes for parquet")
 
-
         existing_df = read_from_parquet(cache_path)
 
         # Record starting partitions
@@ -359,14 +396,17 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
 
         # Coearce dtypes before joining
         for key in primary_keys:
-            if df[key].dtype != existing_df[key].dtype:
-                if is_datetime(existing_df[key]):
-                    # Doesn't seem that dask has timezones on parquet reads?
-                    df[key] = df[key].dt.tz_localize(None)
-                else:
-                    df[key] = df[key].astype(existing_df[key].dtype)
+            if is_datetime(existing_df[key].dtype):
+                # The only way I could get this to work was by removing timezones
+                # many attempts to coerc df to existing df with the correct tz
+                df[key] = df[key].dt.tz_localize(None)
+                df[key] = dd.to_datetime(df[key], utc=False)
+                existing_df[key] = existing_df[key].dt.tz_localize(None)
+                existing_df[key] = dd.to_datetime(existing_df[key], utc=False)
+            elif df[key].dtype != existing_df[key].dtype:
+                df[key] = df[key].astype(existing_df[key].dtype)
 
-        # remove any rows already in the dataframe
+
         outer_join = existing_df.merge(df, how = 'outer', on=primary_keys, indicator = True, suffixes=('_drop',''))
         new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
         cols_to_drop = [x for x in new_rows.columns if x.endswith('_drop')]
@@ -375,15 +415,9 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
         if len(new_rows.index) > 0:
             new_rows = new_rows.repartition(npartitions=start_parts)
 
-            # Coearce dtypes - may not be necessary?
+            # Coearce dtypes and make the columns the same order
             new_rows = new_rows.astype(existing_df.dtypes)
-
-            # Make the columns the same order
             new_rows = new_rows[list(existing_df.columns)]
-
-            # Add an index if it exists
-            if '__null_dask_index__' in existing_df.columns:
-                new_rows['__null_dask_index__'] = None
 
             print("Copying cache for ``consistent'' upsert.")
             temp_cache_path = get_temp_cache(cache_path)
@@ -391,37 +425,31 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
             if fs.exists(temp_cache_path):
                 fs.rm(temp_cache_path, recursive=True)
 
-            fs.cp(cache_path, temp_cache_path, recursive=True)
+            # Is the cache path a file instead of a directory? It realy
+            # needs to be a directory so make it one
+            if fs.info(cache_path)['type'] == 'file':
+                rewrite_parquet(cache_path, temp_cache_path, part)
+            else:
+                fs.cp(cache_path, temp_cache_path, recursive=True)
 
             # write in append mode
             print("Appending new rows to temp parquet.")
             try:
-                new_rows.to_parquet(
-                    temp_cache_path,
-                    overwrite=False,
-                    append=True,
-                    partition_on=part,
-                    engine="pyarrow",
-                    write_metadata_file=True,
-                    write_index=False,
-                    schema='infer',
-                )
+                append_parquet_helper(new_rows, temp_cache_path)
             except ValueError as e:
-                if '__null_dask_index__' in str(e):
-                    new_rows.to_parquet(
-                        temp_cache_path,
-                        overwrite=False,
-                        append=True,
-                        partition_on=part,
-                        engine="pyarrow",
-                        write_metadata_file=True,
-                        write_index=True,
-                        schema='infer',
-                    )
+                if '__null_dask_index__' in str(e) or 'Appended dtypes differ' in str(e):
+                    # We get this when the dataset was written with index True
+                    # To solve this we need to (1) fully rewrite not just copy the dataset to temp
+                    # Then append the rows to the new dataset
+
+                    print("Rewriting parquet due to incompatible write type.")
+                    rewrite_parquet(cache_path, temp_cache_path, part, strip_timezone=True)
+                    append_parquet_helper(new_rows, temp_cache_path, part)
                 else:
                     raise e
 
             print("Successfully appended rows to temp parquet. Overwriting existing cache.")
+
             if fs.exists(verify_path):
                 fs.rm(verify_path)
 
@@ -429,8 +457,6 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
                 fs.rm(cache_path, recursive=True)
 
             fs.cp(temp_cache_path, cache_path, recursive=True)
-
-
 
         else:
             print("No rows to upsert.")
@@ -442,14 +468,7 @@ def write_to_parquet(df, cache_path, verify_path, overwrite=False, upsert=False,
             fs.rm(verify_path)
 
         if isinstance(df, dd.DataFrame):
-            df.to_parquet(
-                cache_path,
-                overwrite=overwrite,
-                partition_on=part,
-                engine="pyarrow",
-                write_metadata_file=True,
-                write_index=False,
-            )
+            write_parquet_helper(df, cache_path, part)
         elif isinstance(df, pd.DataFrame):
             df.to_parquet(cache_path, partition_cols=part, engine='pyarrow')
         else:
@@ -642,11 +661,19 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
 
             # For the ON CONFLICT clause, postgres requires that the columns have unique constraint
             # To add if not exists must drop if exists and then add. In a transaction this is consistent
+
+            constraint_id =  hashlib.md5(table_name.encode()).hexdigest()[:10]
             query_pk = f"""
-            ALTER TABLE "{new_table_name}" DROP CONSTRAINT IF EXISTS unique_constraint_for_upsert;
-            ALTER TABLE "{new_table_name}" ADD CONSTRAINT unique_constraint_for_upsert UNIQUE ({index_sql_txt});
+            ALTER TABLE "{new_table_name}" DROP CONSTRAINT IF EXISTS unique_constraint_for_{constraint_id} CASCADE;
             """
+
             print("Adding a unique to contraint to table if it doesn't exist.")
+            conn.exec_driver_sql(query_pk)
+
+            query_pk = f"""
+            ALTER TABLE "{new_table_name}" ADD CONSTRAINT unique_constraint_for_{constraint_id}
+            UNIQUE ({index_sql_txt});
+            """
             conn.exec_driver_sql(query_pk)
 
             # Compose and execute upsert query
@@ -1323,10 +1350,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                             if write:
                                 print(f"Caching result for {cache_path} in parquet.")
-                                write_to_parquet(ds, cache_path, verify_path, overwrite=True,
+                                write_to_parquet(ds, cache_path, verify_path,
                                                  upsert=upsert, primary_keys=primary_keys)
                                 sync_local_remote(backend, fs, read_fs, cache_path,
                                                   read_cache_path, verify_path, null_path)
+
                                 # Reopen dataset to truncate the computational path
                                 ds = read_from_parquet(read_cache_path)
 
