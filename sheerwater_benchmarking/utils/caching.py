@@ -40,7 +40,6 @@ global_recompute = None
 global_force_overwrite = None
 global_validate_cache_timeseries = None
 global_retry_null_cache = None
-global_is_top_level = True
 
 # Remote dir for all caches, except for postgres and terracotta
 CACHE_ROOT_DIR = "gs://sheerwater-datalake/caches/"
@@ -79,6 +78,21 @@ def set_global_cache_variables(recompute=None, force_overwrite=None,
         global_recompute = [recompute]
     else:
         global_recompute = recompute  # if recompute is false, '_all' or a list
+
+
+def check_if_nested_fn():
+    """Check if the current scope downstream from another cached function."""
+    # Get the current frame
+    stack = inspect.stack()
+    # skip the first two frames (this function and the current cacheable function)
+    for frame_info in stack[2:]:
+        frame = frame_info.frame
+        func_name = frame.f_code.co_name
+        if func_name == "cacheable_wrapper":
+            # There is a cachable function upstream of this one
+            return True
+    # No cachable function upstream of this one
+    return False
 
 
 def get_local_cache(cache_path):
@@ -804,11 +818,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 hash_postgres_table_name = passed_hash_postgres_table_name
 
             # Check if this is a nested cacheable function
-            global global_is_top_level
-            if global_is_top_level:
+            if not check_if_nested_fn():
                 # This is a top level cacheable function, reset global cache variables
-                is_top_level = True
-                global_is_top_level = False  # So that nested calls don't think they're top-level
                 set_global_cache_variables(recompute=recompute,
                                            force_overwrite=force_overwrite,
                                            validate_cache_timeseries=validate_cache_timeseries,
@@ -816,7 +827,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 if isinstance(recompute, list) or isinstance(recompute, str) or recompute == '_all':
                     recompute = True
             else:
-                is_top_level = False
                 # Inherit global cache variables
                 global global_recompute, global_force_overwrite, \
                     global_validate_cache_timeseries, global_retry_null_cache
@@ -832,507 +842,499 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     if func.__name__ in global_recompute or global_recompute == '_all':
                         recompute = True
 
-            # Use a try/finally to make sure that global_is_top_level gets set back to False if this
-            # is a top-level call, regardless of where the function returns or if it raises an
-            # exception.
-            try:
-                params = signature(func).parameters
+            params = signature(func).parameters
 
-                # Validate time series params
-                start_time = None
-                end_time = None
-                if timeseries is not None:
-                    # Convert to a list if not
-                    tl = timeseries if isinstance(timeseries, list) else [timeseries]
+            # Validate time series params
+            start_time = None
+            end_time = None
+            if timeseries is not None:
+                # Convert to a list if not
+                tl = timeseries if isinstance(timeseries, list) else [timeseries]
 
-                    if 'start_time' in cache_args or 'end_time' in cache_args:
-                        raise ValueError(
-                            "Time series functions must not place their time arguments in cacheable_args!")
+                if 'start_time' in cache_args or 'end_time' in cache_args:
+                    raise ValueError(
+                        "Time series functions must not place their time arguments in cacheable_args!")
 
-                    if 'start_time' not in params or 'end_time' not in params:
-                        raise ValueError(
-                            "Time series functions must have the parameters 'start_time' and 'end_time'")
-                    else:
-                        keys = [item for item in params]
-                        try:
-                            start_time = args[keys.index('start_time')]
-                            end_time = args[keys.index('end_time')]
-                        except IndexError:
-                            raise ValueError("'start_time' and 'end_time' must be passed as positional arguments, not "
-                                             "keyword arguments")
-
-                # Handle keying based on cache arguments
-                cache_arg_values = {}
-
-                for a in cache_args:
-                    # If it's in kwargs, great
-                    if a in kwargs:
-                        cache_arg_values[a] = kwargs[a]
-                        continue
-
-                    # If it's not in kwargs it must either be (1) in args or (2) passed as default
-                    found = False
-                    for i, p in enumerate(params):
-                        if (a == p and len(args) > i and
-                                (params[p].kind == Parameter.VAR_POSITIONAL or
-                                 params[p].kind == Parameter.POSITIONAL_OR_KEYWORD)):
-                            cache_arg_values[a] = args[i]
-                            found = True
-                            break
-                        elif a == p and params[p].default != Parameter.empty:
-                            cache_arg_values[a] = params[p].default
-                            found = True
-                            break
-
-                    if not found:
-                        raise RuntimeError(f"Specified cacheable argument {a} "
-                                           "not discovered as passed argument or default argument.")
-
-                # Update chunking based on chunk_by_arg
-                chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
-
-                # Now that we have all the cacheable args values we can calculate whether
-                # the cache should be disable from them if
-                if cache and isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
-                    cache = check_cache_disable_if(cache_disable_if, cache_arg_values)
-                elif cache and cache_disable_if is not None:
-                    raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
-
-                imkeys = list(cache_arg_values.keys())
-                imkeys.sort()
-                sorted_values = [cache_arg_values[i] for i in imkeys]
-                flat_values = []
-                for val in sorted_values:
-                    if isinstance(val, list):
-                        sub_vals = [str(v) for v in val]
-                        sub_vals.sort()
-                        flat_values += sub_vals
-                    elif isinstance(val, dict):
-                        sub_vals = [f"{k}-{v}" for k, v in val.items()]
-                        sub_vals.sort()
-                        flat_values += sub_vals
-                    else:
-                        flat_values.append(str(val))
-
-                cache_key = func.__name__ + '/' + '_'.join(flat_values)
-                verify_path = None
-                if data_type == 'array':
-                    backend = "zarr" if backend is None else backend
-                    if storage_backend is None:
-                        storage_backend = backend
-
-                    cache_path = CACHE_ROOT_DIR + cache_key + '.zarr'
-                    verify_path = CACHE_ROOT_DIR + cache_key + '.verify'
-                    null_path = CACHE_ROOT_DIR + cache_key + '.null'
-                    supports_filepath = True
-                elif data_type == 'tabular':
-                    # Set the default
-                    backend = "delta" if backend is None else backend
-                    if storage_backend is None:
-                        storage_backend = backend
-
-                    if backend == 'delta':
-                        cache_path = CACHE_ROOT_DIR + cache_key + '.delta'
-                        null_path = CACHE_ROOT_DIR + cache_key + '.null'
-                        supports_filepath = True
-                    elif backend == 'parquet':
-                        cache_path = CACHE_ROOT_DIR + cache_key + '.parquet'
-                        verify_path = CACHE_ROOT_DIR + cache_key + '.verify'
-                        null_path = CACHE_ROOT_DIR + cache_key + '.null'
-                        supports_filepath = True
-                    elif backend == 'postgres':
-                        cache_path = cache_key
-                        null_path = CACHE_ROOT_DIR + cache_key + '.null'
-                        supports_filepath = False
-                    else:
-                        raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
-                elif data_type == 'basic':
-                    backend = "pickle" if backend is None else backend
-                    if backend != 'pickle':
-                        raise ValueError("Only pickle backend supported for basic types.")
-                    if storage_backend is None:
-                        storage_backend = backend
-                    cache_path = CACHE_ROOT_DIR + cache_key + '.pkl'
-                    verify_path = CACHE_ROOT_DIR + cache_key + '.verify'
-                    null_path = CACHE_ROOT_DIR + cache_key + '.null'
-                    supports_filepath = True
+                if 'start_time' not in params or 'end_time' not in params:
+                    raise ValueError(
+                        "Time series functions must have the parameters 'start_time' and 'end_time'")
                 else:
-                    raise ValueError("Caching currently only supports the 'array', 'tabular', and 'basic' datatypes")
+                    keys = [item for item in params]
+                    try:
+                        start_time = args[keys.index('start_time')]
+                        end_time = args[keys.index('end_time')]
+                    except IndexError:
+                        raise ValueError("'start_time' and 'end_time' must be passed as positional arguments, not "
+                                         "keyword arguments")
 
-                if filepath_only and not supports_filepath:
-                    raise ValueError(f"{backend} backend does not support filepath_only flag")
+            # Handle keying based on cache arguments
+            cache_arg_values = {}
 
-                # Set up cached computation
-                ds = None
-                compute_result = True
-                fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
-                cache_map = fs.get_mapper(cache_path)
+            for a in cache_args:
+                # If it's in kwargs, great
+                if a in kwargs:
+                    cache_arg_values[a] = kwargs[a]
+                    continue
 
-                # First remove null caches if retry null cache is passed
-                if retry_null_cache and fs.exists(null_path):
-                    print(f"Removing and retrying null cache {null_path}.")
-                    fs.rm(null_path, recursive=True)
+                # If it's not in kwargs it must either be (1) in args or (2) passed as default
+                found = False
+                for i, p in enumerate(params):
+                    if (a == p and len(args) > i and
+                            (params[p].kind == Parameter.VAR_POSITIONAL or
+                             params[p].kind == Parameter.POSITIONAL_OR_KEYWORD)):
+                        cache_arg_values[a] = args[i]
+                        found = True
+                        break
+                    elif a == p and params[p].default != Parameter.empty:
+                        cache_arg_values[a] = params[p].default
+                        found = True
+                        break
 
-                read_cache_path = cache_path
-                read_cache_map = cache_map
-                read_fs = fs
+                if not found:
+                    raise RuntimeError(f"Specified cacheable argument {a} "
+                                       "not discovered as passed argument or default argument.")
 
-                # If we are using local caching, and the cache exists, then we can use the local cache
-                if cache_local and backend in SUPPORTS_LOCAL_CACHING:
-                    # If local, active cache can differ from the cache path
-                    read_cache_path = get_local_cache(cache_path)
-                    read_cache_map = fs.get_mapper(read_cache_path)
-                    read_fs = fsspec.core.url_to_fs(read_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
+            # Update chunking based on chunk_by_arg
+            chunking = merge_chunk_by_arg(chunking, chunk_by_arg, cache_arg_values)
 
-                # Now check if the cache exists
-                if not recompute and not upsert and cache:
-                    if cache_exists(backend, cache_path, verify_path,
-                                    hash_postgres_table_name=hash_postgres_table_name):
-                        # Sync the cache from the remote to the local
-                        sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
-                        print(f"Found cache for {read_cache_path}")
-                        if data_type == 'array':
+            # Now that we have all the cacheable args values we can calculate whether
+            # the cache should be disable from them if
+            if cache and isinstance(cache_disable_if, dict) or isinstance(cache_disable_if, list):
+                cache = check_cache_disable_if(cache_disable_if, cache_arg_values)
+            elif cache and cache_disable_if is not None:
+                raise ValueError("cache_disable_if only accepts a dict or list of dicts.")
+
+            imkeys = list(cache_arg_values.keys())
+            imkeys.sort()
+            sorted_values = [cache_arg_values[i] for i in imkeys]
+            flat_values = []
+            for val in sorted_values:
+                if isinstance(val, list):
+                    sub_vals = [str(v) for v in val]
+                    sub_vals.sort()
+                    flat_values += sub_vals
+                elif isinstance(val, dict):
+                    sub_vals = [f"{k}-{v}" for k, v in val.items()]
+                    sub_vals.sort()
+                    flat_values += sub_vals
+                else:
+                    flat_values.append(str(val))
+
+            cache_key = func.__name__ + '/' + '_'.join(flat_values)
+            verify_path = None
+            if data_type == 'array':
+                backend = "zarr" if backend is None else backend
+                if storage_backend is None:
+                    storage_backend = backend
+
+                cache_path = CACHE_ROOT_DIR + cache_key + '.zarr'
+                verify_path = CACHE_ROOT_DIR + cache_key + '.verify'
+                null_path = CACHE_ROOT_DIR + cache_key + '.null'
+                supports_filepath = True
+            elif data_type == 'tabular':
+                # Set the default
+                backend = "delta" if backend is None else backend
+                if storage_backend is None:
+                    storage_backend = backend
+
+                if backend == 'delta':
+                    cache_path = CACHE_ROOT_DIR + cache_key + '.delta'
+                    null_path = CACHE_ROOT_DIR + cache_key + '.null'
+                    supports_filepath = True
+                elif backend == 'parquet':
+                    cache_path = CACHE_ROOT_DIR + cache_key + '.parquet'
+                    verify_path = CACHE_ROOT_DIR + cache_key + '.verify'
+                    null_path = CACHE_ROOT_DIR + cache_key + '.null'
+                    supports_filepath = True
+                elif backend == 'postgres':
+                    cache_path = cache_key
+                    null_path = CACHE_ROOT_DIR + cache_key + '.null'
+                    supports_filepath = False
+                else:
+                    raise ValueError("Only delta, parquet, and postgres backends are supported for tabular data")
+            elif data_type == 'basic':
+                backend = "pickle" if backend is None else backend
+                if backend != 'pickle':
+                    raise ValueError("Only pickle backend supported for basic types.")
+                if storage_backend is None:
+                    storage_backend = backend
+                cache_path = CACHE_ROOT_DIR + cache_key + '.pkl'
+                verify_path = CACHE_ROOT_DIR + cache_key + '.verify'
+                null_path = CACHE_ROOT_DIR + cache_key + '.null'
+                supports_filepath = True
+            else:
+                raise ValueError("Caching currently only supports the 'array', 'tabular', and 'basic' datatypes")
+
+            if filepath_only and not supports_filepath:
+                raise ValueError(f"{backend} backend does not support filepath_only flag")
+
+            # Set up cached computation
+            ds = None
+            compute_result = True
+            fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
+            cache_map = fs.get_mapper(cache_path)
+
+            # First remove null caches if retry null cache is passed
+            if retry_null_cache and fs.exists(null_path):
+                print(f"Removing and retrying null cache {null_path}.")
+                fs.rm(null_path, recursive=True)
+
+            read_cache_path = cache_path
+            read_cache_map = cache_map
+            read_fs = fs
+
+            # If we are using local caching, and the cache exists, then we can use the local cache
+            if cache_local and backend in SUPPORTS_LOCAL_CACHING:
+                # If local, active cache can differ from the cache path
+                read_cache_path = get_local_cache(cache_path)
+                read_cache_map = fs.get_mapper(read_cache_path)
+                read_fs = fsspec.core.url_to_fs(read_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
+
+            # Now check if the cache exists
+            if not recompute and not upsert and cache:
+                if cache_exists(backend, cache_path, verify_path,
+                                hash_postgres_table_name=hash_postgres_table_name):
+                    # Sync the cache from the remote to the local
+                    sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
+                    print(f"Found cache for {read_cache_path}")
+                    if data_type == 'array':
+                        if filepath_only:
+                            return read_cache_map
+                        else:
+                            print(f"Opening cache {read_cache_path}")
+                            # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
+                            # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
+                            # every chunk is only 4B!
+                            if auto_rechunk:
+                                # If rechunk is passed then check to see if the rechunk array
+                                # matches chunking. If not then rechunk
+                                ds_remote = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                if not isinstance(chunking, dict):
+                                    raise ValueError(
+                                        "If auto_rechunk is True, a chunking dict must be supplied.")
+
+                                # Compare the dict to the rechunk dict
+                                if not chunking_compare(ds_remote, chunking):
+                                    print(
+                                        "Rechunk was passed and cached chunks do not match rechunk request. "
+                                        "Performing rechunking.")
+
+                                    # write to a temp cache map
+                                    # writing to temp cache is necessary because if you overwrite
+                                    # the original cache map it will write it before reading the
+                                    # data leading to corruption.
+                                    temp_cache_path = CACHE_ROOT_DIR + 'temp/' + cache_key + '.temp'
+                                    temp_verify_path = CACHE_ROOT_DIR + 'temp/' + cache_key + '.verify'
+                                    chunk_to_zarr(ds_remote, temp_cache_path, temp_verify_path, chunking)
+
+                                    # Remove the old cache and verify files
+                                    if fs.exists(verify_path):
+                                        fs.rm(verify_path, recursive=True)
+                                    if fs.exists(cache_path):
+                                        fs.rm(cache_path, recursive=True)
+
+                                    fs.mv(temp_cache_path, cache_path, recursive=True)
+                                    fs.mv(temp_verify_path, verify_path, recursive=True)
+
+                                    # Sync the cache from the remote to the local
+                                    sync_local_remote(backend, fs, read_fs, cache_path,
+                                                      read_cache_path, verify_path, null_path)
+
+                                    # Reopen the dataset - will use the appropriate global or local cache
+                                    ds = xr.open_dataset(read_cache_map, engine='zarr',
+                                                         chunks={}, decode_timedelta=True)
+                                else:
+                                    # Requested chunks already match rechunk.
+                                    ds = xr.open_dataset(read_cache_map, engine='zarr',
+                                                         chunks={}, decode_timedelta=True)
+                            else:
+                                ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+
+                            if validate_cache_timeseries and timeseries is not None:
+                                # Check to see if the dataset extends roughly the full time series set
+                                match_time = [t for t in tl if t in ds.dims]
+                                if len(match_time) == 0:
+                                    raise RuntimeError("Timeseries array functions must return "
+                                                       "a time dimension for slicing. "
+                                                       "This could be an invalid cache. "
+                                                       "Try running with recompute=True to reset the cache.")
+                                else:
+                                    time_col = match_time[0]
+
+                                    # Assign start and end times if None are passed
+                                    st = dateparser.parse(start_time) if start_time is not None \
+                                        else pd.Timestamp(ds[time_col].min().values)
+                                    et = dateparser.parse(end_time) if end_time is not None \
+                                        else pd.Timestamp(ds[time_col].max().values)
+
+                                    # Check if within 1 year at least
+                                    if (pd.Timestamp(ds[time_col].min().values) <
+                                        st + datetime.timedelta(days=365) and
+                                            pd.Timestamp(ds[time_col].max().values) >
+                                            et - datetime.timedelta(days=365)):
+                                        compute_result = False
+                                    else:
+                                        print("WARNING: The cached array does not have data within "
+                                              "1 year of your start or end time. Automatically recomputing. "
+                                              "If you do not want to recompute the result set "
+                                              "`validate_cache_timeseries=False`")
+                            else:
+                                compute_result = False
+                    elif data_type == 'tabular':
+                        if backend == 'delta':
                             if filepath_only:
                                 return read_cache_map
                             else:
                                 print(f"Opening cache {read_cache_path}")
-                                # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
-                                # Setting chunks=True triggers what I think is an xarray/zarr engine bug where
-                                # every chunk is only 4B!
-                                if auto_rechunk:
-                                    # If rechunk is passed then check to see if the rechunk array
-                                    # matches chunking. If not then rechunk
-                                    ds_remote = xr.open_dataset(cache_map, engine='zarr', chunks={}, decode_timedelta=True)
-                                    if not isinstance(chunking, dict):
-                                        raise ValueError(
-                                            "If auto_rechunk is True, a chunking dict must be supplied.")
+                                ds = read_from_delta(read_cache_path)
 
-                                    # Compare the dict to the rechunk dict
-                                    if not chunking_compare(ds_remote, chunking):
-                                        print(
-                                            "Rechunk was passed and cached chunks do not match rechunk request. "
-                                            "Performing rechunking.")
-
-                                        # write to a temp cache map
-                                        # writing to temp cache is necessary because if you overwrite
-                                        # the original cache map it will write it before reading the
-                                        # data leading to corruption.
-                                        temp_cache_path = CACHE_ROOT_DIR + 'temp/' + cache_key + '.temp'
-                                        temp_verify_path = CACHE_ROOT_DIR + 'temp/' + cache_key + '.verify'
-                                        chunk_to_zarr(ds_remote, temp_cache_path, temp_verify_path, chunking)
-
-                                        # Remove the old cache and verify files
-                                        if fs.exists(verify_path):
-                                            fs.rm(verify_path, recursive=True)
-                                        if fs.exists(cache_path):
-                                            fs.rm(cache_path, recursive=True)
-
-                                        fs.mv(temp_cache_path, cache_path, recursive=True)
-                                        fs.mv(temp_verify_path, verify_path, recursive=True)
-
-                                        # Sync the cache from the remote to the local
-                                        sync_local_remote(backend, fs, read_fs, cache_path,
-                                                          read_cache_path, verify_path, null_path)
-
-                                        # Reopen the dataset - will use the appropriate global or local cache
-                                        ds = xr.open_dataset(read_cache_map, engine='zarr',
-                                                             chunks={}, decode_timedelta=True)
-                                    else:
-                                        # Requested chunks already match rechunk.
-                                        ds = xr.open_dataset(read_cache_map, engine='zarr',
-                                                             chunks={}, decode_timedelta=True)
-                                else:
-                                    ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
-
-                                if validate_cache_timeseries and timeseries is not None:
-                                    # Check to see if the dataset extends roughly the full time series set
-                                    match_time = [t for t in tl if t in ds.dims]
-                                    if len(match_time) == 0:
-                                        raise RuntimeError("Timeseries array functions must return "
-                                                           "a time dimension for slicing. "
-                                                           "This could be an invalid cache. "
-                                                           "Try running with recompute=True to reset the cache.")
-                                    else:
-                                        time_col = match_time[0]
-
-                                        # Assign start and end times if None are passed
-                                        st = dateparser.parse(start_time) if start_time is not None \
-                                            else pd.Timestamp(ds[time_col].min().values)
-                                        et = dateparser.parse(end_time) if end_time is not None \
-                                            else pd.Timestamp(ds[time_col].max().values)
-
-                                        # Check if within 1 year at least
-                                        if (pd.Timestamp(ds[time_col].min().values) <
-                                            st + datetime.timedelta(days=365) and
-                                                pd.Timestamp(ds[time_col].max().values) >
-                                                et - datetime.timedelta(days=365)):
-                                            compute_result = False
-                                        else:
-                                            print("WARNING: The cached array does not have data within "
-                                                  "1 year of your start or end time. Automatically recomputing. "
-                                                  "If you do not want to recompute the result set "
-                                                  "`validate_cache_timeseries=False`")
-                                else:
-                                    compute_result = False
-                        elif data_type == 'tabular':
-                            if backend == 'delta':
-                                if filepath_only:
-                                    return read_cache_map
-                                else:
-                                    print(f"Opening cache {read_cache_path}")
-                                    ds = read_from_delta(read_cache_path)
-
-                                    if validate_cache_timeseries and timeseries is not None:
-                                        raise NotImplementedError("""Timeseries validation is not currently implemented
-                                                                  for tabular datasets.""")
-                                    else:
-                                        compute_result = False
-                            elif backend == 'parquet':
-                                if filepath_only:
-                                    return read_cache_path
-                                else:
-                                    print(f"Opening cache {read_cache_path}")
-                                    ds = read_from_parquet(read_cache_path)
-
-                                    if validate_cache_timeseries and timeseries is not None:
-                                        raise NotImplementedError("""Timeseries validation is not currently implemented
-                                                                  for tabular datasets.""")
-                                    else:
-                                        compute_result = False
-
-                            elif backend == 'postgres':
-                                ds = read_from_postgres(cache_key, hash_table_name=hash_postgres_table_name)
                                 if validate_cache_timeseries and timeseries is not None:
                                     raise NotImplementedError("""Timeseries validation is not currently implemented
-                                                              for tabular datasets""")
+                                                              for tabular datasets.""")
                                 else:
                                     compute_result = False
+                        elif backend == 'parquet':
+                            if filepath_only:
+                                return read_cache_path
                             else:
-                                raise ValueError("""Only delta, parquet, and postgres backends are
-                                                 supported for tabular data.""")
-                        elif data_type == 'basic':
-                            if backend == 'pickle':
-                                if filepath_only:
-                                    return read_cache_map
-                                else:
-                                    print(f"Opening cache {read_cache_path}")
-                                    with read_fs.open(read_cache_path, 'rb') as f:
-                                        ds = pickle.load(f)
+                                print(f"Opening cache {read_cache_path}")
+                                ds = read_from_parquet(read_cache_path)
 
-                                    if validate_cache_timeseries and timeseries is not None:
-                                        raise NotImplementedError("""Timeseries validation is not currently implemented
-                                                                  for basic datasets.""")
-                                    else:
-                                        compute_result = False
+                                if validate_cache_timeseries and timeseries is not None:
+                                    raise NotImplementedError("""Timeseries validation is not currently implemented
+                                                              for tabular datasets.""")
+                                else:
+                                    compute_result = False
+
+                        elif backend == 'postgres':
+                            ds = read_from_postgres(cache_key, hash_table_name=hash_postgres_table_name)
+                            if validate_cache_timeseries and timeseries is not None:
+                                raise NotImplementedError("""Timeseries validation is not currently implemented
+                                                          for tabular datasets""")
                             else:
-                                raise ValueError("Only pickle backend supported for basic types.")
+                                compute_result = False
                         else:
-                            print("Auto caching currently only supports array, tabular, and basic types.")
-                    elif fs.exists(null_path) and not recompute and cache and not retry_null_cache:
-                        print(f"Found null cache for {null_path}. Skipping computation.")
+                            raise ValueError("""Only delta, parquet, and postgres backends are
+                                             supported for tabular data.""")
+                    elif data_type == 'basic':
+                        if backend == 'pickle':
+                            if filepath_only:
+                                return read_cache_map
+                            else:
+                                print(f"Opening cache {read_cache_path}")
+                                with read_fs.open(read_cache_path, 'rb') as f:
+                                    ds = pickle.load(f)
+
+                                if validate_cache_timeseries and timeseries is not None:
+                                    raise NotImplementedError("""Timeseries validation is not currently implemented
+                                                              for basic datasets.""")
+                                else:
+                                    compute_result = False
+                        else:
+                            raise ValueError("Only pickle backend supported for basic types.")
+                    else:
+                        print("Auto caching currently only supports array, tabular, and basic types.")
+                elif fs.exists(null_path) and not recompute and cache and not retry_null_cache:
+                    print(f"Found null cache for {null_path}. Skipping computation.")
+                    return None
+
+            # If the cache doesn't exist or we are recomputing, compute the result
+            if compute_result or backend != storage_backend:
+                if compute_result:
+                    if recompute:
+                        print(f"Recompute for {cache_key} requested. Not checking for cached result.")
+                    elif upsert:
+                        print(f"Computing {cache_key} to enable data upsert.")
+                    elif not cache:
+                        # The function isn't cacheable, recomputing
+                        pass
+                    else:
+                        if fail_if_no_cache:
+                            raise RuntimeError(f"""Computation has been disabled by
+                                                `fail_if_no_cache` and cache doesn't exist for {cache_key}.""")
+
+                        print(f"Cache doesn't exist for {cache_key}. Running function")
+
+                    if timeseries is not None and (start_time is None or end_time is None):
+                        raise ValueError('Need to pass start and end time arguments when recomputing function.')
+
+                    ##### IF NOT EXISTS ######
+                    ds = func(*args, **kwargs)
+                    ##########################
+
+                # Store the result
+                if cache:
+                    if ds is None:
+                        if not upsert:
+                            print(f"Autocaching null result for {null_path}.")
+                            with fs.open(null_path, 'wb') as f:
+                                f.write(b'')
+                                sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path,
+                                                  verify_path, null_path)
+                        else:
+                            print(f"Null result not cached for {null_path} in upsert mode.")
+
                         return None
 
-                # If the cache doesn't exist or we are recomputing, compute the result
-                if compute_result or backend != storage_backend:
-                    if compute_result:
-                        if recompute:
-                            print(f"Recompute for {cache_key} requested. Not checking for cached result.")
-                        elif upsert:
-                            print(f"Computing {cache_key} to enable data upsert.")
-                        elif not cache:
-                            # The function isn't cacheable, recomputing
-                            pass
+                    write = False  # boolean to determine if we should write to the cache
+                    if data_type == 'array':
+                        if storage_backend == 'zarr':
+                            if (cache_exists(storage_backend, cache_path, verify_path)
+                                and force_overwrite is None):
+                                inp = input(f'A cache already exists at {
+                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write = True
+                            elif force_overwrite is False:
+                                pass
+                            else:
+                                write = True
+
+                            if write:
+                                print(f"Caching result for {cache_path} as zarr.")
+                                if isinstance(ds, xr.Dataset):
+                                    chunk_config = chunking if chunking else 'auto'
+                                    chunk_to_zarr(ds, cache_path, verify_path, chunk_config)
+                                    sync_local_remote(backend, fs, read_fs, cache_path,
+                                                      read_cache_path, verify_path, null_path)
+                                    # Reopen the dataset to truncate the computational path
+                                    ds = xr.open_dataset(read_cache_map, engine='zarr',
+                                                         chunks={}, decode_timedelta=True)
+                                else:
+                                    raise RuntimeError(
+                                        f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
+                        # Either way if terracotta is specified as a backend try to write the result array to terracotta
+                        elif storage_backend == 'terracotta':
+                            print(f"Also caching {cache_key} to terracotta.")
+                            write_to_terracotta(cache_key, ds)
+                    elif data_type == 'tabular':
+                        if not (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
+                            raise RuntimeError(f"""Tabular datatypes must return pandas or dask dataframe
+                                               or none instead of {type(ds)}""")
+
+                        # TODO: combine repeated code
+                        if storage_backend == 'delta':
+                            if fs.exists(cache_path) and force_overwrite is None:
+                                inp = input(f'A cache already exists at {
+                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write = True
+                            elif force_overwrite is False:
+                                pass
+                            else:
+                                write = True
+
+                            if write:
+                                print(f"Caching result for {cache_path} in delta.")
+                                write_to_delta(ds, cache_path, overwrite=True)
+                                # Reopen dataset to truncate the computational path
+                                ds = read_from_delta(read_cache_path)
+                        elif storage_backend == 'parquet':
+                            if (
+                                cache_exists(
+                                    storage_backend,
+                                    cache_path,
+                                    verify_path,
+                                )
+                                and force_overwrite is None
+                                and not upsert
+                            ):
+                                inp = input(f'A cache already exists at {
+                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write = True
+                            else:
+                                write = True
+
+                            if write:
+                                print(f"Caching result for {cache_path} in parquet.")
+                                write_to_parquet(ds, cache_path, verify_path, overwrite=True,
+                                                 upsert=upsert, primary_keys=primary_keys)
+                                sync_local_remote(backend, fs, read_fs, cache_path,
+                                                  read_cache_path, verify_path, null_path)
+                                # Reopen dataset to truncate the computational path
+                                ds = read_from_parquet(read_cache_path)
+
+                        elif storage_backend == 'postgres':
+                            if (check_exists_postgres(cache_key, hash_table_name=hash_postgres_table_name)
+                               and force_overwrite is None and not upsert):
+                                inp = input(f'A cache already exists for {
+                                            cache_key}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write = True
+                            elif force_overwrite is False:
+                                pass
+                            else:
+                                write = True
+
+                            if write:
+                                print(f"Caching result for {cache_key} in postgres.")
+                                write_to_postgres(ds, cache_key, overwrite=True, upsert=upsert,
+                                                  primary_keys=primary_keys, hash_table_name=hash_postgres_table_name)
+                                # Don't support computation path truncation because dask read sql function
+                                # requires knowledge of indexes we don't have generically
+                                # ds = read_from_postgres(cache_path)
+                                return ds
                         else:
-                            if fail_if_no_cache:
-                                raise RuntimeError(f"""Computation has been disabled by
-                                                    `fail_if_no_cache` and cache doesn't exist for {cache_key}.""")
-
-                            print(f"Cache doesn't exist for {cache_key}. Running function")
-
-                        if timeseries is not None and (start_time is None or end_time is None):
-                            raise ValueError('Need to pass start and end time arguments when recomputing function.')
-
-                        ##### IF NOT EXISTS ######
-                        ds = func(*args, **kwargs)
-                        ##########################
-
-                    # Store the result
-                    if cache:
-                        if ds is None:
-                            if not upsert:
-                                print(f"Autocaching null result for {null_path}.")
-                                with fs.open(null_path, 'wb') as f:
-                                    f.write(b'')
-                                    sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path,
-                                                      verify_path, null_path)
+                            raise ValueError("Only delta and postgres backends are implemented for tabular data")
+                    elif data_type == 'basic':
+                        if backend == 'pickle':
+                            if fs.exists(cache_path) and force_overwrite is None:
+                                inp = input(f'A cache already exists at {
+                                            cache_path}. Are you sure you want to overwrite it? (y/n)')
+                                if inp == 'y' or inp == 'Y':
+                                    write = True
+                            elif force_overwrite is False:
+                                pass
                             else:
-                                print(f"Null result not cached for {null_path} in upsert mode.")
+                                write = True
 
-                            return None
+                            if write:
+                                print(f"Caching result for {cache_path}.")
+                                with fs.open(cache_path, 'wb') as f:
+                                    pickle.dump(ds, f)
+                                    fs.open(verify_path, 'w').write(
+                                        datetime.datetime.now(datetime.timezone.utc).isoformat())
+                                sync_local_remote(backend, fs, read_fs, cache_path,
+                                                  read_cache_path, verify_path, null_path)
+                        else:
+                            raise ValueError("Only pickle backend is implemented for basic data data")
 
-                        write = False  # boolean to determine if we should write to the cache
-                        if data_type == 'array':
-                            if storage_backend == 'zarr':
-                                if (cache_exists(storage_backend, cache_path, verify_path)
-                                    and force_overwrite is None):
-                                    inp = input(f'A cache already exists at {
-                                                cache_path}. Are you sure you want to overwrite it? (y/n)')
-                                    if inp == 'y' or inp == 'Y':
-                                        write = True
-                                elif force_overwrite is False:
-                                    pass
-                                else:
-                                    write = True
-
-                                if write:
-                                    print(f"Caching result for {cache_path} as zarr.")
-                                    if isinstance(ds, xr.Dataset):
-                                        chunk_config = chunking if chunking else 'auto'
-                                        chunk_to_zarr(ds, cache_path, verify_path, chunk_config)
-                                        sync_local_remote(backend, fs, read_fs, cache_path,
-                                                          read_cache_path, verify_path, null_path)
-                                        # Reopen the dataset to truncate the computational path
-                                        ds = xr.open_dataset(read_cache_map, engine='zarr',
-                                                             chunks={}, decode_timedelta=True)
-                                    else:
-                                        raise RuntimeError(
-                                            f"Array datatypes must return xarray datasets or None instead of {type(ds)}")
-                            # Either way if terracotta is specified as a backend try to write the result array to terracotta
-                            elif storage_backend == 'terracotta':
-                                print(f"Also caching {cache_key} to terracotta.")
-                                write_to_terracotta(cache_key, ds)
-                        elif data_type == 'tabular':
-                            if not (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
-                                raise RuntimeError(f"""Tabular datatypes must return pandas or dask dataframe
-                                                   or none instead of {type(ds)}""")
-
-                            # TODO: combine repeated code
-                            if storage_backend == 'delta':
-                                if fs.exists(cache_path) and force_overwrite is None:
-                                    inp = input(f'A cache already exists at {
-                                                cache_path}. Are you sure you want to overwrite it? (y/n)')
-                                    if inp == 'y' or inp == 'Y':
-                                        write = True
-                                elif force_overwrite is False:
-                                    pass
-                                else:
-                                    write = True
-
-                                if write:
-                                    print(f"Caching result for {cache_path} in delta.")
-                                    write_to_delta(ds, cache_path, overwrite=True)
-                                    # Reopen dataset to truncate the computational path
-                                    ds = read_from_delta(read_cache_path)
-                            elif storage_backend == 'parquet':
-                                if (
-                                    cache_exists(
-                                        storage_backend,
-                                        cache_path,
-                                        verify_path,
-                                    )
-                                    and force_overwrite is None
-                                    and not upsert
-                                ):
-                                    inp = input(f'A cache already exists at {
-                                                cache_path}. Are you sure you want to overwrite it? (y/n)')
-                                    if inp == 'y' or inp == 'Y':
-                                        write = True
-                                else:
-                                    write = True
-
-                                if write:
-                                    print(f"Caching result for {cache_path} in parquet.")
-                                    write_to_parquet(ds, cache_path, verify_path, overwrite=True,
-                                                     upsert=upsert, primary_keys=primary_keys)
-                                    sync_local_remote(backend, fs, read_fs, cache_path,
-                                                      read_cache_path, verify_path, null_path)
-                                    # Reopen dataset to truncate the computational path
-                                    ds = read_from_parquet(read_cache_path)
-
-                            elif storage_backend == 'postgres':
-                                if (check_exists_postgres(cache_key, hash_table_name=hash_postgres_table_name)
-                                   and force_overwrite is None and not upsert):
-                                    inp = input(f'A cache already exists for {
-                                                cache_key}. Are you sure you want to overwrite it? (y/n)')
-                                    if inp == 'y' or inp == 'Y':
-                                        write = True
-                                elif force_overwrite is False:
-                                    pass
-                                else:
-                                    write = True
-
-                                if write:
-                                    print(f"Caching result for {cache_key} in postgres.")
-                                    write_to_postgres(ds, cache_key, overwrite=True, upsert=upsert,
-                                                      primary_keys=primary_keys, hash_table_name=hash_postgres_table_name)
-                                    # Don't support computation path truncation because dask read sql function
-                                    # requires knowledge of indexes we don't have generically
-                                    # ds = read_from_postgres(cache_path)
-                                    return ds
-                            else:
-                                raise ValueError("Only delta and postgres backends are implemented for tabular data")
-                        elif data_type == 'basic':
-                            if backend == 'pickle':
-                                if fs.exists(cache_path) and force_overwrite is None:
-                                    inp = input(f'A cache already exists at {
-                                                cache_path}. Are you sure you want to overwrite it? (y/n)')
-                                    if inp == 'y' or inp == 'Y':
-                                        write = True
-                                elif force_overwrite is False:
-                                    pass
-                                else:
-                                    write = True
-
-                                if write:
-                                    print(f"Caching result for {cache_path}.")
-                                    with fs.open(cache_path, 'wb') as f:
-                                        pickle.dump(ds, f)
-                                        fs.open(verify_path, 'w').write(
-                                            datetime.datetime.now(datetime.timezone.utc).isoformat())
-                                    sync_local_remote(backend, fs, read_fs, cache_path,
-                                                      read_cache_path, verify_path, null_path)
-                            else:
-                                raise ValueError("Only pickle backend is implemented for basic data data")
-
-                if filepath_only:
-                    if backend == 'parquet':
-                        return read_cache_path
-                    else:
-                        return read_cache_map
+            if filepath_only:
+                if backend == 'parquet':
+                    return read_cache_path
                 else:
-                    # Do the time series filtering
-                    if timeseries is not None:
+                    return read_cache_map
+            else:
+                # Do the time series filtering
+                if timeseries is not None:
 
-                        if data_type == "array":
-                            match_time = [t for t in tl if t in ds.dims]
-                        elif data_type == "tabular":
-                            match_time = [t for t in tl if t in ds.columns]
-                        else:
-                            raise ValueError(
-                                f"Timeseries is only supported for array or tabular data, not {data_type}"
-                            )
+                    if data_type == "array":
+                        match_time = [t for t in tl if t in ds.dims]
+                    elif data_type == "tabular":
+                        match_time = [t for t in tl if t in ds.columns]
+                    else:
+                        raise ValueError(
+                            f"Timeseries is only supported for array or tabular data, not {data_type}"
+                        )
 
-                        if len(match_time) == 0:
-                            raise RuntimeError(
-                                f"Timeseries must have a dimension or column named {tl} for slicing."
-                            )
+                    if len(match_time) == 0:
+                        raise RuntimeError(
+                            f"Timeseries must have a dimension or column named {tl} for slicing."
+                        )
 
-                        time_col = match_time[0]
+                    time_col = match_time[0]
 
-                        # Assign start and end times if None are passed
-                        if data_type == 'array' and isinstance(ds, xr.Dataset):
-                            ds = ds.sel({time_col: slice(start_time, end_time)})
-                        elif data_type == 'tabular' and (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
-                            if start_time is not None:
-                                ds = ds[ds[time_col] >= start_time]
-                            if end_time is not None:
-                                ds = ds[ds[time_col] <= end_time]
+                    # Assign start and end times if None are passed
+                    if data_type == 'array' and isinstance(ds, xr.Dataset):
+                        ds = ds.sel({time_col: slice(start_time, end_time)})
+                    elif data_type == 'tabular' and (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
+                        if start_time is not None:
+                            ds = ds[ds[time_col] >= start_time]
+                        if end_time is not None:
+                            ds = ds[ds[time_col] <= end_time]
 
-                    return ds
-
-            finally:
-                if is_top_level:
-                    global_is_top_level = True
+                return ds
 
         return cacheable_wrapper
     return create_cacheable
