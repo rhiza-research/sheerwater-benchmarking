@@ -101,7 +101,7 @@ def start_remote(remote_name=None, remote_config=None):
 def dask_remote(func):
     """Decorator to run a function on a remote dask cluster."""
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def remote_wrapper(*args, **kwargs):
         # See if there are extra function args to run this remotely
         if 'remote' in kwargs and kwargs['remote']:
 
@@ -135,4 +135,4 @@ def dask_remote(func):
             del kwargs['remote_name']
 
         return func(*args, **kwargs)
-    return wrapper
+    return remote_wrapper
