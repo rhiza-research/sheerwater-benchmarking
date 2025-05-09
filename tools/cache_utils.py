@@ -6,6 +6,7 @@ import re
 import sqlalchemy
 from sqlalchemy import text
 import xarray as xr
+import pandas as pd
 
 from sheerwater_benchmarking.utils import dask_remote
 from sheerwater_benchmarking.utils.secrets import postgres_write_password
@@ -224,5 +225,62 @@ def cache_verify(backend, name, glob):
 
     return verified
 
+def rename_postgres(old_name, new_name):
+    pgwrite_pass = postgres_write_password()
+
+    POSTGRES_IP = "34.59.163.82"
+
+    uri = f'postgresql://write:{pgwrite_pass}@{POSTGRES_IP}:5432/postgres'
+    engine = sqlalchemy.create_engine(uri)
+
+    with engine.begin() as conn:
+        print(f"Renaming {old_name} to {new_name}.")
+        try:
+            query_rename = f'ALTER TABLE "{old_name}" RENAME TO "{new_name}"'
+            conn.exec_driver_sql(query_rename)
+
+            query_delete = f"DELETE FROM cache_tables where table_name = '{old_name}'"
+            conn.exec_driver_sql(query_delete)
+        except Exception as e:
+            if 'already exists' in str(e):
+                pass
+
+        # Now update the renaming entry
+        pd_name = {'table_name': [new_name], 'table_key': [new_name], 'created_at': [pd.Timestamp.now()]}
+        pd_name = pd.DataFrame(pd_name)
+        pd_name.to_sql('cache_tables', engine, if_exists='append')
 
 
+def internal_rename(f, backend, old_name, new_name):
+    if backend == 'postgres':
+        rename_to = f.replace(old_name, new_name)
+        rename_postgres(f, rename_to)
+    elif backend in ['zarr', 'parquet', 'delta', 'pickle']:
+        end = f.split('.')[-1]
+        if end == backend:
+            rename_to = f.replace(old_name, new_name)
+            fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
+            fs.cp(f, rename_to, recursive=True)
+
+
+def cache_rename(backend, old_name, new_name, glob, parallel):
+    """Delete all the caches that match the given name and glob pattern.
+
+    Args:
+        backend (str): The backend to use. One of: 'zarr', 'delta', 'pickle', 'terracotta', 'postgres'.
+        name (str): The name of the cache.
+        glob (str): The glob pattern to search for.
+    """
+    to_rename = cache_list(backend, old_name, glob)
+
+
+    if parallel:
+        import multiprocessing
+        from functools import partial
+        with multiprocessing.Pool() as pool:
+            r = pool.map(partial(internal_rename, backend=backend, old_name=old_name, new_name=new_name), to_rename)
+    else:
+        for f in to_rename:
+            internal_rename(f, backend, old_name, new_name)
+
+    return True
