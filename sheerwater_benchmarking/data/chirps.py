@@ -25,7 +25,7 @@ def chirps_gridded(year, grid):
     # Rename to lat/lon
     ds = ds.rename({'latitude': 'lat', 'longitude': 'lon'})
 
-    # regrid
+    # Regrid if not on the native grid
     if grid != 'chirps':
         ds = regrid(ds, grid, base='base180', method='conservative')
 
