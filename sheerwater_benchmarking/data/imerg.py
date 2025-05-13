@@ -43,8 +43,9 @@ def imerg_gridded(start_time, end_time, grid):
     ds = ds['precipitation'].to_dataset()
     ds = ds.rename({'precipitation': 'precip'})
 
-    # regrid
-    ds = regrid(ds, grid, base='base180', method='conservative')
+    # Regrid if not on the native grid
+    if grid != 'imerg':
+        ds = regrid(ds, grid, base='base180', method='conservative')
 
     return ds
 
