@@ -19,8 +19,11 @@ import sqlalchemy
 import pickle
 
 import numpy as np
+import pyarrow as pa
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
+from pandas.api.types import is_numeric_dtype as is_numeric
+from pandas.api.types import is_string_dtype as is_string
 import dask.dataframe as dd
 import xarray as xr
 
@@ -330,6 +333,21 @@ def read_from_parquet(cache_path):
     return dd.read_parquet(cache_path, engine='pyarrow', ignore_metadata_file=True)
 
 
+def get_pyarrow_schema(df):
+    slist = []
+    for name in df.columns:
+        if is_numeric(df[name].dtype):
+            slist.append((name,pa.float64()))
+        elif is_datetime(df[name].dtype):
+            slist.append((name,pa.timestamp('ns', tz='UTC')))
+        elif is_string(df[name].dtype):
+            slist.append((name,pa.large_string()))
+        else:
+            raise ValueError(f"Unknown dtype for {name} {df[name].dtype}")
+
+    return pa.schema(slist)
+
+
 def append_parquet_helper(df, path, partition_on=None):
     """Helper to append to parquets."""
     df.to_parquet(
@@ -340,7 +358,7 @@ def append_parquet_helper(df, path, partition_on=None):
         engine="pyarrow",
         write_metadata_file=None,
         write_index=False,
-        schema='infer',
+        schema=get_pyarrow_schema(df),
     )
 
 
@@ -353,12 +371,10 @@ def write_parquet_helper(df, path, partition_on=None):
         engine="pyarrow",
         write_metadata_file=True,
         write_index=False,
-        schema='infer',
     )
 
 def rewrite_parquet(original_path, new_path, partition_on=None, strip_timezone=False):
     """Rewrites parquets given a path and new location."""
-    print("Parquet stored as root file. Transitioning to directory for append.")
     cp_df = dd.read_parquet(original_path, engine='pyarrow', ignore_metadata_file=True)
 
     if strip_timezone:
@@ -393,6 +409,7 @@ def write_to_parquet(df, cache_path, verify_path, upsert=False, primary_keys=Non
 
         # Record starting partitions
         start_parts = df.npartitions
+        existing_parts = existing_df.npartitions
 
         # Coearce dtypes before joining
         for key in primary_keys:
@@ -412,12 +429,15 @@ def write_to_parquet(df, cache_path, verify_path, upsert=False, primary_keys=Non
         cols_to_drop = [x for x in new_rows.columns if x.endswith('_drop')]
         new_rows = new_rows.drop(columns=cols_to_drop)
 
+        # Now concat with existing df
+        new_rows = new_rows.astype(existing_df.dtypes)
+        new_rows = new_rows[list(existing_df.columns)]
+        final_df = dd.concat([existing_df, new_rows])
+
         if len(new_rows.index) > 0:
-            new_rows = new_rows.repartition(npartitions=start_parts)
+            final_df = final_df.repartition(npartitions=start_parts + existing_parts)
 
             # Coearce dtypes and make the columns the same order
-            new_rows = new_rows.astype(existing_df.dtypes)
-            new_rows = new_rows[list(existing_df.columns)]
 
             print("Copying cache for ``consistent'' upsert.")
             temp_cache_path = get_temp_cache(cache_path)
@@ -427,26 +447,31 @@ def write_to_parquet(df, cache_path, verify_path, upsert=False, primary_keys=Non
 
             # Is the cache path a file instead of a directory? It realy
             # needs to be a directory so make it one
-            if fs.info(cache_path)['type'] == 'file':
-                rewrite_parquet(cache_path, temp_cache_path, part)
-            else:
-                fs.cp(cache_path, temp_cache_path, recursive=True)
+            #if fs.info(cache_path)['type'] == 'file':
+            #    print("Parquet stored as root file. Transitioning to directory for append.")
+            #    rewrite_parquet(cache_path, temp_cache_path, part)
+            #else:
+            #    fs.cp(cache_path, temp_cache_path, recursive=True)
 
             # write in append mode
-            print("Appending new rows to temp parquet.")
-            try:
-                append_parquet_helper(new_rows, temp_cache_path)
-            except ValueError as e:
-                if '__null_dask_index__' in str(e) or 'Appended dtypes differ' in str(e):
-                    # We get this when the dataset was written with index True
-                    # To solve this we need to (1) fully rewrite not just copy the dataset to temp
-                    # Then append the rows to the new dataset
+            #print("Appending new rows to temp parquet.")
+            #try:
+            #    append_parquet_helper(new_rows, temp_cache_path)
+            #except ValueError as e:
+            #    if '__null_dask_index__' in str(e) or 'Appended dtypes differ' in str(e):
+            #        # We get this when the dataset was written with index True
+            #        # To solve this we need to (1) fully rewrite not just copy the dataset to temp
+            #        # Then append the rows to the new dataset
 
-                    print("Rewriting parquet due to incompatible write type.")
-                    rewrite_parquet(cache_path, temp_cache_path, part, strip_timezone=True)
-                    append_parquet_helper(new_rows, temp_cache_path, part)
-                else:
-                    raise e
+            #        print("Rewriting parquet due to incompatible write type.")
+            #        rewrite_parquet(cache_path, temp_cache_path, part, strip_timezone=True)
+            #        print(new_rows.dtypes)
+            #        exists = read_from_parquet(temp_cache_path)
+            #        print(exists.dtypes)
+            #        append_parquet_helper(new_rows, temp_cache_path, part)
+            #    else:
+            #        raise e
+            write_parquet_helper(final_df, temp_cache_path, part)
 
             print("Successfully appended rows to temp parquet. Overwriting existing cache.")
 
