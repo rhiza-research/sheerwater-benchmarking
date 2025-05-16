@@ -4,6 +4,8 @@ from functools import partial
 from sheerwater_benchmarking.utils import regrid, dask_remote, cacheable, roll_and_agg, apply_mask, clip_region
 from dateutil import parser
 from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
+import datetime
+import fsspec
 
 
 @dask_remote
@@ -13,8 +15,16 @@ from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
 def chirps_gridded(year, grid):
     """CHIRPS regridded by year."""
     # Open the datastore
-    store = 'https://nyu1.osn.mghpcc.org/leap-pangeo-pipeline/chirps_feedstock/chirps-global-daily.zarr'
-    ds = xr.open_dataset(store, engine='zarr', chunks={})
+    #store = 'https://nyu1.osn.mghpcc.org/leap-pangeo-pipeline/chirps_feedstock/chirps-global-daily.zarr'
+    #ds = xr.open_dataset(store, engine='zarr', chunks={})
+    if year == datetime.datetime.now().year:
+        url = f'https://data.chc.ucsb.edu/products/CHIRPS-2.0/prelim/global_daily/netcdf/p05/chirps-v2.0.{year}.days_p05.nc'
+    else:
+        url = f'https://data.chc.ucsb.edu/products/CHIRPS-2.0/global_daily/netcdf/p05/chirps-v2.0.{year}.days_p05.nc'
+
+    fs = fsspec.implementations.http.HTTPFileSystem()
+    fobj = fs.open(url)
+    ds = xr.open_dataset(fobj, chunks={'lat': 300, 'lon': 300, 'time': 365})
 
     # clip to the year
     start_time = str(year) + '-01-01'
