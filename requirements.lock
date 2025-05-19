@@ -478,6 +478,7 @@ notebook-shim==0.2.4
     # via jupyterlab
     # via notebook
 numcodecs==0.15.0
+    # via sheerwater-benchmarking
     # via zarr
 numpy==2.2.2
     # via bokeh

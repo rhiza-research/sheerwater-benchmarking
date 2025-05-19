@@ -101,6 +101,7 @@ dependencies = [
     "huggingface_hub",
     "py7zr",
     "tqdm",
+    "numcodecs<0.16.0"
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
