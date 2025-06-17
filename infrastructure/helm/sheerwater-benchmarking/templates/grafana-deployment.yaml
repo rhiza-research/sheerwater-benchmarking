@@ -74,6 +74,8 @@ spec:
             value: "true"
           - name: GF_OAUTH_SKIP_ORG_ROLE_UPDATE_SYNC
             value: "true"
+          - name: GF_ALLOW_EMBEDDING
+            value: "true"
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-grafana-secrets
