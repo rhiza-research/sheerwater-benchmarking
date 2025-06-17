@@ -47,8 +47,6 @@ argon2-cffi-bindings==21.2.0
     # via argon2-cffi
 arrow==1.3.0
     # via isoduration
-asciitree==0.3.3
-    # via zarr
 asttokens==3.0.0
     # via stack-data
 async-lru==2.0.4
@@ -142,6 +140,8 @@ comm==0.2.2
 contourpy==1.3.1
     # via bokeh
     # via matplotlib
+crc32c==2.7.1
+    # via numcodecs
 cryptography==44.0.0
     # via kr8s
     # via paramiko
@@ -183,6 +183,8 @@ distributed==2025.1.0
     # via coiled
     # via dask
     # via dask-kubernetes
+donfig==0.8.1.post1
+    # via zarr
 durationpy==0.9
     # via kubernetes
 ecmwf-api-client==1.6.3
@@ -191,8 +193,6 @@ executing==2.2.0
     # via stack-data
 fabric==3.2.2
     # via coiled
-fasteners==0.19
-    # via zarr
 fastjsonschema==2.21.1
     # via nbformat
 filelock==3.17.0
@@ -549,6 +549,7 @@ packaging==24.2
     # via rioxarray
     # via statsmodels
     # via xarray
+    # via zarr
 pandas==2.2.3
     # via bokeh
     # via dask
@@ -692,6 +693,7 @@ pyyaml==6.0.2
     # via bokeh
     # via dask
     # via distributed
+    # via donfig
     # via huggingface-hub
     # via jsondiff
     # via jupyter-events
@@ -870,6 +872,7 @@ typing-extensions==4.12.2
     # via minio
     # via referencing
     # via sqlalchemy
+    # via zarr
 tzdata==2025.1
     # via pandas
 tzlocal==5.2
@@ -910,7 +913,7 @@ wrapt==1.17.2
     # via deprecated
 wsproto==1.2.0
     # via httpx-ws
-xarray==2024.10.0
+xarray==2025.6.0
     # via rioxarray
     # via salientsdk
     # via sheerwater-benchmarking
@@ -928,7 +931,7 @@ xyzservices==2025.1.0
     # via bokeh
 yarl==1.18.3
     # via aiohttp
-zarr==2.18.3
+zarr==3.0.8
     # via sheerwater-benchmarking
     # via weatherbench2
 zict==3.0.0
