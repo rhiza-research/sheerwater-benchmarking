@@ -350,43 +350,34 @@ from sheerwater_benchmarking.utils import (
     regrid,
     shift_forecast_date_to_target_date,
     target_date_to_forecast_date,
+    lead_to_agg_days,
 )
 
 
 @dask_remote
 @cacheable(
     data_type="array",
-    cache_args=["run_type", "grid"],
-    timeseries=["start_date", "model_issuance_date"],
-    chunking={
-        "lat": 300,
-        "lon": 300,
-        "lead_time": 46,
-        "start_date": 29,
-        "start_year": 29,
-        "model_issuance_date": 1,
-    },
+    cache_args=[],
+    timeseries=["time"],
 )
-def gefs_raw(start_time, end_time, run_type="perturbed", grid="global0_25"):
+def gefs_raw(start_time, end_time):
     """Raw GEFS forecast data.
 
     Args:
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
-        run_type (str): The type of run to fetch. One of:
-            - perturbed: to download all perturbed runs
-            - [int 0-50]: to download a specific  perturbed run
-        grid (str): The grid resolution to fetch the data at. One of:
-            - global0_25: 0.25 degree global grid
     """
-    if grid != "global0_25":
-        raise NotImplementedError("Only global 0.25 degree grid is implemented.")
-
     # Open the datastore from dynamical.org
-    store = "https://data.dynamical.org/noaa/gefs/forecast/latest.zarr?email=info@rhizaresearch.org"
+    store = "s3://dynamical/noaa-gefs-forecast-35-day/v0.2.0.zarr"
 
     ds = xr.open_dataset(
         store,
+        backend_kwargs={'storage_options': {
+                            'client_kwargs': {
+                                'endpoint_url':"https://data.source.coop"
+                                }
+                            }
+                        },
         engine="zarr",
         chunks={},
         drop_variables=[
@@ -406,6 +397,8 @@ def gefs_raw(start_time, end_time, run_type="perturbed", grid="global0_25"):
             "pressure_reduced_to_mean_sea_level_avg",
             "pressure_surface",
             "pressure_surface_avg",
+            "precipitation_surface_avg",
+            "tmp2m_surface_avg",
             "relative_humidity_2m",
             "relative_humidity_2m_avg",
             "total_cloud_cover_atmosphere",
@@ -416,24 +409,20 @@ def gefs_raw(start_time, end_time, run_type="perturbed", grid="global0_25"):
             "wind_v_100m",
             "wind_v_10m",
             "wind_v_10m_avg",
-            "precipitation_surface_avg",
-            "temperature_2m_avg",
             "downward_short_wave_radiation_flux_surface_avg",
             "downward_long_wave_radiation_flux_surface_avg",
             "downward_short_wave_radiation_flux_surface",
             "downward_long_wave_radiation_flux_surface",
         ],
+        decode_timedelta=True,
+
     )
-
     # NOTE: variables with the _avg suffix are the avg of the ensemble members
-
-    # Select the right time period
-    ds = ds.sel(init_time=slice(start_time, end_time))
 
     # Rename to match interface conventions
     ds = ds.rename(
         {
-            "init_time": "start_date",
+            "init_time": "time",
             "latitude": "lat",
             "longitude": "lon",
             "ensemble_member": "member",
@@ -441,14 +430,6 @@ def gefs_raw(start_time, end_time, run_type="perturbed", grid="global0_25"):
             "temperature_2m": "tmp2m",
         }
     )
-
-    # Handle different run types
-    if isinstance(run_type, int):
-        # Take specific ensemble member
-        ds = ds.isel(member=run_type)
-    elif run_type != "perturbed":
-        raise ValueError(f"Invalid run_type: {run_type}")
-    # else select all ensemble members for perturbed run
 
     # convert units
     # precip: kg/m2 (hourly) -> mm/day requires no scalar conversion, just daily summation
@@ -459,30 +440,25 @@ def gefs_raw(start_time, end_time, run_type="perturbed", grid="global0_25"):
     ds["tmp2m"] = ds["tmp2m"].resample(lead_time="D").mean()
     ds["tmp2m"].attrs.update(units="C")
 
-    # Chunks need to be the same size for caching to work
-    ds = ds.unify_chunks()
-
     return ds
 
 
 @dask_remote
 @cacheable(
     data_type="array",
-    cache_args=["run_type", "grid"],
-    timeseries=["start_date", "model_issuance_date"],
+    cache_args=["grid"],
+    timeseries=["time"],
     chunking={
         "lat": 300,
         "lon": 300,
         "lead_time": 1,
-        "start_date": 1000,
-        "model_issuance_date": 1000,
-        "start_year": 1,
+        "time": 1000,
         "member": 1,
     },
 )
-def gefs_gridded(start_time, end_time, run_type="perturbed", grid="global1_5"):
+def gefs_gridded(start_time, end_time, grid="global0_25"):
     """GEFS forecast data with regridding."""
-    ds = gefs_raw(start_time, end_time, run_type, grid="global0_25")
+    ds = gefs_raw(start_time, end_time)
 
     # Spatial resolution:
     #   0-240 hours: 0.25 degrees (~20km)
@@ -491,6 +467,51 @@ def gefs_gridded(start_time, end_time, run_type="perturbed", grid="global1_5"):
     # the 0.25 degree grid because of the different resolutions at different lead times
     ds = regrid(ds, grid, base="base180", method="conservative")
     return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['variable', 'agg_days', 'prob_type', 'grid'],
+           timeseries='time',
+           cache_disable_if={'agg_days': 1},
+            chunking={
+                "lat": 300,
+                "lon": 300,
+                "lead_time": 1,
+                "time": 1000,
+                "member": 1,
+            },
+           validate_cache_timeseries=False)
+def gefs_rolled(start_time, end_time, variable, agg_days, prob_type, grid='global0_25'):
+    """A rolled and aggregated gefs forecast."""
+    ds = gefs_gridded(start_time, end_time, grid=grid)
+
+    if prob_type == 'probabilistic':
+        ds = ds[[variable]]
+        ds = ds.assign_attrs(prob_type='ensemble')
+    else:
+        ds = ds[[variable]]
+        ds = ds.mean(dim='member')
+        ds = ds.assign_attrs(prob_type='deterministic')
+
+    ds = roll_and_agg(ds, agg=agg_days, agg_col="lead_time", agg_fn="mean")
+    return ds
+
+def _process_lead(variable, lead):
+    """Helper function for interpreting lead for FuXI forecasts."""
+    lead_params = {}
+    for i in range(35):
+        lead_params[f"day{i+1}"] = i
+    for i in [0, 7, 14, 21, 28, 35]:
+        lead_params[f"week{i//7+1}"] = i
+    for i in [0, 7, 14, 21, 28]:
+        lead_params[f"weeks{(i//7)+1}{(i//7)+2}"] = i
+    lead_offset_days = lead_params.get(lead, None)
+    if lead_offset_days is None:
+        raise NotImplementedError(f"Lead {lead} not implemented for FuXi {variable} forecasts.")
+
+    agg_days = lead_to_agg_days(lead)
+    return agg_days, lead_offset_days
 
 
 @dask_remote
@@ -522,49 +543,36 @@ def gefs(
         mask: Mask to apply (lsm, None)
         region: Region to clip to (global, africa, conus)
     """
-    lead_params = {
-        "week1": 0,
-        "week2": 7,
-        "week3": 14,
-        "week4": 21,
-        "week5": 28,
-        "weeks12": 0,
-        "weeks23": 7,
-        "weeks34": 14,
-    }
-    lead_offset_days = lead_params.get(lead, None)
-    if lead_offset_days is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for GEFS forecasts.")
+    agg_days, lead_offset_days = _process_lead(variable, lead)
 
     # Convert start and end time to forecast start and end based on lead time
     forecast_start = target_date_to_forecast_date(start_time, lead)
     forecast_end = target_date_to_forecast_date(end_time, lead)
 
-    if prob_type == "probabilistic":
-        run_type = "perturbed"
-    else:  # deterministic
-        raise NotImplementedError(f"prob_type: {prob_type} not implemented for GEFS forecasts.")
-
-    ds = gefs_gridded(
+    ds = gefs_rolled(
         forecast_start,
         forecast_end,
-        run_type=run_type,
-        grid=grid,
+        variable=variable,
+        agg_days=agg_days,
+        prob_type=prob_type,
+        grid=grid
     )
-    ds = ds.assign_attrs(prob_type=prob_type)
 
     # Get specific lead
     lead_shift = np.timedelta64(lead_offset_days, "D")
     ds = ds.sel(lead_time=lead_shift)
 
     # Time shift - we want target date, instead of forecast date
-    ds = shift_forecast_date_to_target_date(ds, "start_date", lead)
-    ds = ds.rename({"start_date": "time"})
+    ds = shift_forecast_date_to_target_date(ds, "time", lead)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)
 
     # Clip to specified region
     ds = clip_region(ds, region=region)
+
+    # Assign final prob label
+    prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
+    ds = ds.assign_attrs(prob_type=prob_label)
 
     return ds
