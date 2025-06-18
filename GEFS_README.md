@@ -10,4 +10,4 @@ Attempts/description
 - Switch to S3, run gefs_etl_s3.py. Now we get the checksum error
 - Github discussion https://github.com/pydata/xarray/discussions/9938 indicates that this could be due chunk/sharding misalignment. Try to set shards as multiple of chunk for S3 try 2 - same error
 
-To reproduce start a dask cluster and added S3 client key/secret from source coop.
+To reproduce start a dask cluster, add S3 client key/secret from source coop, and change write location to a different datalake.

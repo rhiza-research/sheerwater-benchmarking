@@ -6,7 +6,6 @@ import zarr
 from sheerwater_benchmarking.utils import start_remote
 start_remote(remote_config=['large_scheduler', 'large_cluster', 'xxlarge_node'])
 
-# S3 version
 store = "https://data.dynamical.org/noaa/gefs/forecast-35-day/latest.zarr"
 ds = xr.open_zarr(store,
                   # Note - reading without chunks set here fails because the default chunk size is too small
