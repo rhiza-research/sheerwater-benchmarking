@@ -9,6 +9,7 @@ import logging
 import hashlib
 import fsspec
 import uuid
+import zarr
 
 from deltalake import DeltaTable, write_deltalake
 from rasterio.io import MemoryFile
@@ -256,12 +257,36 @@ def drop_encoded_chunks(ds):
             del ds[var].encoding['chunks']
         if 'preferred_chunks' in ds[var].encoding:
             del ds[var].encoding['preferred_chunks']
+        if 'shards' in ds[var].encoding:
+            del ds[var].encoding['shards']
+        if 'serializer' in ds[var].encoding:
+            del ds[var].encoding['serializer']
+        if 'compressors' in ds[var].encoding:
+            del ds[var].encoding['compressors']
 
     for coord in ds.coords:
         if 'chunks' in ds[coord].encoding:
             del ds[coord].encoding['chunks']
         if 'preferred_chunks' in ds[coord].encoding:
             del ds[coord].encoding['preferred_chunks']
+        if 'shards' in ds[coord].encoding:
+            del ds[coord].encoding['shards']
+        if 'serializer' in ds[coord].encoding:
+            del ds[coord].encoding['serializer']
+        if 'compressors' in ds[coord].encoding:
+            del ds[coord].encoding['compressors']
+
+    return ds
+
+
+def unify_shards_chunks(ds):
+    """Drop the encoded chunks from a dataset."""
+
+    for var in ds.data_vars:
+        tlist = []
+        for key in ds.chunks:
+            tlist.append(ds.chunks[key][0])
+        ds[var].encoding['shards'] = tuple(tlist)
 
     return ds
 
@@ -420,8 +445,7 @@ def write_to_zarr(ds, cache_path, verify_path):
     if fs.exists(cache_path):
         fs.rm(cache_path, recursive=True)
 
-    cache_map = fs.get_mapper(cache_path)
-    ds.to_zarr(store=cache_map, mode='w')
+    ds.to_zarr(store=cache_path, mode='w', zarr_format=3, consolidated=False)
 
     # Add a lock file to the cache to verify cache integrity, with the current timestamp
     fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -429,12 +453,14 @@ def write_to_zarr(ds, cache_path, verify_path):
 
 def chunk_to_zarr(ds, cache_path, verify_path, chunking):
     """Write a dataset to a zarr cache map and check the chunking."""
-    ds = drop_encoded_chunks(ds)
+    #ds = drop_encoded_chunks(ds)
+    ds = ds.drop_encoding()
+    ds = ds.unify_chunks()
 
     if isinstance(chunking, dict):
         # No need to prune if chunking is None or 'auto'
         chunking = prune_chunking_dimensions(ds, chunking)
-    ds = ds.chunk(chunks=chunking)
+        ds = ds.chunk(chunks=chunking)
     try:
         chunk_size, chunk_with_labels = get_chunk_size(ds)
 
@@ -443,6 +469,7 @@ def chunk_to_zarr(ds, cache_path, verify_path, chunking):
             print(chunk_with_labels)
     except ValueError:
         print("Failed to get chunks size! Continuing with unknown chunking...")
+
     write_to_zarr(ds, cache_path, verify_path)
 
 
@@ -999,7 +1026,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     print(f"Found cache for {read_cache_path}")
                     if data_type == 'array':
                         if filepath_only:
-                            return read_cache_map
+                            return read_cache_path
                         else:
                             print(f"Opening cache {read_cache_path}")
                             # We must auto open chunks. This tries to use the underlying zarr chunking if possible.
@@ -1041,14 +1068,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                       read_cache_path, verify_path, null_path)
 
                                     # Reopen the dataset - will use the appropriate global or local cache
-                                    ds = xr.open_dataset(read_cache_map, engine='zarr',
+                                    ds = xr.open_dataset(read_cache_path, engine='zarr',
                                                          chunks={}, decode_timedelta=True)
                                 else:
                                     # Requested chunks already match rechunk.
-                                    ds = xr.open_dataset(read_cache_map, engine='zarr',
+                                    ds = xr.open_dataset(read_cache_path, engine='zarr',
                                                          chunks={}, decode_timedelta=True)
                             else:
-                                ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+                                ds = xr.open_dataset(read_cache_path, engine='zarr', chunks={}, decode_timedelta=True)
 
                             if validate_cache_timeseries and timeseries is not None:
                                 # Check to see if the dataset extends roughly the full time series set
@@ -1198,7 +1225,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                     sync_local_remote(backend, fs, read_fs, cache_path,
                                                       read_cache_path, verify_path, null_path)
                                     # Reopen the dataset to truncate the computational path
-                                    ds = xr.open_dataset(read_cache_map, engine='zarr',
+                                    ds = xr.open_dataset(read_cache_path, engine='zarr',
                                                          chunks={}, decode_timedelta=True)
                                 else:
                                     raise RuntimeError(
@@ -1278,8 +1305,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         else:
                             raise ValueError("Only delta and postgres backends are implemented for tabular data")
                     elif data_type == 'basic':
-                        if backend == 'pickle':
-                            if fs.exists(cache_path) and force_overwrite is None:
+                        if storage_backend == 'pickle':
+                            if (cache_exists(storage_backend, cache_path, verify_path)
+                                and force_overwrite is None):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
