@@ -69,7 +69,7 @@ dependencies = [
     "jupytext",
     "dask-kubernetes",
     "gcsfs",
-    "zarr~=3.0",
+    "zarr @ git+https://github.com/zarr-developers/zarr-python@ba1f71a2af6f5d15eab71f43bdb0b85c76898ebe",
     "h5py",
     "netcdf4",
     "h5netcdf",
@@ -100,8 +100,9 @@ dependencies = [
     "minio",
     "huggingface_hub",
     "py7zr",
+    "pyzstd==0.16.2",
     "tqdm",
-    "numcodecs<0.16.0"
+    "numcodecs<0.16.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

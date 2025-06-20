@@ -341,6 +341,9 @@ Data Variables:
 """
 import numpy as np
 import xarray as xr
+import zarr
+import asyncio
+from dateutil import parser
 
 from sheerwater_benchmarking.utils import (
     apply_mask,
@@ -357,67 +360,51 @@ from sheerwater_benchmarking.utils import (
 @dask_remote
 @cacheable(
     data_type="array",
-    cache_args=[],
-    timeseries=["time"],
+    cache_args=["year"],
+    chunking={
+        "lat": 374,
+        "lon": 368,
+        "lead_time": 35,
+        "time": 1,
+        "member": 31,
+    },
 )
-def gefs_raw(start_time, end_time):
+def gefs_year(year):
     """Raw GEFS forecast data.
 
     Args:
-        start_time (str): The start date to fetch data for.
-        end_time (str): The end date to fetch.
+        year
     """
     # Open the datastore from dynamical.org
-    store = "s3://dynamical/noaa-gefs-forecast-35-day/v0.2.0.zarr"
+    class RetryingFsspecStore(zarr.storage.FsspecStore):
+        max_attempts = 5
+        backoff = 0.1
 
-    ds = xr.open_dataset(
-        store,
-        backend_kwargs={'storage_options': {
-                            'client_kwargs': {
-                                'endpoint_url':"https://data.source.coop"
-                                }
-                            }
-                        },
-        engine="zarr",
-        chunks={},
-        drop_variables=[
-            "categorical_freezing_rain_surface",
-            "categorical_freezing_rain_surface_avg",
-            "categorical_ice_pellets_surface",
-            "categorical_ice_pellets_surface_avg",
-            "categorical_rain_surface",
-            "categorical_rain_surface_avg",
-            "categorical_snow_surface",
-            "categorical_snow_surface_avg",
-            "geopotential_height_cloud_ceiling",
-            "percent_frozen_precipitation_surface",
-            "precipitable_water_atmosphere",
-            "precipitable_water_atmosphere_avg",
-            "pressure_reduced_to_mean_sea_level",
-            "pressure_reduced_to_mean_sea_level_avg",
-            "pressure_surface",
-            "pressure_surface_avg",
-            "precipitation_surface_avg",
-            "tmp2m_surface_avg",
-            "relative_humidity_2m",
-            "relative_humidity_2m_avg",
-            "total_cloud_cover_atmosphere",
-            "total_cloud_cover_atmosphere_avg",
-            "wind_u_100m",
-            "wind_u_10m",
-            "wind_u_10m_avg",
-            "wind_v_100m",
-            "wind_v_10m",
-            "wind_v_10m_avg",
-            "downward_short_wave_radiation_flux_surface_avg",
-            "downward_long_wave_radiation_flux_surface_avg",
-            "downward_short_wave_radiation_flux_surface",
-            "downward_long_wave_radiation_flux_surface",
-        ],
-        decode_timedelta=True,
+        async def get(
+            self,
+            key: str,
+            prototype: zarr.core.buffer.core.BufferPrototype,
+            byte_range: zarr.abc.store.ByteRequest | None = None,
+        ) -> zarr.core.buffer.Buffer | None:
+            for attempt in range(self.max_attempts):
+                try:
+                    return await super().get(key, prototype, byte_range)
+                except:
+                    if attempt >= self.max_attempts - 1:
+                        raise
+                    await asyncio.sleep(self.backoff * (2**attempt))
 
-    )
-    # NOTE: variables with the _avg suffix are the avg of the ensemble members
+            raise AssertionError("Unreachable")
+
+    # Usage example
+    store = RetryingFsspecStore.from_url("https://data.dynamical.org/noaa/gefs/forecast-35-day/latest.zarr?email=info@rhizaresearch.org", read_only=True)
+    ds = xr.open_zarr(store,
+                      chunks={'latitude': 374, 'longitude': 368, 'init_time': 1, 'ensemble_member': 31, 'lead_time': 64},
+                      decode_timedelta=True,
+                    )
+
+    ds = ds.sel(init_time=slice(f'{year}-01-01', f'{year}-12-31'))
+    ds = ds[["precipitation_surface", "temperature_2m"]]
 
     # Rename to match interface conventions
     ds = ds.rename(
@@ -443,17 +430,55 @@ def gefs_raw(start_time, end_time):
     return ds
 
 
+
+@dask_remote
+@cacheable(
+    data_type="array",
+    cache_args=[],
+    timeseries=["time"],
+    chunking={
+        "lat": 374,
+        "lon": 368,
+        "lead_time": 32,
+        "time": 1,
+        "member": 31,
+    },
+)
+def gefs_raw(start_time, end_time):
+    """Raw GEFS forecast data.
+
+    Args:
+        start_time (str): The start date to fetch data for.
+        end_time (str): The end date to fetch.
+    """
+    years = range(parser.parse(start_time).year, parser.parse(end_time).year + 1)
+
+    datasets = []
+    for year in years:
+        ds = gefs_year(year, filepath_only=True)
+        datasets.append(ds)
+
+    ds = xr.open_mfdataset(datasets,
+                           engine='zarr',
+                           parallel=True,
+                           chunks={'latitude': 374, 'longitude': 368, 'init_time': 1, 'ensemble_member': 31, 'lead_time': 96},
+                           decode_timedelta=True)
+
+    return ds
+
+
 @dask_remote
 @cacheable(
     data_type="array",
     cache_args=["grid"],
     timeseries=["time"],
+    cache_disable_if={'grid':'global0_25'},
     chunking={
-        "lat": 300,
-        "lon": 300,
-        "lead_time": 1,
-        "time": 1000,
-        "member": 1,
+        "lat": 374,
+        "lon": 368,
+        "lead_time": 16,
+        "time": 1,
+        "member": 31,
     },
 )
 def gefs_gridded(start_time, end_time, grid="global0_25"):
