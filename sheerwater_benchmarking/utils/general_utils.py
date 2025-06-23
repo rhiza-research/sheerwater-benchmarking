@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import gcsfs
 import numpy as np
 import xarray as xr
+import itertools
 
 import plotly.graph_objects as go
 
