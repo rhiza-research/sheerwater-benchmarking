@@ -340,6 +340,7 @@ Data Variables:
         units:              m/s
 """
 import numpy as np
+import pandas as pd
 import xarray as xr
 import zarr
 import asyncio
@@ -360,16 +361,16 @@ from sheerwater_benchmarking.utils import (
 @dask_remote
 @cacheable(
     data_type="array",
-    cache_args=["year"],
+    cache_args=["day"],
     chunking={
         "lat": 374,
         "lon": 368,
-        "lead_time": 35,
+        "lead_time": 14,
         "time": 1,
         "member": 31,
     },
 )
-def gefs_year(year):
+def gefs_day(day):
     """Raw GEFS forecast data.
 
     Args:
@@ -399,11 +400,11 @@ def gefs_year(year):
     # Usage example
     store = RetryingFsspecStore.from_url("https://data.dynamical.org/noaa/gefs/forecast-35-day/latest.zarr?email=info@rhizaresearch.org", read_only=True)
     ds = xr.open_zarr(store,
-                      chunks={'latitude': 374, 'longitude': 368, 'init_time': 1, 'ensemble_member': 31, 'lead_time': 64},
+                      chunks={'latitude': 374, 'longitude': 368, 'init_time': 1, 'ensemble_member': 31, 'lead_time': 16},
                       decode_timedelta=True,
                     )
 
-    ds = ds.sel(init_time=slice(f'{year}-01-01', f'{year}-12-31'))
+    ds = ds.sel(init_time=slice(f'{day}', f'{day}'))
     ds = ds[["precipitation_surface", "temperature_2m"]]
 
     # Rename to match interface conventions
@@ -451,11 +452,11 @@ def gefs_raw(start_time, end_time):
         start_time (str): The start date to fetch data for.
         end_time (str): The end date to fetch.
     """
-    years = range(parser.parse(start_time).year, parser.parse(end_time).year + 1)
+    days = pd.date_range(start=start_time, end=end_time)
 
     datasets = []
-    for year in years:
-        ds = gefs_year(year, filepath_only=True)
+    for day in days:
+        ds = gefs_day(day, filepath_only=True)
         datasets.append(ds)
 
     ds = xr.open_mfdataset(datasets,
