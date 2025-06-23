@@ -1,0 +1,64 @@
+/Users/joshuaadkins/rhiza/sheerwater-benchmarking/gefs_etl_https.py:11: UserWarning: The specified chunks separate the stored chunks along dimension "init_time" starting at index 1. This could degrade performance. Instead, consider rechunking after loading.
+  ds = xr.open_zarr(store,
+/Users/joshuaadkins/rhiza/sheerwater-benchmarking/gefs_etl_https.py:11: UserWarning: The specified chunks separate the stored chunks along dimension "lead_time" starting at index 16. This could degrade performance. Instead, consider rechunking after loading.
+  ds = xr.open_zarr(store,
+/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/distributed/client.py:3370: UserWarning: Sending large graph of size 131.50 MiB.
+This may cause some slowdown.
+Consider loading the data with Dask directly
+ or using futures or delayed objects to embed the data into the graph without repetition.
+See also https://docs.dask.org/en/stable/best-practices.html#load-data-with-dask for more information.
+  warnings.warn(
+Traceback (most recent call last):
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/gefs_etl_https.py", line 73, in <module>
+    ds.to_zarr(store="gcs://sheerwater-datalake/tmp/gefs-35.zarr", mode='w', encoding=encoding, zarr_format=3, consolidated=False)
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/core/dataset.py", line 2291, in to_zarr
+    return to_zarr(  # type: ignore[call-overload,misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/backends/api.py", line 2246, in to_zarr
+    writes = writer.sync(
+             ^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/backends/common.py", line 357, in sync
+    delayed_store = chunkmanager.store(
+                    ^^^^^^^^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/namedarray/daskmanager.py", line 247, in store
+    return store(
+           ^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/dask/array/core.py", line 1253, in store
+    compute_as_if_collection(Array, store_dsk, map_keys, **kwargs)
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/dask/base.py", line 399, in compute_as_if_collection
+    return schedule(dsk2, keys, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/distributed/client.py", line 3492, in get
+    results = self.gather(packed, asynchronous=asynchronous, direct=direct)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/distributed/client.py", line 2565, in gather
+    return self.sync(
+           ^^^^^^^^^^
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/core/indexing.py", line 575, in __array__
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/core/indexing.py", line 580, in get_duck_array
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/core/indexing.py", line 799, in get_duck_array
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/core/indexing.py", line 654, in get_duck_array
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/backends/zarr.py", line 224, in __getitem__
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/core/indexing.py", line 1023, in explicit_indexing_adapter
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/backends/zarr.py", line 214, in _getitem
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/array.py", line 2441, in __getitem__
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/_compat.py", line 43, in inner_f
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/array.py", line 2883, in get_orthogonal_selection
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/sync.py", line 163, in sync
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/sync.py", line 119, in _runner
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/array.py", line 1298, in _get_selection
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/codec_pipeline.py", line 464, in read
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/common.py", line 69, in concurrent_map
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/common.py", line 67, in run
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/codec_pipeline.py", line 251, in read_batch
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/codec_pipeline.py", line 207, in decode_partial_batch
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/abc/codec.py", line 198, in decode_partial
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/common.py", line 69, in concurrent_map
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/common.py", line 67, in run
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/codecs/sharding.py", line 513, in _decode_partial_single
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/storage/_common.py", line 124, in get
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/storage/_fsspec.py", line 233, in get
+  File "/opt/coiled/env/lib/python3.12/site-packages/fsspec/implementations/http.py", line 236, in _cat_file
+  File "/opt/coiled/env/lib/python3.12/site-packages/fsspec/implementations/http.py", line 219, in _raise_not_found_for_status
+  File "/opt/coiled/env/lib/python3.12/site-packages/aiohttp/client_reqrep.py", line 1161, in raise_for_status
+Exception: ClientResponseError(RequestInfo(url=URL('https://data.dynamical.org/noaa/gefs/forecast-35-day/latest.zarr/precipitation_surface/c/985/0/0/1/1'), method='GET', headers=<CIMultiDictProxy('Host': 'data.dynamical.org', 'Range': 'bytes=159727866-159913065', 'Accept': '*/*', 'Accept-Encoding': 'gzip, deflate, br', 'User-Agent': 'Python/3.12 aiohttp/3.11.18')>, real_url=URL('https://data.dynamical.org/noaa/gefs/forecast-35-day/latest.zarr/precipitation_surface/c/985/0/0/1/1')), (), status=500, message='Internal Server Error', headers=<CIMultiDictProxy('Date': 'Wed, 18 Jun 2025 22:03:30 GMT', 'Content-Type': 'text/html; charset=UTF-8', 'Content-Length': '4323', 'Connection': 'keep-alive', 'Report-To': '{"endpoints":[{"url":"https:\\/\\/a.nel.cloudflare.com\\/report\\/v4?s=zxM002LhPKiyHqde%2F44ZC76Q7hvPfIJLyfc237uD7tvDQLKKlZ6XU6MESuNHxoW8aLhIVOixJI04V3NEvApqO5G8y7Wzl3KqbKa%2BKR2jHr4oC9QTyQriqdFBWurWBhJqWDjZyMI%3D"}],"group":"cf-nel","max_age":604800}', 'Nel': '{"success_fraction":0,"report_to":"cf-nel","max_age":604800}', 'Vary': 'Accept-Encoding', 'X-Frame-Options': 'SAMEORIGIN', 'Referrer-Policy': 'same-origin', 'Cache-Control': 'private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0', 'Expires': 'Thu, 01 Jan 1970 00:00:01 GMT', 'Server': 'cloudflare', 'Cf-Ray': '951e13b9cc45ead3-ORD', 'alt-svc': 'h3=":443"; ma=86400', 'server-timing': 'cfL4;desc="?proto=TCP&rtt=26864&min_rtt=11325&rtt_var=4990&sent=130511&recv=4090&lost=0&retrans=50&sent_bytes=181483364&recv_bytes=201456&delivery_rate=4857430&cwnd=244&unsent_bytes=0&cid=fb736e6704229971&ts=177812&x=0"')>)

@@ -1,0 +1,23 @@
+/Users/joshuaadkins/rhiza/sheerwater-benchmarking/gefs_etl_https.py:11: UserWarning: The specified chunks separate the stored chunks along dimension "init_time" starting at index 1. This could degrade performance. Instead, consider rechunking after loading.
+  ds = xr.open_zarr(store,
+/Users/joshuaadkins/rhiza/sheerwater-benchmarking/gefs_etl_https.py:11: UserWarning: The specified chunks separate the stored chunks along dimension "lead_time" starting at index 64. This could degrade performance. Instead, consider rechunking after loading.
+  ds = xr.open_zarr(store,
+Traceback (most recent call last):
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/gefs_etl_https.py", line 72, in <module>
+    ds.to_zarr(store="gcs://sheerwater-datalake/tmp/gefs-35.zarr", mode='w', encoding=encoding, zarr_format=3, consolidated=False)
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/core/dataset.py", line 2291, in to_zarr
+    return to_zarr(  # type: ignore[call-overload,misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/backends/api.py", line 2245, in to_zarr
+    dump_to_store(dataset, zstore, writer, encoding=encoding)
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/backends/api.py", line 1975, in dump_to_store
+    store.store(variables, attrs, check_encoding, writer, unlimited_dims=unlimited_dims)
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/backends/zarr.py", line 990, in store
+    self.set_variables(
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/backends/zarr.py", line 1188, in set_variables
+    validate_grid_chunks_alignment(
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/backends/chunks.py", line 215, in validate_grid_chunks_alignment
+    raise ValueError(
+ValueError: Specified Zarr chunks encoding['chunks']=(5475,) for variable named 'expected_forecast_length' would overlap multiple Dask chunks. Check the chunk at position 1, which has a size of 1 on dimension 0. It is unaligned with backend chunks of size 5475 in region slice(None, None, None). Writing this array in parallel with Dask could lead to corrupted data. To resolve this issue, consider one of the following options: - Rechunk the array using `chunk()`. - Modify or delete `encoding['chunks']`. - Set `safe_chunks=False`. - Enable automatic chunks alignment with `align_chunks=True`.
+
+
