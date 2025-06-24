@@ -54,6 +54,11 @@ data "google_secret_manager_secret_version" "postgres_read_password" {
  secret   = "sheerwater-postgres-read-password"
 }
 
+# Gcloud secrets for Single sign on
+data "google_secret_manager_secret_version" "tahmo_influx_read_password" {
+ secret   = "tahmo-influx-read-password"
+}
+
 resource "postgresql_role" "read" {
   name = "read"
   password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
@@ -249,7 +254,7 @@ resource "grafana_organization" "tahmo" {
   admin_user   = "admin"
 
   lifecycle {
-    ignore_changes = [admins,]
+    ignore_changes = [admins, viewers, editors]
   }
 }
 
@@ -285,5 +290,30 @@ resource "grafana_data_source" "postgres_tahmo" {
 
   org_id = grafana_organization.tahmo.id
 }
+
+# Connect grafana to the read user with a datasource
+resource "grafana_data_source" "influx_tahmo" {
+  type                = "influxdb"
+  name                = "influx"
+  url                 = "https://heavy-d24620b1.influxcloud.net:8086"
+  basic_auth_enabled  = true
+  basic_auth_username = "RhizaResearch"
+  database_name       = "TAHMO"
+  
+  secure_json_data_encoded = jsonencode({
+    basicAuthPassword = "${data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data}"
+  })
+
+  json_data_encoded = jsonencode({
+    dbname = "TAHMO"
+    basicAuthPassword = "${data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data}"
+    authType          = "default"
+    query_language    = "SQL"
+  })
+
+  org_id = grafana_organization.tahmo.id
+}
+
+
 
 # Eventually create dashboards
