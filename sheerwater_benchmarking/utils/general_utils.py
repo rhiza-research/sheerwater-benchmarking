@@ -3,6 +3,10 @@ import matplotlib.pyplot as plt
 import gcsfs
 import numpy as np
 import xarray as xr
+import itertools
+import multiprocessing
+import tqdm
+import dask
 
 import plotly.graph_objects as go
 
@@ -122,3 +126,52 @@ def plot_ds_map(ds, sel=None, variable=None, zoom=3, center_lat=None, center_lon
 
     # Show the map
     fig.show()
+
+
+def run_in_parallel(func, iterable, parallelism, local_multiproc=False):
+    """Run a function in parallel with dask delayed.
+
+    Args:
+        func(callable): A function to call. Must take one of iterable as an argument.
+        iterable (iterable): Any iterable object to pass to func.
+        parallelism (int): Number of func(iterables) to run in parallel at a time.
+        local_multiproc (bool): If true run using multiprocessing pool instead of dask delayed batches.
+    """
+    iterable, copy = itertools.tee(iterable)
+    length = len(list(copy))
+    counter = 0
+    success_count = 0
+    failed = []
+    if parallelism <= 1:
+        for i, it in enumerate(iterable):
+            print(f"Running {i+1}/{length}")
+            out = func(it)
+            if out is not None:
+                success_count += 1
+            else:
+                failed.append(it)
+    else:
+        if local_multiproc:
+            with multiprocessing.Pool(parallelism) as p:
+                results = list(tqdm.tqdm(p.imap_unordered(func, iterable), total=length))
+                outputs = [result[0] for result in results]
+                for out in outputs:
+                    if out is not None:
+                        success_count += 1
+        else:
+            for it in itertools.batched(iterable, parallelism):
+                output = []
+                print(f"Running {counter+1}...{counter+parallelism}/{length}")
+                for i in it:
+                    out = dask.delayed(func)(i)
+                    if out is not None:
+                        success_count += 1
+                    else:
+                        failed.append(i)
+
+                    output.append(out)
+
+                dask.compute(output)
+                counter = counter + parallelism
+
+    print(f"{success_count}/{length} returned non-null values. Runs that failed: {failed}")
