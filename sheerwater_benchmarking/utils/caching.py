@@ -1332,38 +1332,33 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         #
                         # If `start_time` and `ds[time_col]` aren't in the same time zone, or if one
                         # is tz-aware and the other is tz-naive, we convert `start_time`. Same for
-                        # `end_time`. The control flow is a tad complex here to avoid either
-                        # clipping `ds` twice, or calling `ds[time_col].dt.tz.compute()`
-                        # unnecessarily.
+                        # `end_time`.
 
-                        time_col_tz = "_" # A sentinel value that's not None
-                        if start_time is not None:
-                            try:
+                        try:
+                            if start_time is not None:
                                 ds = ds[ds[time_col] >= start_time]
-                            except TypeError:
-                                # Get ds's time zone.
-                                time_col_tz = ds[time_col].dt.tz.compute()
+                            if end_time is not None:
+                                ds = ds[ds[time_col] <= end_time]
 
+                        except TypeError:
+                            time_col_tz = ds[time_col].dt.tz.compute()
+
+                            if start_time is not None:
+                                start_time = pd.Timestamp(start_time)
                                 if start_time.tz is None:
                                     start_time = start_time.tz_localize(time_col_tz)
                                 else:
                                     start_time = start_time.tz_convert(time_col_tz)
-
                                 ds = ds[ds[time_col] >= start_time]
-                        if end_time is not None:
-                            try:
-                                ds = ds[ds[time_col] <= end_time]
-                            except TypeError:
-                                # Get ds's time zone, only if we didn't already.
-                                if time_col_tz == "_":
-                                    time_col_tz = ds[time_col].dt.tz.compute()
 
+                            if end_time is not None:
+                                end_time = pd.Timestamp(end_time)
                                 if end_time.tz is None:
                                     end_time = end_time.tz_localize(time_col_tz)
                                 else:
                                     end_time = end_time.tz_convert(time_col_tz)
-
                                 ds = ds[ds[time_col] <= end_time]
+
 
                 return ds
 
