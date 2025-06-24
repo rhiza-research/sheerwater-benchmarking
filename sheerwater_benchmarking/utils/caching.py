@@ -333,36 +333,6 @@ def read_from_parquet(cache_path):
     return dd.read_parquet(cache_path, engine='pyarrow', ignore_metadata_file=True)
 
 
-def get_pyarrow_schema(df):
-    """Get pyarrow schema from basic types."""
-    slist = []
-    for name in df.columns:
-        if is_numeric(df[name].dtype):
-            slist.append((name,pa.float64()))
-        elif is_datetime(df[name].dtype):
-            slist.append((name,pa.timestamp('ns', tz='UTC')))
-        elif is_string(df[name].dtype):
-            slist.append((name,pa.large_string()))
-        else:
-            raise ValueError(f"Unknown dtype for {name} {df[name].dtype}")
-
-    return pa.schema(slist)
-
-
-def append_parquet_helper(df, path, partition_on=None):
-    """Helper to append to parquets."""
-    df.to_parquet(
-        path,
-        overwrite=False,
-        append=True,
-        partition_on=partition_on,
-        engine="pyarrow",
-        write_metadata_file=None,
-        write_index=False,
-        schema=get_pyarrow_schema(df),
-    )
-
-
 def write_parquet_helper(df, path, partition_on=None):
     """Helper to write parquets."""
     df.to_parquet(
@@ -374,17 +344,6 @@ def write_parquet_helper(df, path, partition_on=None):
         write_index=False,
     )
 
-def rewrite_parquet(original_path, new_path, partition_on=None, strip_timezone=False):
-    """Rewrites parquets given a path and new location."""
-    cp_df = dd.read_parquet(original_path, engine='pyarrow', ignore_metadata_file=True)
-
-    if strip_timezone:
-        for key in cp_df.columns:
-            if is_datetime(cp_df[key].dtype):
-                cp_df[key] = cp_df[key].dt.tz_localize(None)
-                cp_df[key] = dd.to_datetime(cp_df[key], utc=False)
-
-    write_parquet_helper(cp_df, new_path, partition_on)
 
 def write_to_parquet(df, cache_path, verify_path, upsert=False, primary_keys=None):
     """Write a pandas or dask dataframe to a parquet."""
@@ -446,34 +405,7 @@ def write_to_parquet(df, cache_path, verify_path, upsert=False, primary_keys=Non
             if fs.exists(temp_cache_path):
                 fs.rm(temp_cache_path, recursive=True)
 
-            # Is the cache path a file instead of a directory? It realy
-            # needs to be a directory so make it one
-            #if fs.info(cache_path)['type'] == 'file':
-            #    print("Parquet stored as root file. Transitioning to directory for append.")
-            #    rewrite_parquet(cache_path, temp_cache_path, part)
-            #else:
-            #    fs.cp(cache_path, temp_cache_path, recursive=True)
-
-            # write in append mode
-            #print("Appending new rows to temp parquet.")
-            #try:
-            #    append_parquet_helper(new_rows, temp_cache_path)
-            #except ValueError as e:
-            #    if '__null_dask_index__' in str(e) or 'Appended dtypes differ' in str(e):
-            #        # We get this when the dataset was written with index True
-            #        # To solve this we need to (1) fully rewrite not just copy the dataset to temp
-            #        # Then append the rows to the new dataset
-
-            #        print("Rewriting parquet due to incompatible write type.")
-            #        rewrite_parquet(cache_path, temp_cache_path, part, strip_timezone=True)
-            #        print(new_rows.dtypes)
-            #        exists = read_from_parquet(temp_cache_path)
-            #        print(exists.dtypes)
-            #        append_parquet_helper(new_rows, temp_cache_path, part)
-            #    else:
-            #        raise e
             write_parquet_helper(final_df, temp_cache_path, part)
-
             print("Successfully appended rows to temp parquet. Overwriting existing cache.")
 
             if fs.exists(verify_path):
@@ -688,6 +620,7 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
             # For the ON CONFLICT clause, postgres requires that the columns have unique constraint
             # To add if not exists must drop if exists and then add. In a transaction this is consistent
 
+            # Constraint IDs need to be globally unique to not conflict in the database
             constraint_id =  hashlib.md5(table_name.encode()).hexdigest()[:10]
             query_pk = f"""
             ALTER TABLE "{new_table_name}" DROP CONSTRAINT IF EXISTS unique_constraint_for_{constraint_id} CASCADE;
