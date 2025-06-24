@@ -971,7 +971,13 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
             # Set up cached computation
             ds = None
             compute_result = True
-            fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
+
+            # We must use the null path for postgres because the cache path doesn't have gs://
+            if backend == 'postgres':
+                fs = fsspec.core.url_to_fs(null_path, **CACHE_STORAGE_OPTIONS)[0]
+            else:
+                fs = fsspec.core.url_to_fs(cache_path, **CACHE_STORAGE_OPTIONS)[0]
+
             cache_map = fs.get_mapper(cache_path)
 
             # First remove null caches if retry null cache is passed
