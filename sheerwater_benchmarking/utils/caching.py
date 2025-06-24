@@ -1325,14 +1325,45 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                     time_col = match_time[0]
 
-                    # Assign start and end times if None are passed
                     if data_type == 'array' and isinstance(ds, xr.Dataset):
                         ds = ds.sel({time_col: slice(start_time, end_time)})
                     elif data_type == 'tabular' and (isinstance(ds, pd.DataFrame) or isinstance(ds, dd.DataFrame)):
+                        # Clip to start and end times.
+                        #
+                        # If `start_time` and `ds[time_col]` aren't in the same time zone, or if one
+                        # is tz-aware and the other is tz-naive, we convert `start_time`. Same for
+                        # `end_time`. The control flow is a tad complex here to avoid either
+                        # clipping `ds` twice, or calling `ds[time_col].dt.tz.compute()`
+                        # unnecessarily.
+
+                        time_col_tz = "_" # A sentinel value that's not None
                         if start_time is not None:
-                            ds = ds[ds[time_col] >= start_time]
+                            try:
+                                ds = ds[ds[time_col] >= start_time]
+                            except TypeError:
+                                # Get ds's time zone.
+                                time_col_tz = ds[time_col].dt.tz.compute()
+
+                                if start_time.tz is None:
+                                    start_time = start_time.tz_localize(time_col_tz)
+                                else:
+                                    start_time = start_time.tz_convert(time_col_tz)
+
+                                ds = ds[ds[time_col] >= start_time]
                         if end_time is not None:
-                            ds = ds[ds[time_col] <= end_time]
+                            try:
+                                ds = ds[ds[time_col] <= end_time]
+                            except TypeError:
+                                # Get ds's time zone, only if we didn't already.
+                                if time_col_tz == "_":
+                                    time_col_tz = ds[time_col].dt.tz.compute()
+
+                                if end_time.tz is None:
+                                    end_time = end_time.tz_localize(time_col_tz)
+                                else:
+                                    end_time = end_time.tz_convert(time_col_tz)
+
+                                ds = ds[ds[time_col] <= end_time]
 
                 return ds
 
