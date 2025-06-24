@@ -334,6 +334,7 @@ def read_from_parquet(cache_path):
 
 
 def get_pyarrow_schema(df):
+    """Get pyarrow schema from basic types."""
     slist = []
     for name in df.columns:
         if is_numeric(df[name].dtype):
