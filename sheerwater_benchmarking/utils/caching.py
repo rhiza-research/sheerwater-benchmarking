@@ -19,11 +19,8 @@ import sqlalchemy
 import pickle
 
 import numpy as np
-import pyarrow as pa
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
-from pandas.api.types import is_numeric_dtype as is_numeric
-from pandas.api.types import is_string_dtype as is_string
 import dask.dataframe as dd
 import xarray as xr
 
