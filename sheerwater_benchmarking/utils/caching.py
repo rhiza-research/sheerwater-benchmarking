@@ -1333,6 +1333,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                         # If `start_time` and `ds[time_col]` aren't in the same time zone, or if one
                         # is tz-aware and the other is tz-naive, we convert `start_time`. Same for
                         # `end_time`.
+                        #
+                        # Do this only if needed, because getting the data's time zone requires a
+                        # compute().
 
                         try:
                             if start_time is not None:

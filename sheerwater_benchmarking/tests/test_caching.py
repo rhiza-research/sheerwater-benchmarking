@@ -135,7 +135,7 @@ def test_tabular_timeseries():
     start_time = '2020-01-01'
     end_time = '2020-01-10'
 
-    ds1 = tabular_timeseries(start_time, end_time, recompute=True, force_overwrite=True, backend="parquet")
+    ds1 = tabular_timeseries(start_time, end_time, recompute=True, force_overwrite=True)
 
     end_time = '2020-01-15'
     # Without validate_cache_timeseries, this should return only the original 10 days (and the same values, not
@@ -147,6 +147,31 @@ def test_tabular_timeseries():
     end_time = '2020-01-07'
     ds3 = tabular_timeseries(start_time, end_time)
     assert len(ds3) < len(ds1)
+
+
+def test_timeseries_time_zone_disagreement():
+    """Test timeseries caching when start_ or end_time and the timeseries don't share a time zone."""
+
+    # Test TZ-naive timeseries, TZ-aware start and end.
+    start_time = '2020-01-01'
+    end_time = '2020-01-10'
+    tabular_timeseries(start_time, end_time, recompute=True, force_overwrite=True)
+
+    start_time = '2020-01-01 00:00+00'
+    end_time = '2020-01-10 00:00+00'
+    tabular_timeseries(start_time, end_time)
+
+    # Test TZ-aware timeseries, TZ-naive start and end.
+    tabular_timeseries(start_time, end_time, recompute=True, force_overwrite=True)
+
+    start_time = '2020-01-01'
+    end_time = '2020-01-10'
+    tabular_timeseries(start_time, end_time)
+
+    # Test both TZ-aware, but different time zones.
+    start_time = '2020-01-01 00:00+04'
+    end_time = '2020-01-10 00:00+04'
+    tabular_timeseries(start_time, end_time)
 
 
 def test_cache_disable_if():
@@ -332,5 +357,6 @@ if __name__ == "__main__":
     test_null_time_caching()
     test_validate_timeseries()
     test_tabular_timeseries()
+    test_timeseries_time_zone_disagreement()
     test_cache_disable_if()
     test_cache_arg_scope()
