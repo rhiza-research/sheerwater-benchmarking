@@ -151,7 +151,6 @@ def test_tabular_timeseries():
 
 def test_timeseries_time_zone_disagreement():
     """Test timeseries caching when start_ or end_time and the timeseries don't share a time zone."""
-
     # Test TZ-naive timeseries, TZ-aware start and end.
     start_time = '2020-01-01'
     end_time = '2020-01-10'
