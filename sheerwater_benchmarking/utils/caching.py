@@ -1344,7 +1344,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 ds = ds[ds[time_col] <= end_time]
 
                         except TypeError as e:
-                            if "Invalid comparison" not in e:
+                            if "Invalid comparison" not in str(e):
                                 raise e
 
                             time_col_tz = ds[time_col].dt.tz.compute()
