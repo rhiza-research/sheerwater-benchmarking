@@ -15,3 +15,7 @@ spec:
   selector:
     app: {{ include "sheerwater-benchmarking.name" . }}-timescale
     release: {{ .Release.Name }}
+  {{- if .Values.timescale.externalIP }}
+  type: LoadBalancer
+  loadBalancerIP: {{ .Values.timescale.externalIP }}
+  {{ end }}

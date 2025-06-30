@@ -73,6 +73,39 @@ resource postgresql_grant "readonly_public" {
   privileges  = ["SELECT"]
 }
 
+# Create postgres users and grant them permissions
+resource "random_password" "postgres_tahmo_password" {
+  length           = 16
+  special          = true
+}
+
+resource "google_secret_manager_secret" "postgres_tahmo_password" {
+  secret_id = "sheerwater-postgres-tahmo-password"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "postgres_tahmo_password" {
+  secret = google_secret_manager_secret.postgres_tahmo_password.id
+  secret_data = random_password.postgres_tahmo_password.result
+}
+
+resource "postgresql_role" "tahmo" {
+  name = "tahmo"
+  password = "${google_secret_manager_secret_version.postgres_tahmo_password.secret_data}"
+  login = true
+}
+
+resource postgresql_grant "tahmo_read" {
+  database    = "postgres"
+  role        = postgresql_role.tahmo.name
+  schema      = "public"
+  object_type = "table"
+  privileges  = ["SELECT"]
+}
+
+
 resource postgresql_grant "readonly_public_terracotta" {
   database    = "terracotta"
   role        = postgresql_role.read.name
@@ -250,7 +283,7 @@ resource "grafana_data_source" "postgres" {
 }
 
 resource "grafana_organization" "tahmo" {
-  name         = "Tahmo"
+  name         = "TAHMO"
   admin_user   = "admin"
 
   lifecycle {

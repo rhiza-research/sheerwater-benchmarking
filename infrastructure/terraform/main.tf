@@ -300,6 +300,22 @@ resource "google_dns_record_set" "terracotta_recordset" {
   ttl = 300
 }
 
+# Create a regional IP Address
+resource "google_compute_address" "postgres_address" {
+  name = "sheerwater-benchmarking-postgres-address"
+  project = "rhiza-shared"
+  region = "us-central1"
+}
+
+# Set a DNS record for that IP Address
+resource "google_dns_record_set" "resource-recordset" {
+  managed_zone = "sheerwater"
+  name         = "postgres.sheerwater.rhizaresearch.org."
+  type         = "A"
+  rrdatas = [google_compute_address.postgres_address.address]
+  ttl          = 300
+}
+
 
 
 ################
@@ -353,6 +369,10 @@ resource "helm_release" "sheerwater_benchmarking" {
   set {
     name = "timescale.pv.size"
     value = google_compute_disk.sheerwater_benchmarking_timescaledb_ssd.size
+  }
+  set {
+    name = "timescale.externalIP"
+    value = google_compute_address.postgres_address.address
   }
   set_sensitive {
     name = "timescale.admin_password"
