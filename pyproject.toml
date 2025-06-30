@@ -99,6 +99,7 @@ dependencies = [
     "dask_deltatable",
     "minio",
     "huggingface_hub",
+    "pyzstd==0.16.2",
     "py7zr",
     "tqdm",
     "numcodecs<0.16.0"
