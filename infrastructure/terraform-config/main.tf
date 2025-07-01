@@ -141,6 +141,15 @@ resource "postgresql_default_privileges" "read_only_default" {
   privileges  = ["SELECT"]
 }
 
+resource "postgresql_default_privileges" "tahmo_default" {
+  database = "postgres"
+  role        = postgresql_role.tahmo.name
+  schema   = "public"
+  owner       = "write"
+  object_type = "table"
+  privileges  = ["SELECT"]
+}
+
 resource "postgresql_default_privileges" "read_only_default_terracotta" {
   database = "terracotta"
   role        = postgresql_role.read.name
