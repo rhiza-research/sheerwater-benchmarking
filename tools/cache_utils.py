@@ -63,11 +63,11 @@ def cache_list(backend, name, glob):
     """List all the caches that match the given name and glob pattern.
 
     Args:
-        backend (str): The backend to use. One of: 'zarr', 'delta', 'pickle', 'terracotta', 'postgres'.
+        backend (str): The backend to use. One of: 'zarr', 'delta', 'pkl', 'terracotta', 'postgres'.
         name (str): The name of the cache.
         glob (str): The glob pattern to search for.
     """
-    if backend in ['zarr', 'delta', 'pickle', 'parquet']:
+    if backend in ['zarr', 'delta', 'pkl', 'parquet']:
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
         name = name.rstrip('/')
@@ -130,7 +130,7 @@ def cache_delete(backend, name, glob):
     """Delete all the caches that match the given name and glob pattern.
 
     Args:
-        backend (str): The backend to use. One of: 'zarr', 'delta', 'pickle', 'terracotta', 'postgres'.
+        backend (str): The backend to use. One of: 'zarr', 'delta', 'pkl', 'terracotta', 'postgres'.
         name (str): The name of the cache.
         glob (str): The glob pattern to search for.
     """
@@ -145,7 +145,7 @@ def _gui_cache_delete(to_delete, backend):
         click.echo("No files to delete.")
         return
 
-    if backend in ['zarr', 'delta', 'pickle']:
+    if backend in ['zarr', 'delta', 'pkl']:
         fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
 
         click.echo(to_delete)
@@ -206,7 +206,7 @@ def cache_verify(backend, name, glob):
     """Delete all the caches that match the given name and glob pattern.
 
     Args:
-        backend (str): The backend to use. One of: 'zarr', 'delta', 'pickle', 'terracotta', 'postgres'.
+        backend (str): The backend to use. One of: 'zarr', 'delta', 'pkl', 'terracotta', 'postgres'.
         name (str): The name of the cache.
         glob (str): The glob pattern to search for.
     """
@@ -255,7 +255,7 @@ def internal_rename(f, backend, old_name, new_name):
     if backend == 'postgres':
         rename_to = f.replace(old_name, new_name)
         rename_postgres(f, rename_to)
-    elif backend in ['zarr', 'parquet', 'delta', 'pickle']:
+    elif backend in ['zarr', 'parquet', 'delta', 'pkl']:
         end = f.split('.')[-1]
         if end == backend:
             rename_to = f.replace(old_name, new_name)
@@ -267,7 +267,7 @@ def cache_rename(backend, old_name, new_name, glob, parallel):
     """Delete all the caches that match the given name and glob pattern.
 
     Args:
-        backend (str): The backend to use. One of: 'zarr', 'delta', 'pickle', 'terracotta', 'postgres'.
+        backend (str): The backend to use. One of: 'zarr', 'delta', 'pkl', 'terracotta', 'postgres'.
         name (str): The name of the cache.
         glob (str): The glob pattern to search for.
     """

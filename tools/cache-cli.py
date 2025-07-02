@@ -11,7 +11,7 @@ def cache():
 
 @cache.command()
 @click.option('--backend', '-b',
-              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle', 'parquet']),
+              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pkl', 'parquet']),
               default='zarr',
               help="The backend to find the cache")
 @click.option('--name', '-n', type=str,
@@ -27,7 +27,7 @@ def delete(backend, name, glob):
 
 @cache.command()
 @click.option('--backend', '-b',
-              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle', 'parquet']),
+              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pkl', 'parquet']),
               default='zarr',
               help="The backend to find the cache")
 @click.option('--name', '-n', type=str,
@@ -47,7 +47,7 @@ def list(backend, name, glob):
 
 @cache.command()
 @click.option('--backend', '-b',
-              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle', 'parquet']),
+              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pkl', 'parquet']),
               default='zarr',
               help="The backend to find the cache")
 @click.option('--name', '-n', type=str,
@@ -64,7 +64,7 @@ def verify(backend, name, glob):
 
 @cache.command()
 @click.option('--backend', '-b',
-              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pickle', 'parquet']),
+              type=click.Choice(['zarr', 'delta', 'postgres', 'terracotta', 'pkl', 'parquet']),
               required=True,
               help="The backend to find the cache")
 @click.option('--old-name', '-n', type=str,
