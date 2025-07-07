@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ephemeral-grafana.fullname" . }}-config
+  labels:
+    {{- include "ephemeral-grafana.labels" . | nindent 4 }}
+data:
+  grafana.ini: |
+    [server]
+    root_url = {{ .Values.grafana.config.server.root_url }}
+
+    [auth.anonymous]
+    enabled = {{ .Values.grafana.config.auth.anonymous.enabled }}
+    org_role = {{ .Values.grafana.config.auth.anonymous.org_role }} 
