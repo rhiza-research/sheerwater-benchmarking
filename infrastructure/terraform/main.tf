@@ -316,6 +316,20 @@ resource "google_dns_record_set" "resource-recordset" {
   ttl          = 300
 }
 
+# TODO: move this to the infrastructure repo to be the with rest of the argocd resources
+resource "google_compute_global_address" "argocd_address" {
+  name = "sheerwater-benchmarking-argocd-address"
+  project = "rhiza-shared"
+}
+
+resource "google_dns_record_set" "argocd_recordset" {
+  managed_zone = "sheerwater"
+  name = "argocd.sheerwater.rhizaresearch.org."
+  type = "A"
+  rrdatas = [google_compute_global_address.argocd_address.address]
+  ttl = 300
+}
+
 
 
 ################
