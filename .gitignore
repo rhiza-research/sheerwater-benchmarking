@@ -183,3 +183,6 @@ scratch
 tahmo_scripts
 salient_scripts
 ./data
+
+# grafana config
+config.yaml
