@@ -1,0 +1,132 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ .Values.applicationSet.name }}
+  namespace: {{ .Values.applicationSet.namespace }}
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - pullRequest:
+      github:
+        owner: {{ .Values.github.org | quote }}
+        repo: {{ .Values.github.repo | quote }}
+        tokenRef:
+          secretName: {{ .Values.github.tokenSecret.name }}
+          key: {{ .Values.github.tokenSecret.key }}
+        labels:
+        - "PR-env"
+        {{- if and .Values.webhook.enabled .Values.webhook.secret.create }}
+        webhookSecret:
+          secretName: {{ .Values.webhook.secret.name }}
+          key: {{ .Values.webhook.secret.key }}
+        {{- end }}
+      {{- if .Values.applicationSet.pollingInterval }}
+      # Configure polling interval (optional - webhook recommended)
+      requeueAfterSeconds: {{ .Values.applicationSet.pollingInterval }}
+      {{- end }}
+      # Pass additional values
+      values:
+        branch_name: '{{ "{{" }} .branch | replace "/" "-" | replace "." "-" | lower {{ "}}" }}'
+        pr_number: '{{ "{{" }} .number {{ "}}" }}'
+        pr_title: '{{ "{{" }} .title {{ "}}" }}'
+        pr_author: '{{ "{{" }} .author {{ "}}" }}'
+        domain: {{ .Values.domain | quote }}
+  template:
+    metadata:
+      name: 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}-{{ "{{" }} .values.branch_name {{ "}}" }}'
+      {{- if .Values.notifications.enabled }}
+      annotations:
+        {{- range $key, $value := .Values.notifications.annotations }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+      {{- end }}
+      labels:
+        app.kubernetes.io/name: ephemeral-grafana
+        app.kubernetes.io/instance: 'pr-{{ "{{" }} .values.pr_number {{ "}}" }}'
+        pr.number: '{{ "{{" }} .values.pr_number {{ "}}" }}'
+        pr.branch: '{{ "{{" }} .values.branch_name {{ "}}" }}'
+    spec:
+      project: {{ .Values.project }}
+      source:
+        # Point to the separate Grafana repository
+        repoURL: 'https://github.com/{{ .Values.github.org }}/{{ .Values.github.repo }}.git'
+        {{- if .Values.github.chartBranch }}
+        targetRevision: {{ .Values.github.chartBranch | quote }}
+        {{- else }}
+        targetRevision: '{{ "{{" }} .branch {{ "}}" }}'
+        {{- end }}
+        path: charts/ephemeral-grafana
+        helm:
+          # Infrastructure-specific overrides only
+          # All Grafana application config comes from the PR's own chart
+          values: |
+            fullnameOverride: 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}'
+            
+            # Infrastructure overrides for PR-specific deployment
+            # Set Grafana root_url to match the PR-specific hostname
+            grafana:
+              config:
+                server:
+                  root_url: 'https://grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}.{{ "{{" }} .values.domain {{ "}}" }}'
+                  serve_from_sub_path: false
+            
+            {{- if .Values.ephemeral.ingress.enabled }}
+            ingress:
+              enabled: true
+              {{- if .Values.ephemeral.ingress.className }}
+              className: {{ .Values.ephemeral.ingress.className | quote }}
+              {{- end }}
+              {{- if .Values.ephemeral.ingress.annotations }}
+              annotations:
+                {{- toYaml .Values.ephemeral.ingress.annotations | nindent 16 }}
+              {{- end }}
+              hosts:
+                - host: 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}.{{ "{{" }} .values.domain {{ "}}" }}'
+                  paths:
+                    - path: /
+                      pathType: Prefix
+              {{- if .Values.ephemeral.ingress.tls.enabled }}
+              tls:
+                - secretName: 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}-tls'
+                  hosts:
+                    - 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}.{{ "{{" }} .values.domain {{ "}}" }}'
+              {{- end }}
+            {{- end }}
+            
+            # Resource limits for ephemeral instances
+            resources:
+              {{- toYaml .Values.ephemeral.resources | nindent 14 }}
+            
+            # Add labels to identify this as a PR deployment
+            podLabels:
+              pr.number: '{{ "{{" }} .values.pr_number {{ "}}" }}'
+              pr.branch: '{{ "{{" }} .values.branch_name {{ "}}" }}'
+              pr.author: '{{ "{{" }} .values.pr_author {{ "}}" }}'
+              ephemeral: "true"
+              
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}'
+      
+      # Sync policy
+      syncPolicy:
+        {{- toYaml .Values.syncPolicy | nindent 8 }}
+            
+      # Ignore differences in certain fields
+      ignoreDifferences:
+      - group: apps
+        kind: Deployment
+        jsonPointers:
+        - /spec/replicas
+        
+  # Sync strategy for better performance
+  strategy:
+    type: RollingSync
+    rollingSync:
+      steps:
+      - matchExpressions:
+        - key: app.kubernetes.io/name
+          operator: In
+          values:
+          - ephemeral-grafana 
