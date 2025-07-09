@@ -1,14 +1,4 @@
 
-# get the "helm_release" "argocd" and "kubernetes_namespace" "argocd"  managed resources from state
-data "terraform_remote_state" "shared_state" {
-  backend = "gcs"
-  config = {
-    bucket = "rhiza-terraform-state"
-    prefix = "state"
-  }
-}
-
-
 # get github_token from kubernetes_secret
 data "kubernetes_secret" "github_token" {
   metadata {
