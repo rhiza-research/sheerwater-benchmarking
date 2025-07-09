@@ -16,6 +16,8 @@ data "kubernetes_secret" "github_token" {
   }
 }
 
+# TODO: setup grafana_domain dns record
+
 # Install ApplicationSet for ephemeral Grafana
 resource "helm_release" "grafana_applicationset" {
   depends_on = [data.terraform_remote_state.shared_state, data.kubernetes_secret.github_token]
