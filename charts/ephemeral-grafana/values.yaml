@@ -12,6 +12,14 @@ service:
   type: ClusterIP
   port: 3000
 
+# Ingress configuration (overridden by ApplicationSet)
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
 # Grafana application configuration
 grafana:
   config:
