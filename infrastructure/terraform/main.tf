@@ -319,8 +319,9 @@ resource "google_compute_address" "postgres_address" {
 
 # Set a DNS record for that IP Address
 resource "google_dns_record_set" "resource-recordset" {
-  managed_zone = "sheerwater"
-  name         = "postgres.sheerwater.rhizaresearch.org."
+  project      = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_project
+  managed_zone = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_name
+  name         = "postgres.${data.terraform_remote_state.shared_state.outputs.sheerwater_dns_dns_name}"
   type         = "A"
   rrdatas = [google_compute_address.postgres_address.address]
   ttl          = 300
