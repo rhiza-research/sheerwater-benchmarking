@@ -1,0 +1,35 @@
+# Default values for ephemeral-grafana.
+# Simplified configuration for single-use ephemeral instances.
+
+# Container image configuration
+image:
+  repository: grafana/grafana
+  pullPolicy: IfNotPresent
+  # Uses the chart appVersion as the image tag (single source of truth)
+
+# Service configuration  
+service:
+  type: ClusterIP
+  port: 3000
+
+# Ingress configuration (overridden by ApplicationSet)
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+# Grafana application configuration
+grafana:
+  config:
+    server:
+      # NOTE: this value is overwritten by the argocd application set with the PR based url.
+      root_url: http://localhost:3000
+    auth:
+      # TODO: configure github auth for the ephemeral grafana instances
+      anonymous:
+        enabled: true
+        org_role: Admin
+
+
