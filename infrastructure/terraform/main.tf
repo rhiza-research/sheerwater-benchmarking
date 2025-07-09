@@ -24,6 +24,14 @@ terraform {
 
 }
 
+data "terraform_remote_state" "shared_state" {
+  backend = "gcs"
+  config = {
+    bucket = "rhiza-terraform-state"
+    prefix = "state"
+  }
+}
+
 provider "google" {
   project = "sheerwater"
 }
@@ -279,8 +287,9 @@ resource "google_compute_global_address" "grafana_address" {
 }
 
 resource "google_dns_record_set" "grafana_recordset" {
-  managed_zone = "sheerwater"
-  name = "benchmarks.sheerwater.rhizaresearch.org."
+  project      = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_project
+  managed_zone = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_name
+  name         = "benchmarks.${data.terraform_remote_state.shared_state.outputs.sheerwater_dns_dns_name}"
   type = "A"
   rrdatas = [google_compute_global_address.grafana_address.address]
   ttl = 300
@@ -293,8 +302,9 @@ resource "google_compute_global_address" "terracotta_address" {
 }
 
 resource "google_dns_record_set" "terracotta_recordset" {
-  managed_zone = "sheerwater"
-  name = "terracotta.sheerwater.rhizaresearch.org."
+  project      = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_project
+  managed_zone = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_name
+  name         = "terracotta.${data.terraform_remote_state.shared_state.outputs.sheerwater_dns_dns_name}"
   type = "A"
   rrdatas = [google_compute_global_address.terracotta_address.address]
   ttl = 300
