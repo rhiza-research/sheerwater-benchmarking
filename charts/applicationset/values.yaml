@@ -1,0 +1,132 @@
+# Default values for ephemeral-grafana-applicationset
+# This configures the Argo CD ApplicationSet that manages ephemeral Grafana instances
+
+# GitHub repository configuration
+github:
+  # GitHub organization or user name
+  org: "rhiza-research"
+  
+  # Repository name (this should be the Grafana repository, not the infrastructure repo)
+  repo: "sheerwater-benchmarking"
+  
+  # Branch to use for helm chart (set to null to use PR branch)
+  chartBranch: null  # Set to "main", "develop", etc. to use a specific branch
+  
+  # GitHub token secret reference
+  tokenSecret:
+    name: "github-token"
+    key: "token"
+
+# Domain configuration
+domain: "dev.sheerwater.rhizaresearch.org"
+
+# ApplicationSet configuration
+applicationSet:
+  # Name of the ApplicationSet
+  name: "ephemeral-grafana"
+  
+  # Namespace where ApplicationSet will be created
+  namespace: "argocd"
+  
+  # Polling interval for checking PRs (in seconds)
+  # Set to 0 to disable polling (webhook recommended)
+  pollingInterval: 300  # 5 minutes
+
+# Infrastructure overrides for ephemeral instances
+# These are infrastructure concerns that the ApplicationSet needs to manage
+ephemeral:
+  # Ingress configuration for PR-specific hostnames
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls:
+      enabled: true
+  
+  # Resource limits for ephemeral instances
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+# ApplicationSet sync policy
+syncPolicy:
+  automated:
+    prune: true
+    selfHeal: true
+  syncOptions:
+    - CreateNamespace=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+  retry:
+    limit: 5
+    backoff:
+      duration: 5s
+      factor: 2
+      maxDuration: 3m
+
+# Argo CD project to use
+project: "default"
+
+# Webhook configuration (disabled by default)
+webhook:
+  # Enable webhook ingress for real-time PR detection
+  enabled: false
+  
+  # Webhook ingress configuration
+  name: "argocd-applicationset-webhook"
+  host: "argocd-webhook.dev.sheerwater.rhizaresearch.org"
+  ingressClassName: "nginx"
+  
+  # Ingress annotations
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  
+  # TLS configuration
+  tls:
+    enabled: true
+    secretName: "argocd-webhook-tls"
+  
+  # Webhook secret (optional but recommended for security)
+  secret:
+    create: false
+    name: "webhook-secret"
+    key: "webhook.github.secret"
+    value: ""
+
+# Notification configuration for PR comments
+notifications:
+  # Enable notifications (requires GitHub App configuration)
+  enabled: false
+  
+  # Create the notifications ConfigMap
+  createConfig: false
+  
+  # GitHub App configuration (preferred method)
+  github:
+    authType: "app"
+    
+    # GitHub App settings 
+    app:
+      appID: ""
+      installationID: ""
+      privateKeySecret:
+        name: "argocd-notifications-secret"
+        key: "github-privateKey"
+  
+  # Annotations to add to ApplicationSet template  
+  annotations:
+    "notifications.argoproj.io/subscribe.on-deployed.github": ""
+    "notifications.argoproj.io/subscribe.on-deleted.github": ""
+  
+  # Customize notification templates (optional)
+  templates:
+    deployedMessage: ""
+    deletedMessage: "" 
