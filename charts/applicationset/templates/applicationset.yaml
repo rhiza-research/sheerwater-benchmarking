@@ -79,7 +79,11 @@ spec:
               {{- end }}
               {{- if .Values.ephemeral.ingress.annotations }}
               annotations:
-                {{- toYaml .Values.ephemeral.ingress.annotations | nindent 16 }}
+                {{- range $key, $value := .Values.ephemeral.ingress.annotations }}
+                {{- if ne $key "cert-manager.io/cluster-issuer" }}
+                {{ $key }}: {{ $value | quote }}
+                {{- end }}
+                {{- end }}
               {{- end }}
               hosts:
                 - host: 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}.{{ "{{" }} .values.domain {{ "}}" }}'
@@ -88,7 +92,7 @@ spec:
                       pathType: Prefix
               {{- if .Values.ephemeral.ingress.tls.enabled }}
               tls:
-                - secretName: 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}-tls'
+                - secretName: 'wildcard-dev-sheerwater-tls'
                   hosts:
                     - 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}.{{ "{{" }} .values.domain {{ "}}" }}'
               {{- end }}
