@@ -18,6 +18,11 @@ data "kubernetes_secret" "github_token" {
 
 # TODO: setup grafana_domain dns record
 
+
+resource "terraform_data" "argocd_helm_release_updated" {
+  input = data.terraform_remote_state.shared_state.outputs.argocd_helm_release
+}
+
 # Install ApplicationSet for ephemeral Grafana
 resource "helm_release" "grafana_applicationset" {
   depends_on = [data.terraform_remote_state.shared_state, data.kubernetes_secret.github_token]
@@ -25,6 +30,10 @@ resource "helm_release" "grafana_applicationset" {
   name      = "grafana-applicationset"
   chart     = "../../charts/applicationset"
   namespace = data.terraform_remote_state.shared_state.outputs.argocd_namespace
+
+  lifecycle {
+    replace_triggered_by = [terraform_data.argocd_helm_release_updated]
+  }
 
   values = [
     yamlencode({
