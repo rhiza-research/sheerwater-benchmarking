@@ -6,9 +6,6 @@ data "kubernetes_secret" "github_token" {
   }
 }
 
-# TODO: setup grafana_domain dns record
-
-
 resource "terraform_data" "argocd_helm_release_updated" {
   input = data.terraform_remote_state.shared_state.outputs.argocd_helm_release
 }
@@ -30,14 +27,14 @@ resource "helm_release" "grafana_applicationset" {
       github = {
         org  = "rhiza-research"
         repo = "sheerwater-benchmarking"
-        chartBranch = var.grafana_chart_branch  # Set to "main", "develop", etc. to use a specific branch
         tokenSecret = {
           name = data.kubernetes_secret.github_token.metadata[0].name
           key  = "token"
         }
       }
       
-      domain = var.grafana_domain
+      # domain is passed to the applicationset here from the infrastructure repo dns record output
+      domain = data.terraform_remote_state.shared_state.outputs.grafana_dev_domain
       
       applicationSet = {
         name      = "ephemeral-grafana"
@@ -100,7 +97,7 @@ resource "helm_release" "grafana_applicationset" {
       # Optional: Enable webhooks
       webhook = {
         enabled = false  # Set to true for real-time PR detection
-        host    = "argocd-webhook.${var.grafana_domain}"
+        host    = "argocd-webhook.${data.terraform_remote_state.shared_state.outputs.grafana_dev_domain}"
       }
     })
   ]

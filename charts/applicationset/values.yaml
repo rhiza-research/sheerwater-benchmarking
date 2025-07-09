@@ -9,15 +9,13 @@ github:
   # Repository name (this should be the Grafana repository, not the infrastructure repo)
   repo: "sheerwater-benchmarking"
   
-  # Branch to use for helm chart (set to null to use PR branch)
-  chartBranch: null  # Set to "main", "develop", etc. to use a specific branch
-  
   # GitHub token secret reference
   tokenSecret:
     name: "github-token"
     key: "token"
 
 # Domain configuration
+# This value is overridden by the infrastructure repo dns record output
 domain: "dev.sheerwater.rhizaresearch.org"
 
 # ApplicationSet configuration
@@ -80,6 +78,7 @@ webhook:
   
   # Webhook ingress configuration
   name: "argocd-applicationset-webhook"
+  # This value is overridden by the infrastructure repo dns record output so it matches our dns records
   host: "argocd-webhook.dev.sheerwater.rhizaresearch.org"
   ingressClassName: "nginx"
   
