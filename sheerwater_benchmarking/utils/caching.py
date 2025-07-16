@@ -45,7 +45,6 @@ global_retry_null_cache = None
 # Remote dir for all caches, except for postgres and terracotta
 CACHE_ROOT_DIR = "gs://sheerwater-datalake/caches/"
 CACHE_STORAGE_OPTIONS = {
-    'project': 'sheerwater',
     'token': 'google_default',
     'cache_timeout': 0
 }
