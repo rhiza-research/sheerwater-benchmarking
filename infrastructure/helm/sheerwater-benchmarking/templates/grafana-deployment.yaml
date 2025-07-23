@@ -76,6 +76,10 @@ spec:
             value: "true"
           - name: GF_ALLOW_EMBEDDING
             value: "true"
+          - name: GF_INSTALL_PLUGINS
+            value: "https://storage.googleapis.com/sheerwater-public/grafana_plugins/nline-plotlyjs-panel-1.8.2.zip;nline-plotlyjs-panel"
+          - name: GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS
+            value: "nline-plotlyjs-panel"
           envFrom:
             - secretRef:
                 name: {{ include "sheerwater-benchmarking.fullname" . }}-grafana-secrets
