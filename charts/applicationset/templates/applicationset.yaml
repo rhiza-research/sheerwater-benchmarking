@@ -66,7 +66,12 @@ spec:
                 server:
                   root_url: 'https://grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}.{{ "{{" }} .values.domain {{ "}}" }}'
                   serve_from_sub_path: false
-            
+            {{- if .Values.ephemeral.admin_password }}
+                security:
+                  admin_user: admin
+                  admin_password: {{ .Values.ephemeral.admin_password | quote }}
+            {{- end }}
+
             {{- if .Values.ephemeral.ingress.enabled }}
             ingress:
               enabled: true
