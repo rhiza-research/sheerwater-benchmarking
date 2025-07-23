@@ -33,6 +33,16 @@ applicationSet:
 # Infrastructure overrides for ephemeral instances
 # These are infrastructure concerns that the ApplicationSet needs to manage
 ephemeral:
+  # Admin password for ephemeral Grafana instances
+  # This should be overridden via Terraform or Helm --set
+  admin_password: "changeme"
+  # Use an existing secret for the admin user.
+  # admin:
+  #   ## Name of the secret. Can be templated.
+  #   existingSecret: ""
+  #   userKey: admin-user
+  #   passwordKey: admin-password
+  
   # Ingress configuration for PR-specific hostnames
   ingress:
     enabled: true

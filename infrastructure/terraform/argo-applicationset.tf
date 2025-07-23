@@ -6,6 +6,12 @@ data "kubernetes_secret" "github_token" {
   }
 }
 
+# Get Grafana admin password from Google Secret Manager
+data "google_secret_manager_secret_version" "grafana_admin_password" {
+  secret = "sheerwater-grafana-admin-password"
+  project = "sheerwater"
+}
+
 resource "terraform_data" "argocd_helm_release_updated" {
   input = data.terraform_remote_state.shared_state.outputs.argocd_helm_release
 }
@@ -43,6 +49,9 @@ resource "helm_release" "grafana_applicationset" {
       }
       
       ephemeral = {
+        # Set admin password from Google Secret Manager
+        admin_password = data.google_secret_manager_secret_version.grafana_admin_password.secret_data
+        
         ingress = {
           enabled     = true
           className   = "nginx"
