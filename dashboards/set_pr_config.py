@@ -152,7 +152,7 @@ def generate_config_yaml(pr_number: int) -> str:
 contexts:
     ephemeral:
         grafana:
-            server: https://PR-{pr_number}.dev.sheerwater.rhizaresearch.org
+            server: https://grafana-pr-{pr_number}.dev.sheerwater.rhizaresearch.org
             org-id: 1
 current-context: ephemeral
 """
