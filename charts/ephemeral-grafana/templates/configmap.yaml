@@ -16,3 +16,6 @@ data:
     [security]
     admin_user = admin # {{ .Values.grafana.config.security.admin_user | quote }}
     admin_password = admin # {{ .Values.grafana.config.security.admin_password | quote }}
+
+    [plugins]
+    preinstall = gapit-htmlgraphics-panel,marcusolsson-dynamictext-panel,nline-plotlyjs-panel
