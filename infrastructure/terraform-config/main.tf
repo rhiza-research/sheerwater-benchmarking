@@ -1,3 +1,17 @@
+########################################################
+# This file is used to configure the prod and ephemeral grafana instances based on workspace name
+# 
+# Workspace naming convention:
+# - the "default" workspace configures the prod instance at benchmarks.sheerwater.rhizaresearch.org
+# - any other workspace is an ephemeral instance and should be named with the format "grafana-pr-<pr_number>"
+# 
+# It is used to create/configure:
+# - sso settings
+# - orgs (with preferences)
+# - datasources
+# - dashboards
+########################################################
+
 terraform {
   backend "gcs" {
     bucket  = "rhiza-terraform-state"
@@ -7,7 +21,7 @@ terraform {
   required_providers {
     google = {
       source = "hashicorp/google"
-      version = "6.4.0"
+      version = "6.45.0"
     }
 
     grafana = {
@@ -44,204 +58,36 @@ provider "postgresql" {
   connect_timeout = 15
 }
 
-provider "grafana" {
-  url  = "https://benchmarks.sheerwater.rhizaresearch.org/"
-  auth = "admin:${data.google_secret_manager_secret_version.grafana_admin_password.secret_data}"
+locals {
+  is_prod = terraform.workspace == "default"
+  grafana_url  = terraform.workspace == "default" ? "https://benchmarks.sheerwater.rhizaresearch.org" : "https://${terraform.workspace}.dev.sheerwater.rhizaresearch.org"
 }
 
-# Gcloud secrets for Single sign on
+// if workspace == default then url =  "https://benchmarks.sheerwater.rhizaresearch.org/"
+// else url = "https://${terraform.workspace}.dev.sheerwater.rhizaresearch.org/"
+provider "grafana" {
+  url  = local.grafana_url
+  #auth = "admin:${data.google_secret_manager_secret_version.grafana_admin_password.secret_data}"
+  # TODO: for now I have to use the default password because 
+  # the correct password is not working. It is being set but I think 
+  # there is some urlencoding happening somewhere breaking the password.
+  auth = "admin:admin"
+
+}
+
+output "grafana_url" {
+  value = local.grafana_url
+}
+
+# Gcloud secrets for postgres read user
 data "google_secret_manager_secret_version" "postgres_read_password" {
  secret   = "sheerwater-postgres-read-password"
 }
 
-# Gcloud secrets for Single sign on
+# Gcloud secrets for influx read user
 data "google_secret_manager_secret_version" "tahmo_influx_read_password" {
  secret   = "tahmo-influx-read-password"
 }
-
-resource "postgresql_role" "read" {
-  name = "read"
-  password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
-  login = true
-}
-
-resource postgresql_grant "readonly_public" {
-  database    = "postgres"
-  role        = postgresql_role.read.name
-  schema      = "public"
-  object_type = "table"
-  privileges  = ["SELECT"]
-}
-
-# Create postgres users and grant them permissions
-resource "random_password" "postgres_tahmo_password" {
-  length           = 16
-  special          = true
-}
-
-resource "google_secret_manager_secret" "postgres_tahmo_password" {
-  secret_id = "sheerwater-postgres-tahmo-password"
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret_version" "postgres_tahmo_password" {
-  secret = google_secret_manager_secret.postgres_tahmo_password.id
-  secret_data = random_password.postgres_tahmo_password.result
-}
-
-resource "postgresql_role" "tahmo" {
-  name = "tahmo"
-  password = "${google_secret_manager_secret_version.postgres_tahmo_password.secret_data}"
-  login = true
-}
-
-resource postgresql_grant "tahmo_read" {
-  database    = "postgres"
-  role        = postgresql_role.tahmo.name
-  schema      = "public"
-  object_type = "table"
-  privileges  = ["SELECT"]
-}
-
-
-resource postgresql_grant "readonly_public_terracotta" {
-  database    = "terracotta"
-  role        = postgresql_role.read.name
-  schema      = "public"
-  object_type = "table"
-  privileges  = ["SELECT"]
-}
-
-resource "postgresql_default_privileges" "read_only_default_admin" {
-  database = "postgres"
-  role        = postgresql_role.read.name
-  schema   = "public"
-  owner       = "postgres"
-  object_type = "table"
-  privileges  = ["SELECT"]
-}
-
-resource "postgresql_default_privileges" "tahmo_default_admin" {
-  database = "postgres"
-  role        = postgresql_role.tahmo.name
-  schema   = "public"
-  owner       = "postgres"
-  object_type = "table"
-  privileges  = ["SELECT"]
-}
-
-resource "postgresql_default_privileges" "read_only_default" {
-  database = "postgres"
-  role        = postgresql_role.read.name
-  schema   = "public"
-  owner       = "write"
-  object_type = "table"
-  privileges  = ["SELECT"]
-}
-
-resource "postgresql_default_privileges" "tahmo_default" {
-  database = "postgres"
-  role        = postgresql_role.tahmo.name
-  schema   = "public"
-  owner       = "write"
-  object_type = "table"
-  privileges  = ["SELECT"]
-}
-
-resource "postgresql_default_privileges" "read_only_default_terracotta" {
-  database = "terracotta"
-  role        = postgresql_role.read.name
-  schema   = "public"
-  owner       = "write"
-  object_type = "table"
-  privileges  = ["SELECT"]
-}
-
-resource "postgresql_default_privileges" "read_only_default_admin_terracotta" {
-  database = "terracotta"
-  role        = postgresql_role.read.name
-  schema   = "public"
-  owner       = "postgres"
-  object_type = "table"
-  privileges  = ["SELECT"]
-}
-
-
-resource "random_password" "postgres_write_password" {
-  length           = 16
-  special          = true
-}
-
-resource "google_secret_manager_secret" "postgres_write_password" {
-  secret_id = "sheerwater-postgres-write-password"
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret_version" "postgres_write_password" {
-  secret = google_secret_manager_secret.postgres_write_password.id
-  secret_data = random_password.postgres_write_password.result
-}
-
-resource "postgresql_role" "write" {
-  name = "write"
-  password = "${random_password.postgres_write_password.result}"
-  login = true
-  create_database = true
-}
-
-resource postgresql_grant "write_public" {
-  database    = "postgres"
-  role        = postgresql_role.write.name
-  schema      = "public"
-  object_type = "table"
-  privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
-}
-
-resource postgresql_grant "write_public_terracotta" {
-  database    = "terracotta"
-  role        = postgresql_role.write.name
-  schema      = "public"
-  object_type = "table"
-  privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
-}
-
-resource postgresql_grant "write_public_terracottads" {
-  database    = "terracotta"
-  role        = postgresql_role.write.name
-  schema      = "public"
-  object_type = "table"
-  objects = ["datasets"]
-  privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
-}
-
-resource postgresql_grant "write_schema_public" {
-  database    = "postgres"
-  role        = postgresql_role.write.name
-  schema      = "public"
-  object_type = "schema"
-  privileges  = ["CREATE"]
-}
-
-resource postgresql_grant "public_schema_public" {
-  database    = "postgres"
-  role        = "public"
-  schema      = "public"
-  object_type = "schema"
-  privileges  = ["CREATE", "USAGE"]
-}
-
-resource postgresql_grant "write_database_public" {
-  database    = "postgres"
-  role        = postgresql_role.write.name
-  schema      = "public"
-  object_type = "database"
-  privileges  = ["CREATE"]
-}
-
 
 
 
@@ -256,6 +102,7 @@ data "google_secret_manager_secret_version" "sheerwater_oauth_client_secret" {
 
 # Enable google oauth
 resource "grafana_sso_settings" "google_sso_settings" {
+  count = local.is_prod ? 1 : 0 # only enable for the prod instance because sso doesnt work for ephemeral instances
   provider_name = "google"
   oauth2_settings {
     name            = "Google"
@@ -285,8 +132,9 @@ resource "grafana_organization_preferences" "light_preference" {
 resource "grafana_data_source" "postgres" {
   type                = "grafana-postgresql-datasource"
   name                = "postgres"
-  url                 = "postgres:5432"
+  url                 = "postgres:5432"  # TODO: this does not resolve because the postgres service is not in the same namespace/network as the ephemeral grafana service
   username                = "read"
+  uid = "bdz3m3xs99p1cf"
   
   secure_json_data_encoded = jsonencode({
     password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
@@ -327,6 +175,7 @@ resource "grafana_data_source" "postgres_tahmo" {
   name                = "postgres"
   url                 = "postgres:5432"
   username                = "read"
+  uid = "cegueq2crd3wge"
   
   secure_json_data_encoded = jsonencode({
     password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
@@ -350,6 +199,7 @@ resource "grafana_data_source" "influx_tahmo" {
   basic_auth_enabled  = true
   basic_auth_username = "RhizaResearch"
   database_name       = "TAHMO"
+  uid = "eepjuov1zfi0wb"
   
   secure_json_data_encoded = jsonencode({
     basicAuthPassword = "${data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data}"
@@ -365,6 +215,31 @@ resource "grafana_data_source" "influx_tahmo" {
   org_id = grafana_organization.tahmo.id
 }
 
+# other tahmodatasource uid = 'cer8o24n0lfy8b'
 
 
-# Eventually create dashboards
+
+
+
+# FIXME: dont hardcode users here. This if we can't use oauth this should at least be dynamic in some way.
+data "google_secret_manager_secret_version" "grafana_tristan_password" {
+ secret   = "grafana-tristan-password"
+}
+
+resource "grafana_user" "tristan" {
+  count = local.is_prod ? 0 : 1 # only enable for the ephemeral workspaces, prod uses SSO
+  email    = "tristan@rhizaresearch.org"
+  name     = "Tristan"
+  login    = "tristan"
+  password = "${data.google_secret_manager_secret_version.grafana_tristan_password.secret_data}"
+  is_admin = true
+}
+
+
+
+# Create dashboards
+resource "grafana_dashboard" "dashboards" {
+  # only create dashboards for the ephemeral workspaces (for now)
+  for_each = local.is_prod ? [] : fileset("${path.module}/../../dashboards/build", "*.json")
+  config_json = file("${path.module}/../../dashboards/build/${each.value}")
+}
