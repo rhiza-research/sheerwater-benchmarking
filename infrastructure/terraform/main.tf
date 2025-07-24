@@ -24,6 +24,14 @@ terraform {
 
 }
 
+data "terraform_remote_state" "shared_state" {
+  backend = "gcs"
+  config = {
+    bucket = "rhiza-terraform-state"
+    prefix = "state"
+  }
+}
+
 provider "google" {
   project = "sheerwater"
 }
@@ -279,8 +287,9 @@ resource "google_compute_global_address" "grafana_address" {
 }
 
 resource "google_dns_record_set" "grafana_recordset" {
-  managed_zone = "sheerwater"
-  name = "benchmarks.sheerwater.rhizaresearch.org."
+  project      = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_project
+  managed_zone = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_name
+  name         = "benchmarks.${data.terraform_remote_state.shared_state.outputs.sheerwater_dns_dns_name}"
   type = "A"
   rrdatas = [google_compute_global_address.grafana_address.address]
   ttl = 300
@@ -293,8 +302,9 @@ resource "google_compute_global_address" "terracotta_address" {
 }
 
 resource "google_dns_record_set" "terracotta_recordset" {
-  managed_zone = "sheerwater"
-  name = "terracotta.sheerwater.rhizaresearch.org."
+  project      = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_project
+  managed_zone = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_name
+  name         = "terracotta.${data.terraform_remote_state.shared_state.outputs.sheerwater_dns_dns_name}"
   type = "A"
   rrdatas = [google_compute_global_address.terracotta_address.address]
   ttl = 300
@@ -309,13 +319,13 @@ resource "google_compute_address" "postgres_address" {
 
 # Set a DNS record for that IP Address
 resource "google_dns_record_set" "resource-recordset" {
-  managed_zone = "sheerwater"
-  name         = "postgres.sheerwater.rhizaresearch.org."
+  project      = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_project
+  managed_zone = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_name
+  name         = "postgres.${data.terraform_remote_state.shared_state.outputs.sheerwater_dns_dns_name}"
   type         = "A"
   rrdatas = [google_compute_address.postgres_address.address]
   ttl          = 300
 }
-
 
 
 ################
@@ -404,4 +414,10 @@ resource "helm_release" "sheerwater_benchmarking" {
     name = "terracotta.sql_password"
     value = random_password.postgres_read_password.result
   }
+}
+
+# Outputs
+output "sheerwater_k8s_namespace" {
+  description = "The Kubernetes namespace for Sheerwater Benchmarking"
+  value       = kubernetes_namespace.sheerwater_benchmarking.metadata[0].name
 }

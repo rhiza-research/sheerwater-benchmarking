@@ -1,0 +1,53 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "ephemeral-grafana.fullname" . }}-cert-copy
+  labels:
+    {{- include "ephemeral-grafana.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    spec:
+      serviceAccountName: {{ include "ephemeral-grafana.fullname" . }}-cert-copier
+      containers:
+      - name: cert-copier
+        image: bitnami/kubectl:latest
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          echo "Copying wildcard certificate to {{ .Release.Namespace }}..."
+          
+          # Wait for wildcard certificate to be ready
+          timeout=60
+          while [ $timeout -gt 0 ]; do
+            if kubectl get secret wildcard-dev-sheerwater-tls -n cert-manager > /dev/null 2>&1; then
+              echo "Wildcard certificate found"
+              break
+            fi
+            echo "Waiting for wildcard certificate... ($timeout seconds remaining)"
+            sleep 5
+            timeout=$((timeout - 5))
+          done
+          
+          if [ $timeout -le 0 ]; then
+            echo "Timeout waiting for wildcard certificate"
+            exit 1
+          fi
+          
+          # Copy the wildcard certificate secret to current namespace
+          kubectl get secret wildcard-dev-sheerwater-tls -n cert-manager -o yaml | \
+            sed "s/namespace: cert-manager/namespace: {{ .Release.Namespace }}/" | \
+            sed '/resourceVersion:/d' | \
+            sed '/uid:/d' | \
+            sed '/creationTimestamp:/d' | \
+            kubectl apply -f -
+          
+          echo "Certificate copied successfully"
+      restartPolicy: Never
+  backoffLimit: 3
+{{- end }} 
