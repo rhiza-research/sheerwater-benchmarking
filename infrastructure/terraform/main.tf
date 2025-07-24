@@ -415,3 +415,9 @@ resource "helm_release" "sheerwater_benchmarking" {
     value = random_password.postgres_read_password.result
   }
 }
+
+# Outputs
+output "sheerwater_k8s_namespace" {
+  description = "The Kubernetes namespace for Sheerwater Benchmarking"
+  value       = kubernetes_namespace.sheerwater_benchmarking.metadata[0].name
+}

@@ -21,11 +21,6 @@ terraform {
       version = "6.4.0"
     }
 
-    grafana = {
-      source = "grafana/grafana"
-      version = "3.7.0"
-    }
-
     postgresql = {
       source = "cyrilgdn/postgresql"
       version = "1.23.0"
