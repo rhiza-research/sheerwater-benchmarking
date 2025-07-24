@@ -61,6 +61,14 @@ provider "postgresql" {
 locals {
   is_prod = terraform.workspace == "default"
   grafana_url  = terraform.workspace == "default" ? "https://benchmarks.sheerwater.rhizaresearch.org" : "https://${terraform.workspace}.dev.sheerwater.rhizaresearch.org"
+  
+  # Postgres connection URL - different for prod vs ephemeral
+  # TODO: this url should be built from other resource values 
+  # postgres = ?
+  # sheerwater-benchmarking = infrastructure.terraform-config.sheerwater_k8s_namespace
+  # svc.cluster.local = ?
+  # port = ?
+  postgres_url = terraform.workspace == "default" ? "postgres:5432" : "postgres.sheerwater-benchmarking.svc.cluster.local:5432"
 }
 
 // if workspace == default then url =  "https://benchmarks.sheerwater.rhizaresearch.org/"
@@ -132,7 +140,7 @@ resource "grafana_organization_preferences" "light_preference" {
 resource "grafana_data_source" "postgres" {
   type                = "grafana-postgresql-datasource"
   name                = "postgres"
-  url                 = "postgres:5432"  # TODO: this does not resolve because the postgres service is not in the same namespace/network as the ephemeral grafana service
+  url                 = local.postgres_url
   username                = "read"
   uid = "bdz3m3xs99p1cf"
   
@@ -173,7 +181,7 @@ resource "grafana_organization_preferences" "light_preference_tahmo" {
 resource "grafana_data_source" "postgres_tahmo" {
   type                = "grafana-postgresql-datasource"
   name                = "postgres"
-  url                 = "postgres:5432"
+  url                 = local.postgres_url
   username                = "read"
   uid = "cegueq2crd3wge"
   
