@@ -23,9 +23,9 @@ ingress:
 
 
 plugins:
-- gapit-htmlgraphics-panel
-- marcusolsson-dynamictext-panel
-- nline-plotlyjs-panel
+  - gapit-htmlgraphics-panel
+  - marcusolsson-dynamictext-panel
+  - nline-plotlyjs-panel
 
 # Grafana application configuration
 grafana:
