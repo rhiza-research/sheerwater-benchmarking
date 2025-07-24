@@ -14,5 +14,5 @@ data:
     org_role = {{ .Values.grafana.config.auth.anonymous.org_role }} 
 
     [security]
-    admin_user = {{ .Values.grafana.config.security.admin_user | quote }}
-    admin_password = {{ .Values.grafana.config.security.admin_password | quote }}
+    admin_user = admin # {{ .Values.grafana.config.security.admin_user | quote }}
+    admin_password = admin # {{ .Values.grafana.config.security.admin_password | quote }}
