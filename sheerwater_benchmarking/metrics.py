@@ -1,4 +1,4 @@
-"""Verification metrics for forecasts."""
+# """Verification metrics for forecasts."""
 
 import numpy as np
 from importlib import import_module
@@ -12,12 +12,33 @@ from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_thresh
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
                                            lead_to_agg_days, lead_or_agg)
 from weatherbench2.metrics import _spatial_average
+from weatherbenchX.metrics.deterministic import ACC
 
 PROB_METRICS = ['crps']  # a list of probabilistic metrics
 COUPLED_METRICS = ['acc', 'pearson']  # a list of metrics that are coupled in space and time
 CONTINGENCY_METRICS = ['pod', 'far', 'ets', 'bias_score']  # a list of dichotomous contingency metrics
 CATEGORICAL_CONTINGENCY_METRICS = ['heidke']  # a list of contingency metrics
 PRECIP_ONLY_METRICS = ["pearson", "heidke", "pod", "far", "ets", "mape", "smape", "bias_score", "seeps"]
+
+# Implemented metrics and their component statistics
+metric_statistics = {
+    'acc': ['anom_covariance', 'squared_pred_anom', 'squared_target_anom'],
+    'rmse': ['mse'],
+    'mape': ['mape'],
+    'smape': ['smape'],
+    'mae': ['mae'],
+    'mse': ['mse'],
+    'crps': ['crps'],
+    'crps_ensemble': ['crps_ensemble'],
+    'crps_quantile': ['crps_quantile'],
+    'pearson': ['pearson'],
+    'heidke': ['heidke'],
+    'pod': ['pod'],
+    'far': ['far'],
+    'ets': ['ets'],
+    'bias_score': ['bias_score'],
+    'seeps': ['seeps'],
+}
 
 
 def is_precip_only(metric):
@@ -70,6 +91,7 @@ def mape(fcst, truth, avg_time=False, skipna=True):
     if avg_time:
         ds = ds.mean(skipna=skipna)
     else:
+        # Noting that this doesn't do spatial averaging
         ds = ds.mean(dim=['lat', 'lon'], skipna=skipna)
     return ds
 
@@ -86,6 +108,7 @@ def smape(fcst, truth, avg_time=False, skipna=True):
     if avg_time:
         ds = ds.mean(skipna=skipna)
     else:
+        # Noting that this doesn't do spatial averaging
         ds = ds.mean(dim=['lat', 'lon'], skipna=skipna)
     return ds
 
@@ -131,8 +154,8 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
     fcst_fn = get_datasource_fn(forecast)
 
     # Decide if this is a forecast with a lead or direct datasource with just an agg
-    sparse = False # A variable used to indicate whether the truth is creating sparsity
-    metric_sparse = False # A variable used to indicate whether the metric induces sparsity
+    sparse = False  # A variable used to indicate whether the truth is creating sparsity
+    metric_sparse = False  # A variable used to indicate whether the metric induces sparsity
     if 'lead' in signature(fcst_fn).parameters:
         if lead_or_agg(lead) == 'agg':
             raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
@@ -231,24 +254,40 @@ def eval_metric(start_time, end_time, variable, lead, forecast, truth,
             m_ds = weatherbench2.metrics.SEEPS(**metric_kwargs) \
                                 .compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
 
-    elif metric == 'acc':
+    elif metric in ['acc', 'squared_pred_anom', 'squared_target_anom', 'anom_covariance']:
         clim_ds = climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
                                    grid=grid, mask=mask, region=region)
         clim_ds = clim_ds.sel(time=valid_times)
 
-        # If the obersations are sparse, ensure that the lengths are the same
+        # If the observations are sparse, ensure that the lengths are the same
         # TODO: This will probably break with sparse forecaster and dense observations
         fcst = fcst.where(obs.notnull(), np.nan)
         clim_ds = clim_ds.where(obs.notnull(), np.nan)
 
+        # Get anomalies
         fcst = fcst - clim_ds
         obs = obs - clim_ds
 
-        if spatial:
-            m_ds = weatherbench2.metrics.SpatialACC().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
-            m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+        if metric != 'acc':
+            if metric == 'squared_pred_anom':
+                m_ds = fcst**2
+            elif metric == 'squared_target_anom':
+                m_ds = obs**2
+            elif metric == 'anom_covariance':
+                m_ds = fcst * obs
+
+            if avg_time and spatial:
+                m_ds = m_ds.mean(skipna=True)
+            elif avg_time:
+                m_ds = m_ds.mean(dim=['lat', 'lon'], skipna=True)
+            elif spatial:
+                m_ds = m_ds.mean(dim=['time'], skipna=True)
         else:
-            m_ds = weatherbench2.metrics.ACC().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+            if spatial:
+                m_ds = weatherbench2.metrics.SpatialACC().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
+                m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+            else:
+                m_ds = weatherbench2.metrics.ACC().compute(forecast=fcst, truth=obs, avg_time=avg_time, skipna=True)
 
     elif is_contingency(metric):
         bins = get_bins(metric)
@@ -421,88 +460,96 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         return ds
 
     # To evaluate RMSE, we call MSE and take the final square root average all averaging in sp/time
-    called_metric = 'mse' if metric == 'rmse' else metric
-
-    if is_coupled(called_metric):
-        # Get the unaggregated global metric
-        ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
-                                      forecast=forecast, truth=truth,
-                                      metric=called_metric, grid=grid, mask=mask, region='global')
-        if ds is None:
-            return None
-
-        truth_sparse = ds.attrs['sparse']
-        metric_sparse = ds.attrs['metric_sparse']
-    else:
-
-        # Get the unaggregated global metric
-        ds = global_metric(start_time, end_time, variable, lead=lead,
-                           forecast=forecast, truth=truth,
-                           metric=called_metric, grid=grid, mask=mask, region='global')
-
-        if ds is None:
-            return None
-
-        truth_sparse = ds.attrs['sparse']
-        metric_sparse = ds.attrs['metric_sparse']
-
-        if time_grouping is not None:
-            if time_grouping == 'month_of_year':
-                # TODO if you want this as a name: ds.coords["time"] = ds.time.dt.strftime("%B")
-                ds.coords["time"] = ds.time.dt.month
-            elif time_grouping == 'year':
-                ds.coords["time"] = ds.time.dt.year
-            elif time_grouping == 'quarter_of_year':
-                ds.coords["time"] = ds.time.dt.quarter
-            else:
-                raise ValueError("Invalid time grouping")
-
-            ds = ds.groupby("time").mean()
-        else:
-            # Average in time
-            ds = ds.mean(dim="time")
-        # TODO: we can convert this to a groupby_time call when we're ready
-        # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
-
-    # Clip it to the region
-    ds = clip_region(ds, region)
-
-    if truth_sparse or metric_sparse:
-        print("Metric is sparse, checking if forecast is valid directly")
-        if metric in PROB_METRICS:
-            prob_type = 'probabilistic'
-        else:
-            prob_type = 'deterministic'
-
-        fcst_fn =  get_datasource_fn(forecast)
-
-        if 'lead' in signature(fcst_fn).parameters:
-            check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
-                           prob_type=prob_type, grid=grid, mask=mask, region=region)
-
-        else:
-            check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
-                           grid=grid, mask=mask, region=region)
-    else:
-        check_ds = ds
-
-    # Check if forecast is valid before spatial averaging
-    if not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
-        print("Metric is not valid for region.")
-        return None
-
-    for coord in ds.coords:
-        if coord not in ['time', 'lat', 'lon']:
-            ds = ds.reset_coords(coord, drop=True)
-
-    # Average in space
-    if not spatial:
-        ds = _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
-
-    # Take the final square root of the MSE, after spatial averaging
     if metric == 'rmse':
-        ds = ds ** 0.5
-    return ds
+        called_metrics = ['mse']
+    elif metric == 'acc':
+        called_metrics = ['anom_covariance', 'squared_pred_anom', 'squared_target_anom']
+    else:
+        called_metrics = [metric]
+
+    ds_list = []
+    for called_metric in called_metrics:
+        if is_coupled(called_metric):
+            # Get the unaggregated global metric
+            ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
+                                          forecast=forecast, truth=truth,
+                                          metric=called_metric, grid=grid, mask=mask, region='global')
+            if ds is None:
+                return None
+
+            truth_sparse = ds.attrs['sparse']
+            metric_sparse = ds.attrs['metric_sparse']
+            ds_list.append(ds)
+        else:
+
+            # Get the unaggregated global metric
+            ds = global_metric(start_time, end_time, variable, lead=lead,
+                               forecast=forecast, truth=truth,
+                               metric=called_metric, grid=grid, mask=mask, region='global')
+
+            if ds is None:
+                return None
+
+            truth_sparse = ds.attrs['sparse']
+            metric_sparse = ds.attrs['metric_sparse']
+
+            if time_grouping is not None:
+                if time_grouping == 'month_of_year':
+                    # TODO if you want this as a name: ds.coords["time"] = ds.time.dt.strftime("%B")
+                    ds.coords["time"] = ds.time.dt.month
+                elif time_grouping == 'year':
+                    ds.coords["time"] = ds.time.dt.year
+                elif time_grouping == 'quarter_of_year':
+                    ds.coords["time"] = ds.time.dt.quarter
+                else:
+                    raise ValueError("Invalid time grouping")
+
+                ds = ds.groupby("time").mean()
+            else:
+                # Average in time
+                ds = ds.mean(dim="time")
+            # TODO: we can convert this to a groupby_time call when we're ready
+            # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
+
+        # Clip it to the region
+        ds = clip_region(ds, region)
+
+        if truth_sparse or metric_sparse:
+            print("Metric is sparse, checking if forecast is valid directly")
+            if metric in PROB_METRICS:
+                prob_type = 'probabilistic'
+            else:
+                prob_type = 'deterministic'
+
+            fcst_fn = get_datasource_fn(forecast)
+
+            if 'lead' in signature(fcst_fn).parameters:
+                check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
+                                   prob_type=prob_type, grid=grid, mask=mask, region=region)
+
+            else:
+                check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
+                                   grid=grid, mask=mask, region=region)
+        else:
+            check_ds = ds
+
+        # Check if forecast is valid before spatial averaging
+        if not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
+            print("Metric is not valid for region.")
+            return None
+
+        for coord in ds.coords:
+            if coord not in ['time', 'lat', 'lon']:
+                ds = ds.reset_coords(coord, drop=True)
+
+        # Average in space
+        if not spatial:
+            ds = _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+
+        # Take the final square root of the MSE, after spatial averaging
+        if metric == 'rmse':
+            ds = ds ** 0.5
+        return ds
 
 
 @dask_remote
@@ -619,8 +666,8 @@ def summary_metrics_table(start_time, end_time, variable,
                        'time_grouping', 'grid', 'mask', 'region'],
            cache=True)
 def seasonal_metrics_table(start_time, end_time, variable,
-                          truth, metric, time_grouping=None,
-                          grid='global1_5', mask='lsm', region='global'):
+                           truth, metric, time_grouping=None,
+                           grid='global1_5', mask='lsm', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     forecasts = ['salient', 'climatology_2015']
     leads = ["month1", "month2", "month3"]

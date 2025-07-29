@@ -89,6 +89,7 @@ dependencies = [
     "psycopg2-binary",
     "xarray-regrid",
     "weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2",
+    "weatherbenchX @ git+https://github.com/rhiza-research/weatherbenchX",
     "deltalake",
     "jupyter-server-proxy",
     "xskillscore @ git+https://github.com/rhiza-research/xskillscore",

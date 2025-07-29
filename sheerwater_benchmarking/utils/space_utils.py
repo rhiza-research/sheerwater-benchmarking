@@ -129,8 +129,8 @@ def get_region(region):
             raise NotImplementedError(
                 f"Region {region} has not been implemented.")
         tol = 0.01
-        lons = (gdf['geometry'].bounds['minx'].values-tol, gdf['geometry'].bounds['maxx'].values + tol)
-        lats = (gdf['geometry'].bounds['miny'].values-tol, gdf['geometry'].bounds['maxy'].values + tol)
+        lons = np.array([gdf['geometry'].bounds['minx'].values[0]-tol, gdf['geometry'].bounds['maxx'].values[0] + tol])
+        lats = np.array([gdf['geometry'].bounds['miny'].values[0]-tol, gdf['geometry'].bounds['maxy'].values[0] + tol])
         data = (lons, lats, gdf)
     return data
 
