@@ -25,12 +25,18 @@ def get_grid(grid, base="base180"):
             - global1_5: 1.5 degree global grid
             - global0_25: 0.25 degree global grid
             - salient0_25: 0.25 degree Salient global grid
+            - global0_05: 0.05 degree global grid
+            - chirps: 0.05 degree global grid, offset by 0.025 degrees
+            - imerg: 0.1 degree global grid, offset by 0.05 degrees
         base (str): The base grid to use. One of:
             - base360: 360 degree base longitude grid
             - base180: 180 degree base longitude grid
     """
     if grid == "global1_5":
         grid_size = 1.5
+        offset = 0.0
+    elif grid == "global0_05":
+        grid_size = 0.05
         offset = 0.0
     elif grid == "chirps":
         grid_size = 0.05

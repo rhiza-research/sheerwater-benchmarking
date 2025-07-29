@@ -101,14 +101,19 @@ dependencies = [
     "huggingface_hub",
     "py7zr",
     "tqdm",
-    "numcodecs<0.16.0"
+    "numcodecs<0.16.0",
+    "earthengine-api>=1.5.23",
+    "branca>=0.8.1",
+    "folium>=0.20.0",
+    "earthaccess>=0.14.0",
+    "xesmf>=0.8.10",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
 
 # This is a custom property to instantiate a coiled software environment
 [tool.sheerwater_benchmarking.coiled]
-conda-dependencies = []
+conda-dependencies = ["xesmf"]
 
 [build-system]
 requires = ["hatchling"]

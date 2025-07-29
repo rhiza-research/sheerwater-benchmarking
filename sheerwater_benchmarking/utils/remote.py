@@ -53,7 +53,8 @@ config_options = {
 
 def start_remote(remote_name=None, remote_config=None):
     """Generic function to start a remote cluster."""
-    default_name = 'sheerwater_' + pwd.getpwuid(os.getuid())[0]
+    # default_name = 'sheerwater_' + pwd.getpwuid(os.getuid())[0]
+    default_name = 'genevieve'
 
     coiled_default_options = {
         'name': default_name,

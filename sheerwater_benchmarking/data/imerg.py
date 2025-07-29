@@ -1,11 +1,162 @@
 """Imerg data product."""
+import os
+import sys
+import pandas as pd
+import numpy as np
+import re
 import xarray as xr
 import gcsfs
 from dateutil import parser
 from functools import partial
+import requests
+import ssl
+from urllib3 import poolmanager
+from requests.auth import HTTPBasicAuth
+from scipy.interpolate import griddata
+# import xesmf as xe
+# import ESMF
 
-from sheerwater_benchmarking.utils import cacheable, dask_remote, regrid, roll_and_agg, apply_mask, clip_region
+from sheerwater_benchmarking.utils import cacheable, dask_remote, regrid, roll_and_agg, apply_mask, clip_region, nasa_earthdata_secret, get_grid_ds, get_grid
 from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
+
+import xarray as xr
+import numpy as np
+
+import pandas as pd
+import numpy as np
+
+
+import numpy as np
+import pandas as pd
+import xarray as xr
+
+
+def snap_and_keep_first_all(ds, lat_name='lat', lon_name='lon', resolution=0.05):
+    """
+    Snap lat/lon to the nearest grid and keep the first occurrence per cell,
+    preserving all variables.
+    """
+    # Convert all variables to a single DataFrame (flatten)
+    df = ds.to_dataframe().reset_index()
+
+    # Snap lat/lon
+    df[lat_name] = np.round(df[lat_name] / resolution) * resolution
+    df[lon_name] = np.round(df[lon_name] / resolution) * resolution
+
+    # Drop duplicates, keeping first occurrence
+    df_first = df.drop_duplicates(subset=[lat_name, lon_name], keep='first')
+
+    # Convert back to xarray dataset
+    ds_first = df_first.set_index([lat_name, lon_name]).to_xarray()
+
+    return ds_first
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['time'],
+           chunking={'time': 500000, 'nray': 50})
+def single_gpm_2bcombined(time, verbose=True):
+    """Fetches GPM 2B-CMB data from the NASA Earthdata API.
+
+    See all options here: https://gpm1.gesdisc.eosdis.nasa.gov/opendap/GPM_L2/GPM_2BCMB.07/2023/001/2B.GPM.DPRGMI.CORRA2022.20230101-S000208-E013440.050238.V07A.HDF5.dmr.html 
+
+    Args:
+        time (str): The date to fetch data for (by day).
+    """
+    username, password = nasa_earthdata_secret()
+    # 📂 Remote NASA GES DISC directory
+    url_base = 'https://gpm1.gesdisc.eosdis.nasa.gov/opendap/GPM_L2/GPM_2BCMB.07'
+    date = parser.parse(time)
+    year = date.year
+    day_of_year = date.strftime("%j")
+    url_base = f"{url_base}/{year}/{day_of_year}"
+    # Get directory listing (HTML)
+    r = requests.get(url_base)
+    html = r.text
+
+    # Find all HDF5 files in the directory by extracting the HDF5 filename from the href string
+    hdf5_links = re.findall(r'href="([^"]*\.HDF5)(?!\.)"', html)
+    hdf5_files = []
+    for link in hdf5_links:
+        # Extract the HDF5 filename by splitting on '/' and taking the last part
+        hdf5_file = link.split('/')[-1]
+        hdf5_files.append(hdf5_file)
+
+    # Start session
+    session = requests.Session()
+    session.auth = HTTPBasicAuth(username, password)
+    os.makedirs('./temp', exist_ok=True)
+    datasets = []
+    for i, hdf5_file in enumerate(hdf5_files):
+        url = f"{url_base}/{hdf5_file}.dap.nc4"
+        url = (f"{url}?dap4.ce=/"
+               "KuGMI_Longitude;/"
+               "KuGMI_Latitude;/"
+               "KuGMI_surfaceAirTemperature;/"
+               "KuGMI_nearSurfPrecipTotRate;/"
+               "KuGMI_estimSurfPrecipTotRate;/"
+               "KuGMI_pia;/"
+               "KuGMI_estimSurfPrecipTotRateSigma;/"
+               "KuGMI_ScanTime_Year;/"
+               "KuGMI_ScanTime_DayOfYear;/"
+               "KuGMI_ScanTime_SecondOfDay"
+               )
+        # 📁 Local download destination
+        file = f"./temp/{hdf5_file}.nc"
+        r = session.get(url, stream=True)
+        if r.status_code == 200 and r.headers["Content-Type"] == "application/x-netcdf;ver=4":
+            if verbose:
+                print(f"Downloading: {time}, Scan {i+1} / {len(hdf5_files)}")
+            with open(file, "wb") as f:
+                f.write(r.content)
+            if verbose:
+                print(f"-done (downloaded {sys.getsizeof(r.content) / 1024**2:.2f} MB).\n")
+        elif r.status_code == 404:
+            print(f"Data for {time} is not available for GPM 2B-CMB.\n")
+            return None
+        else:
+            raise ValueError(f"Failed to download data for {time} for GPM 2B-CMB.")
+
+        try:
+            # Read the data and return individual datasets
+            ds = xr.open_dataset(file, engine="netcdf4")
+        except OSError:
+            print(f"Failed to load data for: {time}.")
+            return None
+
+        # Try to convert all at once using pandas to_datetime, without using timedelta
+        year = int(ds['KuGMI_ScanTime_Year'].values[0])  # they are all the same year and doy
+        doy_delta = ds['KuGMI_ScanTime_DayOfYear'].values[0] - pd.to_timedelta(1, unit='D')
+        second_of_day = ds['KuGMI_ScanTime_SecondOfDay'].values
+
+        # Convert base date: Jan 1 of each year
+        base = pd.to_datetime(f"{year}-01-01")
+
+        # Add day-of-year offset + second-of-day offset
+        scan_time = base + doy_delta + pd.to_timedelta(second_of_day, unit='s')
+        ds = ds.assign_coords(time=("nscan", scan_time))
+
+        rename_dict = {
+            "KuGMI_Longitude": "lon",
+            "KuGMI_Latitude": "lat",
+            "KuGMI_nearSurfPrecipTotRate": "precip",
+            "KuGMI_surfaceAirTemperature": "tmp2m",
+            "KuGMI_pia": "pia",
+            "KuGMI_estimSurfPrecipTotRate": "precip_est",
+            "KuGMI_estimSurfPrecipTotRateSigma": "precip_est_sigma",
+        }
+        ds = ds.rename(rename_dict)
+        ds = ds.drop_vars(['KuGMI_ScanTime_Year', 'KuGMI_ScanTime_DayOfYear', 'KuGMI_ScanTime_SecondOfDay'])
+
+        # Swap time and nscan coords
+        ds = ds.swap_dims({'nscan': 'time'})
+        ds = ds.compute()
+        datasets.append(ds)
+        os.remove(file)
+
+    ds_full = xr.concat(datasets, dim="time")
+    return ds_full
 
 
 @dask_remote

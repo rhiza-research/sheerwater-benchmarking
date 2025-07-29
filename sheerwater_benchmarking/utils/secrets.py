@@ -16,6 +16,7 @@ def postgres_write_password():
 
     return key
 
+
 def huggingface_read_token():
     """Get a postgres read password."""
     client = secretmanager.SecretManagerServiceClient()
@@ -25,7 +26,6 @@ def huggingface_read_token():
     key = response.payload.data.decode("UTF-8")
 
     return key
-
 
 
 def postgres_read_password():
@@ -138,6 +138,11 @@ def gap_secret():
 def salient_secret():
     """Get the Salient API login from the secret manager."""
     return general_secret("salient-api")
+
+
+def nasa_earthdata_secret():
+    """Get the NASA Earthdata API login from the secret manager."""
+    return general_secret("nasa-earthdata")
 
 
 def salient_auth(func):
