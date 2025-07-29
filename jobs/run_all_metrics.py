@@ -24,7 +24,7 @@ def run_table(combo):
     except KeyboardInterrupt as e:
         raise(e)
     except NotImplementedError:
-        print(f"Metric {forecast} {lead} {grid} {variable} {metric} not implemented: {traceback.format_exc()}")
+        print(f"Metric {grid} {variable} {metric} {region} {time_grouping} not implemented: {traceback.format_exc()}")
         return "Not Impelemnted"
     except:  # noqa: E722
         print(f"Failed to run metric {grid} {variable} {metric} \
@@ -69,7 +69,6 @@ def run_global(combo):
         return None
 
 if __name__ == "__main__":
-
     if remote:
         start_remote(remote_config=remote_config, remote_name=remote_name)
 
