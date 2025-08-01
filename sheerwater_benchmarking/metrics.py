@@ -15,6 +15,7 @@ from weatherbench2.metrics import _spatial_average
 
 from abc import ABC, abstractmethod
 
+
 class Metric(ABC):
     """Abstract base class for metrics. 
 
@@ -50,10 +51,17 @@ class Metric(ABC):
     def compute(self, statistic_values: dict[str, xr.DataArray]) -> xr.DataArray:
         """Compute the metric from the statistics."""
 
-    # bins = [int(x) for x in metric.split('-')[1:]]
-    # bins = [-np.inf] + bins + [np.inf]
-    # bins = np.array(bins)
-    # return bins
+
+def get_bins(statistic):
+    """Get the bins for a contingency metric."""
+    bins = [int(x) for x in statistic.split('-')[1:]]
+    bins = [-np.inf] + bins + [np.inf]
+    bins = np.array(bins)
+    return bins
+
+def is_contingency(statistic):
+    """Check if a statistic is a contingency metric."""
+    return statistic in ['pod', 'far', 'ets', 'bias_score', 'heidke']
 
 
 def get_datasource_fn(datasource):
