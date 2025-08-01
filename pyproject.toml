@@ -89,7 +89,6 @@ dependencies = [
     "psycopg2-binary",
     "xarray-regrid",
     "weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2",
-    "weatherbenchX @ git+https://github.com/rhiza-research/weatherbenchX",
     "deltalake",
     "jupyter-server-proxy",
     "xskillscore @ git+https://github.com/rhiza-research/xskillscore",
@@ -102,7 +101,8 @@ dependencies = [
     "huggingface_hub",
     "py7zr",
     "tqdm",
-    "numcodecs<0.16.0"
+    "numcodecs<0.16.0",
+    "weatherbenchx @ file:///Users/avocet/content/weatherbenchX",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
