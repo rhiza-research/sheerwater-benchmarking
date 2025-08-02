@@ -87,8 +87,7 @@ def get_datasource_fn(datasource):
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                },
            },
-           cache=True,
-           validate_cache_timeseries=False)
+           validate_cache_timeseries=True)
 def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                      statistic, metric_info, grid="global1_5"):
     """Compute a global metric without aggregated in time or space at a specific lead."""
@@ -106,7 +105,6 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                        prob_type=prob_type, grid=grid, mask=None, region='global')
         # Check to see the prob type attribute
         enhanced_prob_type = fcst.attrs['prob_type']
-
     else:
         if lead_or_agg(lead) == 'lead':
             raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
@@ -243,7 +241,6 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     )
     return m_ds
 
-
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
@@ -259,9 +256,130 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, time_grouping=None, spatial=False, grid="global1_5",
                    mask='lsm', region='africa'):
     """Compute a grouped metric for a forecast at a specific lead."""
+    if is_coupled(metric) and time_grouping is not None:
+        raise NotImplementedError("Cannot run time grouping for coupled metrics.")
+
+    # Get the completely aggregated metric
+    if is_coupled(metric) and not spatial:
+        ds = eval_metric(start_time, end_time, variable, lead=lead,
+                         forecast=forecast, truth=truth, spatial=False, avg_time=True,
+                         metric=metric, grid=grid, mask=mask, region=region)
+
+        if ds is None:
+            return None
+
+        for coord in ds.coords:
+            if coord not in ['time']:
+                ds = ds.reset_coords(coord, drop=True)
+        return ds
+
+    # To evaluate RMSE, we call MSE and take the final square root average all averaging in sp/time
+    called_metric = 'mse' if metric == 'rmse' else metric
+
+    if is_coupled(called_metric):
+        # Get the unaggregated global metric
+        ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
+                                      forecast=forecast, truth=truth,
+                                      metric=called_metric, grid=grid, mask=mask, region='global')
+        if ds is None:
+            return None
+
+        truth_sparse = ds.attrs['sparse']
+        metric_sparse = ds.attrs['metric_sparse']
+    else:
+
+        # Get the unaggregated global metric
+        ds = global_metric(start_time, end_time, variable, lead=lead,
+                           forecast=forecast, truth=truth,
+                           metric=called_metric, grid=grid, mask=mask, region='global')
+
+        if ds is None:
+            return None
+
+        truth_sparse = ds.attrs['sparse']
+        metric_sparse = ds.attrs['metric_sparse']
+
+        if time_grouping is not None:
+            if time_grouping == 'month_of_year':
+                # TODO if you want this as a name: ds.coords["time"] = ds.time.dt.strftime("%B")
+                ds.coords["time"] = ds.time.dt.month
+            elif time_grouping == 'year':
+                ds.coords["time"] = ds.time.dt.year
+            elif time_grouping == 'quarter_of_year':
+                ds.coords["time"] = ds.time.dt.quarter
+            else:
+                raise ValueError("Invalid time grouping")
+
+            ds = ds.groupby("time").mean()
+        else:
+            # Average in time
+            ds = ds.mean(dim="time")
+        # TODO: we can convert this to a groupby_time call when we're ready
+        # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
+
+    # Clip it to the region
+    ds = clip_region(ds, region)
+
+    if truth_sparse or metric_sparse:
+        print("Metric is sparse, checking if forecast is valid directly")
+        if metric in PROB_METRICS:
+            prob_type = 'probabilistic'
+        else:
+            prob_type = 'deterministic'
+
+        fcst_fn =  get_datasource_fn(forecast)
+
+        if 'lead' in signature(fcst_fn).parameters:
+            check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
+                           prob_type=prob_type, grid=grid, mask=mask, region=region)
+
+        else:
+            check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
+                           grid=grid, mask=mask, region=region)
+    else:
+        check_ds = ds
+
+    # Check if forecast is valid before spatial averaging
+    if not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
+        print("Metric is not valid for region.")
+        return None
+
+    for coord in ds.coords:
+        if coord not in ['time', 'lat', 'lon']:
+            ds = ds.reset_coords(coord, drop=True)
+
+    # Average in space
+    if not spatial:
+        ds = _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+
+    # Take the final square root of the MSE, after spatial averaging
+    if metric == 'rmse':
+        ds = ds ** 0.5
+    return ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
+                       'truth', 'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": -1},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, "time": 30}
+               },
+           },
+           cache=True)
+def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
+                       metric, time_grouping=None, spatial=False, grid="global1_5",
+                       mask='lsm', region='africa'):
+    """Compute a grouped metric for a forecast at a specific lead."""
     # Use the metric registry to get the metric class
     metric_cls = metric_factory(metric)
     metric = metric_cls()
+
+    # Check that the variable is valid for the metric
+    if metric.valid_variables and variable not in metric.valid_variables:
+        raise ValueError(f"Variable {variable} is not valid for metric {metric}")
 
     stats_to_call = metric.statistics
     metric_sparse = metric.sparse
@@ -276,8 +394,6 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 
         truth_sparse = ds.attrs['sparse']
 
-        import pdb
-        pdb.set_trace()
         ############################################################
         # Statistic aggregation
         ############################################################

@@ -95,7 +95,7 @@ class RMSE(Metric):
         return statistic_values['mse'] ** 0.5
 
 
-class BiasMetric(Metric):
+class Bias(Metric):
     """Bias metric."""
     prob_type = 'deterministic'
 
