@@ -204,7 +204,9 @@ class POD(Metric):
         return ['true_positives', 'false_negatives']
 
     def compute(self, statistic_values):
-        return statistic_values['true_positives'] / (statistic_values['true_positives'] + statistic_values['false_negatives'])
+        tp = statistic_values['true_positives']
+        fn = statistic_values['false_negatives']
+        return tp / (tp + fn)
 
 
 class FAR(Metric):
@@ -217,7 +219,9 @@ class FAR(Metric):
         return ['false_positives', 'true_negatives']
 
     def compute(self, statistic_values):
-        return statistic_values['false_positives'] / (statistic_values['false_positives'] + statistic_values['true_negatives'])
+        fp = statistic_values['false_positives']
+        tn = statistic_values['true_negatives']
+        return fp / (fp + tn)
 
 
 class ETS(Metric):
@@ -234,7 +238,7 @@ class ETS(Metric):
         fp = statistic_values['false_positives']
         fn = statistic_values['false_negatives']
         tn = statistic_values['true_negatives']
-        chance = (tp + fp) * (tp + fn) / (tp + fp + fn + tn)
+        chance = ((tp + fp) * (tp + fn)) / (tp + fp + fn + tn)
         return (tp - chance) / (tp + fp + fn - chance)
 
 
@@ -245,13 +249,12 @@ class CSI(Metric):
 
     @property
     def statistics(self):
-        return ['true_positives', 'false_positives', 'false_negatives', 'true_negatives']
+        return ['true_positives', 'false_positives', 'false_negatives']
 
     def compute(self, statistic_values):
         tp = statistic_values['true_positives']
         fp = statistic_values['false_positives']
         fn = statistic_values['false_negatives']
-        tn = statistic_values['true_negatives']
         return tp / (tp + fp + fn)
 
 
