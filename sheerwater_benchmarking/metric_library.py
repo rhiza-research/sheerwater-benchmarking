@@ -26,7 +26,7 @@ def metric_factory(metric_name):
         mn = metric_name.split('-')[0]  # support for metric names of the form 'metric-edge-edge...'
         metric = SHEERWATER_METRIC_REGISTRY[mn.lower()]
         # Add runtime metric configuration to the metric class
-        if 'bins' in metric.config_dict:
+        if metric.categorical:
             metric.config_dict['bins'] = get_bins(metric_name)
         return metric
 
@@ -48,6 +48,7 @@ class Metric(ABC):
     sparse = False
     prob_type = 'deterministic'
     valid_variables = None
+    categorical = False
     config_dict = {}
 
     def __init__(self, sparse=None, prob_type=None, valid_variables=None, config_dict=None):
@@ -197,7 +198,7 @@ class Pearson(Metric):
 class POD(Metric):
     """Probability of Detection metric."""
     valid_variables = ['precip']
-    config_dict = {'bins': []}  # list of thresholds for the bins, populated at runtime
+    categorical = True
 
     @property
     def statistics(self):
@@ -212,7 +213,7 @@ class POD(Metric):
 class FAR(Metric):
     """False Alarm Rate metric."""
     valid_variables = ['precip']
-    config_dict = {'bins': []}  # list of thresholds for the bins, populated at runtime
+    categorical = True
 
     @property
     def statistics(self):
@@ -227,7 +228,7 @@ class FAR(Metric):
 class ETS(Metric):
     """Equitable Threat Score metric."""
     valid_variables = ['precip']
-    config_dict = {'bins': []}  # list of thresholds for the bins, populated at runtime
+    categorical = True
 
     @property
     def statistics(self):
@@ -245,7 +246,7 @@ class ETS(Metric):
 class CSI(Metric):
     """Critical Success Index metric."""
     valid_variables = ['precip']
-    config_dict = {'bins': []}  # list of thresholds for the bins, populated at runtime
+    categorical = True
 
     @property
     def statistics(self):
@@ -261,7 +262,7 @@ class CSI(Metric):
 class Heidke(Metric):
     """Heidke Skill Score metric."""
     valid_variables = ['precip']
-    config_dict = {'bins': []}  # list of thresholds for the bins, populated at runtime
+    categorical = True
 
     @property
     def statistics(self):
@@ -274,7 +275,7 @@ class Heidke(Metric):
 class FrequencyBias(Metric):
     """Frequency Bias metric."""
     valid_variables = ['precip']
-    config_dict = {'bins': []}  # list of thresholds for the bins, populated at runtime
+    categorical = True
 
     @property
     def statistics(self):

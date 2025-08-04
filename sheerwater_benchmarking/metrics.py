@@ -142,7 +142,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
             'max_p1': 0.93,
         }
 
-    if statistic.split('-')[0] in ['false_positives', 'false_negatives', 'true_positives', 'true_negatives']:
+    if metric_info.categorical:
         # Categorize the forecast and observation into bins
         bins = metric_info.config_dict['bins']
 
@@ -222,14 +222,6 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         m_ds = (fcst - obs)**2
     elif statistic == 'bias':
         m_ds = fcst - obs
-        # Create 3 subplots
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        fcst.precip.isel(time=10).plot(x='lon', ax=axes[0])
-        obs.precip.isel(time=10).plot(x='lon', ax=axes[1])
-        m_ds.precip.isel(time=10).plot(x='lon', ax=axes[2])
-        plt.show()
-        # import pdb
-        # pdb.set_trace()
     else:
         raise ValueError(f"Statistic {statistic} not implemented")
 
@@ -377,21 +369,27 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
                        mask='lsm', region='africa'):
     """Compute a grouped metric for a forecast at a specific lead."""
     # Use the metric registry to get the metric class
-    metric_cls = metric_factory(metric)
-    metric = metric_cls()
+    metric_obj = metric_factory(metric)()
 
     # Check that the variable is valid for the metric
-    if metric.valid_variables and variable not in metric.valid_variables:
+    if metric_obj.valid_variables and variable not in metric_obj.valid_variables:
         raise ValueError(f"Variable {variable} is not valid for metric {metric}")
 
-    stats_to_call = metric.statistics
-    metric_sparse = metric.sparse
+    stats_to_call = metric_obj.statistics
+    metric_sparse = metric_obj.sparse
     statistic_values = {}
     for statistic in stats_to_call:
+        if metric_obj.categorical:
+            # Get everything after the first '-', for the categorical metrics,
+            # e.g., false_positives-10
+            statistic_call = f'{statistic}-{metric[metric.find('-')+1:]}'
+        else:
+            statistic_call = statistic
+
         ds = global_statistic(start_time, end_time, variable, lead=lead,
                               forecast=forecast, truth=truth,
-                              statistic=statistic,
-                              metric_info=metric, grid=grid)
+                              statistic=statistic_call,
+                              metric_info=metric_obj, grid=grid)
         if ds is None:
             return None
 
@@ -425,7 +423,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
             if 'lead' in signature(fcst_fn).parameters:
                 check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
-                                   prob_type=metric.prob_type, grid=grid, mask=mask, region=region)
+                                   prob_type=metric_obj.prob_type, grid=grid, mask=mask, region=region)
             else:
                 check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
                                    grid=grid, mask=mask, region=region)
@@ -449,7 +447,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         statistic_values[statistic] = ds.copy()
 
     # Finally, compute the metric based on the aggregated statistic values
-    m_ds = metric.compute(statistic_values)
+    m_ds = metric_obj.compute(statistic_values)
     return m_ds
 
 
