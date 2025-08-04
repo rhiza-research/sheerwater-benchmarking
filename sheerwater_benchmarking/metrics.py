@@ -5,7 +5,7 @@ from importlib import import_module
 from inspect import signature
 import xskillscore
 import weatherbench2
-
+import matplotlib.pyplot as plt
 import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
@@ -14,44 +14,6 @@ from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, 
 from weatherbench2.metrics import _spatial_average
 
 from .metric_library import metric_factory
-
-
-def is_precip_only(metric):
-    if '-' in metric:
-        metric = metric.split('-')[0]
-
-    return metric in PRECIP_ONLY_METRICS
-
-
-def is_categorical(metric):
-    if '-' in metric:
-        metric = metric.split('-')[0]
-
-    return metric in CATEGORICAL_CONTINGENCY_METRICS
-
-
-def is_contingency(metric):
-    if '-' in metric:
-        metric = metric.split('-')[0]
-
-    return metric in CONTINGENCY_METRICS or metric in CATEGORICAL_CONTINGENCY_METRICS
-
-
-def get_bins(metric):
-    if is_contingency(metric) and len(metric.split('-')) != 2:
-        if is_categorical(metric) and len(metric.split('-')) <= 2:
-            raise ValueError(f"Categorical contingency metric {metric} must be in the format 'metric-edge-edge...'")
-        elif not is_categorical(metric):
-            raise ValueError(f"Dichotomous contingency metric {metric} must be in the format 'metric-edge'")
-
-    bins = [int(x) for x in metric.split('-')[1:]]
-    bins = [-np.inf] + bins + [np.inf]
-    bins = np.array(bins)
-    return bins
-
-
-def is_coupled(metric):
-    return is_contingency(metric) or metric in COUPLED_METRICS
 
 
 def get_datasource_fn(datasource):
@@ -179,10 +141,35 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
             'min_p1': 0.03,
             'max_p1': 0.93,
         }
+
+    if statistic.split('-')[0] in ['false_positives', 'false_negatives', 'true_positives', 'true_negatives']:
+        # Categorize the forecast and observation into bins
+        bins = metric_info.config_dict['bins']
+
+        # `np.digitize(x, bins, right=True)` returns index `i` such that:
+        #   `bins[i-1] < x <= bins[i]`
+        # Indices range from 0 (for x <= bins[0]) to len(bins) (for x > bins[-1]).
+        # `bins` for np.digitize will be `thresholds_np`.
+        obs_digitized = xr.apply_ufunc(
+            np.digitize,
+            obs,
+            kwargs={'bins': bins, 'right': True},
+            dask='parallelized',
+            output_dtypes=[int],
+        )
+        fcst_digitized = xr.apply_ufunc(
+            np.digitize,
+            fcst,
+            kwargs={'bins': bins, 'right': True},
+            dask='parallelized',
+            output_dtypes=[int],
+        )
+        # Restore NaN values
+        fcst_digitized = fcst_digitized.where(fcst.notnull(), np.nan)
+        obs_digitized = obs_digitized.where(obs.notnull(), np.nan)
     ############################################################
     # Call the statistics with their various libraries
     ############################################################
-
     # Get the appropriate climatology dataframe for metric calculation
     if statistic == 'seeps':
         m_ds = weatherbench2.metrics.SpatialSEEPS(**statistic_kwargs) \
@@ -194,11 +181,18 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         m_ds = obs_anom**2
     elif statistic == 'anom_covariance':
         m_ds = fcst_anom * obs_anom
-    elif statistic.split('-')[0] in ['false_positive', 'false_negative', 'true_positive', 'true_negative']:
-        bins = metric_info.bins
-        statistic = statistic.split('-')[0]
-        contingency_table = xskillscore.Contingency(obs, fcst, bins, bins, dim=None)
-        m_ds = getattr(contingency_table, statistic)()
+    elif statistic.split('-')[0] == 'false_positives':
+        m_ds = (obs_digitized == 1) & (fcst_digitized == 2)
+    elif statistic.split('-')[0] == 'false_negatives':
+        m_ds = (obs_digitized == 2) & (fcst_digitized == 1)
+    elif statistic.split('-')[0] == 'true_positives':
+        m_ds = (obs_digitized == 2) & (fcst_digitized == 2)
+    elif statistic.split('-')[0] == 'true_negatives':
+        m_ds = (obs_digitized == 1) & (fcst_digitized == 1)
+    elif statistic.split('-')[0] == 'digitized_obs':
+        m_ds = obs_digitized
+    elif statistic.split('-')[0] == 'digitized_fcst':
+        m_ds = fcst_digitized
     elif statistic == 'squared_pred':
         m_ds = fcst**2
     elif statistic == 'squared_target':
@@ -228,6 +222,14 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         m_ds = (fcst - obs)**2
     elif statistic == 'bias':
         m_ds = fcst - obs
+        # Create 3 subplots
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        fcst.precip.isel(time=10).plot(x='lon', ax=axes[0])
+        obs.precip.isel(time=10).plot(x='lon', ax=axes[1])
+        m_ds.precip.isel(time=10).plot(x='lon', ax=axes[2])
+        plt.show()
+        # import pdb
+        # pdb.set_trace()
     else:
         raise ValueError(f"Statistic {statistic} not implemented")
 
@@ -240,6 +242,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         statistic=statistic
     )
     return m_ds
+
 
 @dask_remote
 @cacheable(data_type='array',
@@ -327,15 +330,15 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
         else:
             prob_type = 'deterministic'
 
-        fcst_fn =  get_datasource_fn(forecast)
+        fcst_fn = get_datasource_fn(forecast)
 
         if 'lead' in signature(fcst_fn).parameters:
             check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
-                           prob_type=prob_type, grid=grid, mask=mask, region=region)
+                               prob_type=prob_type, grid=grid, mask=mask, region=region)
 
         else:
             check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
-                           grid=grid, mask=mask, region=region)
+                               grid=grid, mask=mask, region=region)
     else:
         check_ds = ds
 
