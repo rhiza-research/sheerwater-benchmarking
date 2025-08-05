@@ -143,6 +143,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
 
     if metric_info.categorical:
         # Categorize the forecast and observation into bins
+        stat_name = statistic.split('-')[0]
         bins = metric_info.config_dict['bins']
 
         # `np.digitize(x, bins, right=True)` returns index `i` such that:
@@ -170,7 +171,11 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     # Call the statistics with their various libraries
     ############################################################
     # Get the appropriate climatology dataframe for metric calculation
-    if statistic == 'seeps':
+    if statistic == 'target' or stat_name == 'target':
+        m_ds = obs
+    elif statistic == 'pred' or stat_name == 'pred':
+        m_ds = fcst
+    elif statistic == 'seeps':
         m_ds = weatherbench2.metrics.SpatialSEEPS(**statistic_kwargs) \
                             .compute(forecast=fcst, truth=obs, avg_time=False, skipna=True)
         m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
@@ -180,17 +185,17 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         m_ds = obs_anom**2
     elif statistic == 'anom_covariance':
         m_ds = fcst_anom * obs_anom
-    elif statistic.split('-')[0] == 'false_positives':
+    elif stat_name == 'false_positives':
         m_ds = (obs_digitized == 1) & (fcst_digitized == 2)
-    elif statistic.split('-')[0] == 'false_negatives':
+    elif stat_name == 'false_negatives':
         m_ds = (obs_digitized == 2) & (fcst_digitized == 1)
-    elif statistic.split('-')[0] == 'true_positives':
+    elif stat_name == 'true_positives':
         m_ds = (obs_digitized == 2) & (fcst_digitized == 2)
-    elif statistic.split('-')[0] == 'true_negatives':
+    elif stat_name == 'true_negatives':
         m_ds = (obs_digitized == 1) & (fcst_digitized == 1)
-    elif statistic.split('-')[0] == 'digitized_obs':
+    elif stat_name == 'digitized_obs':
         m_ds = obs_digitized
-    elif statistic.split('-')[0] == 'digitized_fcst':
+    elif stat_name == 'digitized_fcst':
         m_ds = fcst_digitized
     elif statistic == 'squared_pred':
         m_ds = fcst**2
@@ -337,7 +342,15 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
     stats_to_call = metric_obj.statistics
     metric_sparse = metric_obj.sparse
+
+    # Statistics needed to calculate the metrics, incrementally populated
     statistic_values = {}
+    statistic_values['spatial'] = spatial
+    import pdb
+    pdb.set_trace()
+    if metric_obj.categorical:
+        statistic_values['bins'] = metric_obj.config_dict['bins']
+
     for statistic in stats_to_call:
         if metric_obj.categorical:
             # Get everything after the first '-', for the categorical metrics,
@@ -402,11 +415,12 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         ############################################################
         # Statistic aggregation
         ############################################################
-        # Group by time
-        ds = groupby_time(ds, time_grouping, agg_fn='mean')
-        # Average in space
-        if not spatial:
-            ds = latitude_weighted_spatial_average(ds)
+        if not metric_obj.coupled:
+            # Group by time
+            ds = groupby_time(ds, time_grouping, agg_fn='mean')
+            # Average in space
+            if not spatial:
+                ds = latitude_weighted_spatial_average(ds)
 
         # Assign the final statistic value
         statistic_values[statistic] = ds.copy()

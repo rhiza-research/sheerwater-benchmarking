@@ -45,32 +45,12 @@ class Metric(ABC):
     Based on the implementation in WeatherBenchX, a metric is defined
     in terms of statistics and final computation.
     """
-    sparse = False
-    prob_type = 'deterministic'
-    valid_variables = None
-    categorical = False
-    config_dict = {}
-
-    def __init__(self, sparse=None, prob_type=None, valid_variables=None, config_dict=None):
-        """Initialize the metric.
-
-        Args:
-            sparse (bool): Whether the metric is sparse.
-            prob_type (str): The type of probability distribution of the forecast.
-            valid_variables (list[str]): The variables that the metric is valid for.
-                If None, the metric is valid for all variables.
-            config_dict (dict): A dictionary of configuration parameters for the metric.
-                For example, the bins for a contingency metric.
-
-        """
-        if sparse is not None:
-            self.sparse = sparse
-        if prob_type is not None:
-            self.prob_type = prob_type
-        if valid_variables is not None:
-            self.valid_variables = valid_variables
-        if config_dict is not None:
-            self.config_dict = config_dict
+    sparse = False  # does the metric induce NaNs
+    prob_type = 'deterministic'  # is the forecast probabilistic?
+    valid_variables = None  # what variables is the metric valid for?
+    coupled = False  # If true, the metric can be computed as a nonlinear function of aggregated statistics
+    categorical = False  # is the metric categorical?
+    config_dict = {}  # a dictionary of configuration parameters for the metric
 
     def __init_subclass__(cls, **kwargs):
         """Automatically register derived Metrics classes with the metric registry."""
@@ -176,7 +156,7 @@ class ACC(Metric):
         return ds
 
 
-class Pearson(Metric):
+class Pearson_stream(Metric):
     """Pearson's correlation coefficient metric.
 
     Implemented with a rewrite of the standard formula to enable just-in-time aggregation.
@@ -193,14 +173,57 @@ class Pearson(Metric):
 
     def compute(self, statistic_values):
         # Pearson's r = covariance / sqrt(squared_pred * squared_target)
-        import pdb
-        pdb.set_trace()
         numerator = statistic_values['n_valid'] * statistic_values['covariance'] - \
             statistic_values['pred_mean'] * statistic_values['target_mean']
         denominator = (statistic_values['n_valid'] * statistic_values['squared_pred'] - statistic_values['pred_mean']**2) ** 0.5 * \
             (statistic_values['n_valid'] * statistic_values['squared_target'] -
              statistic_values['target_mean']**2) ** 0.5
         return numerator / denominator
+
+
+class Pearson(Metric):
+    """Pearson's correlation coefficient metric."""
+    coupled = True
+
+    @property
+    def statistics(self):
+        return ['target', 'pred']
+
+    def compute(self, statistic_values):
+        from xskillscore import pearson_r
+        fcst = statistic_values['pred']
+        obs = statistic_values['target']
+        spatial = statistic_values['spatial']
+        fcst = fcst.chunk(time=-1, lat=-1, lon=-1)  # all must be -1 to succeed
+        obs = obs.chunk(time=-1, lat=-1, lon=-1)  # all must be -1 to succeed
+        if spatial:
+            ds = pearson_r(a=obs, b=fcst, dim='time', skipna=True)
+        else:
+            ds = pearson_r(a=obs, b=fcst, skipna=True)
+        return ds
+
+
+class Heidke(Metric):
+    """Heidke Skill Score metric."""
+    # TODO: cons
+    coupled = True
+    valid_variables = ['precip']
+    categorical = True
+
+    @property
+    def statistics(self):
+        return ['target', 'pred']
+
+    def compute(self, statistic_values):
+        from xskillscore import Contingency
+        fcst = statistic_values['pred']
+        obs = statistic_values['target']
+        spatial = statistic_values['spatial']
+        bins = statistic_values['bins']
+        dims = ['time'] if spatial else ['time', 'lat', 'lon']
+        contingency_table = Contingency(obs, fcst, bins, bins, dim=dims)
+        m_ds = contingency_table.heidke_score()
+        return m_ds
 
 
 class POD(Metric):
@@ -267,17 +290,17 @@ class CSI(Metric):
         return tp / (tp + fp + fn)
 
 
-class Heidke(Metric):
-    """Heidke Skill Score metric."""
-    valid_variables = ['precip']
-    categorical = True
+# class Heidke(Metric):
+#     """Heidke Skill Score metric."""
+#     valid_variables = ['precip']
+#     categorical = True
 
-    @property
-    def statistics(self):
-        return ['hits', 'misses']
+#     @property
+#     def statistics(self):
+#         return ['hits', 'misses']
 
-    def compute(self, statistic_values):
-        return statistic_values['hits'] / (statistic_values['hits'] + statistic_values['misses'])
+#     def compute(self, statistic_values):
+#         return statistic_values['hits'] / (statistic_values['hits'] + statistic_values['misses'])
 
 
 class FrequencyBias(Metric):
