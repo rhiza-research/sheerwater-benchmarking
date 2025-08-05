@@ -462,13 +462,12 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
         ds = ds.drop_vars('spatial_ref')
 
     # TODO: remove this once we update ECMWF caches
-    import pdb
-    pdb.set_trace()
     if variable == 'precip' and agg_days in [7, 14]:
         if not debiased:
             print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
             ds['precip'] /= agg_days
-        if ds.precip.mean() > 5:  # check for improper daily values
+        if ds.precip.mean() > 10:  # check for improper daily values
+            # Global avg should be around 2.4; when not divided, it's more like 15
             raise ValueError("Precip is not in daily values!!")
 
     return ds

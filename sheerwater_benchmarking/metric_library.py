@@ -1,4 +1,5 @@
-
+"""Library of metrics implementations for verification."""
+# flake8: noqa: D102
 from abc import ABC
 import xarray as xr
 import numpy as np
@@ -8,7 +9,7 @@ SHEERWATER_METRIC_REGISTRY = {}
 
 
 def get_bins(metric_name):
-    """Get the categorical bins for a metric name of the form 'metric-edge-edge...'
+    """Get the categorical bins for a metric name of the form 'metric-edge-edge...'.
 
     For example,
         'pod-5' returns [-np.inf, 5, np.inf]
@@ -40,7 +41,7 @@ def list_metrics():
 
 
 class Metric(ABC):
-    """Abstract base class for metrics. 
+    """Abstract base class for metrics.
 
     Based on the implementation in WeatherBenchX, a metric is defined
     in terms of statistics and final computation.
@@ -96,7 +97,7 @@ class RMSE(Metric):
     def statistics(self) -> list[str]:
         return ['mse']
 
-    def compute(self, statistic_values: dict[str, xr.DataArray]) -> xr.DataArray:
+    def compute(self, statistic_values):
         return statistic_values['mse'] ** 0.5
 
 
@@ -114,6 +115,7 @@ class Brier(Metric):
     prob_type = 'probabilistic'
     valid_variables = ['precip']
     categorical = True
+
 
 class SMAPE(Metric):
     """Symmetric Mean Absolute Percentage Error metric."""
@@ -156,6 +158,8 @@ class Pearson_stream(Metric):
 
     This can be rewritten as:
     r = (n * sum(x * y) - sum(x) * sum(y)) / sqrt((n * sum(x^2) - sum(x)^2) * (n * sum(y^2) - sum(y)^2))
+
+    # TODO: this is not yet correct; atm only returning positive values. Needs debugging
     """
     @property
     def statistics(self):
@@ -165,14 +169,15 @@ class Pearson_stream(Metric):
         # Pearson's r = covariance / sqrt(squared_pred * squared_target)
         numerator = statistic_values['n_valid'] * statistic_values['covariance'] - \
             statistic_values['pred_mean'] * statistic_values['target_mean']
-        denominator = (statistic_values['n_valid'] * statistic_values['squared_pred'] - statistic_values['pred_mean']**2) ** 0.5 * \
-            (statistic_values['n_valid'] * statistic_values['squared_target'] -
-             statistic_values['target_mean']**2) ** 0.5
+        denominator = (statistic_values['n_valid'] * statistic_values['squared_pred']
+                       - statistic_values['pred_mean']**2) ** 0.5 * \
+            (statistic_values['n_valid'] * statistic_values['squared_target']
+             - statistic_values['target_mean']**2) ** 0.5
         return numerator / denominator
 
 
 class Pearson(Metric):
-    """Pearson's correlation coefficient metric."""
+    """Pearson's correlation coefficient metric, coupled implementation."""
     coupled = True
 
     @property
@@ -194,8 +199,7 @@ class Pearson(Metric):
 
 
 class Heidke(Metric):
-    """Heidke Skill Score metric."""
-    # TODO: cons
+    """Heidke Skill Score metric. TODO: considered an uncoupled implementation."""
     coupled = True
     valid_variables = ['precip']
     categorical = True
@@ -278,19 +282,6 @@ class CSI(Metric):
         fp = statistic_values['false_positives']
         fn = statistic_values['false_negatives']
         return tp / (tp + fp + fn)
-
-
-# class Heidke(Metric):
-#     """Heidke Skill Score metric."""
-#     valid_variables = ['precip']
-#     categorical = True
-
-#     @property
-#     def statistics(self):
-#         return ['hits', 'misses']
-
-#     def compute(self, statistic_values):
-#         return statistic_values['hits'] / (statistic_values['hits'] + statistic_values['misses'])
 
 
 class FrequencyBias(Metric):

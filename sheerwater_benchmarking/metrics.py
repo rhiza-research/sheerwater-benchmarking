@@ -1,11 +1,9 @@
-# """Verification metrics for forecasts."""
-
+"""Verification metrics for forecasters and reanalyses."""
 import numpy as np
 from importlib import import_module
 from inspect import signature
 import xskillscore
 import weatherbench2
-import matplotlib.pyplot as plt
 import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
@@ -299,8 +297,7 @@ def groupby_time(ds, time_grouping, agg_fn='mean'):
 
 
 def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon'):
-    """
-    Compute latitude-weighted spatial average of a dataset.
+    """Compute latitude-weighted spatial average of a dataset.
 
     This function weights each latitude band by the actual cell area,
     which accounts for the fact that grid cells near the poles are smaller
@@ -600,6 +597,5 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
     return df
 
 
-__all__ = ['eval_metric', 'global_metric', 'aggregated_global_metric',
-           'grouped_metric', 'skill_metric',
+__all__ = ['global_statistic', 'grouped_metric', 'skill_metric',
            'summary_metrics_table', 'biweekly_summary_metrics_table']

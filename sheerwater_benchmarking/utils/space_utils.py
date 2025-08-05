@@ -121,7 +121,7 @@ def get_region(region):
         lats = np.array([-90.0, 90.0])
         data = (lons, lats)
     else:
-        filepath = f'gs://sheerwater-datalake/regions/world_countries.geojson'
+        filepath = 'gs://sheerwater-datalake/regions/world_countries.geojson'
         gdf = gpd.read_file(load_object(filepath))
         # Make name lowercase
         gdf = gdf[gdf['name'].str.lower() == region.lower()]
