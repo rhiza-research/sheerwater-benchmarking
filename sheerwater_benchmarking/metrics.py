@@ -11,7 +11,6 @@ import xarray as xr
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
                                            lead_to_agg_days, lead_or_agg, apply_mask)
-from weatherbench2.metrics import _spatial_average
 
 from .metric_library import metric_factory
 
@@ -251,106 +250,67 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                    metric, time_grouping=None, spatial=False, grid="global1_5",
                    mask='lsm', region='africa'):
     """Compute a grouped metric for a forecast at a specific lead."""
-    if is_coupled(metric) and time_grouping is not None:
-        raise NotImplementedError("Cannot run time grouping for coupled metrics.")
+    # TODO: Delete, keeping around for cachable function atm
+    pass
 
-    # Get the completely aggregated metric
-    if is_coupled(metric) and not spatial:
-        ds = eval_metric(start_time, end_time, variable, lead=lead,
-                         forecast=forecast, truth=truth, spatial=False, avg_time=True,
-                         metric=metric, grid=grid, mask=mask, region=region)
 
-        if ds is None:
-            return None
-
-        for coord in ds.coords:
-            if coord not in ['time']:
-                ds = ds.reset_coords(coord, drop=True)
-        return ds
-
-    # To evaluate RMSE, we call MSE and take the final square root average all averaging in sp/time
-    called_metric = 'mse' if metric == 'rmse' else metric
-
-    if is_coupled(called_metric):
-        # Get the unaggregated global metric
-        ds = aggregated_global_metric(start_time, end_time, variable, lead=lead,
-                                      forecast=forecast, truth=truth,
-                                      metric=called_metric, grid=grid, mask=mask, region='global')
-        if ds is None:
-            return None
-
-        truth_sparse = ds.attrs['sparse']
-        metric_sparse = ds.attrs['metric_sparse']
-    else:
-
-        # Get the unaggregated global metric
-        ds = global_metric(start_time, end_time, variable, lead=lead,
-                           forecast=forecast, truth=truth,
-                           metric=called_metric, grid=grid, mask=mask, region='global')
-
-        if ds is None:
-            return None
-
-        truth_sparse = ds.attrs['sparse']
-        metric_sparse = ds.attrs['metric_sparse']
-
-        if time_grouping is not None:
-            if time_grouping == 'month_of_year':
-                # TODO if you want this as a name: ds.coords["time"] = ds.time.dt.strftime("%B")
-                ds.coords["time"] = ds.time.dt.month
-            elif time_grouping == 'year':
-                ds.coords["time"] = ds.time.dt.year
-            elif time_grouping == 'quarter_of_year':
-                ds.coords["time"] = ds.time.dt.quarter
-            else:
-                raise ValueError("Invalid time grouping")
-
+def groupby_time(ds, time_grouping, agg_fn='mean'):
+    """Aggregate a statistic over time."""
+    if time_grouping is not None:
+        if time_grouping == 'month_of_year':
+            ds.coords["time"] = ds.time.dt.month
+        elif time_grouping == 'year':
+            ds.coords["time"] = ds.time.dt.year
+        elif time_grouping == 'quarter_of_year':
+            ds.coords["time"] = ds.time.dt.quarter
+        else:
+            raise ValueError("Invalid time grouping")
+        if agg_fn == 'mean':
             ds = ds.groupby("time").mean()
+        elif agg_fn == 'sum':
+            ds = ds.groupby("time").sum()
         else:
-            # Average in time
-            ds = ds.mean(dim="time")
-        # TODO: we can convert this to a groupby_time call when we're ready
-        # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
-
-    # Clip it to the region
-    ds = clip_region(ds, region)
-
-    if truth_sparse or metric_sparse:
-        print("Metric is sparse, checking if forecast is valid directly")
-        if metric in PROB_METRICS:
-            prob_type = 'probabilistic'
-        else:
-            prob_type = 'deterministic'
-
-        fcst_fn = get_datasource_fn(forecast)
-
-        if 'lead' in signature(fcst_fn).parameters:
-            check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
-                               prob_type=prob_type, grid=grid, mask=mask, region=region)
-
-        else:
-            check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
-                               grid=grid, mask=mask, region=region)
+            raise ValueError(f"Invalid aggregation function {agg_fn}")
     else:
-        check_ds = ds
-
-    # Check if forecast is valid before spatial averaging
-    if not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
-        print("Metric is not valid for region.")
-        return None
-
-    for coord in ds.coords:
-        if coord not in ['time', 'lat', 'lon']:
-            ds = ds.reset_coords(coord, drop=True)
-
-    # Average in space
-    if not spatial:
-        ds = _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
-
-    # Take the final square root of the MSE, after spatial averaging
-    if metric == 'rmse':
-        ds = ds ** 0.5
+        # Average in time
+        if agg_fn == 'mean':
+            ds = ds.mean(dim="time")
+        elif agg_fn == 'sum':
+            ds = ds.sum(dim="time")
+        else:
+            raise ValueError(f"Invalid aggregation function {agg_fn}")
+    # TODO: we can convert this to a groupby_time call when we're ready
+    # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
     return ds
+
+
+def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon'):
+    """
+    Compute latitude-weighted spatial average of a dataset.
+
+    This function weights each latitude band by the actual cell area,
+    which accounts for the fact that grid cells near the poles are smaller
+    in area than those near the equator.
+    """
+    # Calculate latitude cell bounds
+    lat_rad = np.deg2rad(ds[lat_dim].values)
+    # Get the centerpoint of each latitude band
+    pi_over_2 = np.array([np.pi / 2], dtype=lat_rad.dtype)
+    bounds = np.concatenate([-pi_over_2, (lat_rad[:-1] + lat_rad[1:]) / 2, pi_over_2])
+    # Calculate the area of each latitude band
+    # Calculate cell areas from latitude bounds
+    upper = bounds[1:]
+    lower = bounds[:-1]
+    # normalized cell area: integral from lower to upper of cos(latitude)
+    weights = np.sin(upper) - np.sin(lower)
+
+    # Normalize weights
+    weights /= np.mean(weights)
+
+    # Create weights array
+    weights = ds[lat_dim].copy(data=weights)
+    weighted = ds.weighted(weights).mean([lat_dim, lon_dim], skipna=True)
+    return weighted
 
 
 @dask_remote
@@ -396,28 +356,18 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         truth_sparse = ds.attrs['sparse']
 
         ############################################################
-        # Statistic aggregation
+        # Clip, mask and check validity of the statistic
         ############################################################
-        if time_grouping is not None:
-            if time_grouping == 'month_of_year':
-                ds.coords["time"] = ds.time.dt.month
-            elif time_grouping == 'year':
-                ds.coords["time"] = ds.time.dt.year
-            elif time_grouping == 'quarter_of_year':
-                ds.coords["time"] = ds.time.dt.quarter
-            else:
-                raise ValueError("Invalid time grouping")
-            ds = ds.groupby("time").mean()
-        else:
-            # Average in time
-            ds = ds.mean(dim="time")
-        # TODO: we can convert this to a groupby_time call when we're ready
-        # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
+        # Drop any extra coordinates
+        for coord in ds.coords:
+            if coord not in ['time', 'lat', 'lon']:
+                ds = ds.reset_coords(coord, drop=True)
 
         # Clip it to the region
         ds = clip_region(ds, region)
         ds = apply_mask(ds, mask)
 
+        # Check validity of the statistic
         if truth_sparse or metric_sparse:
             print("Metric is sparse, checking if forecast is valid directly.")
             fcst_fn = get_datasource_fn(forecast)
@@ -436,13 +386,27 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             print("Metric is not valid for region.")
             return None
 
-        for coord in ds.coords:
-            if coord not in ['time', 'lat', 'lon']:
-                ds = ds.reset_coords(coord, drop=True)
+        ############################################################
+        # Default n_valid statistic
+        ############################################################
+        # Add a default n_valid statistic if it doesn't exist that just counts the number
+        # of non-null values in the statistics
+        if 'n_valid' not in statistic_values:
+            statistic_values['n_valid'] = xr.ones_like(ds)
+            statistic_values['n_valid'] = groupby_time(
+                statistic_values['n_valid'], time_grouping, agg_fn='sum')
+            if not spatial:
+                # TODO: need to convert this to be a sum, not average
+                statistic_values['n_valid'] = statistic_values['n_valid'].notnull().sum()
 
+        ############################################################
+        # Statistic aggregation
+        ############################################################
+        # Group by time
+        ds = groupby_time(ds, time_grouping, agg_fn='mean')
         # Average in space
         if not spatial:
-            ds = _spatial_average(ds, lat_dim='lat', lon_dim='lon', skipna=True)
+            ds = latitude_weighted_spatial_average(ds)
 
         # Assign the final statistic value
         statistic_values[statistic] = ds.copy()
@@ -467,23 +431,19 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
                               grid=grid, mask=mask, region=region)
     except NotImplementedError:
         return None
-
     if not m_ds:
         return None
 
     # Get the baseline if it exists and run its metric
     base_ds = grouped_metric(start_time, end_time, variable, lead, baseline,
                              truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
-
     if not base_ds:
         raise NotImplementedError("Cannot compute skill for null base")
-
     print("Got metrics. Computing skill")
 
     # Compute the skill
     # TODO - think about base metric of 0
     m_ds = (1 - (m_ds/base_ds))
-
     return m_ds
 
 

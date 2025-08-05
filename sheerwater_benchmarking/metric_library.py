@@ -129,6 +129,22 @@ class CRPS(Metric):
     prob_type = 'probabilistic'
 
 
+class Brier(Metric):
+    """Brier score metric."""
+    prob_type = 'probabilistic'
+    valid_variables = ['precip']
+    categorical = True
+
+    @property
+    def statistics(self):
+        return ['event_probability_mse']
+
+    def compute(self, statistic_values):
+        tp = statistic_values['true_positives']
+        fn = statistic_values['false_negatives']
+        return tp / (tp + fn)
+
+
 class SMAPE(Metric):
     """Symmetric Mean Absolute Percentage Error metric."""
     valid_variables = ['precip']
@@ -153,16 +169,6 @@ class ACC(Metric):
         return ['squared_pred_anom', 'squared_target_anom', 'anom_covariance']
 
     def compute(self, statistic_values):
-        # ACC = anom_covariance / sqrt(squared_pred_anom * squared_target_anom)
-        # numerator = statistic_values['anom_covariance']
-        # denominator = (statistic_values['squared_pred_anom'] * statistic_values['squared_target_anom']) ** 0.5
-        # return numerator / denominator
-
-        # fcst_norm = np.sqrt((forecast**2).mean(dim=avg_dim, skipna=skipna))
-        # gt_norm = np.sqrt((truth**2).mean(dim=avg_dim, skipna=skipna))
-        # dot = (forecast * truth).mean(dim=avg_dim, skipna=skipna)
-        # ds = (dot / (fcst_norm * gt_norm))
-
         fcst_norm = np.sqrt(statistic_values['squared_pred_anom'])
         gt_norm = np.sqrt(statistic_values['squared_target_anom'])
         dot = statistic_values['anom_covariance']
@@ -183,10 +189,12 @@ class Pearson(Metric):
     """
     @property
     def statistics(self):
-        return ['n_valid', 'pred_mean', 'target_mean', 'squared_pred', 'squared_target', 'covariance']
+        return ['pred_mean', 'target_mean', 'squared_pred', 'squared_target', 'covariance']
 
     def compute(self, statistic_values):
         # Pearson's r = covariance / sqrt(squared_pred * squared_target)
+        import pdb
+        pdb.set_trace()
         numerator = statistic_values['n_valid'] * statistic_values['covariance'] - \
             statistic_values['pred_mean'] * statistic_values['target_mean']
         denominator = (statistic_values['n_valid'] * statistic_values['squared_pred'] - statistic_values['pred_mean']**2) ** 0.5 * \
