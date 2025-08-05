@@ -463,12 +463,10 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
 
     # TODO: remove this once we update ECMWF caches
     if variable == 'precip' and agg_days in [7, 14]:
-        if not debiased:
+        # TODO: I found one failure mode for precip, ecmwf_ifs_raw, weekly, where it's already divided
+        if ds.precip.mean() > 10:
             print("Warning: Dividing precip by days to get daily values. Do you still want to do this?")
             ds['precip'] /= agg_days
-        if ds.precip.mean() > 10:  # check for improper daily values
-            # Global avg should be around 2.4; when not divided, it's more like 15
-            raise ValueError("Precip is not in daily values!!")
 
     return ds
 
