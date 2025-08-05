@@ -48,6 +48,7 @@ def get_datasource_fn(datasource):
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                },
            },
+           cache_disable_if={'statistic': ['pred', 'target']},
            validate_cache_timeseries=True)
 def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                      statistic, metric_info, grid="global1_5"):

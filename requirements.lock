@@ -891,8 +891,6 @@ wcwidth==0.2.13
     # via prompt-toolkit
 weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@3c95b54a74a0fc92193901310f75014dcef9f448
     # via sheerwater-benchmarking
-weatherbenchx @ file:///Users/avocet/content/weatherbenchX
-    # via sheerwater-benchmarking
 webcolors==24.11.1
     # via jsonschema
 webencodings==0.5.1

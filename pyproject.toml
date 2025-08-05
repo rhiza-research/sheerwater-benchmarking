@@ -102,7 +102,6 @@ dependencies = [
     "py7zr",
     "tqdm",
     "numcodecs<0.16.0",
-    "weatherbenchx @ file:///Users/avocet/content/weatherbenchX",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
