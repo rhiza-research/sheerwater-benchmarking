@@ -53,6 +53,10 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                      statistic, metric_info, grid="global1_5"):
     """Compute a global metric without aggregated in time or space at a specific lead."""
     prob_type = metric_info.prob_type
+    if metric_info.categorical:
+        stat_name = statistic.split('-')[0]
+    else:
+        stat_name = statistic
 
     # Get the forecast
     fcst_fn = get_datasource_fn(forecast)
@@ -113,7 +117,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         fcst = fcst.where(fcst > -1e9, np.nan)
 
     # Get the appropriate climatology dataframe for metric calculation
-    if statistic in ['anom_covariance', 'squared_pred_anom', 'squared_target_anom']:
+    if stat_name in ['anom_covariance', 'squared_pred_anom', 'squared_target_anom']:
         clim_ds = climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
                                    grid=grid, mask=None, region='global')
         clim_ds = clim_ds.sel(time=valid_times)
@@ -128,7 +132,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         obs_anom = obs - clim_ds
 
     # Get the appropriate climatology dataframe for metric calculation
-    if statistic == 'seeps':
+    if stat_name == 'seeps':
         wet_threshold = seeps_wet_threshold(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead), grid=grid)
         dry_fraction = seeps_dry_fraction(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead), grid=grid)
         clim_ds = xr.merge([wet_threshold, dry_fraction])
@@ -143,7 +147,6 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
 
     if metric_info.categorical:
         # Categorize the forecast and observation into bins
-        stat_name = statistic.split('-')[0]
         bins = metric_info.config_dict['bins']
 
         # `np.digitize(x, bins, right=True)` returns index `i` such that:
@@ -171,19 +174,24 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     # Call the statistics with their various libraries
     ############################################################
     # Get the appropriate climatology dataframe for metric calculation
-    if statistic == 'target' or stat_name == 'target':
+    if stat_name == 'target':
         m_ds = obs
-    elif statistic == 'pred' or stat_name == 'pred':
+    elif stat_name == 'pred':
         m_ds = fcst
-    elif statistic == 'seeps':
+    elif stat_name == 'brier' and enhanced_prob_type == 'ensemble':
+        fcst_event_prob = (fcst_digitized == 2).mean(dim='member')
+        obs_event_prob = (obs_digitized == 2)
+        m_ds = (fcst_event_prob - obs_event_prob)**2
+        # TODO implement brier for quantile forecasts
+    elif stat_name == 'seeps':
         m_ds = weatherbench2.metrics.SpatialSEEPS(**statistic_kwargs) \
                             .compute(forecast=fcst, truth=obs, avg_time=False, skipna=True)
         m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
-    elif statistic == 'squared_pred_anom':
+    elif stat_name == 'squared_pred_anom':
         m_ds = fcst_anom**2
-    elif statistic == 'squared_target_anom':
+    elif stat_name == 'squared_target_anom':
         m_ds = obs_anom**2
-    elif statistic == 'anom_covariance':
+    elif stat_name == 'anom_covariance':
         m_ds = fcst_anom * obs_anom
     elif stat_name == 'false_positives':
         m_ds = (obs_digitized == 1) & (fcst_digitized == 2)
@@ -197,37 +205,37 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         m_ds = obs_digitized
     elif stat_name == 'digitized_fcst':
         m_ds = fcst_digitized
-    elif statistic == 'squared_pred':
+    elif stat_name == 'squared_pred':
         m_ds = fcst**2
-    elif statistic == 'squared_target':
+    elif stat_name == 'squared_target':
         m_ds = obs**2
-    elif statistic == 'pred_mean':
+    elif stat_name == 'pred_mean':
         m_ds = fcst
-    elif statistic == 'target_mean':
+    elif stat_name == 'target_mean':
         m_ds = obs
-    elif statistic == 'covariance':
+    elif stat_name == 'covariance':
         m_ds = fcst * obs
-    elif statistic == 'n_valid':
+    elif stat_name == 'n_valid':
         m_ds = fcst.notnull()  # already masked obs, so this is locs where both forecast and obs are non null
-    elif statistic == 'crps' and enhanced_prob_type == 'ensemble':
+    elif stat_name == 'crps' and enhanced_prob_type == 'ensemble':
         fcst = fcst.chunk(member=-1, time=1, lat=250, lon=250)  # member must be -1 to succeed
         m_ds = xskillscore.crps_ensemble(observations=obs, forecasts=fcst, mean=False, dim='time')
-    elif statistic == 'crps' and enhanced_prob_type == 'quantile':
+    elif stat_name == 'crps' and enhanced_prob_type == 'quantile':
         m_ds = weatherbench2.metrics.SpatialQuantileCRPS(quantile_dim='member') \
                             .compute(forecast=fcst, truth=obs, avg_time=False, skipna=True)
         m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
-    elif statistic == 'mape':
+    elif stat_name == 'mape':
         m_ds = abs(fcst - obs) / np.maximum(abs(obs), 1e-10)
-    elif statistic == 'smape':
+    elif stat_name == 'smape':
         m_ds = abs(fcst - obs) / (abs(fcst) + abs(obs))
-    elif statistic == 'mae':
+    elif stat_name == 'mae':
         m_ds = abs(fcst - obs)
-    elif statistic == 'mse':
+    elif stat_name == 'mse':
         m_ds = (fcst - obs)**2
-    elif statistic == 'bias':
+    elif stat_name == 'bias':
         m_ds = fcst - obs
     else:
-        raise ValueError(f"Statistic {statistic} not implemented")
+        raise ValueError(f"Statistic {stat_name} not implemented")
 
     # Assign attributes in one call
     m_ds = m_ds.assign_attrs(
@@ -346,16 +354,15 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
     # Statistics needed to calculate the metrics, incrementally populated
     statistic_values = {}
     statistic_values['spatial'] = spatial
-    import pdb
-    pdb.set_trace()
     if metric_obj.categorical:
+        # Get everything after the first '-', for the categorical metrics,
+        # e.g., false_positives-10
+        bin_str = metric[metric.find('-')+1:]
         statistic_values['bins'] = metric_obj.config_dict['bins']
 
     for statistic in stats_to_call:
         if metric_obj.categorical:
-            # Get everything after the first '-', for the categorical metrics,
-            # e.g., false_positives-10
-            statistic_call = f'{statistic}-{metric[metric.find('-')+1:]}'
+            statistic_call = f'{statistic}-{bin_str}'
         else:
             statistic_call = statistic
 

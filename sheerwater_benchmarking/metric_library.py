@@ -115,16 +115,6 @@ class Brier(Metric):
     valid_variables = ['precip']
     categorical = True
 
-    @property
-    def statistics(self):
-        return ['event_probability_mse']
-
-    def compute(self, statistic_values):
-        tp = statistic_values['true_positives']
-        fn = statistic_values['false_negatives']
-        return tp / (tp + fn)
-
-
 class SMAPE(Metric):
     """Symmetric Mean Absolute Percentage Error metric."""
     valid_variables = ['precip']
