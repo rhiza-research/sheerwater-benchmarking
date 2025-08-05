@@ -10,7 +10,7 @@ import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
-                                           lead_to_agg_days, lead_or_agg)
+                                           lead_to_agg_days, lead_or_agg, apply_mask)
 from weatherbench2.metrics import _spatial_average
 
 from .metric_library import metric_factory
@@ -416,6 +416,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
         # Clip it to the region
         ds = clip_region(ds, region)
+        ds = apply_mask(ds, mask)
 
         if truth_sparse or metric_sparse:
             print("Metric is sparse, checking if forecast is valid directly.")
