@@ -4,6 +4,9 @@ from abc import ABC
 import xarray as xr
 import numpy as np
 
+import weatherbench2
+import xskillscore
+
 # Global metric registry dictionary
 SHEERWATER_METRIC_REGISTRY = {}
 
@@ -19,6 +22,92 @@ def get_bins(metric_name):
     bins = [-np.inf] + bins + [np.inf]
     bins = np.array(bins)
     return bins
+
+
+def compute_statistic(stat_data):
+    """Compute a statistic from a dictionary of precompiled data.
+
+    Stat data is populated by the global_statistic function and will contain:
+
+    stat_data = {
+        'statistic': the statistic name
+        'prob_type': the probability type
+        'obs': the observations
+        'fcst': the forecast
+        'fcst_digitized': the forecast digitized
+        'obs_digitized': the observations digitized
+        'fcst_anom': the forecast anomaly
+        'obs_anom': the observations anomaly
+        'statistic_kwargs': statistic kwargs needed for some statistics, e.g., SEEPS
+    }
+    """
+    stat_name = stat_data['statistic']
+    prob_type = stat_data['prob_type']
+
+    # Get the appropriate climatology dataframe for metric calculation
+    if stat_name == 'target':
+        m_ds = stat_data['obs']
+    elif stat_name == 'pred':
+        m_ds = stat_data['fcst']
+    elif stat_name == 'brier' and prob_type == 'ensemble':
+        fcst_event_prob = (stat_data['fcst_digitized'] == 2).mean(dim='member')
+        obs_event_prob = (stat_data['obs_digitized'] == 2)
+        m_ds = (fcst_event_prob - obs_event_prob)**2
+        # TODO implement brier for quantile forecasts
+    elif stat_name == 'seeps':
+        m_ds = weatherbench2.metrics.SpatialSEEPS(**stat_data['statistic_kwargs']) \
+                            .compute(forecast=stat_data['fcst'], truth=stat_data['obs'],
+                                     avg_time=False, skipna=True)
+        m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+    elif stat_name == 'squared_pred_anom':
+        m_ds = stat_data['fcst_anom']**2
+    elif stat_name == 'squared_target_anom':
+        m_ds = stat_data['obs_anom']**2
+    elif stat_name == 'anom_covariance':
+        m_ds = stat_data['fcst_anom'] * stat_data['obs_anom']
+    elif stat_name == 'false_positives':
+        m_ds = (stat_data['obs_digitized'] == 1) & (stat_data['fcst_digitized'] == 2)
+    elif stat_name == 'false_negatives':
+        m_ds = (stat_data['obs_digitized'] == 2) & (stat_data['fcst_digitized'] == 1)
+    elif stat_name == 'true_positives':
+        m_ds = (stat_data['obs_digitized'] == 2) & (stat_data['fcst_digitized'] == 2)
+    elif stat_name == 'true_negatives':
+        m_ds = (stat_data['obs_digitized'] == 1) & (stat_data['fcst_digitized'] == 1)
+    elif stat_name == 'digitized_obs':
+        m_ds = stat_data['obs_digitized']
+    elif stat_name == 'digitized_fcst':
+        m_ds = stat_data['fcst_digitized']
+    elif stat_name == 'squared_pred':
+        m_ds = stat_data['fcst']**2
+    elif stat_name == 'squared_target':
+        m_ds = stat_data['obs']**2
+    elif stat_name == 'pred_mean':
+        m_ds = stat_data['fcst']
+    elif stat_name == 'target_mean':
+        m_ds = stat_data['obs']
+    elif stat_name == 'covariance':
+        m_ds = stat_data['fcst'] * stat_data['obs']
+    elif stat_name == 'crps' and prob_type == 'ensemble':
+        fcst = stat_data['fcst'].chunk(member=-1, time=1, lat=250, lon=250)  # member must be -1 to succeed
+        m_ds = xskillscore.crps_ensemble(observations=stat_data['obs'], forecasts=fcst, mean=False, dim='time')
+    elif stat_name == 'crps' and prob_type == 'quantile':
+        m_ds = weatherbench2.metrics.SpatialQuantileCRPS(quantile_dim='member') \
+                            .compute(forecast=stat_data['fcst'], truth=stat_data['obs'],
+                                     avg_time=False, skipna=True)
+        m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
+    elif stat_name == 'mape':
+        m_ds = abs(stat_data['fcst'] - stat_data['obs']) / np.maximum(abs(stat_data['obs']), 1e-10)
+    elif stat_name == 'smape':
+        m_ds = abs(stat_data['fcst'] - stat_data['obs']) / (abs(stat_data['fcst']) + abs(stat_data['obs']))
+    elif stat_name == 'mae':
+        m_ds = abs(stat_data['fcst'] - stat_data['obs'])
+    elif stat_name == 'mse':
+        m_ds = (stat_data['fcst'] - stat_data['obs'])**2
+    elif stat_name == 'bias':
+        m_ds = stat_data['fcst'] - stat_data['obs']
+    else:
+        raise ValueError(f"Statistic {stat_name} not implemented")
+    return m_ds
 
 
 def metric_factory(metric_name):

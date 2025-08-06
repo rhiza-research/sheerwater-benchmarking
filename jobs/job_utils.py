@@ -5,8 +5,7 @@ import itertools
 import multiprocessing
 import tqdm
 
-from sheerwater_benchmarking.metrics import is_precip_only
-from sheerwater_benchmarking.metrics import is_coupled
+from sheerwater_benchmarking.metric_library import metric_factory
 
 def parse_args():
     """Parses arguments for jobs."""
@@ -108,17 +107,19 @@ def prune_metrics(combos, global_run=False):
     for combo in combos:
         metric, variable, grid, region, lead, forecast, time_grouping, truth = combo
 
+        metric_obj = metric_factory(metric)
+
         if not global_run and 'tahmo' in truth and region != 'east_africa':
             continue
 
         if global_run:
-            if is_coupled(metric):
+            if metric_obj.coupled:
                 continue
         else:
-            if is_coupled(metric) and time_grouping is not None:
+            if metric_obj.coupled and time_grouping is not None:
                 continue
 
-        if is_precip_only(metric) and variable != 'precip':
+        if metric_obj.valid_variables and variable not in metric_obj.valid_variables:
             continue
 
         if metric == 'seeps' and grid == 'global0_25':

@@ -2,15 +2,13 @@
 import numpy as np
 from importlib import import_module
 from inspect import signature
-import xskillscore
-import weatherbench2
 import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
                                            lead_to_agg_days, lead_or_agg, apply_mask)
 
-from .metric_library import metric_factory
+from .metric_library import metric_factory, compute_statistic
 
 
 def get_datasource_fn(datasource):
@@ -53,11 +51,12 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     """Compute a global metric without aggregated in time or space at a specific lead."""
     prob_type = metric_info.prob_type
     if metric_info.categorical:
+        # Get the statistic name from the stat-edge-edge... format for categorical statistics
         stat_name = statistic.split('-')[0]
     else:
         stat_name = statistic
 
-    # Get the forecast
+    # Get the forecast and check validity
     fcst_fn = get_datasource_fn(forecast)
 
     # Decide if this is a forecast with a lead or direct datasource with just an agg
@@ -101,9 +100,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     valid_times.sort()
     obs = obs.sel(time=valid_times)
     fcst = fcst.sel(time=valid_times)
-    ############################################################
-    # Prepare and preprocess data for the statistics
-    ############################################################
+
     # For the case where obs and forecast are datetime objects, do a special conversion to seconds since epoch
     # TODO: This is a hack to get around the fact that the metrics library doesn't support datetime objects
     if np.issubdtype(obs[variable].dtype, np.datetime64) or (obs[variable].dtype == np.dtype('<M8[ns]')):
@@ -115,6 +112,15 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         obs = obs.where(obs > -1e9, np.nan)
         fcst = fcst.where(fcst > -1e9, np.nan)
 
+    ###########################################################################
+    # Prepare and preprocess the data necessary to compute the statistics
+    ###########################################################################
+    stat_data = {
+        'obs': obs,
+        'fcst': fcst,
+        'statistic': stat_name,
+        'prob_type': prob_type,
+    }
     # Get the appropriate climatology dataframe for metric calculation
     if stat_name in ['anom_covariance', 'squared_pred_anom', 'squared_target_anom']:
         clim_ds = climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
@@ -129,21 +135,20 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # Get anomalies
         fcst_anom = fcst - clim_ds
         obs_anom = obs - clim_ds
-
+        stat_data['fcst_anom'] = fcst_anom
+        stat_data['obs_anom'] = obs_anom
     # Get the appropriate climatology dataframe for metric calculation
-    if stat_name == 'seeps':
+    elif stat_name == 'seeps':
         wet_threshold = seeps_wet_threshold(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead), grid=grid)
         dry_fraction = seeps_dry_fraction(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead), grid=grid)
         clim_ds = xr.merge([wet_threshold, dry_fraction])
-
-        statistic_kwargs = {
+        stat_data['statistic_kwargs'] = {
             'climatology': clim_ds,
             'dry_threshold_mm': 0.25,
             'precip_name': 'precip',
             'min_p1': 0.03,
             'max_p1': 0.93,
         }
-
     if metric_info.categorical:
         # Categorize the forecast and observation into bins
         bins = metric_info.config_dict['bins']
@@ -169,73 +174,13 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # Restore NaN values
         fcst_digitized = fcst_digitized.where(fcst.notnull(), np.nan)
         obs_digitized = obs_digitized.where(obs.notnull(), np.nan)
-    ############################################################
-    # Call the statistics with their various libraries
-    ############################################################
-    # Get the appropriate climatology dataframe for metric calculation
-    if stat_name == 'target':
-        m_ds = obs
-    elif stat_name == 'pred':
-        m_ds = fcst
-    elif stat_name == 'brier' and enhanced_prob_type == 'ensemble':
-        fcst_event_prob = (fcst_digitized == 2).mean(dim='member')
-        obs_event_prob = (obs_digitized == 2)
-        m_ds = (fcst_event_prob - obs_event_prob)**2
-        # TODO implement brier for quantile forecasts
-    elif stat_name == 'seeps':
-        m_ds = weatherbench2.metrics.SpatialSEEPS(**statistic_kwargs) \
-                            .compute(forecast=fcst, truth=obs, avg_time=False, skipna=True)
-        m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
-    elif stat_name == 'squared_pred_anom':
-        m_ds = fcst_anom**2
-    elif stat_name == 'squared_target_anom':
-        m_ds = obs_anom**2
-    elif stat_name == 'anom_covariance':
-        m_ds = fcst_anom * obs_anom
-    elif stat_name == 'false_positives':
-        m_ds = (obs_digitized == 1) & (fcst_digitized == 2)
-    elif stat_name == 'false_negatives':
-        m_ds = (obs_digitized == 2) & (fcst_digitized == 1)
-    elif stat_name == 'true_positives':
-        m_ds = (obs_digitized == 2) & (fcst_digitized == 2)
-    elif stat_name == 'true_negatives':
-        m_ds = (obs_digitized == 1) & (fcst_digitized == 1)
-    elif stat_name == 'digitized_obs':
-        m_ds = obs_digitized
-    elif stat_name == 'digitized_fcst':
-        m_ds = fcst_digitized
-    elif stat_name == 'squared_pred':
-        m_ds = fcst**2
-    elif stat_name == 'squared_target':
-        m_ds = obs**2
-    elif stat_name == 'pred_mean':
-        m_ds = fcst
-    elif stat_name == 'target_mean':
-        m_ds = obs
-    elif stat_name == 'covariance':
-        m_ds = fcst * obs
-    elif stat_name == 'n_valid':
-        m_ds = fcst.notnull()  # already masked obs, so this is locs where both forecast and obs are non null
-    elif stat_name == 'crps' and enhanced_prob_type == 'ensemble':
-        fcst = fcst.chunk(member=-1, time=1, lat=250, lon=250)  # member must be -1 to succeed
-        m_ds = xskillscore.crps_ensemble(observations=obs, forecasts=fcst, mean=False, dim='time')
-    elif stat_name == 'crps' and enhanced_prob_type == 'quantile':
-        m_ds = weatherbench2.metrics.SpatialQuantileCRPS(quantile_dim='member') \
-                            .compute(forecast=fcst, truth=obs, avg_time=False, skipna=True)
-        m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
-    elif stat_name == 'mape':
-        m_ds = abs(fcst - obs) / np.maximum(abs(obs), 1e-10)
-    elif stat_name == 'smape':
-        m_ds = abs(fcst - obs) / (abs(fcst) + abs(obs))
-    elif stat_name == 'mae':
-        m_ds = abs(fcst - obs)
-    elif stat_name == 'mse':
-        m_ds = (fcst - obs)**2
-    elif stat_name == 'bias':
-        m_ds = fcst - obs
-    else:
-        raise ValueError(f"Statistic {stat_name} not implemented")
+        stat_data['fcst_digitized'] = fcst_digitized
+        stat_data['obs_digitized'] = obs_digitized
 
+    ############################################################
+    # Call the statistic
+    ############################################################
+    m_ds = compute_statistic(stat_data)
     # Assign attributes in one call
     m_ds = m_ds.assign_attrs(
         sparse=sparse,
