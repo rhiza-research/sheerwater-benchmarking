@@ -11,6 +11,76 @@ import xskillscore
 SHEERWATER_METRIC_REGISTRY = {}
 
 
+def metric_or_stat_name(metric_or_stat, metric_info):
+    """Get the metric / statistic name from the metric-edge-edge... format for categorical statistics.
+
+    Returns:
+        name: the metric / statistic name
+        bin_str: the bins for the categorical statistic, e.g., '5' or '5-10'
+    """
+    if metric_info.categorical:
+        return metric_or_stat.split('-')[0], metric_or_stat[metric_or_stat.find('-')+1:]
+    return metric_or_stat, ''  # name, bin_str
+
+
+def groupby_time(ds, time_grouping, agg_fn='mean'):
+    """Aggregate a statistic over time."""
+    if time_grouping is not None:
+        if time_grouping == 'month_of_year':
+            ds.coords["time"] = ds.time.dt.month
+        elif time_grouping == 'year':
+            ds.coords["time"] = ds.time.dt.year
+        elif time_grouping == 'quarter_of_year':
+            ds.coords["time"] = ds.time.dt.quarter
+        else:
+            raise ValueError("Invalid time grouping")
+        if agg_fn == 'mean':
+            ds = ds.groupby("time").mean()
+        elif agg_fn == 'sum':
+            ds = ds.groupby("time").sum()
+        else:
+            raise ValueError(f"Invalid aggregation function {agg_fn}")
+    else:
+        # Average in time
+        if agg_fn == 'mean':
+            ds = ds.mean(dim="time")
+        elif agg_fn == 'sum':
+            ds = ds.sum(dim="time")
+        else:
+            raise ValueError(f"Invalid aggregation function {agg_fn}")
+    # TODO: we can convert this to a groupby_time call when we're ready
+    # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
+    return ds
+
+
+def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon'):
+    """Compute latitude-weighted spatial average of a dataset.
+
+    This function weights each latitude band by the actual cell area,
+    which accounts for the fact that grid cells near the poles are smaller
+    in area than those near the equator.
+    """
+    # Calculate latitude cell bounds
+    lat_rad = np.deg2rad(ds[lat_dim].values)
+    # Get the centerpoint of each latitude band
+    pi_over_2 = np.array([np.pi / 2], dtype=lat_rad.dtype)
+    bounds = np.concatenate([-pi_over_2, (lat_rad[:-1] + lat_rad[1:]) / 2, pi_over_2])
+    # Calculate the area of each latitude band
+    # Calculate cell areas from latitude bounds
+    upper = bounds[1:]
+    lower = bounds[:-1]
+    # normalized cell area: integral from lower to upper of cos(latitude)
+    weights = np.sin(upper) - np.sin(lower)
+
+    # Normalize weights
+    weights /= np.mean(weights)
+
+    # Create weights array
+    weights = ds[lat_dim].copy(data=weights)
+    weighted = ds.weighted(weights).mean([lat_dim, lon_dim], skipna=True)
+    return weighted
+
+
 def get_bins(metric_name):
     """Get the categorical bins for a metric name of the form 'metric-edge-edge...'.
 

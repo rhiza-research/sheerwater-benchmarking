@@ -8,7 +8,8 @@ from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_thresh
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
                                            lead_to_agg_days, lead_or_agg, apply_mask)
 
-from .metric_library import metric_factory, compute_statistic
+from .metric_library import (metric_factory, compute_statistic, metric_or_stat_name,
+                             latitude_weighted_spatial_average, groupby_time)
 
 
 def get_datasource_fn(datasource):
@@ -50,16 +51,13 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                      statistic, metric_info, grid="global1_5"):
     """Compute a global metric without aggregated in time or space at a specific lead."""
     prob_type = metric_info.prob_type
-    if metric_info.categorical:
-        # Get the statistic name from the stat-edge-edge... format for categorical statistics
-        stat_name = statistic.split('-')[0]
-    else:
-        stat_name = statistic
+    stat_name = metric_or_stat_name(statistic, metric_info)
 
     # Get the forecast and check validity
     fcst_fn = get_datasource_fn(forecast)
 
     # Decide if this is a forecast with a lead or direct datasource with just an agg
+    # Enables the same code to be used for both forecasts and truth sources
     sparse = False  # A variable used to indicate whether the truth is creating sparsity
     if 'lead' in signature(fcst_fn).parameters:
         if lead_or_agg(lead) == 'agg':
@@ -211,64 +209,6 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
     pass
 
 
-def groupby_time(ds, time_grouping, agg_fn='mean'):
-    """Aggregate a statistic over time."""
-    if time_grouping is not None:
-        if time_grouping == 'month_of_year':
-            ds.coords["time"] = ds.time.dt.month
-        elif time_grouping == 'year':
-            ds.coords["time"] = ds.time.dt.year
-        elif time_grouping == 'quarter_of_year':
-            ds.coords["time"] = ds.time.dt.quarter
-        else:
-            raise ValueError("Invalid time grouping")
-        if agg_fn == 'mean':
-            ds = ds.groupby("time").mean()
-        elif agg_fn == 'sum':
-            ds = ds.groupby("time").sum()
-        else:
-            raise ValueError(f"Invalid aggregation function {agg_fn}")
-    else:
-        # Average in time
-        if agg_fn == 'mean':
-            ds = ds.mean(dim="time")
-        elif agg_fn == 'sum':
-            ds = ds.sum(dim="time")
-        else:
-            raise ValueError(f"Invalid aggregation function {agg_fn}")
-    # TODO: we can convert this to a groupby_time call when we're ready
-    # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
-    return ds
-
-
-def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon'):
-    """Compute latitude-weighted spatial average of a dataset.
-
-    This function weights each latitude band by the actual cell area,
-    which accounts for the fact that grid cells near the poles are smaller
-    in area than those near the equator.
-    """
-    # Calculate latitude cell bounds
-    lat_rad = np.deg2rad(ds[lat_dim].values)
-    # Get the centerpoint of each latitude band
-    pi_over_2 = np.array([np.pi / 2], dtype=lat_rad.dtype)
-    bounds = np.concatenate([-pi_over_2, (lat_rad[:-1] + lat_rad[1:]) / 2, pi_over_2])
-    # Calculate the area of each latitude band
-    # Calculate cell areas from latitude bounds
-    upper = bounds[1:]
-    lower = bounds[:-1]
-    # normalized cell area: integral from lower to upper of cos(latitude)
-    weights = np.sin(upper) - np.sin(lower)
-
-    # Normalize weights
-    weights /= np.mean(weights)
-
-    # Create weights array
-    weights = ds[lat_dim].copy(data=weights)
-    weighted = ds.weighted(weights).mean([lat_dim, lon_dim], skipna=True)
-    return weighted
-
-
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
@@ -298,9 +238,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
     statistic_values = {}
     statistic_values['spatial'] = spatial
     if metric_obj.categorical:
-        # Get everything after the first '-', for the categorical metrics,
-        # e.g., false_positives-10
-        bin_str = metric[metric.find('-')+1:]
+        _, bin_str = metric_or_stat_name(metric, metric_obj)
         statistic_values['bins'] = metric_obj.config_dict['bins']
 
     for statistic in stats_to_call:
