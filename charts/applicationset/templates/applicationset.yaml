@@ -64,8 +64,13 @@ spec:
                 server:
                   root_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/{{ .Values.github.repo }}/{{ "{{" }} .values.pr_number {{ "}}" }}'
                 auth:
-                  google:
-                    redirect_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/login/google?to=/{{ .Values.github.repo }}/{{ "{{" }} .values.pr_number {{ "}}" }}'
+                  generic_oauth:
+                    client_id: '{{ .Values.oauth.google.client_id }}'
+                    client_secret: '{{ .Values.oauth.google.client_secret }}'
+                    scopes: 'openid email profile'
+                    auth_url: 'https://accounts.google.com/o/oauth2/v2/auth'
+                    token_url: 'https://oauth2.googleapis.com/token'
+                    redirect_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/login/generic_oauth'
 {{- if .Values.ephemeral.admin_password }}
                 security:
                   admin_user: admin

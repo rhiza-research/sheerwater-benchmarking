@@ -14,6 +14,22 @@ data:
     enabled = {{ .Values.grafana.config.auth.anonymous.enabled }}
     org_role = {{ .Values.grafana.config.auth.anonymous.org_role }}
 
+    [auth.generic_oauth]
+    {{- with .Values.grafana.config.auth.generic_oauth }}
+    enabled = true
+    name = Google
+    client_id = {{ .client_id | quote }}
+    client_secret = {{ .client_secret | quote }}
+    scopes = {{ (.scopes | default "openid email profile") | quote }}
+    auth_url = {{ (.auth_url | default "https://accounts.google.com/o/oauth2/v2/auth") | quote }}
+    token_url = {{ (.token_url | default "https://oauth2.googleapis.com/token") | quote }}
+    {{- if .redirect_url }}
+    redirect_url = {{ .redirect_url | quote }}
+    {{- end }}
+    use_pkce = {{ (.use_pkce | default true) }}
+    allow_sign_up = {{ (.allow_sign_up | default true) }}
+    {{- end }}
+
 
     [security]
     admin_user = admin # {{ .Values.grafana.config.security.admin_user | quote }}

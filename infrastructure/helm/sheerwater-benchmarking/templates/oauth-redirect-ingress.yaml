@@ -4,7 +4,7 @@ metadata:
   name: {{ include "sheerwater-benchmarking.fullname" . }}-oauth-redirect
   annotations:
     kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/permanent-redirect: "$scheme://$host$arg_to"
+    nginx.ingress.kubernetes.io/permanent-redirect: "$scheme://$host$arg_to?code=$arg_code&state=$arg_state"
 spec:
   tls:
     - hosts:
@@ -14,7 +14,7 @@ spec:
     - host: dev.sheerwater.rhizaresearch.org
       http:
         paths:
-          - path: /login/google
+          - path: /login/generic_oauth
             pathType: Prefix
             backend:
               service:

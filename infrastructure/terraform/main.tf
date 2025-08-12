@@ -1,22 +1,22 @@
 terraform {
   backend "gcs" {
-    bucket  = "rhiza-terraform-state"
-    prefix  = "sheerwater-benchmarking-state"
+    bucket = "rhiza-terraform-state"
+    prefix = "sheerwater-benchmarking-state"
   }
 
   required_providers {
     google = {
-      source = "hashicorp/google"
+      source  = "hashicorp/google"
       version = "6.4.0"
     }
 
     helm = {
-      source = "hashicorp/helm"
+      source  = "hashicorp/helm"
       version = "2.15.0"
     }
 
     kubernetes = {
-      source = "hashicorp/kubernetes"
+      source  = "hashicorp/kubernetes"
       version = "2.32.0"
     }
   }
@@ -41,7 +41,7 @@ data "google_client_config" "provider" {}
 data "google_container_cluster" "rhiza_shared" {
   name     = "rhiza-cluster"
   location = "us-central1-a"
-  project = "rhiza-shared"
+  project  = "rhiza-shared"
 }
 
 # Connect to the kubernetes cluster
@@ -81,7 +81,7 @@ resource "kubernetes_namespace" "sheerwater_benchmarking" {
 # Create a kubernetes service account in the namespace
 resource "kubernetes_service_account" "sheerwater_sa" {
   metadata {
-    name = "sheerwater-sa"
+    name      = "sheerwater-sa"
     namespace = "sheerwater-benchmarking"
   }
 }
@@ -103,8 +103,8 @@ resource "google_project_iam_binding" "project" {
 
 # Username and password secrets
 resource "random_password" "db_admin_password" {
-  length           = 16
-  special          = true
+  length  = 16
+  special = true
 }
 
 resource "google_secret_manager_secret" "db_admin_password" {
@@ -115,14 +115,14 @@ resource "google_secret_manager_secret" "db_admin_password" {
 }
 
 resource "google_secret_manager_secret_version" "db_admin_password" {
-  secret = google_secret_manager_secret.db_admin_password.id
+  secret      = google_secret_manager_secret.db_admin_password.id
   secret_data = random_password.db_admin_password.result
 }
 
 # Create postgres users and grant them permissions
 resource "random_password" "postgres_read_password" {
-  length           = 16
-  special          = true
+  length  = 16
+  special = true
 }
 
 resource "google_secret_manager_secret" "postgres_read_password" {
@@ -133,16 +133,16 @@ resource "google_secret_manager_secret" "postgres_read_password" {
 }
 
 resource "google_secret_manager_secret_version" "postgres_read_password" {
-  secret = google_secret_manager_secret.postgres_read_password.id
+  secret      = google_secret_manager_secret.postgres_read_password.id
   secret_data = random_password.postgres_read_password.result
 }
 
 # Persistent disk
 resource "google_compute_disk" "sheerwater_benchmarking_db" {
-  name  = "sheerwater-benchmarking-db"
-  type  = "pd-balanced"
-  zone  = "us-central1-a"
-  size  = 20
+  name    = "sheerwater-benchmarking-db"
+  type    = "pd-balanced"
+  zone    = "us-central1-a"
+  size    = 20
   project = "rhiza-shared"
 
   # Mark as deprecated
@@ -153,21 +153,21 @@ resource "google_compute_disk" "sheerwater_benchmarking_db" {
 
 # Persistent disk
 resource "google_compute_disk" "sheerwater_benchmarking_terracotta" {
-  name  = "sheerwater-benchmarking-terracotta"
-  type  = "pd-ssd"
-  zone  = "us-central1-a"
-  size  = 50
+  name    = "sheerwater-benchmarking-terracotta"
+  type    = "pd-ssd"
+  zone    = "us-central1-a"
+  size    = 50
   project = "rhiza-shared"
 }
 
 resource "google_compute_resource_policy" "db_snapshot_policy" {
-  name = "sheerwater-benchmarking-db-snapshot-policy"
+  name   = "sheerwater-benchmarking-db-snapshot-policy"
   region = "us-central1"
   snapshot_schedule_policy {
     schedule {
       daily_schedule {
         days_in_cycle = 1
-        start_time = "04:00"
+        start_time    = "04:00"
       }
     }
     retention_policy {
@@ -179,9 +179,9 @@ resource "google_compute_resource_policy" "db_snapshot_policy" {
 }
 
 resource "google_compute_disk_resource_policy_attachment" "attachment" {
-  name = google_compute_resource_policy.db_snapshot_policy.name
-  disk = google_compute_disk.sheerwater_benchmarking_db_ssd.name
-  zone = "us-central1-a"
+  name    = google_compute_resource_policy.db_snapshot_policy.name
+  disk    = google_compute_disk.sheerwater_benchmarking_db_ssd.name
+  zone    = "us-central1-a"
   project = "rhiza-shared"
 }
 
@@ -203,13 +203,13 @@ resource "google_compute_disk" "sheerwater_benchmarking_db_ssd" {
 
 ### New timescale disk and policy
 resource "google_compute_resource_policy" "timescaledb_snapshot_policy" {
-  name = "sheerwater-benchmarking-timescaledb-snapshot-policy"
+  name   = "sheerwater-benchmarking-timescaledb-snapshot-policy"
   region = "us-central1"
   snapshot_schedule_policy {
     schedule {
       daily_schedule {
         days_in_cycle = 1
-        start_time = "04:00"
+        start_time    = "04:00"
       }
     }
     retention_policy {
@@ -221,19 +221,19 @@ resource "google_compute_resource_policy" "timescaledb_snapshot_policy" {
 }
 
 resource "google_compute_disk_resource_policy_attachment" "timescale_attachment" {
-  name = google_compute_resource_policy.timescaledb_snapshot_policy.name
-  disk = google_compute_disk.sheerwater_benchmarking_timescaledb_ssd.name
-  zone = "us-central1-a"
+  name    = google_compute_resource_policy.timescaledb_snapshot_policy.name
+  disk    = google_compute_disk.sheerwater_benchmarking_timescaledb_ssd.name
+  zone    = "us-central1-a"
   project = "rhiza-shared"
 }
 
 # Create new disk from the specific snapshot
 resource "google_compute_disk" "sheerwater_benchmarking_timescaledb_ssd" {
-  name     = "sheerwater-benchmarking-timescaledb-ssd"
-  type     = "pd-ssd"
-  zone     = "us-central1-a"
-  size     = 200
-  project  = "rhiza-shared"
+  name    = "sheerwater-benchmarking-timescaledb-ssd"
+  type    = "pd-ssd"
+  zone    = "us-central1-a"
+  size    = 200
+  project = "rhiza-shared"
 
   # Prevent accidental deletion
   lifecycle {
@@ -249,22 +249,22 @@ resource "google_compute_disk" "sheerwater_benchmarking_timescaledb_ssd" {
 
 # Persistent disk
 resource "google_compute_disk" "sheerwater_benchmarking_grafana" {
-  name  = "sheerwater-benchmarking-grafana"
-  type  = "pd-balanced"
-  zone  = "us-central1-a"
-  size  = 10
+  name    = "sheerwater-benchmarking-grafana"
+  type    = "pd-balanced"
+  zone    = "us-central1-a"
+  size    = 10
   project = "rhiza-shared"
 }
 
 # SMTP secrets for inviting users
 data "google_secret_manager_secret_version" "sheerwater_sendgrid_api_key" {
- secret   = "sheerwater-sendgrid-api-key"
+  secret = "sheerwater-sendgrid-api-key"
 }
 
 # grafana password
 resource "random_password" "grafana_admin_password" {
-  length           = 16
-  special          = true
+  length  = 16
+  special = true
 }
 
 resource "google_secret_manager_secret" "grafana_admin_password" {
@@ -275,14 +275,14 @@ resource "google_secret_manager_secret" "grafana_admin_password" {
 }
 
 resource "google_secret_manager_secret_version" "grafana_admin_password" {
-  secret = google_secret_manager_secret.grafana_admin_password.id
+  secret      = google_secret_manager_secret.grafana_admin_password.id
   secret_data = random_password.grafana_admin_password.result
 }
 
 
 # Create a domain name and IP address
 resource "google_compute_global_address" "grafana_address" {
-  name = "sheerwater-benchmarking-grafana-address"
+  name    = "sheerwater-benchmarking-grafana-address"
   project = "rhiza-shared"
 }
 
@@ -290,14 +290,14 @@ resource "google_dns_record_set" "grafana_recordset" {
   project      = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_project
   managed_zone = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_name
   name         = "benchmarks.${data.terraform_remote_state.shared_state.outputs.sheerwater_dns_dns_name}"
-  type = "A"
-  rrdatas = [google_compute_global_address.grafana_address.address]
-  ttl = 300
+  type         = "A"
+  rrdatas      = [google_compute_global_address.grafana_address.address]
+  ttl          = 300
 }
 
 # Create a domain name and IP address
 resource "google_compute_global_address" "terracotta_address" {
-  name = "sheerwater-benchmarking-terracotta-address"
+  name    = "sheerwater-benchmarking-terracotta-address"
   project = "rhiza-shared"
 }
 
@@ -305,16 +305,16 @@ resource "google_dns_record_set" "terracotta_recordset" {
   project      = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_project
   managed_zone = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_name
   name         = "terracotta.${data.terraform_remote_state.shared_state.outputs.sheerwater_dns_dns_name}"
-  type = "A"
-  rrdatas = [google_compute_global_address.terracotta_address.address]
-  ttl = 300
+  type         = "A"
+  rrdatas      = [google_compute_global_address.terracotta_address.address]
+  ttl          = 300
 }
 
 # Create a regional IP Address
 resource "google_compute_address" "postgres_address" {
-  name = "sheerwater-benchmarking-postgres-address"
+  name    = "sheerwater-benchmarking-postgres-address"
   project = "rhiza-shared"
-  region = "us-central1"
+  region  = "us-central1"
 }
 
 # Set a DNS record for that IP Address
@@ -323,7 +323,7 @@ resource "google_dns_record_set" "resource-recordset" {
   managed_zone = data.terraform_remote_state.shared_state.outputs.sheerwater_dns_name
   name         = "postgres.${data.terraform_remote_state.shared_state.outputs.sheerwater_dns_dns_name}"
   type         = "A"
-  rrdatas = [google_compute_address.postgres_address.address]
+  rrdatas      = [google_compute_address.postgres_address.address]
   ttl          = 300
 }
 
@@ -334,8 +334,8 @@ resource "google_dns_record_set" "resource-recordset" {
 
 # Now the helm release to release all of the kubernetes manifest
 resource "helm_release" "sheerwater_benchmarking" {
-  name = "sheerwater-benchmarking"
-  chart = "../helm/sheerwater-benchmarking"
+  name      = "sheerwater-benchmarking"
+  chart     = "../helm/sheerwater-benchmarking"
   namespace = "sheerwater-benchmarking"
 
   # load the default values from the helm chart
@@ -347,71 +347,71 @@ resource "helm_release" "sheerwater_benchmarking" {
 
   # Grafana settings
   set {
-    name = "grafana.pv.name"
+    name  = "grafana.pv.name"
     value = google_compute_disk.sheerwater_benchmarking_grafana.name
   }
   set {
-    name = "grafana.pv.size"
+    name  = "grafana.pv.size"
     value = google_compute_disk.sheerwater_benchmarking_grafana.size
   }
   set {
-    name = "grafana.domain_name"
+    name  = "grafana.domain_name"
     value = trimsuffix(google_dns_record_set.grafana_recordset.name, ".")
   }
   set {
-    name = "grafana.ip_name"
+    name  = "grafana.ip_name"
     value = google_compute_global_address.grafana_address.name
   }
   set_sensitive {
-    name = "grafana.admin_password"
+    name  = "grafana.admin_password"
     value = random_password.grafana_admin_password.result
   }
   set_sensitive {
-    name = "grafana.smtp.password"
+    name  = "grafana.smtp.password"
     value = data.google_secret_manager_secret_version.sheerwater_sendgrid_api_key.secret_data
   }
 
   # Timescale settings
   set {
-    name = "timescale.pv.name"
+    name  = "timescale.pv.name"
     value = google_compute_disk.sheerwater_benchmarking_timescaledb_ssd.name
   }
   set {
-    name = "timescale.pv.size"
+    name  = "timescale.pv.size"
     value = google_compute_disk.sheerwater_benchmarking_timescaledb_ssd.size
   }
   set {
-    name = "timescale.externalIP"
+    name  = "timescale.externalIP"
     value = google_compute_address.postgres_address.address
   }
   set_sensitive {
-    name = "timescale.admin_password"
+    name  = "timescale.admin_password"
     value = random_password.db_admin_password.result
   }
 
   # Terracotta settings
   set {
-    name = "terracotta.sql_user"
+    name  = "terracotta.sql_user"
     value = "read"
   }
   set {
-    name = "terracotta.domain_name"
+    name  = "terracotta.domain_name"
     value = trimsuffix(google_dns_record_set.terracotta_recordset.name, ".")
   }
   set {
-    name = "terracotta.ip_name"
+    name  = "terracotta.ip_name"
     value = google_compute_global_address.terracotta_address.name
   }
   set {
-    name = "terracotta.pv.name"
+    name  = "terracotta.pv.name"
     value = google_compute_disk.sheerwater_benchmarking_terracotta.name
   }
   set {
-    name = "terracotta.pv.size"
+    name  = "terracotta.pv.size"
     value = google_compute_disk.sheerwater_benchmarking_terracotta.size
   }
   set_sensitive {
-    name = "terracotta.sql_password"
+    name  = "terracotta.sql_password"
     value = random_password.postgres_read_password.result
   }
 }
