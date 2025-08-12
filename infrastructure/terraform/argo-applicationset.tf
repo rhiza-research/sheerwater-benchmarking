@@ -50,13 +50,13 @@ resource "helm_release" "grafana_applicationset" {
       }
 
       # Google OAuth client settings (override via TF vars/secrets)
-          oauth = {
-            google = {
-              client_id = data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data
-              client_secret = data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data
-            }
-          }
-
+      oauth = {
+        google = {
+          client_id = data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data
+          client_secret = data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data
+        }
+      }
+      
       # domain is passed to the applicationset here from the infrastructure repo dns record output
       domain = data.terraform_remote_state.shared_state.outputs.grafana_dev_domain
 
@@ -69,7 +69,7 @@ resource "helm_release" "grafana_applicationset" {
       ephemeral = {
         # Set admin password from Google Secret Manager
         admin_password = data.google_secret_manager_secret_version.grafana_admin_password.secret_data
-
+        
         ingress = {
           enabled = true
           className = "nginx"
@@ -111,17 +111,13 @@ resource "helm_release" "grafana_applicationset" {
         }
       }
 
-      # Optional: Enable notifications
       notifications = {
-        enabled = false # Set to true if you want PR comments
-        github = {
-          authType = "token" # or "app" for GitHub App
-        }
+        enabled = false
+        github = { authType = "token" }
       }
 
-      # Optional: Enable webhooks
       webhook = {
-        enabled = false # Set to true for real-time PR detection
+        enabled = false
         host = "argocd-webhook.${data.terraform_remote_state.shared_state.outputs.grafana_dev_domain}"
       }
     })
