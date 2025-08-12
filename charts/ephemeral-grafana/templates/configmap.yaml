@@ -8,6 +8,7 @@ data:
   grafana.ini: |
     [server]
     root_url = {{ .Values.grafana.config.server.root_url }}
+    serve_from_sub_path = true
 
     [auth.anonymous]
     enabled = {{ .Values.grafana.config.auth.anonymous.enabled }}

@@ -55,9 +55,7 @@ resource "helm_release" "grafana_applicationset" {
         ingress = {
           enabled     = true
           className   = "nginx"
-          annotations = {
-            "nginx.ingress.kubernetes.io/rewrite-target" = "/"
-          }
+          annotations = {}
           tls = {
             enabled = true
             secretName = "wildcard-dev-sheerwater-tls"
