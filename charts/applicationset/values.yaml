@@ -14,6 +14,11 @@ github:
     name: "github-token"
     key: "token"
 
+oauth:
+  google:
+    client_id: ""
+    client_secret: ""
+
 # Domain configuration
 # This value is overridden by the infrastructure repo dns record output
 domain: "dev.sheerwater.rhizaresearch.org"

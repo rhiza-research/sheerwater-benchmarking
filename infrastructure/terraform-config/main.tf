@@ -72,7 +72,7 @@ locals {
   # OAuth redirect URLs
   # - prod:      https://benchmarks.sheerwater.rhizaresearch.org/login/google
   # - ephemeral: https://dev.sheerwater.rhizaresearch.org/login/google?to=/sheerwater-benchmarking/<pr_number>
-  oauth_redirect_url = local.is_prod ? "https://benchmarks.sheerwater.rhizaresearch.org/login/google" : "https://dev.sheerwater.rhizaresearch.org/login/google?to=/sheerwater-benchmarking/${local.pr_number}"
+  oauth_redirect_url = local.is_prod ? "https://benchmarks.sheerwater.rhizaresearch.org/login/generic_oauth" : "https://dev.sheerwater.rhizaresearch.org/login/generic_oauth?to=/sheerwater-benchmarking/${local.pr_number}"
 
   # Postgres connection URL - different for prod vs ephemeral
   # TODO: this url should be built from other resource values 
@@ -122,7 +122,7 @@ data "google_secret_manager_secret_version" "sheerwater_oauth_client_secret" {
 
 # Enable google oauth
 resource "grafana_sso_settings" "google_sso_settings" {
-  #count = local.is_prod ? 1 : 0 # only enable for the prod instance because sso doesnt work for ephemeral instances
+  count = local.is_prod ? 1 : 0 # only enable for the prod instance because sso doesnt work for ephemeral instances
   provider_name = "google"
   oauth2_settings {
     name          = "Google"
@@ -137,6 +137,30 @@ resource "grafana_sso_settings" "google_sso_settings" {
     use_pkce           = true
   }
 }
+
+# Enable generic oauth
+resource "grafana_sso_settings" "generic_oauth_settings" {
+  count = local.is_prod ? 0 : 1 # only enable for the ephemeral instances
+  provider_name = "generic_oauth"
+  oauth2_settings {
+    name          = "Generic OAuth"
+    client_id     = data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data
+    client_secret = data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data
+    allow_sign_up = true
+    auto_login    = false
+    #allow_assign_grafana_admin = true
+    scopes             = "openid email profile"
+    allowed_domains    = "rhizaresearch.org"
+    skip_org_role_sync = true
+    use_pkce           = true
+    auth_url           = "https://accounts.google.com/o/oauth2/v2/auth"
+    token_url          = "https://oauth2.googleapis.com/token"
+    redirect_url       = local.oauth_redirect_url
+  }
+}
+
+
+
 
 resource "grafana_organization_preferences" "light_preference" {
   theme      = "light"

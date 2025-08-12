@@ -13,19 +13,17 @@ data "google_secret_manager_secret_version" "grafana_admin_password" {
   project = "sheerwater"
 }
 
-# Google OAuth client secrets from Secret Manager
-data "google_secret_manager_secret_version" "google_oauth_client_id" {
-  secret  = "sheerwater-oauth-client-id"
-  project = "sheerwater"
-}
-
-data "google_secret_manager_secret_version" "google_oauth_client_secret" {
-  secret  = "sheerwater-oauth-client-secret"
-  project = "sheerwater"
-}
-
 resource "terraform_data" "argocd_helm_release_updated" {
   input = data.terraform_remote_state.shared_state.outputs.argocd_helm_release
+}
+
+# Gcloud secrets for Single sign on
+data "google_secret_manager_secret_version" "sheerwater_oauth_client_id" {
+  secret = "sheerwater-oauth-client-id"
+}
+
+data "google_secret_manager_secret_version" "sheerwater_oauth_client_secret" {
+  secret = "sheerwater-oauth-client-secret"
 }
 
 # Install ApplicationSet for ephemeral Grafana
@@ -52,10 +50,10 @@ resource "helm_release" "grafana_applicationset" {
       }
 
       # Google OAuth client settings (override via TF vars/secrets)
-                oauth = {
+          oauth = {
             google = {
-              client_id = data.google_secret_manager_secret_version.google_oauth_client_id.secret_data
-              client_secret = data.google_secret_manager_secret_version.google_oauth_client_secret.secret_data
+              client_id = data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data
+              client_secret = data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data
             }
           }
 
