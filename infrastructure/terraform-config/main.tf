@@ -14,23 +14,23 @@
 
 terraform {
   backend "gcs" {
-    bucket  = "rhiza-terraform-state"
-    prefix  = "sheerwater-benchmarking-config"
+    bucket = "rhiza-terraform-state"
+    prefix = "sheerwater-benchmarking-config"
   }
 
   required_providers {
     google = {
-      source = "hashicorp/google"
+      source  = "hashicorp/google"
       version = "6.45.0"
     }
 
     grafana = {
-      source = "grafana/grafana"
+      source  = "grafana/grafana"
       version = "3.7.0"
     }
 
     postgresql = {
-      source = "cyrilgdn/postgresql"
+      source  = "cyrilgdn/postgresql"
       version = "1.23.0"
     }
   }
@@ -41,11 +41,11 @@ provider "google" {
 }
 
 data "google_secret_manager_secret_version" "postgres_admin_password" {
- secret   = "sheerwater-postgres-admin-password"
+  secret = "sheerwater-postgres-admin-password"
 }
 
 data "google_secret_manager_secret_version" "grafana_admin_password" {
- secret   = "sheerwater-grafana-admin-password"
+  secret = "sheerwater-grafana-admin-password"
 }
 
 provider "postgresql" {
@@ -53,15 +53,27 @@ provider "postgresql" {
   port            = 5432
   database        = "postgres"
   username        = "postgres"
-  password        = "${data.google_secret_manager_secret_version.postgres_admin_password.secret_data}"
+  password        = data.google_secret_manager_secret_version.postgres_admin_password.secret_data
   sslmode         = "disable"
   connect_timeout = 15
 }
 
 locals {
   is_prod = terraform.workspace == "default"
-  grafana_url  = terraform.workspace == "default" ? "https://benchmarks.sheerwater.rhizaresearch.org" : "https://${terraform.workspace}.dev.sheerwater.rhizaresearch.org"
-  
+
+  # Extract PR number from workspace name "grafana-pr-<pr_number>"
+  pr_number = local.is_prod ? "" : element(split("-", terraform.workspace), length(split("-", terraform.workspace)) - 1)
+
+  # Base URLs
+  # - prod:      https://benchmarks.sheerwater.rhizaresearch.org
+  # - ephemeral: https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
+  grafana_url = local.is_prod ? "https://benchmarks.sheerwater.rhizaresearch.org" : "https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/${local.pr_number}"
+
+  # OAuth redirect URLs
+  # - prod:      https://benchmarks.sheerwater.rhizaresearch.org/login/google
+  # - ephemeral: https://dev.sheerwater.rhizaresearch.org/login/google?to=/sheerwater-benchmarking/<pr_number>
+  oauth_redirect_url = local.is_prod ? "https://benchmarks.sheerwater.rhizaresearch.org/login/google" : "https://dev.sheerwater.rhizaresearch.org/login/google?to=/sheerwater-benchmarking/${local.pr_number}"
+
   # Postgres connection URL - different for prod vs ephemeral
   # TODO: this url should be built from other resource values 
   # postgres = ?
@@ -71,10 +83,10 @@ locals {
   postgres_url = terraform.workspace == "default" ? "postgres:5432" : "postgres.sheerwater-benchmarking.svc.cluster.local:5432"
 }
 
-// if workspace == default then url =  "https://benchmarks.sheerwater.rhizaresearch.org/"
-// else url = "https://${terraform.workspace}.dev.sheerwater.rhizaresearch.org/"
+// if workspace == default then url =  "https://benchmarks.sheerwater.rhizaresearch.org"
+// else url = "https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/<pr_number>"
 provider "grafana" {
-  url  = local.grafana_url
+  url = local.grafana_url
   #auth = "admin:${data.google_secret_manager_secret_version.grafana_admin_password.secret_data}"
   # TODO: for now I have to use the default password because 
   # the correct password is not working. It is being set but I think 
@@ -89,40 +101,40 @@ output "grafana_url" {
 
 # Gcloud secrets for postgres read user
 data "google_secret_manager_secret_version" "postgres_read_password" {
- secret   = "sheerwater-postgres-read-password"
+  secret = "sheerwater-postgres-read-password"
 }
 
 # Gcloud secrets for influx read user
 data "google_secret_manager_secret_version" "tahmo_influx_read_password" {
- secret   = "tahmo-influx-read-password"
+  secret = "tahmo-influx-read-password"
 }
 
 
 
 # Gcloud secrets for Single sign on
 data "google_secret_manager_secret_version" "sheerwater_oauth_client_id" {
- secret   = "sheerwater-oauth-client-id"
+  secret = "sheerwater-oauth-client-id"
 }
 
 data "google_secret_manager_secret_version" "sheerwater_oauth_client_secret" {
- secret   = "sheerwater-oauth-client-secret"
+  secret = "sheerwater-oauth-client-secret"
 }
 
 # Enable google oauth
 resource "grafana_sso_settings" "google_sso_settings" {
-  count = local.is_prod ? 1 : 0 # only enable for the prod instance because sso doesnt work for ephemeral instances
+  #count = local.is_prod ? 1 : 0 # only enable for the prod instance because sso doesnt work for ephemeral instances
   provider_name = "google"
   oauth2_settings {
-    name            = "Google"
-    client_id = "${data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data}"
-    client_secret = "${data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data}"
-    allow_sign_up   = true
-    auto_login      = false
+    name          = "Google"
+    client_id     = data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data
+    client_secret = data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data
+    allow_sign_up = true
+    auto_login    = false
     #allow_assign_grafana_admin = true
-    scopes          = "openid email profile"
-    allowed_domains = "rhizaresearch.org"
+    scopes             = "openid email profile"
+    allowed_domains    = "rhizaresearch.org"
     skip_org_role_sync = true
-    use_pkce        = true
+    use_pkce           = true
   }
 }
 
@@ -132,33 +144,33 @@ resource "grafana_organization_preferences" "light_preference" {
   week_start = "sunday"
 
   lifecycle {
-    ignore_changes = [home_dashboard_uid,]
+    ignore_changes = [home_dashboard_uid, ]
   }
 }
 
 # Connect grafana to the read user with a datasource
 resource "grafana_data_source" "postgres" {
-  type                = "grafana-postgresql-datasource"
-  name                = "postgres"
-  url                 = local.postgres_url
-  username                = "read"
-  uid = "bdz3m3xs99p1cf"
-  
+  type     = "grafana-postgresql-datasource"
+  name     = "postgres"
+  url      = local.postgres_url
+  username = "read"
+  uid      = "bdz3m3xs99p1cf"
+
   secure_json_data_encoded = jsonencode({
     password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
   })
 
   json_data_encoded = jsonencode({
-    database = "postgres"
-    sslmode = "disable"
+    database        = "postgres"
+    sslmode         = "disable"
     postgresVersion = 1500
-    timescaledb = true
+    timescaledb     = true
   })
 }
 
 resource "grafana_organization" "tahmo" {
-  name         = "TAHMO"
-  admin_user   = "admin"
+  name       = "TAHMO"
+  admin_user = "admin"
 
   lifecycle {
     ignore_changes = [admins, viewers, editors]
@@ -171,7 +183,7 @@ resource "grafana_organization_preferences" "light_preference_tahmo" {
   week_start = "sunday"
 
   lifecycle {
-    ignore_changes = [home_dashboard_uid,]
+    ignore_changes = [home_dashboard_uid, ]
   }
 
   org_id = grafana_organization.tahmo.id
@@ -179,21 +191,21 @@ resource "grafana_organization_preferences" "light_preference_tahmo" {
 
 # Connect grafana to the read user with a datasource
 resource "grafana_data_source" "postgres_tahmo" {
-  type                = "grafana-postgresql-datasource"
-  name                = "postgres"
-  url                 = local.postgres_url
-  username                = "read"
-  uid = "cegueq2crd3wge"
-  
+  type     = "grafana-postgresql-datasource"
+  name     = "postgres"
+  url      = local.postgres_url
+  username = "read"
+  uid      = "cegueq2crd3wge"
+
   secure_json_data_encoded = jsonencode({
     password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
   })
 
   json_data_encoded = jsonencode({
-    database = "postgres"
-    sslmode = "disable"
+    database        = "postgres"
+    sslmode         = "disable"
     postgresVersion = 1500
-    timescaledb = true
+    timescaledb     = true
   })
 
   org_id = grafana_organization.tahmo.id
@@ -207,14 +219,14 @@ resource "grafana_data_source" "influx_tahmo" {
   basic_auth_enabled  = true
   basic_auth_username = "RhizaResearch"
   database_name       = "TAHMO"
-  uid = "eepjuov1zfi0wb"
-  
+  uid                 = "eepjuov1zfi0wb"
+
   secure_json_data_encoded = jsonencode({
     basicAuthPassword = "${data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data}"
   })
 
   json_data_encoded = jsonencode({
-    dbname = "TAHMO"
+    dbname            = "TAHMO"
     basicAuthPassword = "${data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data}"
     authType          = "default"
     query_language    = "SQL"
@@ -231,15 +243,15 @@ resource "grafana_data_source" "influx_tahmo" {
 
 # FIXME: dont hardcode users here. This if we can't use oauth this should at least be dynamic in some way.
 data "google_secret_manager_secret_version" "grafana_tristan_password" {
- secret   = "grafana-tristan-password"
+  secret = "grafana-tristan-password"
 }
 
 resource "grafana_user" "tristan" {
-  count = local.is_prod ? 0 : 1 # only enable for the ephemeral workspaces, prod uses SSO
+  count    = local.is_prod ? 0 : 1 # only enable for the ephemeral workspaces, prod uses SSO
   email    = "tristan@rhizaresearch.org"
   name     = "Tristan"
   login    = "tristan"
-  password = "${data.google_secret_manager_secret_version.grafana_tristan_password.secret_data}"
+  password = data.google_secret_manager_secret_version.grafana_tristan_password.secret_data
   is_admin = true
 }
 
@@ -248,6 +260,6 @@ resource "grafana_user" "tristan" {
 # Create dashboards
 resource "grafana_dashboard" "dashboards" {
   # only create dashboards for the ephemeral workspaces (for now)
-  for_each = local.is_prod ? [] : fileset("${path.module}/../../dashboards/build", "*.json")
+  for_each    = local.is_prod ? [] : fileset("${path.module}/../../dashboards/build", "*.json")
   config_json = file("${path.module}/../../dashboards/build/${each.value}")
 }

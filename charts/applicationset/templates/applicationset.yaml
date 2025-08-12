@@ -63,6 +63,9 @@ spec:
               config:
                 server:
                   root_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/{{ .Values.github.repo }}/{{ "{{" }} .values.pr_number {{ "}}" }}'
+                auth:
+                  google:
+                    redirect_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/login/google?to=/{{ .Values.github.repo }}/{{ "{{" }} .values.pr_number {{ "}}" }}'
 {{- if .Values.ephemeral.admin_password }}
                 security:
                   admin_user: admin

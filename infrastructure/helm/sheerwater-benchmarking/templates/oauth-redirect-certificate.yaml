@@ -1,0 +1,11 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "sheerwater-benchmarking.fullname" . }}-dev-apex
+spec:
+  secretName: dev-apex-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - dev.sheerwater.rhizaresearch.org 
