@@ -70,7 +70,7 @@ spec:
                     scopes: 'openid email profile'
                     auth_url: 'https://accounts.google.com/o/oauth2/v2/auth'
                     token_url: 'https://oauth2.googleapis.com/token'
-                    redirect_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/login/generic_oauth'
+                    redirect_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/login/generic_oauth?to=/{{ .Values.github.repo }}/{{ "{{" }} .values.pr_number {{ "}}" }}/login/generic_oauth'
 {{- if .Values.ephemeral.admin_password }}
                 security:
                   admin_user: admin

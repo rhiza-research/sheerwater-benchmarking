@@ -11,6 +11,8 @@ spec:
       {{- include "ephemeral-grafana.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/grafana-config: {{ toYaml .Values.grafana.config | sha256sum }}
       labels:
         {{- include "ephemeral-grafana.selectorLabels" . | nindent 8 }}
     spec:
