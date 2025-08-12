@@ -65,12 +65,12 @@ spec:
                   root_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/{{ .Values.github.repo }}/{{ "{{" }} .values.pr_number {{ "}}" }}'
                 auth:
                   generic_oauth:
-                    client_id: '{{ .Values.oauth.google.client_id }}'
-                    client_secret: '{{ .Values.oauth.google.client_secret }}'
+                    client_id: 'grafana-prs'
+                    client_secret: ''
                     scopes: 'openid email profile'
-                    auth_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/keycloak/realms/sheerwater/protocol/openid-connect/auth'
-                    token_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/keycloak/realms/sheerwater/protocol/openid-connect/token'
-                    api_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/keycloak/realms/sheerwater/protocol/openid-connect/userinfo'
+                    auth_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/auth/realms/sheerwater/protocol/openid-connect/auth'
+                    token_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/auth/realms/sheerwater/protocol/openid-connect/token'
+                    api_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/auth/realms/sheerwater/protocol/openid-connect/userinfo'
                     redirect_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/{{ .Values.github.repo }}/{{ "{{" }} .values.pr_number {{ "}}" }}/login/generic_oauth'
 {{- if .Values.ephemeral.admin_password }}
                 security:
