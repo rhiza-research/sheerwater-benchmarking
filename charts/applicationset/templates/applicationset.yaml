@@ -58,58 +58,49 @@ spec:
           # All Grafana application config comes from the PR's own chart
           values: |
             fullnameOverride: 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}'
-            
-            # Infrastructure overrides for PR-specific deployment
-            # Set Grafana root_url to match the PR-specific hostname
+
             grafana:
               config:
                 server:
                   root_url: 'https://{{ "{{" }} .values.domain {{ "}}" }}/{{ .Values.github.repo }}/{{ "{{" }} .values.pr_number {{ "}}" }}'
-                  
-            {{- if .Values.ephemeral.admin_password }}
+{{- if .Values.ephemeral.admin_password }}
                 security:
                   admin_user: admin
                   admin_password: {{ .Values.ephemeral.admin_password | quote }}
-            {{- end }}
+{{- end }}
 
-                         {{- if .Values.ephemeral.ingress.enabled }}
-             ingress:
-               enabled: true
-               {{- if .Values.ephemeral.ingress.className }}
-               className: {{ .Values.ephemeral.ingress.className | quote }}
-               {{- end }}
-               {{- if .Values.ephemeral.ingress.annotations }}
-               annotations:
-                 {{- range $key, $value := .Values.ephemeral.ingress.annotations }}
-                 {{- if ne $key "cert-manager.io/cluster-issuer" }}
-                 {{ $key }}: {{ $value | quote }}
-                 {{- end }}
-                 {{- end }}
-               {{- end }}
-               hosts:
-                 - host: '{{ .Values.domain }}'
-                   paths:
-                     - path: /{{ .Values.github.repo }}/{{ "{{" }} .values.pr_number {{ "}}" }}
-                       pathType: Prefix
-               {{- if .Values.ephemeral.ingress.tls.enabled }}
-               tls:
-                 - secretName: 'wildcard-dev-sheerwater-tls'
-                   hosts:
-                     - '{{ .Values.domain }}'
-               {{- end }}
-             {{- end }}
-            
-            # Resource limits for ephemeral instances
+            ingress:
+              enabled: true
+{{- if .Values.ephemeral.ingress.className }}
+              className: {{ .Values.ephemeral.ingress.className | quote }}
+{{- end }}
+{{- if .Values.ephemeral.ingress.annotations }}
+              annotations:
+{{- range $key, $value := .Values.ephemeral.ingress.annotations }}
+{{- if ne $key "cert-manager.io/cluster-issuer" }}
+                {{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+              hosts:
+                - host: '{{ .Values.domain }}'
+                  paths:
+                    - path: /{{ .Values.github.repo }}/{{ "{{" }} .values.pr_number {{ "}}" }}
+                      pathType: Prefix
+              tls:
+                - secretName: 'wildcard-dev-sheerwater-tls'
+                  hosts:
+                    - '{{ .Values.domain }}'
+
             resources:
               {{- toYaml .Values.ephemeral.resources | nindent 14 }}
-            
-            # Add labels to identify this as a PR deployment
+
             podLabels:
               pr.number: '{{ "{{" }} .values.pr_number {{ "}}" }}'
               pr.branch: '{{ "{{" }} .values.branch_name {{ "}}" }}'
               pr.author: '{{ "{{" }} .values.pr_author {{ "}}" }}'
               ephemeral: "true"
-              
+
       destination:
         server: https://kubernetes.default.svc
         namespace: 'grafana-pr-{{ "{{" }} .values.pr_number {{ "}}" }}'
