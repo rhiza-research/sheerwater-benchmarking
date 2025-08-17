@@ -32,15 +32,12 @@ def write_zarr(ds, filepath):
     fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
     _ = fs.open(filepath)
     # write it back out to ZARR
-    gcsmap = fs.get_mapper(filepath)
-    ds.to_zarr(store=gcsmap, mode='w')
+    ds.to_zarr(filepath, mode='w')
 
 
 def load_zarr(filename):
     """Load a Zarr dataset from cloud bucket."""
-    fs = gcsfs.GCSFileSystem(project='sheerwater', token='google_default')
-    cache_map = fs.get_mapper(filename)
-    ds = xr.open_dataset(cache_map, engine='zarr')
+    ds = xr.open_dataset(filename, engine='zarr')
     return ds
 
 

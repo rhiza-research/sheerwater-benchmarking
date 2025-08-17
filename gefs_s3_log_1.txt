@@ -1,0 +1,83 @@
+2025-06-18 15:09:23 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:23 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:23 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:23 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:24 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:25 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:25 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:25 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:25 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:25 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:26 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:26 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+2025-06-18 15:09:26 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+/Users/joshuaadkins/rhiza/sheerwater-benchmarking/gefs_etl_s3.py:14: UserWarning: The specified chunks separate the stored chunks along dimension "init_time" starting at index 1. This could degrade performance. Instead, consider rechunking after loading.
+  ds = xr.open_zarr(store,
+/Users/joshuaadkins/rhiza/sheerwater-benchmarking/gefs_etl_s3.py:14: UserWarning: The specified chunks separate the stored chunks along dimension "lead_time" starting at index 16. This could degrade performance. Instead, consider rechunking after loading.
+  ds = xr.open_zarr(store,
+2025-06-18 15:09:26 - INFO - Skipping checksum validation. Response did not contain one of the following algorithms: ['crc32', 'sha1', 'sha256'].
+/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/distributed/client.py:3370: UserWarning: Sending large graph of size 131.01 MiB.
+This may cause some slowdown.
+Consider loading the data with Dask directly
+ or using futures or delayed objects to embed the data into the graph without repetition.
+See also https://docs.dask.org/en/stable/best-practices.html#load-data-with-dask for more information.
+  warnings.warn(
+Traceback (most recent call last):
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/gefs_etl_s3.py", line 81, in <module>
+    ds.to_zarr(store="gcs://sheerwater-datalake/tmp/gefs-35.zarr", mode='w', encoding=encoding, zarr_format=3, consolidated=False)
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/core/dataset.py", line 2291, in to_zarr
+    return to_zarr(  # type: ignore[call-overload,misc]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/backends/api.py", line 2246, in to_zarr
+    writes = writer.sync(
+             ^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/backends/common.py", line 357, in sync
+    delayed_store = chunkmanager.store(
+                    ^^^^^^^^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/xarray/namedarray/daskmanager.py", line 247, in store
+    return store(
+           ^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/dask/array/core.py", line 1253, in store
+    compute_as_if_collection(Array, store_dsk, map_keys, **kwargs)
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/dask/base.py", line 399, in compute_as_if_collection
+    return schedule(dsk2, keys, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/distributed/client.py", line 3492, in get
+    results = self.gather(packed, asynchronous=asynchronous, direct=direct)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joshuaadkins/rhiza/sheerwater-benchmarking/.venv/lib/python3.12/site-packages/distributed/client.py", line 2565, in gather
+    return self.sync(
+           ^^^^^^^^^^
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/core/indexing.py", line 575, in __array__
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/core/indexing.py", line 580, in get_duck_array
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/core/indexing.py", line 799, in get_duck_array
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/core/indexing.py", line 654, in get_duck_array
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/backends/zarr.py", line 224, in __getitem__
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/core/indexing.py", line 1023, in explicit_indexing_adapter
+  File "/opt/coiled/env/lib/python3.12/site-packages/xarray/backends/zarr.py", line 214, in _getitem
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/array.py", line 2441, in __getitem__
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/_compat.py", line 43, in inner_f
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/array.py", line 2883, in get_orthogonal_selection
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/sync.py", line 163, in sync
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/sync.py", line 119, in _runner
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/array.py", line 1298, in _get_selection
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/codec_pipeline.py", line 464, in read
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/common.py", line 69, in concurrent_map
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/common.py", line 67, in run
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/codec_pipeline.py", line 251, in read_batch
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/codec_pipeline.py", line 207, in decode_partial_batch
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/abc/codec.py", line 198, in decode_partial
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/common.py", line 69, in concurrent_map
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/common.py", line 67, in run
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/codecs/sharding.py", line 506, in _decode_partial_single
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/codecs/sharding.py", line 722, in _load_shard_index_maybe
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/codecs/sharding.py", line 640, in _decode_shard_index
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/codec_pipeline.py", line 446, in decode
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/codec_pipeline.py", line 185, in decode_batch
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/abc/codec.py", line 129, in decode
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/abc/codec.py", line 407, in _batching_helper
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/common.py", line 69, in concurrent_map
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/core/common.py", line 67, in run
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/abc/codec.py", line 420, in wrap
+  File "/opt/coiled/env/lib/python3.12/site-packages/zarr/codecs/crc32c_.py", line 46, in _decode_single
+ValueError: Stored and computed checksum do not match. Stored: b'\xd3}\xaf4'. Computed: b'\xbc_J\xa6'.
