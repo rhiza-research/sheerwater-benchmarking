@@ -59,13 +59,16 @@ provider "postgresql" {
 locals {
   is_prod = terraform.workspace == "default"
 
+  # git repo name
+  repo_name = "sheerwater-benchmarking"
+
   # Extract PR number from workspace name "grafana-pr-<pr_number>"
   pr_number = local.is_prod ? "" : element(split("-", terraform.workspace), length(split("-", terraform.workspace)) - 1)
 
   # Base URLs
   # - prod:      https://benchmarks.sheerwater.rhizaresearch.org
   # - ephemeral: https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
-  grafana_url = local.is_prod ? "https://benchmarks.sheerwater.rhizaresearch.org" : "https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/${local.pr_number}"
+  grafana_url = local.is_prod ? "https://benchmarks.sheerwater.rhizaresearch.org" : "https://dev.sheerwater.rhizaresearch.org/${local.repo_name}/${local.pr_number}"
 
   # Postgres connection URL - different for prod vs ephemeral
   # TODO: this url should be built from other resource values 
@@ -169,9 +172,9 @@ resource "grafana_organization_preferences" "light_preference_benchmarking" {
   home_dashboard_uid = local.home_dashboard_uid
   org_id = grafana_organization.benchmarking.id
 
-  lifecycle {
-    ignore_changes = [home_dashboard_uid, ]
-  }
+  # lifecycle {
+  #   ignore_changes = [home_dashboard_uid, ]
+  # }
 
   depends_on = [grafana_organization.benchmarking]
 
@@ -308,7 +311,7 @@ resource "grafana_dashboard" "dashboards" {
   # only create dashboards for the ephemeral workspaces (for now)
   for_each = local.is_prod ? {} : local.dashboards_by_uid
   config_json = file(each.value)
-  message = "Imported from terraform"
+  message = "Modified by terraform from https://github.com/rhiza-research/${local.repo_name}/pull/${local.pr_number}"
   #is_starred = each.value == local.home_dashboard_uid
 
   overwrite = true
