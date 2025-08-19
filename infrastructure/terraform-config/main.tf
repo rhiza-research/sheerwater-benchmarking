@@ -232,10 +232,10 @@ resource "grafana_organization_preferences" "light_preference_tahmo" {
 }
 
 
-import {
-  to = grafana_data_source.postgres_tahmo
-  id = "cegueq2crd3wge"
-}
+# import {
+#   to = grafana_data_source.postgres_tahmo
+#   id = "cegueq2crd3wge"
+# }
 
 # Connect grafana to the read user with a datasource
 resource "grafana_data_source" "postgres_tahmo" {
