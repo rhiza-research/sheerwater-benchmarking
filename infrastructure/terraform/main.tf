@@ -1,10 +1,18 @@
 terraform {
+  required_version = ">= 1.5.7"
+
   backend "gcs" {
     bucket = "rhiza-terraform-state"
     prefix = "sheerwater-benchmarking-state"
   }
 
   required_providers {
+
+    random = {
+      source = "hashicorp/random"
+      version = "3.7.2"
+    }
+
     google = {
       source = "hashicorp/google"
       version = "6.4.0"

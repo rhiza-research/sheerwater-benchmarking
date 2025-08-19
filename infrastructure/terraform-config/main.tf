@@ -13,6 +13,8 @@
 ########################################################
 
 terraform {
+  required_version = ">= 1.5.7"
+
   backend "gcs" {
     bucket = "rhiza-terraform-state"
     prefix = "sheerwater-benchmarking-config"
@@ -44,10 +46,6 @@ data "google_secret_manager_secret_version" "postgres_admin_password" {
   secret = "sheerwater-postgres-admin-password"
 }
 
-data "google_secret_manager_secret_version" "grafana_admin_password" {
-  secret = "sheerwater-grafana-admin-password"
-}
-
 provider "postgresql" {
   host = "sheerwater-benchmarking-postgres"
   port = 5432
@@ -68,11 +66,6 @@ locals {
   # - prod:      https://benchmarks.sheerwater.rhizaresearch.org
   # - ephemeral: https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
   grafana_url = local.is_prod ? "https://benchmarks.sheerwater.rhizaresearch.org" : "https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/${local.pr_number}"
-
-  # OAuth redirect URLs
-  # - prod:      https://benchmarks.sheerwater.rhizaresearch.org/login/google
-  # - ephemeral: https://dev.sheerwater.rhizaresearch.org/login/google?to=/sheerwater-benchmarking/<pr_number>
-  oauth_redirect_url = local.is_prod ? "https://benchmarks.sheerwater.rhizaresearch.org/login/generic_oauth" : "https://dev.sheerwater.rhizaresearch.org/login/generic_oauth?to=/sheerwater-benchmarking/${local.pr_number}"
 
   # Postgres connection URL - different for prod vs ephemeral
   # TODO: this url should be built from other resource values 
@@ -155,7 +148,7 @@ resource "grafana_data_source" "postgres" {
   uid = "bdz3m3xs99p1cf"
 
   secure_json_data_encoded = jsonencode({
-    password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
+    password = data.google_secret_manager_secret_version.postgres_read_password.secret_data
   })
 
   json_data_encoded = jsonencode({
@@ -196,7 +189,7 @@ resource "grafana_data_source" "postgres_tahmo" {
   uid = "cegueq2crd3wge"
 
   secure_json_data_encoded = jsonencode({
-    password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
+    password = data.google_secret_manager_secret_version.postgres_read_password.secret_data
   })
 
   json_data_encoded = jsonencode({
@@ -220,12 +213,12 @@ resource "grafana_data_source" "influx_tahmo" {
   uid = "eepjuov1zfi0wb"
 
   secure_json_data_encoded = jsonencode({
-    basicAuthPassword = "${data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data}"
+    basicAuthPassword = data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data
   })
 
   json_data_encoded = jsonencode({
     dbname = "TAHMO"
-    basicAuthPassword = "${data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data}"
+    basicAuthPassword = data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data
     authType = "default"
     query_language = "SQL"
   })

@@ -10,12 +10,23 @@
 ########################################################
 
 terraform {
+  required_version = ">= 1.5.7"
   backend "gcs" {
     bucket = "rhiza-terraform-state"
     prefix = "sheerwater-benchmarking-config"
   }
 
   required_providers {
+    null = {
+      source = "hashicorp/null"
+      version = "3.2.4"
+    }
+
+    random = {
+      source = "hashicorp/random"
+      version = "3.7.2"
+    }
+
     google = {
       source = "hashicorp/google"
       version = "6.4.0"
@@ -36,9 +47,6 @@ data "google_secret_manager_secret_version" "postgres_admin_password" {
   secret = "sheerwater-postgres-admin-password"
 }
 
-data "google_secret_manager_secret_version" "grafana_admin_password" {
-  secret = "sheerwater-grafana-admin-password"
-}
 
 
 locals {
@@ -71,11 +79,6 @@ provider "postgresql" {
 # Gcloud secrets for Single sign on
 data "google_secret_manager_secret_version" "postgres_read_password" {
   secret = "sheerwater-postgres-read-password"
-}
-
-# Gcloud secrets for Single sign on
-data "google_secret_manager_secret_version" "tahmo_influx_read_password" {
-  secret = "tahmo-influx-read-password"
 }
 
 resource "postgresql_role" "read" {
