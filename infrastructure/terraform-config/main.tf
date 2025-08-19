@@ -28,7 +28,7 @@ terraform {
 
     grafana = {
       source = "grafana/grafana"
-      version = "3.7.0"
+      version = "4.5.1"
     }
 
     postgresql = {
@@ -74,6 +74,16 @@ locals {
   # svc.cluster.local = ?
   # port = ?
   postgres_url = terraform.workspace == "default" ? "postgres:5432" : "postgres.sheerwater-benchmarking.svc.cluster.local:5432"
+
+  # Collect dashboards and key them by UID so filename changes don't disturb state
+  dashboard_files = fileset("${path.module}/../../dashboards/build", "*.json")
+  dashboards_parsed = { for f in local.dashboard_files : f => jsondecode(file("${path.module}/../../dashboards/build/${f}")) }
+  dashboards_by_uid = {
+    for f, d in local.dashboards_parsed :
+    d.uid => "${path.module}/../../dashboards/build/${f}"
+    if try(d.uid, "") != ""
+  }
+  home_dashboard_uid = "ee4mze492j0n4d"
 }
 provider "grafana" {
   # Base URLs
@@ -128,15 +138,43 @@ resource "grafana_sso_settings" "google_sso_settings" {
   }
 }
 
-resource "grafana_organization_preferences" "light_preference" {
+
+import {
+  to = grafana_organization.benchmarking
+  id = "1"
+}
+
+resource "grafana_organization" "benchmarking" {
+  name = "Main Org."
+  # Note: changing the name will disable anonymous access because they are given access by org name.
+  #name = "benchmarking"
+  #admin_user = "admin"
+
+  lifecycle {
+    ignore_changes = [admins, viewers, editors]
+    prevent_destroy = true
+  }
+}
+
+import {
+  to = grafana_organization_preferences.light_preference_benchmarking
+  id = "1"
+}
+
+resource "grafana_organization_preferences" "light_preference_benchmarking" {
   theme = "light"
   timezone = "utc"
   week_start = "sunday"
-  home_dashboard_uid = "ee4mze492j0n4d"
+  # only set the home dashboard uid on the first run
+  home_dashboard_uid = local.home_dashboard_uid
+  org_id = grafana_organization.benchmarking.id
 
   lifecycle {
     ignore_changes = [home_dashboard_uid, ]
   }
+
+  depends_on = [grafana_organization.benchmarking]
+
 }
 
 # Connect grafana to the read user with a datasource
@@ -157,16 +195,26 @@ resource "grafana_data_source" "postgres" {
     postgresVersion = 1500
     timescaledb = true
   })
+
+  org_id = grafana_organization.benchmarking.id
+
+  depends_on = [grafana_organization.benchmarking]
+
 }
 
 resource "grafana_organization" "tahmo" {
   name = "TAHMO"
   admin_user = "admin"
 
-  lifecycle {
-    ignore_changes = [admins, viewers, editors]
-  }
+  # lifecycle {
+  #   ignore_changes = [admins, viewers, editors]
+  # }
 }
+
+# import {
+#   to = grafana_organization_preferences.light_preference_tahmo
+#   id = "2"
+# }
 
 resource "grafana_organization_preferences" "light_preference_tahmo" {
   theme = "light"
@@ -175,9 +223,18 @@ resource "grafana_organization_preferences" "light_preference_tahmo" {
 
   lifecycle {
     ignore_changes = [home_dashboard_uid, ]
+    replace_triggered_by = [grafana_organization.tahmo.id]
   }
 
   org_id = grafana_organization.tahmo.id
+
+  depends_on = [grafana_organization.tahmo]
+}
+
+
+import {
+  to = grafana_data_source.postgres_tahmo
+  id = "cegueq2crd3wge"
 }
 
 # Connect grafana to the read user with a datasource
@@ -199,7 +256,15 @@ resource "grafana_data_source" "postgres_tahmo" {
     timescaledb = true
   })
 
+  lifecycle {
+    replace_triggered_by = [grafana_organization.tahmo]
+  }
+
   org_id = grafana_organization.tahmo.id
+
+  depends_on = [grafana_organization.tahmo]
+
+
 }
 
 # Connect grafana to the read user with a datasource
@@ -224,6 +289,14 @@ resource "grafana_data_source" "influx_tahmo" {
   })
 
   org_id = grafana_organization.tahmo.id
+
+  depends_on = [grafana_organization.tahmo]
+
+  lifecycle {
+
+    replace_triggered_by = [grafana_organization.tahmo.id]
+  }
+
 }
 
 # TODO: add a datasource for the missing tahmo database
@@ -233,6 +306,31 @@ resource "grafana_data_source" "influx_tahmo" {
 # Create dashboards
 resource "grafana_dashboard" "dashboards" {
   # only create dashboards for the ephemeral workspaces (for now)
-  for_each = local.is_prod ? [] : fileset("${path.module}/../../dashboards/build", "*.json")
-  config_json = file("${path.module}/../../dashboards/build/${each.value}")
+  for_each = local.is_prod ? {} : local.dashboards_by_uid
+  config_json = file(each.value)
+  message = "Imported from terraform"
+  #is_starred = each.value == local.home_dashboard_uid
+
+  overwrite = true
+  org_id = grafana_organization.benchmarking.id
+
+  depends_on = [grafana_data_source.postgres, grafana_data_source.postgres_tahmo, grafana_data_source.influx_tahmo]
 }
+
+
+# resource "grafana_apps_dashboard_dashboard_v1beta1" "home" {
+#   #name = "Home"
+#   metadata {
+#     uid = "ee4mze492j0n4d"
+#     #folder_uid = "dashboards"
+#   }
+#   # options {
+#   #   #overwrite = true
+#   #   #path = "dashboards/home"
+#   # }
+#   spec {
+#     json = file("${path.module}/../../dashboards/build/Home.json")
+#     #tags = []
+#     #title = "Home"
+#   }
+# }
