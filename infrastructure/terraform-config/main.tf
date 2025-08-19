@@ -82,17 +82,16 @@ locals {
   # port = ?
   postgres_url = terraform.workspace == "default" ? "postgres:5432" : "postgres.sheerwater-benchmarking.svc.cluster.local:5432"
 }
-
-// if workspace == default then url =  "https://benchmarks.sheerwater.rhizaresearch.org"
-// else url = "https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/<pr_number>"
 provider "grafana" {
+  # Base URLs
+  # - prod:      https://benchmarks.sheerwater.rhizaresearch.org
+  # - ephemeral: https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
   url = local.grafana_url
   #auth = "admin:${data.google_secret_manager_secret_version.grafana_admin_password.secret_data}"
   # TODO: for now I have to use the default password because 
   # the correct password is not working. It is being set but I think 
   # there is some urlencoding happening somewhere breaking the password.
   auth = "admin:admin"
-
 }
 
 output "grafana_url" {
@@ -109,8 +108,6 @@ data "google_secret_manager_secret_version" "tahmo_influx_read_password" {
   secret = "tahmo-influx-read-password"
 }
 
-
-
 # Gcloud secrets for Single sign on
 data "google_secret_manager_secret_version" "sheerwater_oauth_client_id" {
   secret = "sheerwater-oauth-client-id"
@@ -122,7 +119,7 @@ data "google_secret_manager_secret_version" "sheerwater_oauth_client_secret" {
 
 # Enable google oauth
 resource "grafana_sso_settings" "google_sso_settings" {
-  count = local.is_prod ? 1 : 0 # only enable for the prod instance because sso doesnt work for ephemeral instances
+  count = local.is_prod ? 1 : 0 # only enable for the prod instance because sso is already enabled via keycloak for the ephemeral instances
   provider_name = "google"
   oauth2_settings {
     name          = "Google"
@@ -138,34 +135,11 @@ resource "grafana_sso_settings" "google_sso_settings" {
   }
 }
 
-# Enable generic oauth
-resource "grafana_sso_settings" "generic_oauth_settings" {
-  count = local.is_prod ? 0 : 1 # only enable for the ephemeral instances
-  provider_name = "generic_oauth"
-  oauth2_settings {
-    name          = "Generic OAuth"
-    client_id     = data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data
-    client_secret = data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data
-    allow_sign_up = true
-    auto_login    = false
-    #allow_assign_grafana_admin = true
-    scopes             = "openid email profile"
-    allowed_domains    = "rhizaresearch.org"
-    skip_org_role_sync = true
-    use_pkce           = true
-    auth_url           = "https://accounts.google.com/o/oauth2/v2/auth"
-    token_url          = "https://oauth2.googleapis.com/token"
-    redirect_url       = local.oauth_redirect_url
-  }
-}
-
-
-
-
 resource "grafana_organization_preferences" "light_preference" {
   theme      = "light"
   timezone   = "utc"
   week_start = "sunday"
+  home_dashboard_uid = "ee4mze492j0n4d"
 
   lifecycle {
     ignore_changes = [home_dashboard_uid, ]
@@ -259,26 +233,8 @@ resource "grafana_data_source" "influx_tahmo" {
   org_id = grafana_organization.tahmo.id
 }
 
+# TODO: add a datasource for the missing tahmo database
 # other tahmodatasource uid = 'cer8o24n0lfy8b'
-
-
-
-
-
-# FIXME: dont hardcode users here. This if we can't use oauth this should at least be dynamic in some way.
-data "google_secret_manager_secret_version" "grafana_tristan_password" {
-  secret = "grafana-tristan-password"
-}
-
-resource "grafana_user" "tristan" {
-  count    = local.is_prod ? 0 : 1 # only enable for the ephemeral workspaces, prod uses SSO
-  email    = "tristan@rhizaresearch.org"
-  name     = "Tristan"
-  login    = "tristan"
-  password = data.google_secret_manager_secret_version.grafana_tristan_password.secret_data
-  is_admin = true
-}
-
 
 
 # Create dashboards

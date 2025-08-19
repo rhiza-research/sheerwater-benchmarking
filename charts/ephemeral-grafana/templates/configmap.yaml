@@ -28,8 +28,10 @@ data:
     {{- end }}
     use_pkce = {{ (.use_pkce | default true) }}
     allow_sign_up = {{ (.allow_sign_up | default true) }}
+    login_attribute_path = {{ (.login_attribute_path | default "email") | quote }}
+    name_attribute_path = {{ (.name_attribute_path | default "coalesce(join(' ', [given_name, family_name]), preferred_username)") | quote }}
+    role_attribute_path = {{ (.role_attribute_path | default "contains(realm_access.roles[], 'grafana_admin') && 'Admin' || contains(realm_access.roles[], 'grafana_editor') && 'Editor' || 'Viewer'") | quote }}
     {{- end }}
-
 
     [security]
     admin_user = admin # {{ .Values.grafana.config.security.admin_user | quote }}
