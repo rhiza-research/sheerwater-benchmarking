@@ -56,7 +56,7 @@ resource "helm_release" "grafana_applicationset" {
           client_secret = data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data
         }
       }
-      
+
       # domain is passed to the applicationset here from the infrastructure repo dns record output
       domain = data.terraform_remote_state.shared_state.outputs.grafana_dev_domain
 
@@ -69,7 +69,7 @@ resource "helm_release" "grafana_applicationset" {
       ephemeral = {
         # Set admin password from Google Secret Manager
         admin_password = data.google_secret_manager_secret_version.grafana_admin_password.secret_data
-        
+
         ingress = {
           enabled = true
           className = "nginx"

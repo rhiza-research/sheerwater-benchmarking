@@ -11,8 +11,8 @@
 
 terraform {
   backend "gcs" {
-    bucket  = "rhiza-terraform-state"
-    prefix  = "sheerwater-benchmarking-config"
+    bucket = "rhiza-terraform-state"
+    prefix = "sheerwater-benchmarking-config"
   }
 
   required_providers {
@@ -33,11 +33,11 @@ provider "google" {
 }
 
 data "google_secret_manager_secret_version" "postgres_admin_password" {
- secret   = "sheerwater-postgres-admin-password"
+  secret = "sheerwater-postgres-admin-password"
 }
 
 data "google_secret_manager_secret_version" "grafana_admin_password" {
- secret   = "sheerwater-grafana-admin-password"
+  secret = "sheerwater-grafana-admin-password"
 }
 
 
@@ -59,43 +59,43 @@ resource "null_resource" "warn_non_default" {
 
 
 provider "postgresql" {
-  host            = "sheerwater-benchmarking-postgres"
-  port            = 5432
-  database        = "postgres"
-  username        = "postgres"
-  password        = "${data.google_secret_manager_secret_version.postgres_admin_password.secret_data}"
-  sslmode         = "disable"
+  host = "sheerwater-benchmarking-postgres"
+  port = 5432
+  database = "postgres"
+  username = "postgres"
+  password = data.google_secret_manager_secret_version.postgres_admin_password.secret_data
+  sslmode = "disable"
   connect_timeout = 15
 }
 
 # Gcloud secrets for Single sign on
 data "google_secret_manager_secret_version" "postgres_read_password" {
- secret   = "sheerwater-postgres-read-password"
+  secret = "sheerwater-postgres-read-password"
 }
 
 # Gcloud secrets for Single sign on
 data "google_secret_manager_secret_version" "tahmo_influx_read_password" {
- secret   = "tahmo-influx-read-password"
+  secret = "tahmo-influx-read-password"
 }
 
 resource "postgresql_role" "read" {
   name = "read"
-  password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
+  password = data.google_secret_manager_secret_version.postgres_read_password.secret_data
   login = true
 }
 
-resource postgresql_grant "readonly_public" {
-  database    = "postgres"
-  role        = postgresql_role.read.name
-  schema      = "public"
+resource "postgresql_grant" "readonly_public" {
+  database = "postgres"
+  role = postgresql_role.read.name
+  schema = "public"
   object_type = "table"
-  privileges  = ["SELECT"]
+  privileges = ["SELECT"]
 }
 
 # Create postgres users and grant them permissions
 resource "random_password" "postgres_tahmo_password" {
-  length           = 16
-  special          = true
+  length = 16
+  special = true
 }
 
 resource "google_secret_manager_secret" "postgres_tahmo_password" {
@@ -112,85 +112,85 @@ resource "google_secret_manager_secret_version" "postgres_tahmo_password" {
 
 resource "postgresql_role" "tahmo" {
   name = "tahmo"
-  password = "${google_secret_manager_secret_version.postgres_tahmo_password.secret_data}"
+  password = google_secret_manager_secret_version.postgres_tahmo_password.secret_data
   login = true
 }
 
-resource postgresql_grant "tahmo_read" {
-  database    = "postgres"
-  role        = postgresql_role.tahmo.name
-  schema      = "public"
+resource "postgresql_grant" "tahmo_read" {
+  database = "postgres"
+  role = postgresql_role.tahmo.name
+  schema = "public"
   object_type = "table"
-  privileges  = ["SELECT"]
+  privileges = ["SELECT"]
 }
 
 
-resource postgresql_grant "readonly_public_terracotta" {
-  database    = "terracotta"
-  role        = postgresql_role.read.name
-  schema      = "public"
+resource "postgresql_grant" "readonly_public_terracotta" {
+  database = "terracotta"
+  role = postgresql_role.read.name
+  schema = "public"
   object_type = "table"
-  privileges  = ["SELECT"]
+  privileges = ["SELECT"]
 }
 
 resource "postgresql_default_privileges" "read_only_default_admin" {
   database = "postgres"
-  role        = postgresql_role.read.name
-  schema   = "public"
-  owner       = "postgres"
+  role = postgresql_role.read.name
+  schema = "public"
+  owner = "postgres"
   object_type = "table"
-  privileges  = ["SELECT"]
+  privileges = ["SELECT"]
 }
 
 resource "postgresql_default_privileges" "tahmo_default_admin" {
   database = "postgres"
-  role        = postgresql_role.tahmo.name
-  schema   = "public"
-  owner       = "postgres"
+  role = postgresql_role.tahmo.name
+  schema = "public"
+  owner = "postgres"
   object_type = "table"
-  privileges  = ["SELECT"]
+  privileges = ["SELECT"]
 }
 
 resource "postgresql_default_privileges" "read_only_default" {
   database = "postgres"
-  role        = postgresql_role.read.name
-  schema   = "public"
-  owner       = "write"
+  role = postgresql_role.read.name
+  schema = "public"
+  owner = "write"
   object_type = "table"
-  privileges  = ["SELECT"]
+  privileges = ["SELECT"]
 }
 
 resource "postgresql_default_privileges" "tahmo_default" {
   database = "postgres"
-  role        = postgresql_role.tahmo.name
-  schema   = "public"
-  owner       = "write"
+  role = postgresql_role.tahmo.name
+  schema = "public"
+  owner = "write"
   object_type = "table"
-  privileges  = ["SELECT"]
+  privileges = ["SELECT"]
 }
 
 resource "postgresql_default_privileges" "read_only_default_terracotta" {
   database = "terracotta"
-  role        = postgresql_role.read.name
-  schema   = "public"
-  owner       = "write"
+  role = postgresql_role.read.name
+  schema = "public"
+  owner = "write"
   object_type = "table"
-  privileges  = ["SELECT"]
+  privileges = ["SELECT"]
 }
 
 resource "postgresql_default_privileges" "read_only_default_admin_terracotta" {
   database = "terracotta"
-  role        = postgresql_role.read.name
-  schema   = "public"
-  owner       = "postgres"
+  role = postgresql_role.read.name
+  schema = "public"
+  owner = "postgres"
   object_type = "table"
-  privileges  = ["SELECT"]
+  privileges = ["SELECT"]
 }
 
 
 resource "random_password" "postgres_write_password" {
-  length           = 16
-  special          = true
+  length = 16
+  special = true
 }
 
 resource "google_secret_manager_secret" "postgres_write_password" {
@@ -207,56 +207,56 @@ resource "google_secret_manager_secret_version" "postgres_write_password" {
 
 resource "postgresql_role" "write" {
   name = "write"
-  password = "${random_password.postgres_write_password.result}"
+  password = random_password.postgres_write_password.result
   login = true
   create_database = true
 }
 
-resource postgresql_grant "write_public" {
-  database    = "postgres"
-  role        = postgresql_role.write.name
-  schema      = "public"
+resource "postgresql_grant" "write_public" {
+  database = "postgres"
+  role = postgresql_role.write.name
+  schema = "public"
   object_type = "table"
-  privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+  privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
 }
 
-resource postgresql_grant "write_public_terracotta" {
-  database    = "terracotta"
-  role        = postgresql_role.write.name
-  schema      = "public"
+resource "postgresql_grant" "write_public_terracotta" {
+  database = "terracotta"
+  role = postgresql_role.write.name
+  schema = "public"
   object_type = "table"
-  privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+  privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
 }
 
-resource postgresql_grant "write_public_terracottads" {
-  database    = "terracotta"
-  role        = postgresql_role.write.name
-  schema      = "public"
+resource "postgresql_grant" "write_public_terracottads" {
+  database = "terracotta"
+  role = postgresql_role.write.name
+  schema = "public"
   object_type = "table"
   objects = ["datasets"]
-  privileges  = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+  privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
 }
 
-resource postgresql_grant "write_schema_public" {
-  database    = "postgres"
-  role        = postgresql_role.write.name
-  schema      = "public"
+resource "postgresql_grant" "write_schema_public" {
+  database = "postgres"
+  role = postgresql_role.write.name
+  schema = "public"
   object_type = "schema"
-  privileges  = ["CREATE"]
+  privileges = ["CREATE"]
 }
 
-resource postgresql_grant "public_schema_public" {
-  database    = "postgres"
-  role        = "public"
-  schema      = "public"
+resource "postgresql_grant" "public_schema_public" {
+  database = "postgres"
+  role = "public"
+  schema = "public"
   object_type = "schema"
-  privileges  = ["CREATE", "USAGE"]
+  privileges = ["CREATE", "USAGE"]
 }
 
-resource postgresql_grant "write_database_public" {
-  database    = "postgres"
-  role        = postgresql_role.write.name
-  schema      = "public"
+resource "postgresql_grant" "write_database_public" {
+  database = "postgres"
+  role = postgresql_role.write.name
+  schema = "public"
   object_type = "database"
-  privileges  = ["CREATE"]
+  privileges = ["CREATE"]
 }

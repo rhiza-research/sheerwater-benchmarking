@@ -20,17 +20,17 @@ terraform {
 
   required_providers {
     google = {
-      source  = "hashicorp/google"
+      source = "hashicorp/google"
       version = "6.45.0"
     }
 
     grafana = {
-      source  = "grafana/grafana"
+      source = "grafana/grafana"
       version = "3.7.0"
     }
 
     postgresql = {
-      source  = "cyrilgdn/postgresql"
+      source = "cyrilgdn/postgresql"
       version = "1.23.0"
     }
   }
@@ -49,12 +49,12 @@ data "google_secret_manager_secret_version" "grafana_admin_password" {
 }
 
 provider "postgresql" {
-  host            = "sheerwater-benchmarking-postgres"
-  port            = 5432
-  database        = "postgres"
-  username        = "postgres"
-  password        = data.google_secret_manager_secret_version.postgres_admin_password.secret_data
-  sslmode         = "disable"
+  host = "sheerwater-benchmarking-postgres"
+  port = 5432
+  database = "postgres"
+  username = "postgres"
+  password = data.google_secret_manager_secret_version.postgres_admin_password.secret_data
+  sslmode = "disable"
   connect_timeout = 15
 }
 
@@ -122,22 +122,22 @@ resource "grafana_sso_settings" "google_sso_settings" {
   count = local.is_prod ? 1 : 0 # only enable for the prod instance because sso is already enabled via keycloak for the ephemeral instances
   provider_name = "google"
   oauth2_settings {
-    name          = "Google"
-    client_id     = data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data
+    name = "Google"
+    client_id = data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data
     client_secret = data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data
     allow_sign_up = true
-    auto_login    = false
+    auto_login = false
     #allow_assign_grafana_admin = true
-    scopes             = "openid email profile"
-    allowed_domains    = "rhizaresearch.org"
+    scopes = "openid email profile"
+    allowed_domains = "rhizaresearch.org"
     skip_org_role_sync = true
-    use_pkce           = true
+    use_pkce = true
   }
 }
 
 resource "grafana_organization_preferences" "light_preference" {
-  theme      = "light"
-  timezone   = "utc"
+  theme = "light"
+  timezone = "utc"
   week_start = "sunday"
   home_dashboard_uid = "ee4mze492j0n4d"
 
@@ -148,26 +148,26 @@ resource "grafana_organization_preferences" "light_preference" {
 
 # Connect grafana to the read user with a datasource
 resource "grafana_data_source" "postgres" {
-  type     = "grafana-postgresql-datasource"
-  name     = "postgres"
-  url      = local.postgres_url
+  type = "grafana-postgresql-datasource"
+  name = "postgres"
+  url = local.postgres_url
   username = "read"
-  uid      = "bdz3m3xs99p1cf"
+  uid = "bdz3m3xs99p1cf"
 
   secure_json_data_encoded = jsonencode({
     password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
   })
 
   json_data_encoded = jsonencode({
-    database        = "postgres"
-    sslmode         = "disable"
+    database = "postgres"
+    sslmode = "disable"
     postgresVersion = 1500
-    timescaledb     = true
+    timescaledb = true
   })
 }
 
 resource "grafana_organization" "tahmo" {
-  name       = "TAHMO"
+  name = "TAHMO"
   admin_user = "admin"
 
   lifecycle {
@@ -176,8 +176,8 @@ resource "grafana_organization" "tahmo" {
 }
 
 resource "grafana_organization_preferences" "light_preference_tahmo" {
-  theme      = "light"
-  timezone   = "utc"
+  theme = "light"
+  timezone = "utc"
   week_start = "sunday"
 
   lifecycle {
@@ -189,21 +189,21 @@ resource "grafana_organization_preferences" "light_preference_tahmo" {
 
 # Connect grafana to the read user with a datasource
 resource "grafana_data_source" "postgres_tahmo" {
-  type     = "grafana-postgresql-datasource"
-  name     = "postgres"
-  url      = local.postgres_url
+  type = "grafana-postgresql-datasource"
+  name = "postgres"
+  url = local.postgres_url
   username = "read"
-  uid      = "cegueq2crd3wge"
+  uid = "cegueq2crd3wge"
 
   secure_json_data_encoded = jsonencode({
     password = "${data.google_secret_manager_secret_version.postgres_read_password.secret_data}"
   })
 
   json_data_encoded = jsonencode({
-    database        = "postgres"
-    sslmode         = "disable"
+    database = "postgres"
+    sslmode = "disable"
     postgresVersion = 1500
-    timescaledb     = true
+    timescaledb = true
   })
 
   org_id = grafana_organization.tahmo.id
@@ -211,23 +211,23 @@ resource "grafana_data_source" "postgres_tahmo" {
 
 # Connect grafana to the read user with a datasource
 resource "grafana_data_source" "influx_tahmo" {
-  type                = "influxdb"
-  name                = "influx"
-  url                 = "https://heavy-d24620b1.influxcloud.net:8086"
-  basic_auth_enabled  = true
+  type = "influxdb"
+  name = "influx"
+  url = "https://heavy-d24620b1.influxcloud.net:8086"
+  basic_auth_enabled = true
   basic_auth_username = "RhizaResearch"
-  database_name       = "TAHMO"
-  uid                 = "eepjuov1zfi0wb"
+  database_name = "TAHMO"
+  uid = "eepjuov1zfi0wb"
 
   secure_json_data_encoded = jsonencode({
     basicAuthPassword = "${data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data}"
   })
 
   json_data_encoded = jsonencode({
-    dbname            = "TAHMO"
+    dbname = "TAHMO"
     basicAuthPassword = "${data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data}"
-    authType          = "default"
-    query_language    = "SQL"
+    authType = "default"
+    query_language = "SQL"
   })
 
   org_id = grafana_organization.tahmo.id
@@ -240,6 +240,6 @@ resource "grafana_data_source" "influx_tahmo" {
 # Create dashboards
 resource "grafana_dashboard" "dashboards" {
   # only create dashboards for the ephemeral workspaces (for now)
-  for_each    = local.is_prod ? [] : fileset("${path.module}/../../dashboards/build", "*.json")
+  for_each = local.is_prod ? [] : fileset("${path.module}/../../dashboards/build", "*.json")
   config_json = file("${path.module}/../../dashboards/build/${each.value}")
 }
