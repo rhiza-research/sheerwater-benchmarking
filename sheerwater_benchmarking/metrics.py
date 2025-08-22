@@ -8,7 +8,7 @@ from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_thresh
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
                                            lead_to_agg_days, lead_or_agg, apply_mask)
 
-from .metric_library import (metric_factory, compute_statistic, metric_or_stat_name,
+from .metric_library import (metric_factory, compute_statistic, get_stat_name,
                              latitude_weighted_spatial_average, groupby_time)
 
 
@@ -45,13 +45,13 @@ def get_datasource_fn(datasource):
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                },
            },
-           cache_disable_if={'statistic': ['pred', 'target']},
+           cache_disable_if={'statistic': ['pred', 'target', 'n_valid']},
            validate_cache_timeseries=True)
 def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                      statistic, metric_info, grid="global1_5"):
     """Compute a global metric without aggregated in time or space at a specific lead."""
     prob_type = metric_info.prob_type
-    stat_name = metric_or_stat_name(statistic, metric_info)
+    stat_name, _ = get_stat_name(statistic, metric_info)
 
     # Get the forecast and check validity
     fcst_fn = get_datasource_fn(forecast)
@@ -222,7 +222,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
            cache=True)
 def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
                        metric, time_grouping=None, spatial=False, grid="global1_5",
-                       mask='lsm', region='africa'):
+                       mask='lsm', region='all'):
     """Compute a grouped metric for a forecast at a specific lead."""
     # Use the metric registry to get the metric class
     metric_obj = metric_factory(metric)()
@@ -236,12 +236,20 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
     # Statistics needed to calculate the metrics, incrementally populated
     statistic_values = {}
-    statistic_values['spatial'] = spatial
+    statistic_values['spatial'] = spatial  # whether the metric is spatially aggregated
+    # If metric is categorical, store the bins
     if metric_obj.categorical:
-        _, bin_str = metric_or_stat_name(metric, metric_obj)
+        _, bin_str = get_stat_name(metric, metric_obj)
         statistic_values['bins'] = metric_obj.config_dict['bins']
 
+    # Iterate through the statistics and compute them
     for statistic in stats_to_call:
+        # Statistics can be a tuple of (statistic, agg_fn), or just a statistic with default mean agg
+        if isinstance(statistic, tuple):
+            statistic, agg_fn = statistic
+        else:
+            agg_fn = 'mean'
+
         if metric_obj.categorical:
             statistic_call = f'{statistic}-{bin_str}'
         else:
@@ -264,9 +272,8 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             if coord not in ['time', 'lat', 'lon']:
                 ds = ds.reset_coords(coord, drop=True)
 
-        # Clip it to the region
-        ds = clip_region(ds, region)
-        ds = apply_mask(ds, mask)
+        # Apply masking
+        ds = apply_mask(ds, mask, grid=grid)
 
         # Check validity of the statistic
         if truth_sparse or metric_sparse:
@@ -288,27 +295,14 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             return None
 
         ############################################################
-        # Default n_valid statistic
-        ############################################################
-        # Add a default n_valid statistic if it doesn't exist that just counts the number
-        # of non-null values in the statistics
-        if 'n_valid' not in statistic_values:
-            statistic_values['n_valid'] = xr.ones_like(ds)
-            statistic_values['n_valid'] = groupby_time(
-                statistic_values['n_valid'], time_grouping, agg_fn='sum')
-            if not spatial:
-                # TODO: need to convert this to be a sum, not average
-                statistic_values['n_valid'] = statistic_values['n_valid'].notnull().sum()
-
-        ############################################################
         # Statistic aggregation
         ############################################################
         if not metric_obj.coupled:
             # Group by time
-            ds = groupby_time(ds, time_grouping, agg_fn='mean')
+            ds = groupby_time(ds, time_grouping, agg_fn=agg_fn)
             # Average in space
             if not spatial:
-                ds = latitude_weighted_spatial_average(ds)
+                ds = latitude_weighted_spatial_average(ds, agg=agg_fn)
 
         # Assign the final statistic value
         statistic_values[statistic] = ds.copy()
@@ -368,7 +362,8 @@ def _summary_metrics_table(start_time, end_time, variable,
                 ds = grouped_metric(start_time, end_time, variable,
                                     lead=lead, forecast=forecast, truth=truth,
                                     metric=metric, time_grouping=time_grouping, spatial=False,
-                                    grid=grid, mask=mask, region=region)
+                                    grid=grid, mask=mask, region=region,
+                                    retry_null_cache=True)
             except NotImplementedError:
                 ds = None
 
@@ -399,7 +394,10 @@ def _summary_metrics_table(start_time, end_time, variable,
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
                        'time_grouping', 'grid', 'mask', 'region'],
-           cache=True)
+           hash_postgres_table_name=True,
+           backend='postgres',
+           cache=True,
+           primary_keys=['time', 'forecast'])
 def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):
@@ -426,7 +424,8 @@ def summary_metrics_table(start_time, end_time, variable,
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
                        'time_grouping', 'grid', 'mask', 'region'],
-           cache=True)
+           cache=True,
+           primary_keys=['time', 'forecast'])
 def seasonal_metrics_table(start_time, end_time, variable,
                            truth, metric, time_grouping=None,
                            grid='global1_5', mask='lsm', region='global'):
@@ -445,7 +444,8 @@ def seasonal_metrics_table(start_time, end_time, variable,
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
                        'time_grouping', 'grid', 'mask', 'region'],
-           cache=True)
+           cache=True,
+           primary_keys=['time', 'forecast'])
 def station_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
                           grid='global1_5', mask='lsm', region='global'):

@@ -9,7 +9,7 @@ import dask
 from functools import partial
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
 from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
-                                           apply_mask, clip_region, pad_with_leapdays, add_dayofyear)
+                                           apply_mask, clip_region, pad_with_leapdays, add_dayofyear, forecast)
 from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
 
 
@@ -396,6 +396,7 @@ def _climatology_unified(start_time, end_time, variable, lead,
     return ds
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
@@ -408,6 +409,7 @@ def climatology_2015(start_time, end_time, variable, lead, prob_type='determinis
                                 trend=False, prob_type=prob_type, grid=grid, mask=mask, region=region)
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
@@ -420,6 +422,7 @@ def climatology_2020(start_time, end_time, variable, lead, prob_type='determinis
                                 trend=False, prob_type=prob_type, grid=grid, mask=mask, region=region)
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
@@ -432,6 +435,7 @@ def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='dete
                                 trend=True, prob_type=prob_type, grid=grid, mask=mask, region=region)
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',

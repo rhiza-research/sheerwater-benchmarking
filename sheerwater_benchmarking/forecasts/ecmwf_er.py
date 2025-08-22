@@ -13,7 +13,8 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lead_to_agg_days,
                                            regrid, get_variable,
                                            target_date_to_forecast_date,
-                                           shift_forecast_date_to_target_date)
+                                           shift_forecast_date_to_target_date,
+                                           forecast)
 
 
 @dask_remote
@@ -471,6 +472,7 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
     return ds
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
@@ -483,6 +485,7 @@ def ecmwf_ifs_er(start_time, end_time, variable, lead, prob_type='deterministic'
                                  grid=grid, mask=mask, region=region, debiased=False)
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',

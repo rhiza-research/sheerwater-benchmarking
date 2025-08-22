@@ -30,7 +30,9 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
         region=region,
         grid='global1_5',
         mask='lsm',
-        recompute=False
+        # recompute=False
+        recompute=['global_statistic'],
+        force_overwrite=False
     )
 
     # Run grouped_metric

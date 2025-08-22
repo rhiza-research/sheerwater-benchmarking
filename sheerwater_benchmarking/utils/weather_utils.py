@@ -1,5 +1,47 @@
 """Variable-related utility functions for all parts of the data pipeline."""
 
+from functools import wraps
+import xarray as xr
+import numpy as np
+
+# Global forecast registry
+FORECAST_REGISTRY = {}
+
+
+def forecast(func):
+    """Decorator to mark a function as a forecast and concat the leads."""
+    # Register the forecast in the global forecast registry when defined
+    FORECAST_REGISTRY[func.__name__] = func
+    
+    @wraps(func)
+    def forecast_wrapper(*args, **kwargs):
+        called_lead = kwargs.get('lead')
+        leads, agg_period = get_leads(called_lead)
+        ret_list = []
+        for lead in leads:
+            kwargs['lead'] = lead
+            try:
+                ds = func(*args, **kwargs)
+            except NotImplementedError:
+                continue
+            ds = ds.assign_coords(lead_time=lead)
+            ret_list.append(ds)
+        try:
+            ret = xr.concat(ret_list, dim='lead_time')
+        except ValueError as e:
+            if 'must supply at least one object to concatenate' in str(e):
+                raise NotImplementedError(f"Lead {called_lead} not supported for {func.__name__}")
+            else:
+                raise e
+        ret = ret.assign_attrs(agg_period=agg_period)
+        return ret
+    return forecast_wrapper
+
+
+def get_forecast(forecast_name):
+    """Get a forecast from the global forecast registry."""
+    return FORECAST_REGISTRY[forecast_name]
+
 
 def get_variable(variable_name, variable_type='era5'):
     """Converts a variable in any other type to a variable name of the requested type."""
@@ -40,3 +82,33 @@ def get_variable(variable_name, variable_type='era5'):
                 return val
 
     raise ValueError(f"Variable {variable_name} not found")
+
+
+def get_leads(lead):
+    """Lead generation shortcuts.
+
+    Support leads are 
+    - weekly
+    - biweekly
+    - monthly
+    - daily-n, where n is the number of days from day1 to dayn
+    """
+    if lead == 'weekly':
+        return (['week1', 'week2', 'week3', 'week4', 'week5', 'week6'], np.timedelta64(7, 'D'))
+    elif lead == 'biweekly':
+        return (['weeks12', 'weeks23', 'weeks34', 'weeks45', 'weeks56'], np.timedelta64(14, 'D'))
+    elif lead == 'monthly':
+        return (['month1', 'month2', 'month3'], np.timedelta64(30, 'D'))
+    elif 'daily' in lead:
+        days = int(lead.split('-')[1])
+        return ([f'day{i}' for i in range(1, days + 1)], np.timedelta64(days, 'D'))
+    elif 'day' in lead:
+        return ([lead], np.timedelta64(1, 'D'))
+    elif 'week' in lead:
+        return ([lead], np.timedelta64(7, 'D'))
+    elif 'weeks' in lead:
+        return ([lead], np.timedelta64(14, 'D'))
+    elif 'month' in lead:
+        return ([lead], np.timedelta64(30, 'D'))
+    else:
+        raise ValueError(f"Lead {lead} not supported")

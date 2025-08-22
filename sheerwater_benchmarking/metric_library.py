@@ -11,16 +11,16 @@ import xskillscore
 SHEERWATER_METRIC_REGISTRY = {}
 
 
-def metric_or_stat_name(metric_or_stat, metric_info):
-    """Get the metric / statistic name from the metric-edge-edge... format for categorical statistics.
+def get_stat_name(stat_name, metric_info):
+    """Get the statistic name from the statistic-edge-edge... format for categorical statistics.
 
     Returns:
-        name: the metric / statistic name
+        name: the statistic name
         bin_str: the bins for the categorical statistic, e.g., '5' or '5-10'
     """
     if metric_info.categorical:
-        return metric_or_stat.split('-')[0], metric_or_stat[metric_or_stat.find('-')+1:]
-    return metric_or_stat, ''  # name, bin_str
+        return stat_name.split('-')[0], stat_name[stat_name.find('-')+1:]
+    return stat_name, ''  # name, bin_str
 
 
 def groupby_time(ds, time_grouping, agg_fn='mean'):
@@ -53,7 +53,7 @@ def groupby_time(ds, time_grouping, agg_fn='mean'):
     return ds
 
 
-def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon'):
+def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon', agg_fn='mean'):
     """Compute latitude-weighted spatial average of a dataset.
 
     This function weights each latitude band by the actual cell area,
@@ -77,7 +77,10 @@ def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon'):
 
     # Create weights array
     weights = ds[lat_dim].copy(data=weights)
-    weighted = ds.weighted(weights).mean([lat_dim, lon_dim], skipna=True)
+    if agg_fn == 'mean':
+        weighted = ds.weighted(weights).mean([lat_dim, lon_dim], skipna=True)
+    else:
+        weighted = ds.weighted(weights).sum([lat_dim, lon_dim], skipna=True)
     return weighted
 
 
@@ -175,6 +178,8 @@ def compute_statistic(stat_data):
         m_ds = (stat_data['fcst'] - stat_data['obs'])**2
     elif stat_name == 'bias':
         m_ds = stat_data['fcst'] - stat_data['obs']
+    elif stat_name == 'n_valid':
+        m_ds = xr.ones_like(stat_data['fcst'])
     else:
         raise ValueError(f"Statistic {stat_name} not implemented")
     return m_ds
@@ -204,6 +209,9 @@ class Metric(ABC):
 
     Based on the implementation in WeatherBenchX, a metric is defined
     in terms of statistics and final computation.
+
+    All statistics are returned as means, unless otherwise specified in the metric.statistics property.
+    Valid options are: 'mean', 'sum'
     """
     sparse = False  # does the metric induce NaNs
     prob_type = 'deterministic'  # is the forecast probabilistic?
@@ -322,7 +330,7 @@ class Pearson_stream(Metric):
     """
     @property
     def statistics(self):
-        return ['pred_mean', 'target_mean', 'squared_pred', 'squared_target', 'covariance']
+        return ['pred_mean', 'target_mean', 'squared_pred', 'squared_target', 'covariance', ('n_valid', 'sum')]
 
     def compute(self, statistic_values):
         # Pearson's r = covariance / sqrt(squared_pred * squared_target)

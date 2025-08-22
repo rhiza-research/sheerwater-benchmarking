@@ -3,7 +3,7 @@ import xarray as xr
 import numpy as np
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, get_variable, apply_mask, clip_region, regrid,
-                                           target_date_to_forecast_date, shift_forecast_date_to_target_date)
+                                           target_date_to_forecast_date, shift_forecast_date_to_target_date, forecast)
 
 
 @dask_remote
@@ -97,6 +97,7 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
 #     return ds
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',

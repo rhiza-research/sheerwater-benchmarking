@@ -16,7 +16,7 @@ from huggingface_hub.utils import EntryNotFoundError
 from sheerwater_benchmarking.utils.secrets import huggingface_read_token
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
-                                           lon_base_change,
+                                           lon_base_change, forecast,
                                            target_date_to_forecast_date,
                                            shift_forecast_date_to_target_date, lead_to_agg_days, roll_and_agg)
 from sheerwater_benchmarking.tasks import spw_precip_preprocess, spw_rainy_onset
@@ -236,6 +236,7 @@ def fuxi_spw(start_time, end_time, lead,
     return ds
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',

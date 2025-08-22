@@ -15,7 +15,7 @@ from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_
                          groupby_time, lead_to_agg_days, lead_or_agg, assign_grouping_coordinates,
                          convert_group_to_time, date_mean, doy_mean)
 
-from .weather_utils import get_variable
+from .weather_utils import get_variable, get_leads, forecast,  FORECAST_REGISTRY
 
 from .task_utils import first_satisfied_date
 
@@ -70,5 +70,7 @@ __all__ = [
     "first_satisfied_date",
     "date_mean",
     "doy_mean",
-    "run_in_parallel"
+    "run_in_parallel",
+    "forecast",
+    "get_leads"
 ]

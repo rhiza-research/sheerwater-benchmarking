@@ -8,7 +8,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lon_base_change,
                                            target_date_to_forecast_date,
                                            shift_forecast_date_to_target_date,
-                                           lead_to_agg_days, roll_and_agg, regrid)
+                                           lead_to_agg_days, roll_and_agg, regrid, forecast)
 
 
 @dask_remote
@@ -183,6 +183,7 @@ def _process_lead(variable, lead):
     return agg_days, lead_offset_days
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
