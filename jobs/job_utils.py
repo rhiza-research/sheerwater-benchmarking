@@ -7,6 +7,7 @@ import tqdm
 
 from sheerwater_benchmarking.metric_library import metric_factory
 
+
 def parse_args():
     """Parses arguments for jobs."""
     parser = argparse.ArgumentParser()
@@ -23,7 +24,7 @@ def parse_args():
     parser.add_argument("--backend", type=str, default=None)
     parser.add_argument("--parallelism", type=int, default=1)
     parser.add_argument("--recompute", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--remote", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--local", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--station-evaluation", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--seasonal", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--remote-name", type=str, default=None)
@@ -51,15 +52,19 @@ def parse_args():
         truth = args.truth
 
     if args.station_evaluation:
-        metrics = ["mae", "rmse", "bias", "acc", "smape", "seeps", "pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+        metrics = ["mae", "rmse", "bias", "acc", "smape", "seeps", "pod-1", "pod-5", "pod-10",
+                   "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
     else:
-        metrics = ["mae", "crps", "acc", "rmse", "bias",  "smape", "seeps", "pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+        metrics = ["mae", "crps", "acc", "rmse", "bias",  "smape", "seeps", "pod-1", "pod-5",
+                   "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
 
     if args.metric:
         if args.metric == ['contingency']:
-            metrics = ["pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+            metrics = ["pod-1", "pod-5", "pod-10", "far-1", "far-5",
+                       "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
         elif args.metric == ['coupled']:
-            metrics = ["acc", "pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+            metrics = ["acc", "pod-1", "pod-5", "pod-10", "far-1", "far-5",
+                       "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
         else:
             metrics = args.metric
 
@@ -94,9 +99,12 @@ def parse_args():
     if args.remote_config:
         remote_config = args.remote_config
 
+    remote = not args.local
+
     return (args.start_time, args.end_time, forecasts, truth, metrics, variables, grids,
             regions, leads, time_groupings, args.parallelism,
-            args.recompute, args.backend, args.remote_name, args.remote, remote_config)
+            args.recompute, args.backend, args.remote_name, remote, remote_config)
+
 
 def prune_metrics(combos, global_run=False):
     """Prunes a list of metrics combinations.

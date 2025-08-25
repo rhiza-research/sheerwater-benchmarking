@@ -51,7 +51,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                      statistic, metric_info, grid="global1_5"):
     """Compute a global metric without aggregated in time or space at a specific lead."""
     prob_type = metric_info.prob_type
-    stat_name = metric_or_stat_name(statistic, metric_info)
+    stat_name, _ = metric_or_stat_name(statistic, metric_info)
 
     # Get the forecast and check validity
     fcst_fn = get_datasource_fn(forecast)
@@ -201,9 +201,9 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                },
            },
            cache=True)
-def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
-                   metric, time_grouping=None, spatial=False, grid="global1_5",
-                   mask='lsm', region='africa'):
+def grouped_metric_old(start_time, end_time, variable, lead, forecast, truth,
+                       metric, time_grouping=None, spatial=False, grid="global1_5",
+                       mask='lsm', region='africa'):
     """Compute a grouped metric for a forecast at a specific lead."""
     # TODO: Delete, keeping around for cachable function atm
     pass
@@ -220,9 +220,9 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
                },
            },
            cache=True)
-def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
-                       metric, time_grouping=None, spatial=False, grid="global1_5",
-                       mask='lsm', region='africa'):
+def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
+                   metric, time_grouping=None, spatial=False, grid="global1_5",
+                   mask='lsm', region='africa'):
     """Compute a grouped metric for a forecast at a specific lead."""
     # Use the metric registry to get the metric class
     metric_obj = metric_factory(metric)()
@@ -250,7 +250,8 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         ds = global_statistic(start_time, end_time, variable, lead=lead,
                               forecast=forecast, truth=truth,
                               statistic=statistic_call,
-                              metric_info=metric_obj, grid=grid)
+                              metric_info=metric_obj, grid=grid,
+                              retry_null_cache=True)
         if ds is None:
             return None
 
@@ -266,7 +267,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
         # Clip it to the region
         ds = clip_region(ds, region)
-        ds = apply_mask(ds, mask)
+        ds = apply_mask(ds, mask, grid=grid)
 
         # Check validity of the statistic
         if truth_sparse or metric_sparse:
@@ -368,7 +369,7 @@ def _summary_metrics_table(start_time, end_time, variable,
                 ds = grouped_metric(start_time, end_time, variable,
                                     lead=lead, forecast=forecast, truth=truth,
                                     metric=metric, time_grouping=time_grouping, spatial=False,
-                                    grid=grid, mask=mask, region=region)
+                                    grid=grid, mask=mask, region=region, retry_null_cache=True)
             except NotImplementedError:
                 ds = None
 
