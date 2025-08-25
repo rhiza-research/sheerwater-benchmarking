@@ -2,12 +2,12 @@
 from .caching import cacheable
 from .remote import dask_remote, start_remote
 from .secrets import cdsapi_secret, ecmwf_secret, salient_secret, salient_auth, tahmo_secret, gap_secret
-from .data_utils import (apply_mask, roll_and_agg, regrid, clip_region,
-                         lon_base_change, get_globe_slice, get_anomalies, is_valid)
+from .data_utils import (roll_and_agg, regrid, get_anomalies, is_valid)
 from .general_utils import (load_netcdf, write_zarr, load_zarr, load_object, plot_ds, plot_ds_map, run_in_parallel)
 
 from .space_utils import (get_grid, get_grid_ds, is_wrapped, get_region,
-                          base360_to_base180, base180_to_base360, check_bases)
+                          base360_to_base180, base180_to_base360, check_bases, add_region, clip_region,
+                          get_region_labels, lon_base_change, get_globe_slice)
 
 from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_dates,
                          pad_with_leapdays, add_dayofyear, forecast_date_to_target_date,
@@ -72,5 +72,6 @@ __all__ = [
     "doy_mean",
     "run_in_parallel",
     "forecast",
-    "get_leads"
+    "get_leads",
+    "add_region"
 ]

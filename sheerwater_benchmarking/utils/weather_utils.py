@@ -12,7 +12,7 @@ def forecast(func):
     """Decorator to mark a function as a forecast and concat the leads."""
     # Register the forecast in the global forecast registry when defined
     FORECAST_REGISTRY[func.__name__] = func
-    
+
     @wraps(func)
     def forecast_wrapper(*args, **kwargs):
         called_lead = kwargs.get('lead')

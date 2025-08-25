@@ -24,7 +24,7 @@ from pandas.api.types import is_datetime64_any_dtype as is_datetime
 import dask.dataframe as dd
 import xarray as xr
 
-from sheerwater_benchmarking.utils.data_utils import lon_base_change
+from sheerwater_benchmarking.utils import lon_base_change
 from sheerwater_benchmarking.utils.secrets import postgres_write_password, postgres_read_password
 
 logger = logging.getLogger(__name__)

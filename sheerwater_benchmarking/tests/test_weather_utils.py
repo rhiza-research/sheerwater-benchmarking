@@ -128,8 +128,6 @@ def test_all_forecasts_registered():
     import sheerwater_benchmarking.forecasts.graphcast  # noqa: F401
     import sheerwater_benchmarking.baselines.climatology  # noqa: F401
 
-    import pdb; pdb.set_trace()
-
     # Expected forecast function names based on the codebase
     expected_forecasts = {
         'salient',
