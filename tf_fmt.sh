@@ -22,8 +22,8 @@ tflint --fix --recursive
 # validate specific terraform projects
 tf_projects=(
   "infrastructure/terraform"
-  "infrastructure/terraform-config"
-  "infrastructure/terraform-grafana-datasources"
+  "infrastructure/terraform-grafana-config"
+  "infrastructure/terraform-database-config"
 )
 
 for project in "${tf_projects[@]}"; do
