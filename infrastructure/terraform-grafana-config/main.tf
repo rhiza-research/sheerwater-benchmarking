@@ -270,6 +270,8 @@ resource "grafana_data_source" "postgres_tahmo" {
 
 }
 
+# TODO: where is https://heavy-d24620b1.influxcloud.net:8086 configured?
+
 # Connect grafana to the read user with a datasource
 resource "grafana_data_source" "influx_tahmo" {
   type = "influxdb"

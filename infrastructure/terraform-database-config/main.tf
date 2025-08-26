@@ -1,12 +1,13 @@
 ########################################################
-# This file is used to configure the shared datasources for the prod and ephemeral grafana instances
+# This file is used to configure the shared databases for the prod and ephemeral grafana instances
 # 
 # This should only be run in the default workspace. 
 # The ephemeral workspaces will import data from the output of this module.
 # 
 # It is used to create/configure:
 # - postgres datasources
-# - influx datasources
+#
+# TODO: This file can be made obsolete if we use postgres-operator (https://github.com/zalando/postgres-operator/tree/master) to configure the postgres instance with users and credentials directly from k8s/helm.
 ########################################################
 
 terraform {

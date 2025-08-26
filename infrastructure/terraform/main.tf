@@ -340,6 +340,9 @@ resource "google_dns_record_set" "resource-recordset" {
 ## Helm Release
 ################
 
+# TODO: replace custom timescale helm chart inside sheerwater-benchmarking helm chart with postgres-operator https://github.com/zalando/postgres-operator/tree/master
+# This would allow to configure the postgres instance with users and credentials in the same k8s installation step in terraform without needing a second terraform repo to configure the database after installation.
+
 # Now the helm release to release all of the kubernetes manifest
 resource "helm_release" "sheerwater_benchmarking" {
   name = "sheerwater-benchmarking"
