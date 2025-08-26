@@ -146,6 +146,14 @@ def compute_statistic(stat_data):
         m_ds = (stat_data['obs_digitized'] == 2) & (stat_data['fcst_digitized'] == 2)
     elif stat_name == 'true_negatives':
         m_ds = (stat_data['obs_digitized'] == 1) & (stat_data['fcst_digitized'] == 1)
+    elif stat_name == 'n_correct':
+        m_ds = (stat_data['obs_digitized'] == stat_data['fcst_digitized'])
+    elif 'n_obs_bin' in stat_name:
+        category = int(stat_name.split('_')[3])
+        m_ds = (stat_data['obs_digitized'] == category)
+    elif 'n_fcst_bin' in stat_name:
+        category = int(stat_name.split('_')[3])
+        m_ds = (stat_data['fcst_digitized'] == category)
     elif stat_name == 'digitized_obs':
         m_ds = stat_data['obs_digitized']
     elif stat_name == 'digitized_fcst':
@@ -360,25 +368,48 @@ class Pearson(Metric):
 
 
 class Heidke(Metric):
-    """Heidke Skill Score metric. TODO: considered an uncoupled implementation."""
-    coupled = True
+    """Heidke Skill Score metric for streaming data."""
+    coupled = False
     valid_variables = ['precip']
     categorical = True
 
     @property
     def statistics(self):
-        return ['target', 'pred']
+        stats = [('n_correct', 'sum'), ('n_valid', 'sum')]
+        stats += [(f'n_fcst_bin_{i}', 'sum') for i in range(1, len(self.config_dict['bins']))]
+        stats += [(f'n_obs_bin_{i}', 'sum') for i in range(1, len(self.config_dict['bins']))]
+        return stats
 
     def compute(self, statistic_values):
-        from xskillscore import Contingency
-        fcst = statistic_values['pred']
-        obs = statistic_values['target']
-        spatial = statistic_values['spatial']
-        bins = statistic_values['bins']
-        dims = ['time'] if spatial else ['time', 'lat', 'lon']
-        contingency_table = Contingency(obs, fcst, bins, bins, dim=dims)
-        m_ds = contingency_table.heidke_score()
-        return m_ds
+        prop_correct = statistic_values['n_correct'] / statistic_values['n_valid']
+        n2 = statistic_values['n_valid']**2
+        right_by_chance = (statistic_values[f'n_fcst_bin_1'] * statistic_values[f'n_obs_bin_1']) / n2
+        for i in range(2, len(self.config_dict['bins'])):
+            right_by_chance += (statistic_values[f'n_fcst_bin_{i}'] * statistic_values[f'n_obs_bin_{i}']) / n2
+
+        return (prop_correct - right_by_chance) / (1 - right_by_chance)
+
+
+# class Heidke_old(Metric):
+#     """Heidke Skill Score metric. TODO: considered an uncoupled implementation."""
+#     coupled = True
+#     valid_variables = ['precip']
+#     categorical = True
+
+#     @property
+#     def statistics(self):
+#         return ['target', 'pred']
+
+#     def compute(self, statistic_values):
+#         from xskillscore import Contingency
+#         fcst = statistic_values['pred']
+#         obs = statistic_values['target']
+#         spatial = statistic_values['spatial']
+#         bins = statistic_values['bins']
+#         dims = ['time'] if spatial else ['time', 'lat', 'lon']
+#         contingency_table = Contingency(obs, fcst, bins, bins, dim=dims)
+#         m_ds = contingency_table.heidke_score()
+#         return m_ds
 
 
 class POD(Metric):

@@ -39,6 +39,7 @@ def get_datasource_fn(datasource):
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
+           cache=False,
            cache_args=['variable', 'lead', 'forecast', 'truth', 'statistic', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
