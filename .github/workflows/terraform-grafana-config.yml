@@ -1,0 +1,54 @@
+name: Terraform apply (grafana-config per PR)
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+concurrency:
+  group: tf-grafana-config-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_WORKSPACE: grafana-pr-${{ github.event.pull_request.number }}
+
+jobs:
+  apply:
+    if: contains(github.event.pull_request.labels.*.name, 'PR-env')
+    name: Apply terraform for PR ${{ github.event.pull_request.number }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: sheerwater-benchmarking/infrastructure/terraform-grafana-config
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          export_environment_variables: true
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Select or create workspace
+        run: |
+          terraform workspace select "$TF_WORKSPACE" || terraform workspace new "$TF_WORKSPACE"
+
+      - name: Terraform Plan
+        run: terraform plan -input=false
+      #- name: Terraform Apply
+      #  run: terraform apply -input=false -auto-approve
+
+
