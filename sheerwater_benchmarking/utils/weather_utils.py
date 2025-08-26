@@ -101,7 +101,7 @@ def get_leads(lead):
         return (['month1', 'month2', 'month3'], np.timedelta64(30, 'D'))
     elif 'daily' in lead:
         days = int(lead.split('-')[1])
-        return ([f'day{i}' for i in range(1, days + 1)], np.timedelta64(days, 'D'))
+        return ([f'day{i}' for i in range(1, days + 1)], np.timedelta64(1, 'D'))
     elif 'day' in lead:
         return ([lead], np.timedelta64(1, 'D'))
     elif 'week' in lead:

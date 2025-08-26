@@ -2,9 +2,11 @@
 import os
 import cdsapi
 import xarray as xr
+import numpy as np
+import matplotlib.pyplot as plt
 
-from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid,
-                                           lon_base_change)
+from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid, clip_region,
+                                           lon_base_change, get_region_labels, get_grid_ds)
 
 
 @cacheable(data_type='array', cache_args=['grid'])
@@ -68,6 +70,74 @@ def land_sea_mask(grid="global1_5"):
     ds = ds.compute()
     os.remove(path)
     return ds
+
+
+@cacheable(data_type='array',
+           cache_args=['grid', 'admin_level'],
+           chunking={'lat': 1000, 'lon': 1000})
+def region_labels(grid='global1_5', admin_level='country'):
+    """Generate a dataset with a region coordinate at a specific admin level.
+
+    Available admin levels are 'country', 'region', 'continent', and 'world'.
+
+    Args:
+        grid (str): The grid to fetch the data at.  Note that only
+            the resolution of the specified grid is used.
+        admin_level (str): The admin level to add to the dataset
+
+    Returns:
+        xarray.Dataset: Dataset with added region coordinate
+    """
+    # Get the list of regions for the specified admin level
+    region_names = get_region_labels(admin_level)
+    ds = get_grid_ds(grid)
+    world_ds = xr.full_like(ds.lat * ds.lon, 1.0, dtype=np.float32)
+    ds = ds.assign_coords(region=(('lat', 'lon'), xr.full_like(ds.lat * ds.lon, 'no region', dtype=object).data))
+
+    # Loop through each region and label grid cells
+    for i, rn in enumerate(region_names):
+        # Clip dataset to this region
+        region_ds = clip_region(world_ds, rn, keep_shape=True)
+        # Create a mask where the region exists (non-NaN values)
+        region_mask = ~region_ds.isnull()
+        # Assign region name where the mask is True
+        ds['region'] = ds.region.where(~region_mask, rn)
+        # region_mask.plot(x='lon'); plt.show()
+    return ds
+
+
+@cacheable(data_type='array',
+           cache_args=['grid'],
+           chunking={'lat': 1000, 'lon': 1000})
+def region_mask(grid='global1_5'):
+    """Generate a dataset with a region coordinate at a specific admin level.
+
+    Args:
+        grid (str): The grid to fetch the data at.  Note that only
+        admin_level (str): The admin level to add to the dataset
+
+    Returns:
+        xarray.Dataset: Dataset with added region coordinate
+    """
+    # Get the list of regions for the specified admin level
+    region_names = get_region_labels('country')
+    ds = get_grid_ds(grid)
+    world_ds = xr.full_like(ds.lat * ds.lon, 1.0, dtype=np.float32)
+    region_masks = []
+
+    # Loop through each region and label grid cells
+    for i, rn in enumerate(region_names):
+        # Clip dataset to this region
+        region_ds = clip_region(world_ds, rn, keep_shape=True)
+        # Create a mask where the region exists (non-NaN values)
+        region_mask = ~region_ds.isnull()
+        region_masks.append(region_mask)
+        if i > 5:
+            break
+
+    mask = xr.concat(region_masks, dim='region')
+    mask = mask.assign_coords(region=region_names[:len(region_masks)])
+    return mask
 
 
 # Use __all__ to define what is part of the public API.

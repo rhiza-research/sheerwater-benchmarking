@@ -2,8 +2,17 @@
 import numpy as np
 import xarray as xr
 import geopandas as gpd
+import rioxarray  # noqa: F401 - needed to enable .rio attribute
+from importlib import import_module
 
-from .general_utils import load_object
+from .general_utils import load_object, plot_ds, plot_ds_map
+
+import matplotlib.pyplot as plt
+
+
+def clean_country_name(country):
+    """Clean a country name to match the geojson file."""
+    return country.lower().replace(' ', '_')
 
 
 def get_globe_slice(ds, lon_slice, lat_slice, lon_dim='lon', lat_dim='lat', base="base180"):
@@ -83,7 +92,7 @@ def lon_base_change(ds, to_base="base180", lon_dim='lon'):
     return ds
 
 
-def clip_region(ds, region, lon_dim='lon', lat_dim='lat', drop=False):
+def clip_region(ds, region, lon_dim='lon', lat_dim='lat', drop=False, keep_shape=False):
     """Clip a dataset to a region.
 
     Args:
@@ -93,6 +102,7 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat', drop=False):
         lon_dim (str): The name of the longitude dimension.
         lat_dim (str): The name of the latitude dimension.
         drop (bool): Whether to drop the original coordinates that are NaN'd by clipping.
+        keep_shape (bool): Whether to keep the shape of the region.
     """
     # No clipping needed
     if region == 'global':
@@ -111,7 +121,8 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat', drop=False):
         ds = ds.rio.clip(gdf.geometry, gdf.crs, drop=drop)
 
     # Slice the globe
-    ds = get_globe_slice(ds, lon_slice, lat_slice, lon_dim=lon_dim, lat_dim=lat_dim, base='base180')
+    if not keep_shape:
+        ds = get_globe_slice(ds, lon_slice, lat_slice, lon_dim=lon_dim, lat_dim=lat_dim, base='base180')
     return ds
 
 
@@ -223,122 +234,86 @@ def get_grid(grid, base="base180"):
 
 
 def get_region(region):
-    """Get the longitudes, latitudes boundaries or shapefile for a given region.
+    """Get the longitudes, latitudes boundaries and/or shapefile for a given region.
 
     Note: assumes longitude in base180 format.
 
     Args:
-        region (str): The resolution to get the grid for. One of:
-            - africa: the African continent
-            - conus: the CONUS region
-            - global: the global region
+        region (str): The region to get the data for. Can be a country, region, continent, or global.
 
     Returns:
         data: The longitudes and latitudes of the region as a tuple,
             or the shapefile defining the region.
     """
-    if region == "africa":
-        # Get the countries of Africa shapefile
-        lons = np.array([-23.0, 58.0])
-        lats = np.array([-35.0, 37.5])
-        filepath = 'gs://sheerwater-datalake/africa.geojson'
-        gdf = gpd.read_file(load_object(filepath))
-        data = (lons, lats, gdf)
-    elif region == "east_africa":
-        # Get the countries of Africa shapefile
-        lons = np.array([28.2, 42.6])
-        lats = np.array([-12.1, 5.6])
-        filepath = 'gs://sheerwater-datalake/regions/africa.geojson'
-        gdf = gpd.read_file(load_object(filepath))
+    # Get which admin level the region is at (e.g., countries, continents, etc.)
+    admin_level = get_admin_level(region)
+    valid_labels = get_region_labels(admin_level)
+    if region not in valid_labels:
+        raise NotImplementedError(f"Region {region} has not been implemented.")
 
-        # Filter the gdf
-        gdf = gdf.where(gdf['sovereignt'].isin(['Kenya',
-                                                'Burundi',
-                                                'Rwanda',
-                                                'United Republic of Tanzania',
-                                                'Uganda'])).dropna(how='all')
-        data = (lons, lats, gdf)
-    elif region == "kenya":
-        # Get the countries of Africa shapefile
-        lons = np.array([33.5, 42.0])
-        lats = np.array([-5.0, 5.2])
-        filepath = 'gs://sheerwater-datalake/regions/africa.geojson'
-        gdf = gpd.read_file(load_object(filepath))
+    # If the region does not specify countries, then just return the lats and lons bounding box
+    from .region_defs import valid_regions
+    if admin_level != 'countries' and len(valid_regions[admin_level][region]['countries']) == 0:
+        return (valid_regions[admin_level][region]['lons'], valid_regions[admin_level][region]['lats'])
 
-        # Filter the gdf
-        gdf = gdf.where(gdf['sovereignt'].isin(['Kenya'])).dropna(how='all')
-        data = (lons, lats, gdf)
-    elif region == "conus":
-        lons = np.array([-125.0, -67.0])
-        lats = np.array([25.0, 50.0])
-        filepath = 'gs://sheerwater-datalake/regions/usa.geojson'
-        gdf = gpd.read_file(load_object(filepath))
-        # Remove non-CONUS states
-        gdf = gdf[~gdf['NAME'].isin(['Alaska', 'Hawaii', 'Puerto Rico'])]
-        data = (lons, lats, gdf)
-    elif region == "global":
-        lons = np.array([-180.0, 180.0])
-        lats = np.array([-90.0, 90.0])
-        data = (lons, lats)
-    else:
-        filepath = 'gs://sheerwater-datalake/regions/world_countries.geojson'
-        gdf = gpd.read_file(load_object(filepath))
-        # Make name lowercase
-        gdf = gdf[gdf['name'].str.lower() == region.lower()]
-        if len(gdf) == 0:
-            raise NotImplementedError(
-                f"Region {region} has not been implemented.")
+    # Get the geojson of world countries
+    filepath = 'gs://sheerwater-datalake/regions/world_countries.geojson'
+    gdf = gpd.read_file(load_object(filepath))
+    # Get the countries, lats and lons for the region
+    if admin_level == 'countries':
+        gdf = gdf[clean_country_name(gdf['name']) == clean_country_name(region)]
         tol = 0.01
         lons = np.array([gdf['geometry'].bounds['minx'].values[0]-tol, gdf['geometry'].bounds['maxx'].values[0] + tol])
         lats = np.array([gdf['geometry'].bounds['miny'].values[0]-tol, gdf['geometry'].bounds['maxy'].values[0] + tol])
-        data = (lons, lats, gdf)
-    return data
+        return (lons, lats, gdf)
+
+    # Read and merge muliple countries from the regions
+    countries = valid_regions[admin_level][region]['countries']
+    lats = valid_regions[admin_level][region]['lats']
+    lons = valid_regions[admin_level][region]['lons']
+
+    # Get a unifed regional gdf
+    countries = [clean_country_name(country) for country in countries]
+    region_gdf = gdf[gdf['name'].apply(clean_country_name).isin(countries)]
+    geometry = region_gdf.geometry.unary_union
+    region_gdf = gpd.GeoDataFrame(geometry=[geometry], crs=region_gdf.crs, columns=['name'])
+    region_gdf['name'] = region
+
+    # Get the bounding box of the region
+    tol = 0.01
+    if lons is None:
+        lons = np.array([region_gdf['geometry'].bounds['minx'].values[0]-tol,
+                        region_gdf['geometry'].bounds['maxx'].values[0] + tol])
+    if lats is None:
+        lats = np.array([region_gdf['geometry'].bounds['miny'].values[0]-tol,
+                        region_gdf['geometry'].bounds['maxy'].values[0] + tol])
+    return (lons, lats, region_gdf)
 
 
-def add_region(ds, admin_level='country'):
-    """Add a region coordinate to an xarray dataset at a specific admin level.
-
-    Available admin levels are 'country', 'region', 'continent', and 'world'.
+def get_admin_level(region):
+    """Get the admin level of a region.
 
     Args:
-        ds (xarray.Dataset): The dataset to add region coordinates to
-        admin_level (str): The admin level to add to the dataset
-
-    Returns:
-        xarray.Dataset: Dataset with added region coordinate
+        region (str): The region to get the admin level of.
     """
-    # Get the list of regions for the specified admin level
-    region_names = get_region_labels(admin_level)
+    if region in get_region_labels('countries'):
+        return 'countries'
 
-    # Create region coordinate using xarray coordinates
-    regions = xr.full_like(ds.lat * ds.lon, 'no region', dtype=object)
+    from .region_defs import valid_regions
+    for admin_level, data in valid_regions.items():
+        if region in data.keys():
+            return admin_level
 
-    # Loop through each region and label grid cells
-    for region in region_names:
-        # Clip dataset to this region
-        region_ds = clip_region(ds, region)
-
-        # Get the valid grid cells for this region using xarray operations
-        valid_mask = ~region_ds.isnull().any(dim=[d for d in region_ds.dims if d not in ['lat', 'lon']])
-
-        # Label those cells with the region name using xarray where
-        for var in valid_mask.data_vars:
-            if 'lat' in valid_mask[var].dims and 'lon' in valid_mask[var].dims:
-                regions = regions.where(~valid_mask[var], region)
-                break
-
-    # Add region coordinate to dataset
-    ds = ds.assign_coords({admin_level: regions})
-
-    return ds
+    raise NotImplementedError(
+        f"Region {region} has not been implemented.")
 
 
-def get_region_labels(admin_level='country'):
+def get_region_labels(admin_level='countries'):
     """Get default names for administrative levels.
 
     Args:
         admin_level (str): The administrative level to get labels for.
-            One of: 'country', 'region', 'continent', 'world'
+            One of: 'countries', 'african_regions', 'continents', 'meterological_zones', 'hemispheres', 'global'
 
     Returns:
         list: List of region names for the specified admin level
@@ -346,25 +321,16 @@ def get_region_labels(admin_level='country'):
     Raises:
         NotImplementedError: If the admin level is not supported
     """
-    if admin_level == 'country':
-        # Load world countries from the existing data source
-        filepath = 'gs://sheerwater-datalake/regions/world_countries.geojson'
-        regions_df = gpd.read_file(load_object(filepath))
-        # Return the country names from the geojson file
-        return regions_df['name'].tolist()
-    elif admin_level == 'region':
-        return [
-            'east_africa', 'west_africa', 'north_africa', 'central_africa',
-            'southern_africa', 'horn_of_africa', 'sahel', 'maghreb',
-            'west_africa', 'central_africa', 'east_africa', 'southern_africa'
-        ]
-    elif admin_level == 'continent':
-        return ['africa', 'europe', 'asia', 'north_america', 'south_america', 'australia', 'antarctica']
-    elif admin_level == 'world':
-        return ['global', 'northern_hemisphere', 'southern_hemisphere', 'eastern_hemisphere', 'western_hemisphere']
-    else:
+    if admin_level == 'countries':
+        from .region_defs import countries
+        return [clean_country_name(country) for country in countries]
+
+    from .region_defs import valid_regions
+    try:
+        return list(valid_regions[admin_level].keys())
+    except KeyError:
         raise NotImplementedError(
-            f"Admin level '{admin_level}' not supported. Use one of: 'country', 'region', 'continent', 'world'")
+            f"Admin level '{admin_level}' not supported.")
 
 
 def base360_to_base180(lons):
@@ -431,3 +397,24 @@ def check_bases(ds, dsp, lon_col='lon', lon_colp='lon'):
     if base != basep:
         return -1
     return 0
+
+
+def regrid(ds, output_grid, method='conservative', base="base180", output_chunks=None):
+    """Regrid a dataset to a new grid.
+
+    Args:
+        ds (xr.Dataset): Dataset to regrid.
+        output_grid (str): The output grid resolution. One of valid named grids.
+        method (str): The regridding method. One of:
+            'linear', 'nearest', 'cubic', 'conservative', 'most_common'.
+        base (str): The base of the longitudes. One of 'base180', 'base360'.
+        output_chunks (dict): Chunks for the output dataset (optional).
+            Only used for conservative regridding.
+    """
+    # Interpret the grid
+    ds_out = get_grid_ds(output_grid, base=base)
+    # Output chunks only for conservative regridding
+    kwargs = {'output_chunks': output_chunks} if method == 'conservative' else {}
+    regridder = getattr(ds.regrid, method)
+    ds = regridder(ds_out, **kwargs)
+    return ds
