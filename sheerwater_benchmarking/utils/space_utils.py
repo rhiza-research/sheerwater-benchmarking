@@ -257,22 +257,21 @@ def get_region(region):
         return (valid_regions[admin_level][region]['lons'], valid_regions[admin_level][region]['lats'])
 
     # Get the geojson of world countries
+    tol = 0.01
     filepath = 'gs://sheerwater-datalake/regions/world_countries.geojson'
     gdf = gpd.read_file(load_object(filepath))
     # Get the countries, lats and lons for the region
     if admin_level == 'countries':
-        gdf = gdf[clean_country_name(gdf['name']) == clean_country_name(region)]
-        tol = 0.01
+        gdf = gdf[gdf['name'].apply(clean_country_name) == clean_country_name(region)]
         lons = np.array([gdf['geometry'].bounds['minx'].values[0]-tol, gdf['geometry'].bounds['maxx'].values[0] + tol])
         lats = np.array([gdf['geometry'].bounds['miny'].values[0]-tol, gdf['geometry'].bounds['maxy'].values[0] + tol])
         return (lons, lats, gdf)
 
-    # Read and merge muliple countries from the regions
+    # Read and merge multiple countries from the regions to get a unified regional gdf
     countries = valid_regions[admin_level][region]['countries']
     lats = valid_regions[admin_level][region]['lats']
     lons = valid_regions[admin_level][region]['lons']
 
-    # Get a unifed regional gdf
     countries = [clean_country_name(country) for country in countries]
     region_gdf = gdf[gdf['name'].apply(clean_country_name).isin(countries)]
     geometry = region_gdf.geometry.unary_union
@@ -280,7 +279,6 @@ def get_region(region):
     region_gdf['name'] = region
 
     # Get the bounding box of the region
-    tol = 0.01
     if lons is None:
         lons = np.array([region_gdf['geometry'].bounds['minx'].values[0]-tol,
                         region_gdf['geometry'].bounds['maxx'].values[0] + tol])

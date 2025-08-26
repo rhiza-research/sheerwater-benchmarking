@@ -33,7 +33,8 @@ def forecast(func):
                 raise NotImplementedError(f"Lead {called_lead} not supported for {func.__name__}")
             else:
                 raise e
-        ret = ret.assign_attrs(agg_period=agg_period)
+        # Assign agg period as time in seconds (timedeltas are not JSON serializable for storage)
+        ret = ret.assign_attrs(agg_period_secs=float(agg_period / np.timedelta64(1, 's')))
         return ret
     return forecast_wrapper
 

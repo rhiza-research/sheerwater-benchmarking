@@ -216,8 +216,8 @@ class Metric(ABC):
     sparse = False  # does the metric induce NaNs
     prob_type = 'deterministic'  # is the forecast probabilistic?
     valid_variables = None  # what variables is the metric valid for?
-    coupled = False  # If true, the metric can be computed as a nonlinear function of aggregated statistics
     categorical = False  # is the metric categorical?
+    coupled = False  # is the metric coupled?
     config_dict = {}  # a dictionary of configuration parameters for the metric
 
     def __init_subclass__(cls, **kwargs):
@@ -315,7 +315,7 @@ class ACC(Metric):
         return ds
 
 
-class Pearson_stream(Metric):
+class Pearson(Metric):
     """Pearson's correlation coefficient metric.
 
     Implemented with a rewrite of the standard formula to enable just-in-time aggregation.
@@ -324,45 +324,39 @@ class Pearson_stream(Metric):
     r = sum((x - E(x)) * (y - E(y))) / sqrt(sum(x - E(x))^2 * sum(y - E(y))^2)
 
     This can be rewritten as:
-    r = (n * sum(x * y) - sum(x) * sum(y)) / sqrt((n * sum(x^2) - sum(x)^2) * (n * sum(y^2) - sum(y)^2))
-
-    # TODO: this is not yet correct; atm only returning positive values. Needs debugging
+    r = (covariance - pred_mean * target_mean) / (sqrt(squared_pred - pred_mean^2) * sqrt(squared_target - target_mean^2))
     """
     @property
     def statistics(self):
-        return ['pred_mean', 'target_mean', 'squared_pred', 'squared_target', 'covariance', ('n_valid', 'sum')]
+        return ['pred_mean', 'target_mean', 'squared_pred', 'squared_target', 'covariance']
 
     def compute(self, statistic_values):
-        # Pearson's r = covariance / sqrt(squared_pred * squared_target)
-        numerator = statistic_values['n_valid'] * statistic_values['covariance'] - \
-            statistic_values['pred_mean'] * statistic_values['target_mean']
-        denominator = (statistic_values['n_valid'] * statistic_values['squared_pred']
-                       - statistic_values['pred_mean']**2) ** 0.5 * \
-            (statistic_values['n_valid'] * statistic_values['squared_target']
-             - statistic_values['target_mean']**2) ** 0.5
+        numerator = statistic_values['covariance'] - statistic_values['pred_mean'] * statistic_values['target_mean']
+        denominator = (statistic_values['squared_pred'] - statistic_values['pred_mean']**2) ** 0.5 * \
+            (statistic_values['squared_target'] - statistic_values['target_mean']**2) ** 0.5
         return numerator / denominator
 
 
-class Pearson(Metric):
-    """Pearson's correlation coefficient metric, coupled implementation."""
-    coupled = True
+# class Pearson_old(Metric):
+#     """Pearson's correlation coefficient metric, coupled implementation."""
+#     coupled = True
 
-    @property
-    def statistics(self):
-        return ['target', 'pred']
+#     @property
+#     def statistics(self):
+#         return ['target', 'pred']
 
-    def compute(self, statistic_values):
-        from xskillscore import pearson_r
-        fcst = statistic_values['pred']
-        obs = statistic_values['target']
-        spatial = statistic_values['spatial']
-        fcst = fcst.chunk(time=-1, lat=-1, lon=-1)  # all must be -1 to succeed
-        obs = obs.chunk(time=-1, lat=-1, lon=-1)  # all must be -1 to succeed
-        if spatial:
-            ds = pearson_r(a=obs, b=fcst, dim='time', skipna=True)
-        else:
-            ds = pearson_r(a=obs, b=fcst, skipna=True)
-        return ds
+#     def compute(self, statistic_values):
+#         from xskillscore import pearson_r
+#         fcst = statistic_values['pred']
+#         obs = statistic_values['target']
+#         spatial = statistic_values['spatial']
+#         fcst = fcst.chunk(time=-1, lat=-1, lon=-1)  # all must be -1 to succeed
+#         obs = obs.chunk(time=-1, lat=-1, lon=-1)  # all must be -1 to succeed
+#         if spatial:
+#             ds = pearson_r(a=obs, b=fcst, dim='time', skipna=True)
+#         else:
+#             ds = pearson_r(a=obs, b=fcst, skipna=True)
+#         return ds
 
 
 class Heidke(Metric):

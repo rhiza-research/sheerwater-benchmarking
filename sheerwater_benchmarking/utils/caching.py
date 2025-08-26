@@ -1124,7 +1124,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
 
                             # Check for memoized land-sea mask
-                            if cache_key not in memoized:
+                            if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
                                 print(f"Memoizing {cache_key}")
                                 memoized[cache_key] = ds.persist()
 
@@ -1239,7 +1239,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     ##### IF NOT EXISTS ######
                     ds = func(*args, **kwargs)
                     # Check for memoized land-sea mask
-                    if cache_key not in memoized:
+                    if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
                         print(f"Memoizing {cache_key}")
                         memoized[cache_key] = ds.persist()
                     ##########################

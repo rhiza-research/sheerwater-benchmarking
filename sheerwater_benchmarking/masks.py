@@ -92,17 +92,18 @@ def region_labels(grid='global1_5', admin_level='country'):
     region_names = get_region_labels(admin_level)
     ds = get_grid_ds(grid)
     world_ds = xr.full_like(ds.lat * ds.lon, 1.0, dtype=np.float32)
-    ds = ds.assign_coords(region=(('lat', 'lon'), xr.full_like(ds.lat * ds.lon, 'no region', dtype=object).data))
+    # Assign a dummy region coordinate to all grid cells
+    ds = ds.assign_coords(region=(('lat', 'lon'), xr.full_like(ds.lat * ds.lon, 'no_region', dtype=object).data))
 
     # Loop through each region and label grid cells
     for i, rn in enumerate(region_names):
+        print(i, '/', len(region_names), rn)
         # Clip dataset to this region
         region_ds = clip_region(world_ds, rn, keep_shape=True)
         # Create a mask where the region exists (non-NaN values)
         region_mask = ~region_ds.isnull()
         # Assign region name where the mask is True
         ds['region'] = ds.region.where(~region_mask, rn)
-        # region_mask.plot(x='lon'); plt.show()
     return ds
 
 

@@ -7,6 +7,7 @@ import xarray as xr
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
                                            lead_to_agg_days, lead_or_agg, apply_mask)
+from sheerwater_benchmarking.masks import region_labels
 
 from .metric_library import (metric_factory, compute_statistic, get_stat_name,
                              latitude_weighted_spatial_average, groupby_time)
@@ -222,7 +223,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
            cache=True)
 def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
                        metric, time_grouping=None, spatial=False, grid="global1_5",
-                       mask='lsm', region='all'):
+                       mask='lsm', region='countries'):
     """Compute a grouped metric for a forecast at a specific lead."""
     # Use the metric registry to get the metric class
     metric_obj = metric_factory(metric)()
@@ -269,13 +270,15 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         ############################################################
         # Drop any extra coordinates
         for coord in ds.coords:
-            if coord not in ['time', 'lat', 'lon']:
+            if coord not in ['time', 'lead_time', 'lat', 'lon']:
                 ds = ds.reset_coords(coord, drop=True)
 
         # Apply masking
         ds = apply_mask(ds, mask, grid=grid)
+        ds = clip_region(ds, region)
 
         # Check validity of the statistic
+        # TODO: need to figure out how to handle all regions in parallel
         if truth_sparse or metric_sparse:
             print("Metric is sparse, checking if forecast is valid directly.")
             fcst_fn = get_datasource_fn(forecast)
