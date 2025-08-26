@@ -3,8 +3,8 @@ The infrastructure for sheerwater benchmarking
 ./docker - any custom docker containers we may need for this project
 ./helm - the helm chart to deploy all the kubernetes manifests
 ./terraform - all of the terraform infrastructure. This includes cloud resources and the deployed of k8s services
-./terraform-config - the configuration of grafana instances (orgs, datasources, etc)
-./terraform-grafana-datasources - the configuration of shared datasources
+./terraform-grafana-config - the configuration of grafana instances (orgs, datasources, etc)
+./terraform-database-config - the configuration of shared databases
 ./dashboards - contains grafana dashboards
 
 # Notes:

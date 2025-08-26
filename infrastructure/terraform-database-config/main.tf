@@ -5,7 +5,22 @@
 # The ephemeral workspaces will import data from the output of this module.
 # 
 # It is used to create/configure:
-# - postgres datasources
+# - postgres databases
+# - postgres users and roles
+# - postgres grants
+# - postgres default privileges
+#
+# All grafana resources have been moved to the terraform-grafana-config repo. 
+# To prevent deletion of these resources, we need to move the state to the new repo.
+# Run the following commands to move the state to the new repo:
+# terraform state mv grafana_data_source.influx_tahmo terraform-grafana-config/grafana_data_source.influx_tahmo
+# terraform state mv grafana_data_source.postgres terraform-grafana-config/grafana_data_source.postgres
+# terraform state mv grafana_data_source.postgres_tahmo terraform-grafana-config/grafana_data_source.postgres_tahmo
+# terraform state mv grafana_organization.tahmo terraform-grafana-config/grafana_organization.tahmo
+# terraform state mv grafana_organization_preferences.light_preference terraform-grafana-config/grafana_organization_preferences.light_preference
+# terraform state mv grafana_organization_preferences.light_preference_tahmo terraform-grafana-config/grafana_organization_preferences.light_preference_tahmo
+# terraform state mv grafana_sso_settings.google_sso_settings terraform-grafana-config/grafana_sso_settings.google_sso_settings
+# terraform state mv grafana_dashboard.dashboards terraform-grafana-config/grafana_dashboard.dashboards
 #
 # TODO: This file can be made obsolete if we use postgres-operator (https://github.com/zalando/postgres-operator/tree/master) to configure the postgres instance with users and credentials directly from k8s/helm.
 ########################################################
@@ -48,8 +63,6 @@ data "google_secret_manager_secret_version" "postgres_admin_password" {
   secret = "sheerwater-postgres-admin-password"
 }
 
-
-
 locals {
   is_default_workspace = terraform.workspace == "default"
 }
@@ -65,7 +78,6 @@ resource "null_resource" "warn_non_default" {
     command = "echo 'WARNING: You are currently using the \"${terraform.workspace}\" workspace, not \"default\". This resource should only be run in the default workspace.' >&2"
   }
 }
-
 
 provider "postgresql" {
   host = "sheerwater-benchmarking-postgres"
@@ -128,7 +140,6 @@ resource "postgresql_grant" "tahmo_read" {
   privileges = ["SELECT"]
 }
 
-
 resource "postgresql_grant" "readonly_public_terracotta" {
   database = "terracotta"
   role = postgresql_role.read.name
@@ -190,7 +201,6 @@ resource "postgresql_default_privileges" "read_only_default_admin_terracotta" {
   object_type = "table"
   privileges = ["SELECT"]
 }
-
 
 resource "random_password" "postgres_write_password" {
   length = 16
