@@ -3,9 +3,92 @@
 from functools import wraps
 import xarray as xr
 import numpy as np
+import pandas as pd
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+import dateparser
 
 # Global forecast registry
 FORECAST_REGISTRY = {}
+
+# Lead aggregation period in days and offset
+LEAD_OFFSETS = {
+    'daily': (1, (0, 'days')),
+    'weekly': (7, (0, 'days')),
+    'biweekly': (14, (0, 'days')),
+    'monthly': (30, (0, 'days')),
+    'month1': (30, (0, 'days')),
+    'month2': (30, (30, 'days')),
+    'month3': (30, (60, 'days')),
+}
+# Add daily and 8/11d windows
+for i in range(46):
+    LEAD_OFFSETS[f"day{i+1}"] = (1, (i, 'days'))
+for i in [0, 7, 14, 21, 28, 35]:
+    LEAD_OFFSETS[f"week{i//7+1}"] = (7, (i, 'days'))
+for i in [0, 7, 14, 21, 28]:
+    LEAD_OFFSETS[f"weeks{(i//7)+1}{(i//7)+2}"] = (14, (i, 'days'))
+
+
+def lead_to_agg_days(lead):
+    """Convert lead to time grouping."""
+    return LEAD_OFFSETS[lead][0]
+
+
+def lead_or_agg(lead):
+    """Return whether argument is a lead or an agg."""
+    if any(i.isdigit() for i in lead) or lead in ['daily', 'weekly', 'biweekly', 'monthly']:
+        return 'lead'
+    else:
+        return 'agg'
+
+
+def shift_forecast_date_to_target_date(ds, forecast_date_dim, lead):
+    """Shift a forecast date dimension to a target date coordinate from a lead time."""
+    ds = ds.assign_coords({forecast_date_dim: [
+        forecast_date_to_target_date(x, lead) for x in ds[forecast_date_dim].values]})
+    return ds
+
+
+def target_date_to_forecast_date(target_date, lead):
+    """Converts a target date to a forecast date."""
+    return _date_shift(target_date, lead, shift='backward')
+
+
+def forecast_date_to_target_date(forecast_date, lead):
+    """Converts a forecast date to a target date."""
+    return _date_shift(forecast_date, lead, shift='forward')
+
+
+def _date_shift(date, lead, shift='forward'):
+    """Converts a target date to a forecast date or visa versa."""
+    offset, offset_units = LEAD_OFFSETS[lead][1]
+    input_type = type(date)
+
+    # Convert input time to datetime object  for relative delta
+    if isinstance(date, str):
+        date_obj = dateparser.parse(date)
+    elif isinstance(date, np.datetime64):
+        date_obj = pd.Timestamp(date)
+    elif isinstance(date, datetime):
+        date_obj = date
+    else:
+        raise ValueError(f"Date type {type(date)} not supported.")
+
+    # Shift the date
+    if shift == 'forward':
+        new_date = date_obj + relativedelta(**{offset_units: offset})
+    elif shift == 'backward':
+        new_date = date_obj - relativedelta(**{offset_units: offset})
+    else:
+        raise ValueError(f"Shift direction {shift} not supported")
+
+    # Convert back to original type
+    if np.issubdtype(input_type, str):
+        new_date = datetime.strftime(new_date, "%Y-%m-%d")
+    elif np.issubdtype(input_type, np.datetime64):
+        new_date = np.datetime64(new_date, 'ns')
+    return new_date
 
 
 def forecast(func):
@@ -17,22 +100,27 @@ def forecast(func):
     def forecast_wrapper(*args, **kwargs):
         called_lead = kwargs.get('lead')
         leads, agg_period = get_leads(called_lead)
-        ret_list = []
-        for lead in leads:
-            kwargs['lead'] = lead
-            try:
-                ds = func(*args, **kwargs)
-            except NotImplementedError:
-                continue
-            ds = ds.assign_coords(lead_time=lead)
-            ret_list.append(ds)
         try:
-            ret = xr.concat(ret_list, dim='lead_time')
-        except ValueError as e:
-            if 'must supply at least one object to concatenate' in str(e):
-                raise NotImplementedError(f"Lead {called_lead} not supported for {func.__name__}")
-            else:
-                raise e
+            ret = func(*args, **kwargs)
+            ret = ret.assign_coords(lead_time=called_lead)
+        except NotImplementedError:
+            # Function does not implement the called lead, so we need to get the leads and agg period
+            ret_list = []
+            for lead in leads:
+                kwargs['lead'] = lead
+                try:
+                    ds = func(*args, **kwargs)
+                except NotImplementedError:
+                    continue
+                ds = ds.assign_coords(lead_time=lead)
+                ret_list.append(ds)
+            try:
+                ret = xr.concat(ret_list, dim='lead_time')
+            except ValueError as e:
+                if 'must supply at least one object to concatenate' in str(e):
+                    raise NotImplementedError(f"Lead {called_lead} not supported for {func.__name__}")
+                else:
+                    raise e
         # Assign agg period as time in seconds (timedeltas are not JSON serializable for storage)
         ret = ret.assign_attrs(agg_period_secs=float(agg_period / np.timedelta64(1, 's')))
         return ret

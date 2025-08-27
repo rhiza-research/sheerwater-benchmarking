@@ -6,10 +6,11 @@ import xarray as xr
 
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, is_valid,
-                                           lead_to_agg_days, lead_or_agg, apply_mask)
+                                           lead_to_agg_days, lead_or_agg, apply_mask, get_admin_level)
 from sheerwater_benchmarking.masks import region_labels
 
-from .metric_library import (metric_factory, compute_statistic, latitude_weighted_spatial_average, groupby_time)
+from .metric_library import (metric_factory, compute_statistic,
+                             latitude_weighted_spatial_average, groupby_time, mean_or_sum)
 
 
 def get_datasource_fn(datasource):
@@ -46,7 +47,7 @@ def get_datasource_fn(datasource):
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                },
            },
-           cache_disable_if={'statistic': ['pred', 'target', 'mse', 'mae',
+           cache_disable_if={'statistic': ['pred', 'target', 'mse',
                                            'n_valid', 'n_correct',
                                            'n_fcst_bin_1', 'n_fcst_bin_2', 'n_fcst_bin_3',
                                            'n_fcst_bin_4', 'n_fcst_bin_5',
@@ -65,15 +66,16 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     # Enables the same code to be used for both forecasts and truth sources
     sparse = False  # A variable used to indicate whether the truth is creating sparsity
     if 'lead' in signature(fcst_fn).parameters:
-        if lead_or_agg(lead) == 'agg':
-            raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
+        # TODO: this is no longer clearly true, since we can pass in daily, weekly to forecasters
+        # if lead_or_agg(lead) == 'agg':
+        #     raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
         fcst = fcst_fn(start_time, end_time, variable, lead=lead,
                        prob_type=prob_type, grid=grid, mask=None, region='global')
         # Check to see the prob type attribute
         enhanced_prob_type = fcst.attrs['prob_type']
     else:
-        if lead_or_agg(lead) == 'lead':
-            raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
+        # if lead_or_agg(lead) == 'lead':
+        #     raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
         fcst = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
                        grid=grid, mask=None, region='global')
         # Prob type is always deterministic for truth sources
@@ -126,7 +128,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     }
     # Get the appropriate climatology dataframe for metric calculation
     if statistic in ['anom_covariance', 'squared_pred_anom', 'squared_target_anom']:
-        clim_ds = climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
+        clim_ds = climatology_2020(start_time, end_time, variable, lead=lead, prob_type='deterministic',
                                    grid=grid, mask=None, region='global')
         clim_ds = clim_ds.sel(time=valid_times)
 
@@ -218,7 +220,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 @cacheable(data_type='array',
            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
                        'truth', 'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
-           chunking={"lat": 121, "lon": 240, "time": -1},
+           chunking={"lat": 121, "lon": 240, "time": 30, 'region': 300, 'lead_time': -1},
            chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, "time": 30}
@@ -278,27 +280,27 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
         # Apply masking
         # ds = apply_mask(ds, mask, grid=grid)
-        ds = clip_region(ds, region)
+        # ds = clip_region(ds, region)
 
         # Check validity of the statistic
         # TODO: need to figure out how to handle all regions in parallel
-        if truth_sparse or metric_sparse:
-            print("Metric is sparse, checking if forecast is valid directly.")
-            fcst_fn = get_datasource_fn(forecast)
+        # if truth_sparse or metric_sparse:
+        #     print("Metric is sparse, checking if forecast is valid directly.")
+        #     fcst_fn = get_datasource_fn(forecast)
 
-            if 'lead' in signature(fcst_fn).parameters:
-                check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
-                                   prob_type=metric_obj.prob_type, grid=grid, mask=mask, region=region)
-            else:
-                check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
-                                   grid=grid, mask=mask, region=region)
-        else:
-            check_ds = ds
+        #     if 'lead' in signature(fcst_fn).parameters:
+        #         check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
+        #                            prob_type=metric_obj.prob_type, grid=grid, mask=mask, region=region)
+        #     else:
+        #         check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
+        #                            grid=grid, mask=mask, region=region)
+        # else:
+        #     check_ds = ds
 
-        # Check if forecast is valid before spatial averaging
-        if not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
-            print("Metric is not valid for region.")
-            return None
+        # # Check if forecast is valid before spatial averaging
+        # if not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
+        #     print("Metric is not valid for region.")
+        #     return None
 
         ############################################################
         # Statistic aggregation
@@ -306,10 +308,23 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         if not metric_obj.coupled:
             # Group by time
             ds = groupby_time(ds, time_grouping, agg_fn=agg_fn)
-            # region_ds = region_labels(grid=grid, region=region)
+            admin_level = get_admin_level(region)
+            region_ds = region_labels(grid=grid, admin_level=admin_level)
+            # Add the region coordinate to the statistic
+            ds = ds.assign_coords(region=region_ds.region)
             # Average in space
             if not spatial:
-                ds = latitude_weighted_spatial_average(ds, agg=agg_fn)
+                # Group by region and average in space
+                # ds = ds.groupby('region').apply(latitude_weighted_spatial_average, agg_fn=agg_fn)
+                # Note: if we want to keep latitude weighing, we should think about
+                # how to properly normalize for different countries
+                ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
+
+            else:
+                # Mask and drop the region coordinate
+                mask = (ds.region == region).compute()
+                ds = ds.where(mask, drop=True)
+                ds = ds.drop_vars('region')
 
         # Assign the final statistic value
         statistic_values[statistic] = ds.copy()

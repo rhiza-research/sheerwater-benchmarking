@@ -3,31 +3,50 @@
 from abc import ABC
 import xarray as xr
 import numpy as np
+import pandas as pd
 
 import weatherbench2
 import xskillscore
 
+from sheerwater_benchmarking.utils import assign_grouping_coordinates
+
 # Global metric registry dictionary
 SHEERWATER_METRIC_REGISTRY = {}
+
+
+def mean_or_sum(ds, agg_fn, dims=['lat', 'lon']):
+    # Note, for some reason:
+    # ds.groupby('region').mean(['lat', 'lon'], skipna=True).compute()
+    # raises:
+    # *** AttributeError: 'bool' object has no attribute 'blockwise'
+    # or
+    # *** TypeError: reindex_intermediates() missing 1 required positional argument: 'array_type'
+    # So we have to do it via apply
+    if agg_fn == 'mean':
+        return ds.mean(dims, skipna=True)
+    else:
+        return ds.sum(dims, skipna=True)
 
 
 def groupby_time(ds, time_grouping, agg_fn='mean'):
     """Aggregate a statistic over time."""
     if time_grouping is not None:
         if time_grouping == 'month_of_year':
-            ds.coords["time"] = ds.time.dt.month
+            coords = ds.time.dt.month.values
         elif time_grouping == 'year':
-            ds.coords["time"] = ds.time.dt.year
+            coords = ds.time.dt.year.values
         elif time_grouping == 'quarter_of_year':
-            ds.coords["time"] = ds.time.dt.quarter
+            coords = ds.time.dt.quarter.values
+        elif time_grouping == 'day_of_year':
+            coords = ds.time.dt.dayofyear.values
+        elif time_grouping == 'month':
+            coords = [f'{pd.to_datetime(x).year:04d}-{pd.to_datetime(x).month:02d}-01' for x in ds.time.values]
         else:
             raise ValueError("Invalid time grouping")
-        if agg_fn == 'mean':
-            ds = ds.groupby("time").mean()
-        elif agg_fn == 'sum':
-            ds = ds.groupby("time").sum()
-        else:
-            raise ValueError(f"Invalid aggregation function {agg_fn}")
+        ds = ds.assign_coords(group=("time", coords))
+        ds = ds.groupby("group").apply(mean_or_sum, agg_fn=agg_fn, dims='time')
+        # Rename the group coordinate to time
+        ds = ds.rename({"group": "time"})
     else:
         # Average in time
         if agg_fn == 'mean':
@@ -65,10 +84,14 @@ def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon', agg_fn='
 
     # Create weights array
     weights = ds[lat_dim].copy(data=weights)
-    if agg_fn == 'mean':
-        weighted = ds.weighted(weights).mean([lat_dim, lon_dim], skipna=True)
+    if f'stacked_{lat_dim}_{lon_dim}' in ds.coords:
+        agg_dims = [f'stacked_{lat_dim}_{lon_dim}']
     else:
-        weighted = ds.weighted(weights).sum([lat_dim, lon_dim], skipna=True)
+        agg_dims = [lat_dim, lon_dim]
+    if agg_fn == 'mean':
+        weighted = ds.weighted(weights).mean(agg_dims, skipna=True)
+    else:
+        weighted = ds.weighted(weights).sum(agg_dims, skipna=True)
     return weighted
 
 
@@ -177,7 +200,6 @@ def compute_statistic(stat_data):
     elif stat_name == 'n_valid':
         m_ds = xr.ones_like(stat_data['fcst'])
     else:
-        import pdb; pdb.set_trace()
         raise ValueError(f"Statistic {stat_name} not implemented")
     return m_ds
 
