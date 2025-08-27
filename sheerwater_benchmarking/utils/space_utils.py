@@ -327,8 +327,9 @@ def get_region_labels(admin_level='countries'):
     try:
         return list(valid_regions[admin_level].keys())
     except KeyError:
-        raise NotImplementedError(
-            f"Admin level '{admin_level}' not supported.")
+        # Check if the region is a subregion of a valid region
+        new_admin_level = get_admin_level(admin_level)
+        return list(valid_regions[new_admin_level].keys())
 
 
 def base360_to_base180(lons):

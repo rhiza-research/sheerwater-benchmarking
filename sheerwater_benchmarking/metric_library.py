@@ -11,18 +11,6 @@ import xskillscore
 SHEERWATER_METRIC_REGISTRY = {}
 
 
-def get_stat_name(stat_name, metric_info):
-    """Get the statistic name from the statistic-edge-edge... format for categorical statistics.
-
-    Returns:
-        name: the statistic name
-        bin_str: the bins for the categorical statistic, e.g., '5' or '5-10'
-    """
-    if metric_info.categorical:
-        return stat_name.split('-')[0], stat_name[stat_name.find('-')+1:]
-    return stat_name, ''  # name, bin_str
-
-
 def groupby_time(ds, time_grouping, agg_fn='mean'):
     """Aggregate a statistic over time."""
     if time_grouping is not None:
@@ -189,6 +177,7 @@ def compute_statistic(stat_data):
     elif stat_name == 'n_valid':
         m_ds = xr.ones_like(stat_data['fcst'])
     else:
+        import pdb; pdb.set_trace()
         raise ValueError(f"Statistic {stat_name} not implemented")
     return m_ds
 

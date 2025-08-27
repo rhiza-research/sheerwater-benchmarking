@@ -75,7 +75,7 @@ def land_sea_mask(grid="global1_5"):
 @cacheable(data_type='array',
            cache_args=['grid', 'admin_level'],
            chunking={'lat': 1000, 'lon': 1000})
-def region_labels(grid='global1_5', admin_level='country'):
+def region_labels(grid='global1_5', admin_level='countries'):
     """Generate a dataset with a region coordinate at a specific admin level.
 
     Available admin levels are 'country', 'region', 'continent', and 'world'.

@@ -9,8 +9,7 @@ from sheerwater_benchmarking.utils import (cacheable, dask_remote, clip_region, 
                                            lead_to_agg_days, lead_or_agg, apply_mask)
 from sheerwater_benchmarking.masks import region_labels
 
-from .metric_library import (metric_factory, compute_statistic, get_stat_name,
-                             latitude_weighted_spatial_average, groupby_time)
+from .metric_library import (metric_factory, compute_statistic, latitude_weighted_spatial_average, groupby_time)
 
 
 def get_datasource_fn(datasource):
@@ -39,21 +38,25 @@ def get_datasource_fn(datasource):
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache=False,
-           cache_args=['variable', 'lead', 'forecast', 'truth', 'statistic', 'grid'],
+           cache=True,
+           cache_args=['variable', 'lead', 'forecast', 'truth', 'statistic', 'bins', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
                'grid': {
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                },
            },
-           cache_disable_if={'statistic': ['pred', 'target', 'n_valid']},
+           cache_disable_if={'statistic': ['pred', 'target', 'mse', 'mae',
+                                           'n_valid', 'n_correct',
+                                           'n_fcst_bin_1', 'n_fcst_bin_2', 'n_fcst_bin_3',
+                                           'n_fcst_bin_4', 'n_fcst_bin_5',
+                                           'n_obs_bin_1', 'n_obs_bin_2', 'n_obs_bin_3',
+                                           'n_obs_bin_4', 'n_obs_bin_5']},
            validate_cache_timeseries=True)
 def global_statistic(start_time, end_time, variable, lead, forecast, truth,
-                     statistic, metric_info, grid="global1_5"):
+                     statistic, bins, metric_info, grid="global1_5"):
     """Compute a global metric without aggregated in time or space at a specific lead."""
     prob_type = metric_info.prob_type
-    stat_name, _ = get_stat_name(statistic, metric_info)
 
     # Get the forecast and check validity
     fcst_fn = get_datasource_fn(forecast)
@@ -118,11 +121,11 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     stat_data = {
         'obs': obs,
         'fcst': fcst,
-        'statistic': stat_name,
-        'prob_type': prob_type,
+        'statistic': statistic,
+        'prob_type': enhanced_prob_type,
     }
     # Get the appropriate climatology dataframe for metric calculation
-    if stat_name in ['anom_covariance', 'squared_pred_anom', 'squared_target_anom']:
+    if statistic in ['anom_covariance', 'squared_pred_anom', 'squared_target_anom']:
         clim_ds = climatology_2020(start_time, end_time, variable, lead, prob_type='deterministic',
                                    grid=grid, mask=None, region='global')
         clim_ds = clim_ds.sel(time=valid_times)
@@ -138,7 +141,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         stat_data['fcst_anom'] = fcst_anom
         stat_data['obs_anom'] = obs_anom
     # Get the appropriate climatology dataframe for metric calculation
-    elif stat_name == 'seeps':
+    elif statistic == 'seeps':
         wet_threshold = seeps_wet_threshold(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead), grid=grid)
         dry_fraction = seeps_dry_fraction(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead), grid=grid)
         clim_ds = xr.merge([wet_threshold, dry_fraction])
@@ -239,10 +242,13 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
     # Statistics needed to calculate the metrics, incrementally populated
     statistic_values = {}
     statistic_values['spatial'] = spatial  # whether the metric is spatially aggregated
+
     # If metric is categorical, store the bins
     if metric_obj.categorical:
-        _, bin_str = get_stat_name(metric, metric_obj)
-        statistic_values['bins'] = metric_obj.config_dict['bins']
+        bins = metric[metric.find('-')+1:]
+        statistic_values['bins'] = bins
+    else:
+        bins = 'none'
 
     # Iterate through the statistics and compute them
     for statistic in stats_to_call:
@@ -252,14 +258,10 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         else:
             agg_fn = 'mean'
 
-        if metric_obj.categorical:
-            statistic_call = f'{statistic}-{bin_str}'
-        else:
-            statistic_call = statistic
-
         ds = global_statistic(start_time, end_time, variable, lead=lead,
                               forecast=forecast, truth=truth,
-                              statistic=statistic_call,
+                              statistic=statistic,
+                              bins=bins,
                               metric_info=metric_obj, grid=grid)
         if ds is None:
             return None
@@ -275,7 +277,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
                 ds = ds.reset_coords(coord, drop=True)
 
         # Apply masking
-        ds = apply_mask(ds, mask, grid=grid)
+        # ds = apply_mask(ds, mask, grid=grid)
         ds = clip_region(ds, region)
 
         # Check validity of the statistic
@@ -304,6 +306,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         if not metric_obj.coupled:
             # Group by time
             ds = groupby_time(ds, time_grouping, agg_fn=agg_fn)
+            # region_ds = region_labels(grid=grid, region=region)
             # Average in space
             if not spatial:
                 ds = latitude_weighted_spatial_average(ds, agg=agg_fn)

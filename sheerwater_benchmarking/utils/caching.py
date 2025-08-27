@@ -1058,15 +1058,15 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 read_cache_map = fs.get_mapper(read_cache_path)
                 read_fs = fsspec.core.url_to_fs(read_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
 
+            # Check for memoized land-sea mask
+            if cache_key in memoized and memoized[cache_key] is not None:
+                print(f"Found memoized result for {cache_key}")
+                return memoized[cache_key]
+
             # Now check if the cache exists
             if not recompute and not upsert and cache:
                 if cache_exists(backend, cache_path, verify_path,
                                 hash_postgres_table_name=hash_postgres_table_name):
-                    # Check for memoized land-sea mask
-                    if cache_key in memoized and memoized[cache_key] is not None:
-                        print(f"Found memoized result for {cache_key}")
-                        return memoized[cache_key]
-
                     # Sync the cache from the remote to the local
                     sync_local_remote(backend, fs, read_fs, cache_path, read_cache_path, verify_path, null_path)
                     print(f"Found cache for {read_cache_path}")
@@ -1124,7 +1124,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
 
                             # Check for memoized land-sea mask
-                            if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
+                            # if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
+                            # if cache_key not in memoized and ds is not None and cache == True:
+                            # if cache_key not in memoized and ds is not None:
+                            if cache_key not in memoized and ds is not None and 'global_statistic' in cache_key:
                                 print(f"Memoizing {cache_key}")
                                 memoized[cache_key] = ds.persist()
 
@@ -1239,7 +1242,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     ##### IF NOT EXISTS ######
                     ds = func(*args, **kwargs)
                     # Check for memoized land-sea mask
-                    if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
+                    # if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
+                    if cache_key not in memoized and ds is not None and 'global_statistic' in cache_key:
                         print(f"Memoizing {cache_key}")
                         memoized[cache_key] = ds.persist()
                     ##########################
