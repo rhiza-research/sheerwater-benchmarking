@@ -20,7 +20,7 @@ from .metric_factory import metric_factory
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
-           cache=False,
+           cache=True,
            cache_args=['variable', 'lead', 'forecast', 'truth', 'statistic', 'bins', 'grid'],
            chunking={"lat": 121, "lon": 240, "time": 1000},
            chunk_by_arg={
@@ -39,8 +39,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                      statistic, bins, metric_info, grid="global1_5"):
     """Compute a global metric without aggregated in time or space at a specific lead."""
     # save these for easy access later
-    cache_kwargs = {'start_time': start_time, 'end_time': end_time, 'variable': variable,
-                    'lead': lead, 'forecast': forecast, 'truth': truth, 'bins': bins, 'grid': grid}
+    cache_kwargs = {'variable': variable, 'lead': lead, 'forecast': forecast, 'truth': truth, 'bins': bins, 'grid': grid}
 
     prob_type = metric_info.prob_type
     # For categorical metrics, get the bins
@@ -132,8 +131,8 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     elif statistic == 'fcst':
         m_ds = fcst
     elif statistic == 'brier' and prob_type == 'ensemble':
-        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
-        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_digitized')
+        obs_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_digitized')
         fcst_event_prob = (fcst_digitized == 2).mean(dim='member')
         obs_event_prob = (obs_digitized == 2)
         m_ds = (fcst_event_prob - obs_event_prob)**2
@@ -155,42 +154,42 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     elif statistic == 'obs_anom':
         m_ds = obs - clim_ds
     elif statistic == 'squared_fcst_anom':
-        fcst_anom = global_statistic(**cache_kwargs, statistic='fcst_anom')
+        fcst_anom = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_anom')
         m_ds = fcst_anom**2
     elif statistic == 'squared_obs_anom':
-        obs_anom = global_statistic(**cache_kwargs, statistic='obs_anom')
+        obs_anom = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_anom')
         m_ds = obs_anom**2
     elif statistic == 'anom_covariance':
-        fcst_anom = global_statistic(**cache_kwargs, statistic='fcst_anom')
-        obs_anom = global_statistic(**cache_kwargs, statistic='obs_anom')
+        fcst_anom = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_anom')
+        obs_anom = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_anom')
         m_ds = fcst_anom * obs_anom
     elif statistic == 'false_positives':
-        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
-        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
+        obs_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_digitized')
         m_ds = (obs_digitized == 1) & (fcst_digitized == 2)
     elif statistic == 'false_negatives':
-        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
-        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
+        obs_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_digitized')
         m_ds = (obs_digitized == 2) & (fcst_digitized == 1)
     elif statistic == 'true_positives':
-        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
-        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
+        obs_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_digitized')
         m_ds = (obs_digitized == 2) & (fcst_digitized == 2)
     elif statistic == 'true_negatives':
-        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
-        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
+        obs_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_digitized')
         m_ds = (obs_digitized == 1) & (fcst_digitized == 1)
     elif statistic == 'n_correct':
-        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
-        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
+        obs_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_digitized')
         m_ds = (obs_digitized == fcst_digitized)
     elif 'n_obs_bin' in statistic:
         category = int(statistic.split('_')[3])
-        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
+        obs_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_digitized')
         m_ds = (obs_digitized == category)
     elif 'n_fcst_bin' in statistic:
         category = int(statistic.split('_')[3])
-        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
+        fcst_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_digitized')
         m_ds = (fcst_digitized == category)
     elif statistic == 'obs_digitized':
         # `np.digitize(x, bins, right=True)` returns index `i` such that:
