@@ -291,16 +291,23 @@ def get_region(region):
 def get_admin_level(region):
     """Get the admin level of a region.
 
+    Returns the admin level and a boolean indicating if the region is
+    already at the admin level.
+
     Args:
         region (str): The region to get the admin level of.
     """
-    if region == 'countries' or region in get_region_labels('countries'):
-        return 'countries'
+    if region == 'countries':
+        return 'countries', 1
+    if region in get_region_labels('countries'):
+        return 'countries', 0
 
     from .region_defs import valid_regions
     for admin_level, data in valid_regions.items():
-        if region == admin_level or region in data.keys():
-            return admin_level
+        if region == admin_level:
+            return admin_level, 1
+        if region in data.keys():
+            return admin_level, 0
 
     raise NotImplementedError(
         f"Region {region} has not been implemented.")

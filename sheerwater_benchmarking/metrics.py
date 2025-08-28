@@ -10,9 +10,9 @@ import xskillscore
 
 
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
-from sheerwater_benchmarking.utils import (cacheable, dask_remote, is_valid,
+from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            lead_to_agg_days, get_admin_level,
-                                           get_time_level)
+                                           get_time_level, get_leads)
 from sheerwater_benchmarking.masks import region_labels
 from .metric_factory import metric_factory
 
@@ -38,17 +38,21 @@ from .metric_factory import metric_factory
 def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                      statistic, bins, metric_info, grid="global1_5"):
     """Compute a global metric without aggregated in time or space at a specific lead."""
+    # save these for easy access later
+    cache_kwargs = {'start_time': start_time, 'end_time': end_time, 'variable': variable,
+                    'lead': lead, 'forecast': forecast, 'truth': truth, 'bins': bins, 'grid': grid}
+
     prob_type = metric_info.prob_type
     # For categorical metrics, get the bins
     if metric_info.categorical:
-        bins = metric_info.config_dict['bins']
+        bin_thresholds = metric_info.config_dict['bins']
 
     # Get the forecast and check validity
     fcst_fn = get_datasource_fn(forecast)
 
     # Decide if this is a forecast with a lead or direct datasource with just an agg
     # Enables the same code to be used for both forecasts and truth sources
-    sparse = False  # A variable used to indicate whether the truth is creating sparsity
+    sparse = False  # A variable used to indicate whether the statistic is expected to be sparse
     if 'lead' in signature(fcst_fn).parameters:
         # TODO: this is no longer clearly true, since we can pass in daily, weekly to forecasters
         # if lead_or_agg(lead) == 'agg':
@@ -79,6 +83,9 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     truth_fn = get_datasource_fn(truth)
     obs = truth_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
                    grid=grid, mask=None, region='global')
+    # We need a lead specific obs, so we know which times are valid for the forecast
+    leads = get_leads(lead)[0]
+    obs = obs.expand_dims({'lead_time': leads})
     # Assign sparsity if it exists
     if 'sparse' in obs.attrs:
         sparse |= obs.attrs['sparse']
@@ -92,7 +99,9 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     # If the observations are sparse, the forecaster and the obs must be the same length
     # for metrics like ACC to work
     # TODO: This will probably break with sparse forecaster and dense observations
-    fcst = fcst.where(obs.notnull(), np.nan)
+    no_null = obs.notnull() & fcst.notnull()
+    fcst = fcst.where(no_null, np.nan)
+    obs = obs.where(no_null, np.nan)
 
     # For the case where obs and forecast are datetime objects, do a special conversion to seconds since epoch
     # TODO: This is a hack to get around the fact that the metrics library doesn't support datetime objects
@@ -123,10 +132,8 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     elif statistic == 'fcst':
         m_ds = fcst
     elif statistic == 'brier' and prob_type == 'ensemble':
-        fcst_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                          truth, 'fcst_digitized', bins, metric_info, grid)
-        obs_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                         truth, 'obs_digitized', bins, metric_info, grid)
+        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
+        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
         fcst_event_prob = (fcst_digitized == 2).mean(dim='member')
         obs_event_prob = (obs_digitized == 2)
         m_ds = (fcst_event_prob - obs_event_prob)**2
@@ -148,58 +155,42 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     elif statistic == 'obs_anom':
         m_ds = obs - clim_ds
     elif statistic == 'squared_fcst_anom':
-        fcst_anom = global_statistic(start_time, end_time, variable, lead, forecast,
-                                     truth, 'fcst_anom', bins, metric_info, grid)
+        fcst_anom = global_statistic(**cache_kwargs, statistic='fcst_anom')
         m_ds = fcst_anom**2
     elif statistic == 'squared_obs_anom':
-        obs_anom = global_statistic(start_time, end_time, variable, lead, forecast,
-                                    truth, 'obs_anom', bins, metric_info, grid)
+        obs_anom = global_statistic(**cache_kwargs, statistic='obs_anom')
         m_ds = obs_anom**2
     elif statistic == 'anom_covariance':
-        fcst_anom = global_statistic(start_time, end_time, variable, lead, forecast,
-                                     truth, 'fcst_anom', bins, metric_info, grid)
-        obs_anom = global_statistic(start_time, end_time, variable, lead, forecast,
-                                    truth, 'obs_anom', bins, metric_info, grid)
+        fcst_anom = global_statistic(**cache_kwargs, statistic='fcst_anom')
+        obs_anom = global_statistic(**cache_kwargs, statistic='obs_anom')
         m_ds = fcst_anom * obs_anom
     elif statistic == 'false_positives':
-        obs_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                         truth, 'obs_digitized', bins, metric_info, grid)
-        fcst_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                          truth, 'fcst_digitized', bins, metric_info, grid)
+        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
         m_ds = (obs_digitized == 1) & (fcst_digitized == 2)
     elif statistic == 'false_negatives':
-        obs_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                         truth, 'obs_digitized', bins, metric_info, grid)
-        fcst_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                          truth, 'fcst_digitized', bins, metric_info, grid)
+        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
         m_ds = (obs_digitized == 2) & (fcst_digitized == 1)
     elif statistic == 'true_positives':
-        obs_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                         truth, 'obs_digitized', bins, metric_info, grid)
-        fcst_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                          truth, 'fcst_digitized', bins, metric_info, grid)
+        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
         m_ds = (obs_digitized == 2) & (fcst_digitized == 2)
     elif statistic == 'true_negatives':
-        obs_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                         truth, 'obs_digitized', bins, metric_info, grid)
-        fcst_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                          truth, 'fcst_digitized', bins, metric_info, grid)
+        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
         m_ds = (obs_digitized == 1) & (fcst_digitized == 1)
     elif statistic == 'n_correct':
-        obs_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                         truth, 'obs_digitized', bins, metric_info, grid)
-        fcst_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                          truth, 'fcst_digitized', bins, metric_info, grid)
+        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
+        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
         m_ds = (obs_digitized == fcst_digitized)
     elif 'n_obs_bin' in statistic:
         category = int(statistic.split('_')[3])
-        obs_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                         truth, 'obs_digitized', bins, metric_info, grid)
+        obs_digitized = global_statistic(**cache_kwargs, statistic='obs_digitized')
         m_ds = (obs_digitized == category)
     elif 'n_fcst_bin' in statistic:
         category = int(statistic.split('_')[3])
-        fcst_digitized = global_statistic(start_time, end_time, variable, lead, forecast,
-                                          truth, 'fcst_digitized', bins, metric_info, grid)
+        fcst_digitized = global_statistic(**cache_kwargs, statistic='fcst_digitized')
         m_ds = (fcst_digitized == category)
     elif statistic == 'obs_digitized':
         # `np.digitize(x, bins, right=True)` returns index `i` such that:
@@ -209,7 +200,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         obs_digitized = xr.apply_ufunc(
             np.digitize,
             obs,
-            kwargs={'bins': bins, 'right': True},
+            kwargs={'bins': bin_thresholds, 'right': True},
             dask='parallelized',
             output_dtypes=[int],
         )
@@ -219,7 +210,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         fcst_digitized = xr.apply_ufunc(
             np.digitize,
             fcst,
-            kwargs={'bins': bins, 'right': True},
+            kwargs={'bins': bin_thresholds, 'right': True},
             dask='parallelized',
             output_dtypes=[int],
         )
@@ -290,8 +281,8 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast',
-                       'truth', 'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth',
+                       'metric', 'time_grouping', 'spatial', 'grid', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 30, 'region': 300, 'lead_time': -1},
            chunk_by_arg={
                'grid': {
@@ -301,7 +292,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
            cache=True)
 def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
                        metric, time_grouping=None, spatial=False, grid="global1_5",
-                       mask='lsm', region='countries'):
+                       region='countries'):
     """Compute a grouped metric for a forecast at a specific lead."""
     # Use the metric registry to get the metric class
     metric_obj = metric_factory(metric)()
@@ -310,7 +301,16 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
     if metric_obj.valid_variables and variable not in metric_obj.valid_variables:
         raise ValueError(f"Variable {variable} is not valid for metric {metric}")
 
-    stats_to_call = metric_obj.statistics
+    # Get admin level for grouping
+    admin_level, is_admin = get_admin_level(region)
+    if is_admin and spatial:
+        raise ValueError(f"Cannot compute spatial metrics for admin level '{region}'. " +
+                         "Pass in a specific region instead.")
+
+    # Get time level for grouping
+    time_level = get_time_level(time_grouping)
+
+    # Set up sparsity for the metric
     metric_sparse = metric_obj.sparse
 
     # Statistics needed to calculate the metrics, incrementally populated
@@ -325,7 +325,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         bins = 'none'
 
     # Iterate through the statistics and compute them
-    for statistic in stats_to_call:
+    for statistic in metric_obj.statistics:
         # Statistics can be a tuple of (statistic, agg_fn), or just a statistic with default mean agg
         if isinstance(statistic, tuple):
             statistic, agg_fn = statistic
@@ -335,72 +335,66 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         ds = global_statistic(start_time, end_time, variable, lead=lead,
                               forecast=forecast, truth=truth,
                               statistic=statistic,
-                              bins=bins,
-                              metric_info=metric_obj, grid=grid,
-                              recompute=True, force_overwrite=True)
+                              bins=bins, metric_info=metric_obj, grid=grid)
         if ds is None:
             return None
-
-        truth_sparse = ds.attrs['sparse']
+        data_sparse = ds.attrs['sparse']  # Whether the input data to the statistic is expected to be sparse
 
         ############################################################
-        # Clip, mask and check validity of the statistic
+        # Aggregate and and check validity of the statistic
         ############################################################
-        # Drop any extra coordinates
+        # Drop any extra random coordinates that shouldn't be there
         for coord in ds.coords:
             if coord not in ['time', 'lead_time', 'lat', 'lon']:
                 ds = ds.reset_coords(coord, drop=True)
 
-        # Apply masking
-        # ds = apply_mask(ds, mask, grid=grid)
-        # ds = clip_region(ds, region)
+        # Prepare the check_ds for validity checking, considering sparsity
+        if data_sparse or metric_sparse:
+            print("Metric is sparse, need to check the underlying forecast validity directly.")
+            fcst_fn = get_datasource_fn(forecast)
 
-        # Check validity of the statistic
-        # TODO: need to figure out how to handle all regions in parallel
-        # if truth_sparse or metric_sparse:
-        #     print("Metric is sparse, checking if forecast is valid directly.")
-        #     fcst_fn = get_datasource_fn(forecast)
-
-        #     if 'lead' in signature(fcst_fn).parameters:
-        #         check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
-        #                            prob_type=metric_obj.prob_type, grid=grid, mask=mask, region=region)
-        #     else:
-        #         check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
-        #                            grid=grid, mask=mask, region=region)
-        # else:
-        #     check_ds = ds
-
-        # # Check if forecast is valid before spatial averaging
-        # if not is_valid(check_ds, variable, mask, region, grid, valid_threshold=0.98):
-        #     print("Metric is not valid for region.")
-        #     return None
+            if 'lead' in signature(fcst_fn).parameters:
+                check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
+                                   prob_type=metric_obj.prob_type, grid=grid, mask=None, region='global')
+            else:
+                check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
+                                   grid=grid, mask=None, region='global')
+        else:
+            check_ds = ds.copy()
+        check_ds = check_ds.notnull()
+        # Create an indicator variable that is 1 for all dimensions
+        check_ds['indicator'] = xr.ones_like(check_ds[variable])
 
         ############################################################
         # Statistic aggregation
         ############################################################
         # Group by time
-        time_level = get_time_level(time_grouping)
         ds = groupby_time(ds, time_level, agg_fn=agg_fn)
+        check_ds = groupby_time(check_ds, time_level, agg_fn='sum')
 
-        admin_level = get_admin_level(region)
-        region_ds = region_labels(grid=grid, admin_level=admin_level)
-
-        # TODO: do something similar for the leads, to get the higher level lead coordinate
         # Add the region coordinate to the statistic
+        region_ds = region_labels(grid=grid, admin_level=admin_level)
         ds = ds.assign_coords(region=region_ds.region)
+        check_ds = check_ds.assign_coords(region=region_ds.region)
+
         # Average in space
         if not spatial:
             # Group by region and average in space
-            # ds = ds.groupby('region').apply(latitude_weighted_spatial_average, agg_fn=agg_fn)
             # Note: if we want to keep latitude weighing, we should think about
             # how to properly normalize for different countries
+            # ds = ds.groupby('region').apply(latitude_weighted_spatial_average, agg_fn=agg_fn)
             ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
-
+            check_ds = check_ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
         else:
             # Mask and drop the region coordinate
             mask = (ds.region == region).compute()
             ds = ds.where(mask, drop=True)
+            check_ds = check_ds.where(mask, drop=True)
             ds = ds.drop_vars('region')
+
+        # Check if the statistic is valid per grouping
+        is_valid = (check_ds[variable] / check_ds['indicator'] > 0.98)
+        ds = ds.where(is_valid, np.nan, drop=False)
 
         # Assign the final statistic value
         statistic_values[statistic] = ds.copy()
@@ -413,16 +407,16 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
-                       'time_grouping', 'spatial', 'grid', 'mask', 'region'],
+                       'time_grouping', 'spatial', 'grid', 'region'],
            cache=False)
 def skill_metric(start_time, end_time, variable, lead, forecast, truth,
                  metric, baseline, time_grouping=None, spatial=False, grid="global1_5",
-                 mask='lsm', region='global'):
+                 region='global'):
     """Compute skill either spatially or as a region summary."""
     try:
         m_ds = grouped_metric(start_time, end_time, variable, lead, forecast,
                               truth, metric, time_grouping, spatial=spatial,
-                              grid=grid, mask=mask, region=region)
+                              grid=grid, region=region)
     except NotImplementedError:
         return None
     if not m_ds:
@@ -430,7 +424,7 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the baseline if it exists and run its metric
     base_ds = grouped_metric(start_time, end_time, variable, lead, baseline,
-                             truth, metric, time_grouping, spatial=spatial, grid=grid, mask=mask, region=region)
+                             truth, metric, time_grouping, spatial=spatial, grid=grid, region=region)
     if not base_ds:
         raise NotImplementedError("Cannot compute skill for null base")
     print("Got metrics. Computing skill")
@@ -445,7 +439,7 @@ def skill_metric(start_time, end_time, variable, lead, forecast, truth,
 def _summary_metrics_table(start_time, end_time, variable,
                            truth, metric, leads, forecasts,
                            time_grouping=None,
-                           grid='global1_5', mask='lsm', region='global'):
+                           grid='global1_5', region='global'):
     """Internal function to compute summary metrics table for flexible leads and forecasts."""
     # For the time grouping we are going to store it in an xarray with dimensions
     # forecast and time, which we instantiate
@@ -460,7 +454,7 @@ def _summary_metrics_table(start_time, end_time, variable,
                 ds = grouped_metric(start_time, end_time, variable,
                                     lead=lead, forecast=forecast, truth=truth,
                                     metric=metric, time_grouping=time_grouping, spatial=False,
-                                    grid=grid, mask=mask, region=region,
+                                    grid=grid, region=region,
                                     retry_null_cache=True)
             except NotImplementedError:
                 ds = None
@@ -491,14 +485,14 @@ def _summary_metrics_table(start_time, end_time, variable,
 @dask_remote
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
-                       'time_grouping', 'grid', 'mask', 'region'],
+                       'time_grouping', 'grid', 'region'],
            hash_postgres_table_name=True,
            backend='postgres',
            cache=True,
            primary_keys=['time', 'forecast'])
 def summary_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
-                          grid='global1_5', mask='lsm', region='global'):
+                          grid='global1_5', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
         forecasts = ['climatology_2015', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased',  'fuxi']
@@ -512,7 +506,7 @@ def summary_metrics_table(start_time, end_time, variable,
         leads = ["week1", "week2", "week3", "week4", "week5", "week6"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,
-                                grid=grid, mask=mask, region=region)
+                                grid=grid, region=region)
 
     print(df)
     return df
@@ -521,18 +515,18 @@ def summary_metrics_table(start_time, end_time, variable,
 @dask_remote
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
-                       'time_grouping', 'grid', 'mask', 'region'],
+                       'time_grouping', 'grid', 'region'],
            cache=True,
            primary_keys=['time', 'forecast'])
 def seasonal_metrics_table(start_time, end_time, variable,
                            truth, metric, time_grouping=None,
-                           grid='global1_5', mask='lsm', region='global'):
+                           grid='global1_5', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     forecasts = ['salient', 'climatology_2015']
     leads = ["month1", "month2", "month3"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,
-                                grid=grid, mask=mask, region=region)
+                                grid=grid, region=region)
 
     print(df)
     return df
@@ -541,18 +535,18 @@ def seasonal_metrics_table(start_time, end_time, variable,
 @dask_remote
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
-                       'time_grouping', 'grid', 'mask', 'region'],
+                       'time_grouping', 'grid', 'region'],
            cache=True,
            primary_keys=['time', 'forecast'])
 def station_metrics_table(start_time, end_time, variable,
                           truth, metric, time_grouping=None,
-                          grid='global1_5', mask='lsm', region='global'):
+                          grid='global1_5', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     forecasts = ['era5', 'chirps', 'imerg', 'cbam']
     leads = ["daily", "weekly", "biweekly", "monthly"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,
-                                grid=grid, mask=mask, region=region)
+                                grid=grid, region=region)
 
     print(df)
     return df
@@ -561,18 +555,18 @@ def station_metrics_table(start_time, end_time, variable,
 @dask_remote
 @cacheable(data_type='tabular',
            cache_args=['start_time', 'end_time', 'variable', 'truth', 'metric',
-                       'time_grouping', 'grid', 'mask', 'region'],
+                       'time_grouping', 'grid', 'region'],
            cache=True)
 def biweekly_summary_metrics_table(start_time, end_time, variable,
                                    truth, metric, time_grouping=None,
-                                   grid='global1_5', mask='lsm', region='global'):
+                                   grid='global1_5', region='global'):
     """Runs summary metric repeatedly for all forecasts and creates a pandas table out of them."""
     forecasts = ['perpp', 'ecmwf_ifs_er', 'ecmwf_ifs_er_debiased', 'climatology_2015',
                  'climatology_trend_2015', 'climatology_rolling']
     leads = ["weeks34", "weeks56"]
     df = _summary_metrics_table(start_time, end_time, variable, truth, metric, leads, forecasts,
                                 time_grouping=time_grouping,
-                                grid=grid, mask=mask, region=region)
+                                grid=grid, region=region)
 
     print(df)
     return df
