@@ -28,8 +28,17 @@ from .metric_factory import metric_factory
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                },
            },
-           cache_disable_if={'statistic': ['pred', 'obs', 'mse',
+           cache_disable_if={'statistic': ['fcst', 'obs', 
+                                           'fcst_anom', 'obs_anom',
+                                           'squared_fcst_anom', 'squared_obs_anom',
+                                           'anom_covariance', 'false_positives',
+                                           'false_negatives', 'true_positives',
+                                           'true_negatives', 
+                                           'squared_fcst', 'squared_obs',
+                                           'fcst_mean', 'obs_mean', 'covariance',
+                                           'mape', 'smape', 'mae', 'mse', 'bias'
                                            'n_valid', 'n_correct',
+                                           # some number hard coded for categorical metrics up to 4 bins
                                            'n_fcst_bin_1', 'n_fcst_bin_2', 'n_fcst_bin_3',
                                            'n_fcst_bin_4', 'n_fcst_bin_5',
                                            'n_obs_bin_1', 'n_obs_bin_2', 'n_obs_bin_3',
@@ -39,7 +48,8 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                      statistic, bins, metric_info, grid="global1_5"):
     """Compute a global metric without aggregated in time or space at a specific lead."""
     # save these for easy access later
-    cache_kwargs = {'variable': variable, 'lead': lead, 'forecast': forecast, 'truth': truth, 'bins': bins, 'grid': grid}
+    cache_kwargs = {'variable': variable, 'lead': lead, 'forecast': forecast, 'truth': truth,
+                    'bins': bins, 'grid': grid, 'metric_info': metric_info}
 
     prob_type = metric_info.prob_type
     # For categorical metrics, get the bins
