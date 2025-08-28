@@ -8,7 +8,7 @@ import xarray as xr
 import dask
 from functools import partial
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates, get_leads,
                                            apply_mask, clip_region, pad_with_leapdays, add_dayofyear, forecast)
 from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
 
@@ -368,6 +368,7 @@ def _climatology_unified(start_time, end_time, variable, lead,
                          grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
     agg_days = _process_lead(variable, lead)
+    expanded_leads = get_leads(lead)[0]
     # Get daily data
     if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
         drought_condition = variable == 'rainy_onset_no_drought'
@@ -389,6 +390,9 @@ def _climatology_unified(start_time, end_time, variable, lead,
         ds = apply_mask(ds, mask, grid=grid)
         ds = clip_region(ds, region=region)
 
+    # Add lead coordinate
+    # Assign a new coordinate the broadcasts / duplicates the existing data
+    ds = ds.expand_dims(lead_time=expanded_leads)
     if prob_type == 'deterministic':
         ds = ds.assign_attrs(prob_type="deterministic")
     else:
@@ -466,6 +470,7 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
     }
 
     agg_days = lead_params.get(lead, None)
+    expanded_leads = get_leads(lead)[0]
     if agg_days is None:
         raise NotImplementedError(f"Lead {lead} not implemented for rolling climatology.")
 
@@ -492,6 +497,9 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
     ds = ds.drop_duplicates(dim='time')
 
     ds = ds.assign_attrs(prob_type="deterministic")
+
+    # Add lead coordinate
+    ds = ds.expand_dims(lead_time=expanded_leads)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

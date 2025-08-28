@@ -12,7 +12,7 @@ from .space_utils import (get_grid, get_grid_ds, is_wrapped, get_region,
 from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_dates,
                          pad_with_leapdays, add_dayofyear,
                          groupby_time, assign_grouping_coordinates,
-                         convert_group_to_time, date_mean, doy_mean)
+                         convert_group_to_time, date_mean, doy_mean, get_time_level)
 
 from .weather_utils import (get_variable, get_leads, forecast,  lead_to_agg_days, lead_or_agg,
                             forecast_date_to_target_date, target_date_to_forecast_date,
@@ -75,4 +75,5 @@ __all__ = [
     "forecast",
     "get_leads",
     "get_admin_level",
+    "get_time_level",
 ]

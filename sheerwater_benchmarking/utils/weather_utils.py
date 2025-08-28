@@ -11,6 +11,44 @@ import dateparser
 # Global forecast registry
 FORECAST_REGISTRY = {}
 
+
+def forecast(func):
+    """Decorator to mark a function as a forecast and concat the leads."""
+    # Register the forecast in the global forecast registry when defined
+    FORECAST_REGISTRY[func.__name__] = func
+
+    @wraps(func)
+    def forecast_wrapper(*args, **kwargs):
+        called_lead = kwargs.get('lead')
+        leads, agg_period = get_leads(called_lead)
+        try:
+            ret = func(*args, **kwargs)
+            if 'lead_time' not in ret.dims:
+                raise NotImplementedError(f"Forecast {func.__name__} does not return a lead time dimension.")
+        except NotImplementedError:
+            # Function does not implement the called lead, so we need to get the leads and agg period
+            ret_list = []
+            for lead in leads:
+                kwargs['lead'] = lead
+                try:
+                    ds = func(*args, **kwargs)
+                except NotImplementedError:
+                    continue
+                ds = ds.assign_coords(lead_time=lead)
+                ret_list.append(ds)
+            try:
+                ret = xr.concat(ret_list, dim='lead_time')
+            except ValueError as e:
+                if 'must supply at least one object to concatenate' in str(e):
+                    raise NotImplementedError(f"Lead {called_lead} not supported for {func.__name__}")
+                else:
+                    raise e
+        # Assign agg period as time in seconds (timedeltas are not JSON serializable for storage)
+        ret = ret.assign_attrs(agg_period_secs=float(agg_period / np.timedelta64(1, 's')))
+        return ret
+    return forecast_wrapper
+
+
 # Lead aggregation period in days and offset
 LEAD_OFFSETS = {
     'daily': (1, (0, 'days')),
@@ -89,42 +127,6 @@ def _date_shift(date, lead, shift='forward'):
     elif np.issubdtype(input_type, np.datetime64):
         new_date = np.datetime64(new_date, 'ns')
     return new_date
-
-
-def forecast(func):
-    """Decorator to mark a function as a forecast and concat the leads."""
-    # Register the forecast in the global forecast registry when defined
-    FORECAST_REGISTRY[func.__name__] = func
-
-    @wraps(func)
-    def forecast_wrapper(*args, **kwargs):
-        called_lead = kwargs.get('lead')
-        leads, agg_period = get_leads(called_lead)
-        try:
-            ret = func(*args, **kwargs)
-            ret = ret.assign_coords(lead_time=called_lead)
-        except NotImplementedError:
-            # Function does not implement the called lead, so we need to get the leads and agg period
-            ret_list = []
-            for lead in leads:
-                kwargs['lead'] = lead
-                try:
-                    ds = func(*args, **kwargs)
-                except NotImplementedError:
-                    continue
-                ds = ds.assign_coords(lead_time=lead)
-                ret_list.append(ds)
-            try:
-                ret = xr.concat(ret_list, dim='lead_time')
-            except ValueError as e:
-                if 'must supply at least one object to concatenate' in str(e):
-                    raise NotImplementedError(f"Lead {called_lead} not supported for {func.__name__}")
-                else:
-                    raise e
-        # Assign agg period as time in seconds (timedeltas are not JSON serializable for storage)
-        ret = ret.assign_attrs(agg_period_secs=float(agg_period / np.timedelta64(1, 's')))
-        return ret
-    return forecast_wrapper
 
 
 def get_forecast(forecast_name):

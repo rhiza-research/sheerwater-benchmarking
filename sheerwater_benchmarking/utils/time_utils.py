@@ -10,6 +10,27 @@ import dateparser
 DATETIME_FORMAT = "%Y-%m-%d"
 
 
+def get_time_level(time_grouping):
+    """Get the time level of a time grouping.
+    TODO: we could probably remove this."""
+    if time_grouping is None:
+        return None
+    if time_grouping in ['month', 'quarter_of_year', 'year', 'day_of_year', 'month_of_year']:
+        return time_grouping
+    # Check if time grouping is a string of the form 'YYYY-MM-DD'
+    if isinstance(time_grouping, str) and len(time_grouping.split('-')) == 3:
+        return 'month'
+    elif 'Q' in time_grouping:
+        return 'quarter_of_year'
+    elif 'Y' in time_grouping:
+        return 'year'
+    elif 'D' in time_grouping:
+        return 'day_of_year'
+    elif 'M' in time_grouping:
+        return 'month_of_year'
+    raise ValueError(f"Invalid time grouping {time_grouping}")
+
+
 def dayofyear_to_datetime(x):
     """Converts day of year to datetime."""
     if np.isnan(x):
