@@ -4,7 +4,8 @@ import numpy as np
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, get_variable, apply_mask, clip_region, regrid,
                                            target_date_to_forecast_date, forecast, get_lead_info,
-                                           convert_lead_to_valid_time)
+                                           convert_lead_to_valid_time, convert_to_standard_lead,
+                                           get_forecast_start_end)
 
 
 @dask_remote
@@ -119,13 +120,8 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     if timescale is None:
         raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
 
-    # Convert start and end time to forecast start and end based on lead time
-    lead_info = get_lead_info(lead)
-    agg_days = lead_info['agg_days']
-    all_labels = lead_info['labels']
-
-    forecast_start = min([target_date_to_forecast_date(start_time, ld) for ld in all_labels])
-    forecast_end = max([target_date_to_forecast_date(end_time, ld) for ld in all_labels])
+    # Get the data with the right days
+    forecast_start, forecast_end = get_forecast_start_end(lead, start_time, end_time)
 
     ds = salient_blend(forecast_start, forecast_end, variable, timescale=timescale, grid=grid)
     if prob_type == 'deterministic':
@@ -143,38 +139,24 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
 
     # Convert salient lead naming to match our standard
     if timescale == "sub-seasonal":
-        ds = ds.assign_coords(lead_timedelta=('lead', [np.timedelta64(i-1, 'W') for i in ds.lead.values]))
+        ds = ds.assign_coords(lead_time=('lead', [np.timedelta64(i-1, 'W') for i in ds.lead.values]))
     elif timescale == "long-range":
-        ds = ds.assign_coords(lead_timedelta=('lead', [np.timedelta64((i-1)*120, 'D') for i in ds.lead.values]))
+        ds = ds.assign_coords(lead_time=('lead', [np.timedelta64((i-1)*120, 'D') for i in ds.lead.values]))
     elif timescale == "seasonal":
         # TODO: salient's monthly leads are 31 days, but we define them as 30 days
-        ds = ds.assign_coords(lead_timedelta=('lead', [i-np.timedelta64(1, 'D') for i in ds.lead.values]))
+        ds = ds.assign_coords(lead_time=('lead', [i-np.timedelta64(1, 'D') for i in ds.lead.values]))
     else:
         raise ValueError(f"Invalid timescale: {timescale}")
-    ds = ds.swap_dims({'lead': 'lead_timedelta'})
+    ds = ds.swap_dims({'lead': 'lead_time'})
     ds = ds.drop_vars('lead')
 
-    # Get specific lead
-    # ds = ds.sel(lead=lead_id)
     # Create a new coordinate for valid_time, that is the start_date plus the lead time
-    ds = convert_lead_to_valid_time(ds, initialization_date_dim='forecast_date',
-                                    lead_time_dim='lead_timedelta', valid_time_dim='time')
+    ds = convert_lead_to_valid_time(ds, initialization_date_dim='forecast_date')
 
-    # Select and label the appropriate lead times
-    all_timedeltas = lead_info['lead_offsets']
-    tmp = zip(all_labels, all_timedeltas)
-    valid_labels = [(x, y) for x, y in tmp if y in ds.lead_timedelta.values]
-    ds = ds.sel(lead_timedelta=[y for x, y in valid_labels])
-
-    # Rename lead times to lead_timedelta and set the new labels to lead time
-    # Add lead label as a new coordinate
-    ds = ds.assign_coords(lead_time=('lead_timedelta', [x for x, y in valid_labels]))
-    ds = ds.swap_dims({'lead_timedelta': 'lead_time'})
-    ds = ds.drop_vars('lead_timedelta')
+    # Convert to standard lead
+    ds = convert_to_standard_lead(ds, lead)
 
     # Time shift - we want target date, instead of forecast date
-    # ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
-    # ds = ds.rename({'forecast_date': 'time'})
     ds = ds.sortby(ds.time)
 
     # Apply masking

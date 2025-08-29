@@ -8,8 +8,9 @@ import xarray as xr
 import dask
 from functools import partial
 from sheerwater_benchmarking.reanalysis import era5_daily, era5_rolled
-from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates, get_leads,
-                                           apply_mask, clip_region, pad_with_leapdays, add_dayofyear, forecast)
+from sheerwater_benchmarking.utils import (dask_remote, cacheable, get_dates,
+                                           apply_mask, clip_region, pad_with_leapdays, add_dayofyear, forecast,
+                                           get_lead_info)
 from sheerwater_benchmarking.tasks import spw_rainy_onset, spw_precip_preprocess
 
 
@@ -310,31 +311,6 @@ def climatology_rolled(start_time, end_time, variable, first_year=1985, last_yea
     return ds
 
 
-def _process_lead(variable, lead):
-    """Helper function for interpreting lead for climatology forecasts."""
-    lead_params = {}
-    for i in range(1, 366):
-        lead_params[f"day{i}"] = 1
-    if variable != 'rainy_onset':
-        for i in range(1, 7):
-            lead_params[f"week{i}"] = 7
-        for le in ['weeks12', 'weeks23', 'weeks34', 'weeks45', 'weeks56']:
-            lead_params[le] = 14
-        for i in range(1, 12):
-            lead_params[f"month{i}"] = 30
-
-    # Adding static grouped leads for climatology
-    lead_params["daily"] = 1
-    lead_params["weekly"] = 7
-    lead_params["biweekly"] = 14
-    lead_params["monthly"] = 30
-
-    agg_days = lead_params.get(lead, None)
-    if agg_days is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for climatology.")
-    return agg_days
-
-
 @dask_remote
 def climatology_spw(start_time, end_time, first_year=1985, last_year=2014, trend=False,
                     prob_type='probabilistic', prob_threshold=0.2,
@@ -367,8 +343,7 @@ def _climatology_unified(start_time, end_time, variable, lead,
                          prob_type='deterministic',
                          grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    agg_days = _process_lead(variable, lead)
-    expanded_leads = get_leads(lead)[0]
+    agg_days = get_lead_info(lead)['agg_days']
     # Get daily data
     if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
         drought_condition = variable == 'rainy_onset_no_drought'
@@ -390,9 +365,10 @@ def _climatology_unified(start_time, end_time, variable, lead,
         ds = apply_mask(ds, mask, grid=grid)
         ds = clip_region(ds, region=region)
 
-    # Add lead coordinate
     # Assign a new coordinate the broadcasts / duplicates the existing data
-    ds = ds.expand_dims(lead_time=expanded_leads)
+    all_labels = get_lead_info(lead)['labels']
+    ds = ds.expand_dims(lead_time=all_labels)
+
     if prob_type == 'deterministic':
         ds = ds.assign_attrs(prob_type="deterministic")
     else:
@@ -448,32 +424,7 @@ def climatology_trend_2015(start_time, end_time, variable, lead, prob_type='dete
 def climatology_rolling(start_time, end_time, variable, lead, prob_type='deterministic',
                         grid='global0_25', mask='lsm', region='global'):
     """Standard format forecast data for climatology forecast."""
-    lead_params = {
-        "daily": 1,
-        "weekly": 7,
-        "week1": 7,
-        "week2": 7,
-        "week3": 7,
-        "week4": 7,
-        "week5": 7,
-        "week6": 7,
-        "biweekly": 14,
-        "weeks12": 14,
-        "weeks23": 14,
-        "weeks34": 14,
-        "weeks45": 14,
-        "weeks56": 14,
-        "monthly": 30,
-        "month1": 30,
-        "month2": 30,
-        "month3": 30,
-    }
-
-    agg_days = lead_params.get(lead, None)
-    expanded_leads = get_leads(lead)[0]
-    if agg_days is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for rolling climatology.")
-
+    agg_days = get_lead_info(lead)['agg_days']
     if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecasts are available for rolling climatology.")
 
@@ -495,7 +446,6 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
     # Handle duplicate values due to leap years
     # TODO: handle this in a more general way
     ds = ds.drop_duplicates(dim='time')
-
     ds = ds.assign_attrs(prob_type="deterministic")
 
     # Add lead coordinate

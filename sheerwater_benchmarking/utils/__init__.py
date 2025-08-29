@@ -18,7 +18,7 @@ from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_
 from .weather_utils import (get_variable, get_lead_info, forecast,
                             forecast_date_to_target_date, target_date_to_forecast_date,
                             shift_forecast_date_to_target_date, convert_lead_to_valid_time,
-                            get_lead_group)
+                            get_lead_group, get_forecast_start_end, convert_to_standard_lead)
 
 from .task_utils import first_satisfied_date
 
@@ -79,4 +79,6 @@ __all__ = [
     "get_lead_info",
     "get_region_labels",
     "get_lead_group",
+    "get_forecast_start_end",
+    "convert_to_standard_lead",
 ]

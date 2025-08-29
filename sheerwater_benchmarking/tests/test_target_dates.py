@@ -6,7 +6,7 @@ from sheerwater_benchmarking.reanalysis import era5_rolled, era5
 from sheerwater_benchmarking.forecasts import salient
 from sheerwater_benchmarking.forecasts.salient import salient_blend
 from sheerwater_benchmarking.forecasts.ecmwf_er import ifs_extended_range
-from sheerwater_benchmarking.baselines import climatology_agg_raw, climatology_2015
+from sheerwater_benchmarking.climatology import climatology_agg_raw, climatology_2015
 
 
 def test_target_date_conversion():

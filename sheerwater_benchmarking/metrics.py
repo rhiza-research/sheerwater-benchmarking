@@ -8,7 +8,7 @@ import weatherbench2
 import xskillscore
 
 
-from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
+from sheerwater_benchmarking.climatology import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            get_lead_info,
                                            get_admin_level,

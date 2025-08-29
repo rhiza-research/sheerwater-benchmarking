@@ -23,7 +23,7 @@ def get_datasource_fn(datasource):
             fn = getattr(mod, datasource)
         except (ImportError, AttributeError):
             try:
-                mod = import_module("sheerwater_benchmarking.baselines")
+                mod = import_module("sheerwater_benchmarking.climatology")
                 fn = getattr(mod, datasource)
             except (ImportError, AttributeError):
                 try:

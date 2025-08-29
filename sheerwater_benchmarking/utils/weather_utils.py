@@ -151,18 +151,10 @@ def get_variable(variable_name, variable_type='era5'):
 
 def get_lead_group(lead):
     """Get the lead group for a lead."""
-    if lead == 'weekly':
-        return 'weekly'
-    elif lead == 'biweekly':
-        return 'biweekly'
-    elif lead == 'monthly':
-        return 'monthly'
-    elif lead == 'quarterly':
-        return 'quarterly'
-    elif 'daily' in lead:
-        return 'daily'
+    if lead in ['weekly', 'biweekly', 'monthly', 'quarterly'] or 'daily-' in lead:
+        return lead
     elif 'day' in lead:
-        return 'daily'
+        return f'daily-{lead[3:]}'
     elif 'weeks' in lead:
         return 'biweekly'
     elif 'week' in lead and 'weeks' not in lead:
@@ -217,6 +209,8 @@ def get_lead_info(lead):
             'labels': ['quarter1', 'quarter2', 'quarter3', 'quarter4'],
         }
     elif 'daily' in lead:
+        if '-' not in lead:
+            raise ValueError(f"Daily lead {lead} must be in the format 'daily-n', {lead} is not valid")
         days = int(lead.split('-')[1])
         if days < 1 or days > 366:
             raise ValueError(f"Daily lead {lead} must be between 1 and 366 days, got {days}")
@@ -282,3 +276,32 @@ def get_lead_info(lead):
         }
     else:
         raise ValueError(f"Lead {lead} not supported")
+
+
+def get_forecast_start_end(lead, start_time, end_time):
+    """Get the start and end times for a forecast."""
+    lead_info = get_lead_info(lead)
+    all_labels = lead_info['labels']
+    forecast_start = min([target_date_to_forecast_date(start_time, ld) for ld in all_labels])
+    forecast_end = max([target_date_to_forecast_date(end_time, ld) for ld in all_labels])
+    return forecast_start, forecast_end
+
+
+def convert_to_standard_lead(ds, lead):
+    """Convert a lead time coordinate to a standard lead time coordinate."""
+    lead_info = get_lead_info(lead)
+    all_labels = lead_info['labels']
+    all_timedeltas = lead_info['lead_offsets']
+
+    # Select and label the appropriate lead times
+    tmp = zip(all_labels, all_timedeltas)
+    valid_labels = [(x, y) for x, y in tmp if y in ds.lead_time.values]
+    ds = ds.sel(lead_time=[y for x, y in valid_labels])
+
+    # Rename lead times to lead_timedelta and set the new labels to lead time
+    ds = ds.rename({'lead_time': 'lead_timedelta'})
+
+    # Add lead label as a new coordinate
+    ds = ds.assign_coords(lead_time=('lead_timedelta', [x for x, y in valid_labels]))
+    ds = ds.swap_dims({'lead_timedelta': 'lead_time'})
+    return ds

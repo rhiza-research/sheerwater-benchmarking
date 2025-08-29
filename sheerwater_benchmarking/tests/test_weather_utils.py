@@ -126,7 +126,7 @@ def test_all_forecasts_registered():
     import sheerwater_benchmarking.forecasts.gencast  # noqa: F401
     import sheerwater_benchmarking.forecasts.ecmwf_er  # noqa: F401
     import sheerwater_benchmarking.forecasts.graphcast  # noqa: F401
-    import sheerwater_benchmarking.baselines.climatology  # noqa: F401
+    import sheerwater_benchmarking.forecasts.climatology  # noqa: F401
 
     # Expected forecast function names based on the codebase
     expected_forecasts = {
