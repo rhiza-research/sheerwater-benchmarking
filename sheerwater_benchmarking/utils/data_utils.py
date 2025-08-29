@@ -4,7 +4,6 @@ These utility functions take as input an xarray dataset and return a modified
 dataset.
 """
 import numpy as np
-import xarray as xr
 import dask
 import xarray_regrid  # noqa: F401, import needed for regridding
 

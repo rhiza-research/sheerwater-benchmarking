@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Test script for all forecasts functionality."""
 
-import xarray as xr
-import numpy as np
-import matplotlib.pyplot as plt
 from sheerwater_benchmarking.utils import start_remote, get_datasource_fn
 
 
@@ -16,15 +13,15 @@ def test_function(function_name, test_params):
         fn = get_datasource_fn(function_name)
 
         # Test 1: Basic function call
-        print(f"   Testing basic call...")
-        
+        print("   Testing basic call...")
+
         # Extract start_time and end_time for positional arguments
         start_time = test_params['start_time']
         end_time = test_params['end_time']
-        
+
         # Create kwargs without start_time and end_time
         kwargs = {k: v for k, v in test_params.items() if k not in ['start_time', 'end_time']}
-        
+
         # Call function with positional arguments for start_time and end_time
         result = fn(start_time, end_time, **kwargs)
 
@@ -55,7 +52,7 @@ def test_all_forecasts():
 
     # Define the forecasts we want to test
     forecasts_to_test = [
-        'salient', 'ecmwf_ifs_er_debiased', 'ecmwf_ifs_er', 
+        'salient', 'ecmwf_ifs_er_debiased', 'ecmwf_ifs_er',
         'fuxi', 'graphcast', 'gencast',
         'climatology_rolling', 'climatology_2015', 'climatology_trend_2015',
         'climatology_2020'
@@ -132,8 +129,8 @@ def test_lead_times():
             try:
                 print(f"\n   Testing lead: {lead}")
                 result = ecmwf_fn(
-                    "2016-01-01",  
-                    "2022-12-31",  
+                    "2016-01-01",
+                    "2022-12-31",
                     variable="precip",
                     lead=lead,
                     region='kenya',

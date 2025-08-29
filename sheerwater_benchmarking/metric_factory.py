@@ -206,7 +206,7 @@ class Heidke(Metric):
     def compute(self, statistic_values):
         prop_correct = statistic_values['n_correct'] / statistic_values['n_valid']
         n2 = statistic_values['n_valid']**2
-        right_by_chance = (statistic_values[f'n_fcst_bin_1'] * statistic_values[f'n_obs_bin_1']) / n2
+        right_by_chance = (statistic_values['n_fcst_bin_1'] * statistic_values['n_obs_bin_1']) / n2
         for i in range(2, len(self.config_dict['bins'])):
             right_by_chance += (statistic_values[f'n_fcst_bin_{i}'] * statistic_values[f'n_obs_bin_{i}']) / n2
 

@@ -1,3 +1,4 @@
+# ruff: noqa: E501 <- line too long
 """Region definitions for the Sheerwater Benchmarking project.
 
 This file contains several dictionaries, each representing an administrative level.

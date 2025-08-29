@@ -11,8 +11,7 @@ DATETIME_FORMAT = "%Y-%m-%d"
 
 
 def get_time_level(time_grouping):
-    """Get the time level of a time grouping.
-    TODO: we could probably remove this."""
+    """Get the time level of a time grouping."""
     if time_grouping is None:
         return None
     if time_grouping in ['month', 'quarter_of_year', 'year', 'day_of_year', 'month_of_year']:

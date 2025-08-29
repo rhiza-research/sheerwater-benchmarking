@@ -3,7 +3,6 @@ import os
 import cdsapi
 import xarray as xr
 import numpy as np
-import matplotlib.pyplot as plt
 
 from sheerwater_benchmarking.utils import (cacheable, cdsapi_secret, get_grid, clip_region,
                                            lon_base_change, get_region_labels, get_grid_ds)

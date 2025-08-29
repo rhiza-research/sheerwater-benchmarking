@@ -3,8 +3,7 @@ import xarray as xr
 import numpy as np
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, get_variable, apply_mask, clip_region, regrid,
-                                           target_date_to_forecast_date, forecast, get_lead_info,
-                                           convert_lead_to_valid_time, convert_to_standard_lead,
+                                           forecast, convert_lead_to_valid_time, convert_to_standard_lead,
                                            get_forecast_start_end)
 
 

@@ -3,7 +3,6 @@
 from sheerwater_benchmarking.metrics import grouped_metric_new, grouped_metric
 from sheerwater_benchmarking.utils import start_remote
 import matplotlib.pyplot as plt
-import numpy as np
 
 
 def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
@@ -13,7 +12,6 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
                            lead="week3",
                            spatial=True):
     """Test a single comparison between the two functions."""
-
     print(f"Testing: {forecast} | {metric} | {variable} | {region} | {lead} | spatial={spatial}")
 
     # Run grouped_metric_new
@@ -99,7 +97,6 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
 
 def test_multiple_combinations():
     """Test multiple combinations of parameters."""
-
     test_cases = [
         # Basic tests
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": True},
@@ -174,7 +171,6 @@ def plot_comparison(forecast="ecmwf_ifs_er_debiased",
                     lead="week3",
                     spatial=True):
     """Create a plot comparing the results of both functions."""
-
     ds_new, ds_old = test_single_comparison(forecast, metric, variable, region, lead, spatial)
 
     if ds_new is None or ds_old is None:

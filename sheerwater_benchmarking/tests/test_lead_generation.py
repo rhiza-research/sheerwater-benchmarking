@@ -3,7 +3,6 @@
 
 import numpy as np
 import pandas as pd
-from datetime import datetime
 from sheerwater_benchmarking.utils import (
     get_lead_info,
     get_lead_group,
@@ -248,7 +247,7 @@ def test_convert_lead_to_valid_time():
         assert result.valid_time.values[
             0] == expected_first, f"First time mismatch: expected {expected_first}, got {result.valid_time.values[0]}"
 
-        print(f"   ✓ Valid time structure is correct (9 total times)")
+        print("   ✓ Valid time structure is correct (9 total times)")
         print(f"   ✓ First valid time matches expected: {expected_first}")
 
     except Exception as e:

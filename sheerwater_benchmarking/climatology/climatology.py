@@ -449,7 +449,8 @@ def climatology_rolling(start_time, end_time, variable, lead, prob_type='determi
     ds = ds.assign_attrs(prob_type="deterministic")
 
     # Add lead coordinate
-    ds = ds.expand_dims(lead_time=expanded_leads)
+    all_labels = get_lead_info(lead)['labels']
+    ds = ds.expand_dims(lead_time=all_labels)
 
     # Apply masking
     ds = apply_mask(ds, mask, var=variable, grid=grid)

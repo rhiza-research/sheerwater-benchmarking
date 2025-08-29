@@ -3,11 +3,9 @@ import numpy as np
 import xarray as xr
 import geopandas as gpd
 import rioxarray  # noqa: F401 - needed to enable .rio attribute
-from importlib import import_module
 
-from .general_utils import load_object, plot_ds, plot_ds_map
+from .general_utils import load_object
 
-import matplotlib.pyplot as plt
 
 
 def clean_country_name(country):
