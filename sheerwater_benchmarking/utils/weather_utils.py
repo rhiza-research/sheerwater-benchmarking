@@ -20,57 +20,20 @@ def forecast(func):
     @wraps(func)
     def forecast_wrapper(*args, **kwargs):
         called_lead = kwargs.get('lead')
-        leads, agg_period = get_leads(called_lead)
-        try:
-            ret = func(*args, **kwargs)
-            if 'lead_time' not in ret.dims:
-                raise NotImplementedError(f"Forecast {func.__name__} does not return a lead time dimension.")
-        except NotImplementedError:
-            # Function does not implement the called lead, so we need to get the leads and agg period
-            ret_list = []
-            for lead in leads:
-                kwargs['lead'] = lead
-                try:
-                    ds = func(*args, **kwargs)
-                except NotImplementedError:
-                    continue
-                ds = ds.assign_coords(lead_time=lead)
-                ret_list.append(ds)
-            try:
-                ret = xr.concat(ret_list, dim='lead_time')
-            except ValueError as e:
-                if 'must supply at least one object to concatenate' in str(e):
-                    raise NotImplementedError(f"Lead {called_lead} not supported for {func.__name__}")
-                else:
-                    raise e
+        lead_group = get_lead_group(called_lead)
+        agg_period = get_lead_info(lead_group)['agg_period']
+
+        # Overwrite the called lead with the lead group
+        kwargs['lead'] = lead_group
+        ds = func(*args, **kwargs)
         # Assign agg period as time in seconds (timedeltas are not JSON serializable for storage)
-        ret = ret.assign_attrs(agg_period_secs=float(agg_period / np.timedelta64(1, 's')))
-        return ret
+        ds = ds.assign_attrs(agg_period_secs=float(agg_period / np.timedelta64(1, 's')))
+
+        # Filter to the called lead
+        if called_lead != lead_group:
+            ds = ds.sel(lead_time=called_lead)
+        return ds
     return forecast_wrapper
-
-
-# Lead aggregation period in days and offset
-LEAD_OFFSETS = {
-    'daily': (1, (0, 'days')),
-    'weekly': (7, (0, 'days')),
-    'biweekly': (14, (0, 'days')),
-    'monthly': (30, (0, 'days')),
-    'month1': (30, (0, 'days')),
-    'month2': (30, (30, 'days')),
-    'month3': (30, (60, 'days')),
-}
-# Add daily and 8/11d windows
-for i in range(46):
-    LEAD_OFFSETS[f"day{i+1}"] = (1, (i, 'days'))
-for i in [0, 7, 14, 21, 28, 35]:
-    LEAD_OFFSETS[f"week{i//7+1}"] = (7, (i, 'days'))
-for i in [0, 7, 14, 21, 28]:
-    LEAD_OFFSETS[f"weeks{(i//7)+1}{(i//7)+2}"] = (14, (i, 'days'))
-
-
-def lead_to_agg_days(lead):
-    """Convert lead to time grouping."""
-    return LEAD_OFFSETS[lead][0]
 
 
 def lead_or_agg(lead):
@@ -100,7 +63,9 @@ def forecast_date_to_target_date(forecast_date, lead):
 
 def _date_shift(date, lead, shift='forward'):
     """Converts a target date to a forecast date or visa versa."""
-    offset, offset_units = LEAD_OFFSETS[lead][1]
+    offset_timedelta = get_lead_info(lead)['lead_offsets']
+    assert len(offset_timedelta) == 1, "Only one lead offset is supported for date shifting"
+    offset_timedelta = offset_timedelta[0]
     input_type = type(date)
 
     # Convert input time to datetime object  for relative delta
@@ -115,9 +80,9 @@ def _date_shift(date, lead, shift='forward'):
 
     # Shift the date
     if shift == 'forward':
-        new_date = date_obj + relativedelta(**{offset_units: offset})
+        new_date = date_obj + offset_timedelta
     elif shift == 'backward':
-        new_date = date_obj - relativedelta(**{offset_units: offset})
+        new_date = date_obj - offset_timedelta
     else:
         raise ValueError(f"Shift direction {shift} not supported")
 
@@ -127,6 +92,15 @@ def _date_shift(date, lead, shift='forward'):
     elif np.issubdtype(input_type, np.datetime64):
         new_date = np.datetime64(new_date, 'ns')
     return new_date
+
+
+def convert_lead_to_valid_time(ds, initialization_date_dim='start_date', lead_time_dim='lead_time', valid_time_dim='time'):
+    """Convert the start_date and lead_time coordinates to a valid_time coordinate."""
+    ds = ds.assign_coords({valid_time_dim: ds[initialization_date_dim] + ds[lead_time_dim]})
+    tmp = ds.stack(z=(initialization_date_dim, lead_time_dim))
+    tmp = tmp.set_index(z=(valid_time_dim, lead_time_dim))
+    ds = tmp.unstack('z')
+    return ds
 
 
 def get_forecast(forecast_name):
@@ -175,31 +149,136 @@ def get_variable(variable_name, variable_type='era5'):
     raise ValueError(f"Variable {variable_name} not found")
 
 
-def get_leads(lead):
-    """Lead generation shortcuts.
+def get_lead_group(lead):
+    """Get the lead group for a lead."""
+    if lead == 'weekly':
+        return 'weekly'
+    elif lead == 'biweekly':
+        return 'biweekly'
+    elif lead == 'monthly':
+        return 'monthly'
+    elif lead == 'quarterly':
+        return 'quarterly'
+    elif 'daily' in lead:
+        return 'daily'
+    elif 'day' in lead:
+        return 'daily'
+    elif 'weeks' in lead:
+        return 'biweekly'
+    elif 'week' in lead and 'weeks' not in lead:
+        return 'weekly'
+    elif 'month' in lead:
+        return 'monthly'
+    elif 'quarter' in lead:
+        return 'quarterly'
+    else:
+        raise ValueError(f"Lead {lead} not supported")
+
+
+def get_lead_info(lead):
+    """Get lead information.
 
     Support leads are 
     - weekly
     - biweekly
     - monthly
+    - quarterly
     - daily-n, where n is the number of days from day1 to dayn
+    - week1, week2, week3, week4, week5, week6
+    - weeks12, weeks23, weeks34, weeks45, weeks56
+    - month1, month2, month3
     """
     if lead == 'weekly':
-        return (['week1', 'week2', 'week3', 'week4', 'week5', 'week6'], np.timedelta64(7, 'D'))
+        return {
+            'agg_period': np.timedelta64(7, 'D'),
+            'agg_days': 7,
+            'lead_offsets': [np.timedelta64(0, 'D'), np.timedelta64(7, 'D'), np.timedelta64(14, 'D'), np.timedelta64(21, 'D'), np.timedelta64(28, 'D'), np.timedelta64(35, 'D')],
+            'labels': ['week1', 'week2', 'week3', 'week4', 'week5', 'week6'],
+        }
     elif lead == 'biweekly':
-        return (['weeks12', 'weeks23', 'weeks34', 'weeks45', 'weeks56'], np.timedelta64(14, 'D'))
+        return {
+            'agg_period': np.timedelta64(14, 'D'),
+            'agg_days': 14,
+            'lead_offsets': [np.timedelta64(0, 'D'), np.timedelta64(7, 'D'), np.timedelta64(14, 'D'), np.timedelta64(21, 'D'), np.timedelta64(28, 'D')],
+            'labels': ['weeks12', 'weeks23', 'weeks34', 'weeks45', 'weeks56'],
+        }
     elif lead == 'monthly':
-        return (['month1', 'month2', 'month3'], np.timedelta64(30, 'D'))
+        return {
+            'agg_period': np.timedelta64(30, 'D'),
+            'agg_days': 30,
+            'lead_offsets': [np.timedelta64(0, 'D'), np.timedelta64(30, 'D'), np.timedelta64(60, 'D')],
+            'labels': ['month1', 'month2', 'month3'],
+        }
+    elif lead == 'quarterly':
+        return {
+            'agg_period': np.timedelta64(90, 'D'),
+            'agg_days': 90,
+            'lead_offsets': [np.timedelta64(0, 'D'), np.timedelta64(90, 'D'), np.timedelta64(180, 'D'), np.timedelta64(270, 'D')],
+            'labels': ['quarter1', 'quarter2', 'quarter3', 'quarter4'],
+        }
     elif 'daily' in lead:
         days = int(lead.split('-')[1])
-        return ([f'day{i}' for i in range(1, days + 1)], np.timedelta64(1, 'D'))
+        if days < 1 or days > 366:
+            raise ValueError(f"Daily lead {lead} must be between 1 and 366 days, got {days}")
+        return {
+            'agg_period': np.timedelta64(1, 'D'),
+            'agg_days': 1,
+            'lead_offsets': [np.timedelta64(i, 'D') for i in range(days)],
+            'labels': [f'day{i}' for i in range(1, days + 1)],
+        }
     elif 'day' in lead:
-        return ([lead], np.timedelta64(1, 'D'))
-    elif 'week' in lead:
-        return ([lead], np.timedelta64(7, 'D'))
+        day_num = int(lead[3:])
+        if day_num < 1 or day_num > 366:
+            raise ValueError(f"Day lead {lead} must be between day1 and day366, got day{day_num}")
+        return {
+            'agg_period': np.timedelta64(1, 'D'),
+            'agg_days': 1,
+            'labels': [lead],
+            'lead_offsets': [np.timedelta64(day_num, 'D')],
+        }
+    elif 'week' in lead and 'weeks' not in lead:
+        week_num = int(lead[4:])
+        if week_num < 1 or week_num > 52:
+            raise ValueError(f"Week lead {lead} must be between week1 and week52, got week{week_num}")
+        return {
+            'agg_period': np.timedelta64(7, 'D'),
+            'agg_days': 7,
+            'labels': [lead],
+            'lead_offsets': [np.timedelta64((week_num+1)*7, 'D')],
+        }
     elif 'weeks' in lead:
-        return ([lead], np.timedelta64(14, 'D'))
+        week_num = int(lead[5])
+        second_week_num = int(lead[6])
+        if second_week_num != week_num + 1:
+            raise ValueError(
+                f"Biweekly lead {lead} must be between week{week_num} and week{week_num+1}, got weeks{week_num}{second_week_num}")
+        if week_num < 1 or week_num > 52 or second_week_num < 1 or second_week_num > 52:
+            raise ValueError(f"Biweekly lead {lead} must be between weeks12 and weeks52, got weeks{week_num}")
+        return {
+            'agg_period': np.timedelta64(14, 'D'),
+            'agg_days': 14,
+            'labels': [lead],
+            'lead_offsets': [np.timedelta64((week_num-1)*7, 'D')],
+        }
     elif 'month' in lead:
-        return ([lead], np.timedelta64(30, 'D'))
+        month_num = int(lead[5:])
+        if month_num < 1 or month_num > 12:
+            raise ValueError(f"Month lead {lead} must be between month1 and month12, got month{month_num}")
+        return {
+            'agg_period': np.timedelta64(30, 'D'),
+            'agg_days': 30,
+            'labels': [lead],
+            'lead_offsets': [np.timedelta64(month_num*30, 'D')],
+        }
+    elif 'quarter' in lead:
+        quarter_num = int(lead[7:])
+        if quarter_num < 1 or quarter_num > 4:
+            raise ValueError(f"Quarter lead {lead} must be between quarter1 and quarter4, got quarter{quarter_num}")
+        return {
+            'agg_period': np.timedelta64(90, 'D'),
+            'agg_days': 90,
+            'labels': [lead],
+            'lead_offsets': [np.timedelta64(quarter_num*90, 'D')],
+        }
     else:
         raise ValueError(f"Lead {lead} not supported")

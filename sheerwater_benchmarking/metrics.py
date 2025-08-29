@@ -1,6 +1,5 @@
 """Verification metrics for forecasters and reanalyses."""
 import numpy as np
-from importlib import import_module
 from inspect import signature
 import xarray as xr
 import pandas as pd
@@ -11,8 +10,10 @@ import xskillscore
 
 from sheerwater_benchmarking.baselines import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
-                                           lead_to_agg_days, get_admin_level,
-                                           get_time_level, get_leads)
+                                           get_lead_info,
+                                           get_admin_level,
+                                           get_time_level,
+                                           get_datasource_fn)
 from sheerwater_benchmarking.masks import region_labels
 from .metric_factory import metric_factory
 
@@ -28,21 +29,25 @@ from .metric_factory import metric_factory
                    'global0_25': {"lat": 721, "lon": 1440, 'time': 30}
                },
            },
-           cache_disable_if={'statistic': ['fcst', 'obs', 
-                                           'fcst_anom', 'obs_anom',
-                                           'squared_fcst_anom', 'squared_obs_anom',
-                                           'anom_covariance', 'false_positives',
-                                           'false_negatives', 'true_positives',
-                                           'true_negatives', 
-                                           'squared_fcst', 'squared_obs',
-                                           'fcst_mean', 'obs_mean', 'covariance',
-                                           'mape', 'smape', 'mae', 'mse', 'bias'
-                                           'n_valid', 'n_correct',
-                                           # some number hard coded for categorical metrics up to 4 bins
-                                           'n_fcst_bin_1', 'n_fcst_bin_2', 'n_fcst_bin_3',
-                                           'n_fcst_bin_4', 'n_fcst_bin_5',
-                                           'n_obs_bin_1', 'n_obs_bin_2', 'n_obs_bin_3',
-                                           'n_obs_bin_4', 'n_obs_bin_5']},
+           cache_disable_if={
+               # We only need to cache statistics that are very expensive to recompute, b/c memoization will
+               # handle most of the rest. We cache statistics that are used multiple times or probabilistic
+               # and thus more expensive to compute
+               # -fcst_anom, obs_anom, fcst_digitized, obs_digitized, crps, and brier
+               'statistic': ['fcst', 'obs',
+                             'squared_fcst_anom', 'squared_obs_anom',
+                             'anom_covariance', 'false_positives',
+                             'false_negatives', 'true_positives',
+                             'true_negatives',
+                             'squared_fcst', 'squared_obs',
+                             'fcst_mean', 'obs_mean', 'covariance',
+                             'mape', 'smape', 'mae', 'mse', 'bias'
+                             'n_valid', 'n_correct',
+                             # some number hard coded for categorical metrics up to 4 bins
+                             'n_fcst_bin_1', 'n_fcst_bin_2', 'n_fcst_bin_3',
+                             'n_fcst_bin_4', 'n_fcst_bin_5',
+                             'n_obs_bin_1', 'n_obs_bin_2', 'n_obs_bin_3',
+                             'n_obs_bin_4', 'n_obs_bin_5']},
            validate_cache_timeseries=True)
 def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                      statistic, bins, metric_info, grid="global1_5"):
@@ -64,6 +69,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     sparse = False  # A variable used to indicate whether the statistic is expected to be sparse
     if 'lead' in signature(fcst_fn).parameters:
         # TODO: this is no longer clearly true, since we can pass in daily, weekly to forecasters
+        # TODO: do we still want this check
         # if lead_or_agg(lead) == 'agg':
         #     raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
         fcst = fcst_fn(start_time, end_time, variable, lead=lead,
@@ -71,9 +77,10 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # Check to see the prob type attribute
         enhanced_prob_type = fcst.attrs['prob_type']
     else:
+        # TODO: do we still want this check?
         # if lead_or_agg(lead) == 'lead':
         #     raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
-        fcst = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
+        fcst = fcst_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
                        grid=grid, mask=None, region='global')
         # Prob type is always deterministic for truth sources
         enhanced_prob_type = "deterministic"
@@ -90,11 +97,11 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
 
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
-    obs = truth_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
+    obs = truth_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
                    grid=grid, mask=None, region='global')
     # We need a lead specific obs, so we know which times are valid for the forecast
-    leads = get_leads(lead)[0]
-    obs = obs.expand_dims({'lead_time': leads})
+    lead_labels = get_lead_info(lead)['labels']
+    obs = obs.expand_dims({'lead_time': lead_labels})
     # Assign sparsity if it exists
     if 'sparse' in obs.attrs:
         sparse |= obs.attrs['sparse']
@@ -148,8 +155,10 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         m_ds = (fcst_event_prob - obs_event_prob)**2
         # TODO implement brier for quantile forecasts
     elif statistic == 'seeps':
-        wet_threshold = seeps_wet_threshold(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead), grid=grid)
-        dry_fraction = seeps_dry_fraction(first_year=1991, last_year=2020, agg_days=lead_to_agg_days(lead), grid=grid)
+        wet_threshold = seeps_wet_threshold(first_year=1991, last_year=2020,
+                                            agg_days=get_lead_info(lead)['agg_days'], grid=grid)
+        dry_fraction = seeps_dry_fraction(first_year=1991, last_year=2020,
+                                          agg_days=get_lead_info(lead)['agg_days'], grid=grid)
         clim_ds = xr.merge([wet_threshold, dry_fraction])
         m_ds = weatherbench2.metrics.SpatialSEEPS(climatology=clim_ds,
                                                   dry_threshold_mm=0.25,
@@ -344,6 +353,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         ds = global_statistic(start_time, end_time, variable, lead=lead,
                               forecast=forecast, truth=truth,
                               statistic=statistic,
+                              recompute=True, force_overwrite=True,
                               bins=bins, metric_info=metric_obj, grid=grid)
         if ds is None:
             return None
@@ -366,7 +376,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
                 check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
                                    prob_type=metric_obj.prob_type, grid=grid, mask=None, region='global')
             else:
-                check_ds = fcst_fn(start_time, end_time, variable, agg_days=lead_to_agg_days(lead),
+                check_ds = fcst_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
                                    grid=grid, mask=None, region='global')
         else:
             check_ds = ds.copy()
@@ -660,29 +670,6 @@ def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon', agg_fn='
     else:
         weighted = ds.weighted(weights).sum(agg_dims, skipna=True)
     return weighted
-
-
-def get_datasource_fn(datasource):
-    """Import the datasource function from any available source."""
-    try:
-        mod = import_module("sheerwater_benchmarking.reanalysis")
-        fn = getattr(mod, datasource)
-    except (ImportError, AttributeError):
-        try:
-            mod = import_module("sheerwater_benchmarking.forecasts")
-            fn = getattr(mod, datasource)
-        except (ImportError, AttributeError):
-            try:
-                mod = import_module("sheerwater_benchmarking.baselines")
-                fn = getattr(mod, datasource)
-            except (ImportError, AttributeError):
-                try:
-                    mod = import_module("sheerwater_benchmarking.data")
-                    fn = getattr(mod, datasource)
-                except (ImportError, AttributeError):
-                    raise ImportError(f"Could not find datasource {datasource}.")
-
-    return fn
 
 
 __all__ = ['global_statistic', 'grouped_metric', 'skill_metric',

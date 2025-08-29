@@ -3,7 +3,8 @@ import xarray as xr
 import numpy as np
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, get_variable, apply_mask, clip_region, regrid,
-                                           target_date_to_forecast_date, shift_forecast_date_to_target_date, forecast)
+                                           target_date_to_forecast_date, forecast, get_lead_info,
+                                           convert_lead_to_valid_time)
 
 
 @dask_remote
@@ -110,26 +111,21 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
         raise NotImplementedError("Rainy onset forecasts not implemented for Salient.")
 
     lead_params = {
-        "week1": ("sub-seasonal", 1),
-        "week2": ("sub-seasonal", 2),
-        "week3": ("sub-seasonal", 3),
-        "week4": ("sub-seasonal", 4),
-        "week5": ("sub-seasonal", 5),
-        "month1": ("seasonal", np.timedelta64('1', 'D')),
-        "month2": ("seasonal", np.timedelta64('31', 'D')),
-        "month3": ("seasonal", np.timedelta64('61', 'D')),
-        "quarter1": ("long-range", 1),
-        "quarter2": ("long-range", 2),
-        "quarter3": ("long-range", 3),
-        "quarter4": ("long-range", 4),
+        "weekly": "sub-seasonal",
+        "monthly": "seasonal",
+        "quarterly": "long-range",
     }
-    timescale, lead_id = lead_params.get(lead, (None, None))
+    timescale = lead_params.get(lead, None)
     if timescale is None:
         raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
 
     # Convert start and end time to forecast start and end based on lead time
-    forecast_start = target_date_to_forecast_date(start_time, lead)
-    forecast_end = target_date_to_forecast_date(end_time, lead)
+    lead_info = get_lead_info(lead)
+    agg_days = lead_info['agg_days']
+    all_labels = lead_info['labels']
+
+    forecast_start = min([target_date_to_forecast_date(start_time, ld) for ld in all_labels])
+    forecast_end = max([target_date_to_forecast_date(end_time, ld) for ld in all_labels])
 
     ds = salient_blend(forecast_start, forecast_end, variable, timescale=timescale, grid=grid)
     if prob_type == 'deterministic':
@@ -145,12 +141,40 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     else:
         raise ValueError("Invalid probabilistic type")
 
+    # Convert salient lead naming to match our standard
+    if timescale == "sub-seasonal":
+        ds = ds.assign_coords(lead_timedelta=('lead', [np.timedelta64(i-1, 'W') for i in ds.lead.values]))
+    elif timescale == "long-range":
+        ds = ds.assign_coords(lead_timedelta=('lead', [np.timedelta64((i-1)*120, 'D') for i in ds.lead.values]))
+    elif timescale == "seasonal":
+        # TODO: salient's monthly leads are 31 days, but we define them as 30 days
+        ds = ds.assign_coords(lead_timedelta=('lead', [i-np.timedelta64(1, 'D') for i in ds.lead.values]))
+    else:
+        raise ValueError(f"Invalid timescale: {timescale}")
+    ds = ds.swap_dims({'lead': 'lead_timedelta'})
+    ds = ds.drop_vars('lead')
+
     # Get specific lead
-    ds = ds.sel(lead=lead_id)
+    # ds = ds.sel(lead=lead_id)
+    # Create a new coordinate for valid_time, that is the start_date plus the lead time
+    ds = convert_lead_to_valid_time(ds, initialization_date_dim='forecast_date',
+                                    lead_time_dim='lead_timedelta', valid_time_dim='time')
+
+    # Select and label the appropriate lead times
+    all_timedeltas = lead_info['lead_offsets']
+    tmp = zip(all_labels, all_timedeltas)
+    valid_labels = [(x, y) for x, y in tmp if y in ds.lead_timedelta.values]
+    ds = ds.sel(lead_timedelta=[y for x, y in valid_labels])
+
+    # Rename lead times to lead_timedelta and set the new labels to lead time
+    # Add lead label as a new coordinate
+    ds = ds.assign_coords(lead_time=('lead_timedelta', [x for x, y in valid_labels]))
+    ds = ds.swap_dims({'lead_timedelta': 'lead_time'})
+    ds = ds.drop_vars('lead_timedelta')
 
     # Time shift - we want target date, instead of forecast date
-    ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
-    ds = ds.rename({'forecast_date': 'time'})
+    # ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
+    # ds = ds.rename({'forecast_date': 'time'})
     ds = ds.sortby(ds.time)
 
     # Apply masking

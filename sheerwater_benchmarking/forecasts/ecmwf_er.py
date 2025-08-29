@@ -10,9 +10,10 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
                                            roll_and_agg,
-                                           lead_to_agg_days,
+                                           convert_lead_to_valid_time,
                                            regrid, get_variable,
                                            target_date_to_forecast_date,
+                                           get_lead_info,
                                            shift_forecast_date_to_target_date,
                                            forecast)
 
@@ -362,29 +363,6 @@ def ifs_extended_range_rolled(start_time, end_time, variable,
     return ds
 
 
-def _process_lead(variable, lead):
-    """Helper function for interpreting lead for ECMWF forecasts."""
-    lead_params = {}
-    if variable == 'rainy_onset':  # rainy onset only has daily leads out to day 36
-        lead_params = {f"day{i+1}": i for i in range(36)}
-    elif variable == 'rainy_onset_no_drought':
-        # need to add 11 days to the lead to handle drought condition
-        lead_params = {f"day{i+1}": i for i in range(25)}
-    else:
-        for i in range(45):
-            lead_params[f"day{i+1}"] = i
-        for i in [0, 7, 14, 21, 28, 35]:
-            lead_params[f"week{i//7+1}"] = i
-        for i in [0, 7, 14, 21, 28]:
-            lead_params[f"weeks{(i//7)+1}{(i//7)+2}"] = i
-    lead_offset_days = lead_params.get(lead, None)
-    if lead_offset_days is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for ECMWF {variable} forecasts.")
-
-    agg_days = lead_to_agg_days(lead)
-    return agg_days, lead_offset_days
-
-
 @dask_remote
 def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
                   prob_type='probabilistic', prob_threshold=0.6,
@@ -399,10 +377,11 @@ def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
     agg_fn = partial(ifs_extended_range_rolled, start_time, end_time, variable='precip',
                      prob_type=prob_type, grid=grid, debiased=debiased)
 
+    # TODO: maybe this could all be done with the new mulit-lead accessor
     def shift_fn(ds, shift_by_days):
         """Helper function for selecting and shifting lead for ECMWF forecasts."""
         # Select the appropriate lead
-        lead_offset_days = _process_lead('precip', lead)[1]
+        lead_offset_days = get_lead_info(lead)['lead_offsets'] / np.timedelta64(1, 'D')
         lead_sel = {'lead_time': np.timedelta64(lead_offset_days + shift_by_days, 'D')}
         ds = ds.sel(**lead_sel)
         # Time shift - we want target date, instead of forecast date
@@ -429,10 +408,14 @@ def ecmwf_ifs_spw(start_time, end_time, lead, debiased=True,
 def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deterministic',
                           grid="global1_5", mask='lsm', region="global", debiased=True):
     """Unified API accessor for ECMWF raw and debiased forecasts."""
-    agg_days, lead_offset_days = _process_lead(variable, lead)
-
-    forecast_start = target_date_to_forecast_date(start_time, lead)
-    forecast_end = target_date_to_forecast_date(end_time, lead)
+    if lead not in ['daily', 'weekly', 'biweekly']:
+        raise ValueError(f"Lead {lead} not valid for variable {variable}")
+    lead_info = get_lead_info(lead)
+    agg_days = lead_info['agg_days']
+    all_labels = lead_info['labels']
+    # The earliest and latest forecast dates for the set of all leads
+    forecast_start = min([target_date_to_forecast_date(start_time, ld) for ld in all_labels])
+    forecast_end = max([target_date_to_forecast_date(end_time, ld) for ld in all_labels])
 
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
     if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
@@ -447,11 +430,20 @@ def _ecmwf_ifs_er_unified(start_time, end_time, variable, lead, prob_type='deter
     else:
         ds = ifs_extended_range_rolled(forecast_start, forecast_end, variable, prob_type=prob_type,
                                        agg_days=agg_days, grid=grid, debiased=debiased)
-        # Select the appropriate lead
-        lead_sel = {'lead_time': np.timedelta64(lead_offset_days, 'D')}
-        ds = ds.sel(**lead_sel)
-        ds = shift_forecast_date_to_target_date(ds, 'start_date', lead)
-        ds = ds.rename({'start_date': 'time'})
+        # Create a new coordinate for valid_time, that is the start_date plus the lead time
+        ds = convert_lead_to_valid_time(ds)
+
+        # Select and label the appropriate lead times
+        all_timedeltas = lead_info['lead_offsets']
+        tmp = zip(all_labels, all_timedeltas)
+        valid_labels = [(x, y) for x, y in tmp if y in ds.lead_time.values]
+        ds = ds.sel(lead_time=[y for x, y in valid_labels])
+
+        # Rename lead times to lead_timedelta and set the new labels to lead time
+        ds = ds.rename({'lead_time': 'lead_timedelta'})
+        # Add lead label as a new coordinate
+        ds = ds.assign_coords(lead_time=('lead_timedelta', [x for x, y in valid_labels]))
+        ds = ds.swap_dims({'lead_timedelta': 'lead_time'})
 
         # Apply masking and clip to region
         ds = apply_mask(ds, mask, grid=grid)

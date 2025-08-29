@@ -246,7 +246,7 @@ def get_region(region):
             or the shapefile defining the region.
     """
     # Get which admin level the region is at (e.g., countries, continents, etc.)
-    admin_level = get_admin_level(region)
+    admin_level = get_admin_level(region)[0]
     valid_labels = get_region_labels(admin_level)
     if region not in valid_labels:
         raise NotImplementedError(f"Region {region} has not been implemented.")

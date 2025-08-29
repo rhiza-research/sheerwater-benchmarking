@@ -8,7 +8,7 @@ from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            lon_base_change,
                                            target_date_to_forecast_date,
                                            shift_forecast_date_to_target_date,
-                                           lead_to_agg_days, roll_and_agg, regrid, forecast)
+                                           get_lead_info, roll_and_agg, regrid, forecast)
 
 
 @dask_remote
@@ -179,7 +179,7 @@ def _process_lead(variable, lead):
     lead_offset_days = lead_params.get(lead, None)
     if lead_offset_days is None:
         raise NotImplementedError(f"Lead {lead} not implemented for gencast {variable} forecasts.")
-    agg_days = lead_to_agg_days(lead)
+    agg_days = get_lead_info(lead)['agg_days']
     return agg_days, lead_offset_days
 
 
