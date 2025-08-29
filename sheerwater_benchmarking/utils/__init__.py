@@ -15,7 +15,7 @@ from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_
                          groupby_time, assign_grouping_coordinates,
                          convert_group_to_time, date_mean, doy_mean, get_time_level)
 
-from .weather_utils import (get_variable, get_lead_info, forecast,
+from .forecaster_utils import (get_variable, get_lead_info, forecast,
                             forecast_date_to_target_date, target_date_to_forecast_date,
                             shift_forecast_date_to_target_date, convert_lead_to_valid_time,
                             get_lead_group, get_forecast_start_end, convert_to_standard_lead)

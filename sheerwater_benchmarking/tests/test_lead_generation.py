@@ -4,10 +4,9 @@
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from sheerwater_benchmarking.utils.weather_utils import (
+from sheerwater_benchmarking.utils import (
     get_lead_info,
     get_lead_group,
-    lead_or_agg,
     forecast_date_to_target_date,
     target_date_to_forecast_date,
     convert_lead_to_valid_time

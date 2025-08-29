@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 import xarray as xr
 
-from sheerwater_benchmarking.utils.weather_utils import (
+from sheerwater_benchmarking.utils.forecaster_utils import (
     forecast, get_leads, get_forecast, FORECAST_REGISTRY
 )
 
