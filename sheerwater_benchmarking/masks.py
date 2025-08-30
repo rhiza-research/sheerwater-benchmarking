@@ -79,6 +79,9 @@ def region_labels(grid='global1_5', admin_level='countries'):
 
     Available admin levels are 'country', 'region', 'continent', and 'world'.
 
+    # NOTE: this is a slow function. Doesn't really matter, b/c we 
+    compute it once and cache, but lots of benefit of parallelizing better.
+
     Args:
         grid (str): The grid to fetch the data at.  Note that only
             the resolution of the specified grid is used.
@@ -104,7 +107,6 @@ def region_labels(grid='global1_5', admin_level='countries'):
         # Assign region name where the mask is True
         ds['region'] = ds.region.where(~region_mask, rn)
     return ds
-
 
 
 __all__ = ['land_sea_mask', 'region_labels']
