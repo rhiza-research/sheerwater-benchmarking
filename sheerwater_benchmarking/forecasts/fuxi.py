@@ -17,7 +17,8 @@ from sheerwater_benchmarking.utils.secrets import huggingface_read_token
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change, forecast,
-                                           target_date_to_forecast_date,
+                                           get_forecast_start_end,
+                                           convert_to_standard_lead,
                                            shift_forecast_date_to_target_date, get_lead_info,
                                            roll_and_agg, convert_lead_to_valid_time)
 from sheerwater_benchmarking.tasks import spw_precip_preprocess, spw_rainy_onset
@@ -226,15 +227,14 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
     if grid != 'global1_5':
         raise NotImplementedError("Only 1.5 grid implemented for FuXi.")
 
-    if lead not in ['daily', 'weekly', 'biweekly']:
+    if lead not in ['weekly', 'biweekly'] and 'daily' not in lead:
         raise ValueError(f"Lead {lead} not valid for variable {variable}")
     lead_info = get_lead_info(lead)
     agg_days = lead_info['agg_days']
     all_labels = lead_info['labels']
 
     # The earliest and latest forecast dates for the set of all leads
-    forecast_start = min([target_date_to_forecast_date(start_time, ld) for ld in all_labels])
-    forecast_end = max([target_date_to_forecast_date(end_time, ld) for ld in all_labels])
+    forecast_start, forecast_end = get_forecast_start_end(lead, start_time, end_time)
 
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
     if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
@@ -248,22 +248,13 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
         ds = ds.assign_attrs(sparse=True)
     else:
         ds = fuxi_rolled(forecast_start, forecast_end, variable=variable, prob_type=prob_type, agg_days=agg_days)
-        ds = ds.rename({'time': 'init_time'})
+
         # Create a new coordinate for valid_time, that is the start_date plus the lead time
-        ds = convert_lead_to_valid_time(ds, initialization_date_dim='init_time',
-                                        lead_time_dim='lead_time', valid_time_dim='time')
+        ds = ds.rename({'time': 'start_date'})
+        ds = convert_lead_to_valid_time(ds)
 
-        # Select and label the appropriate lead times
-        all_timedeltas = lead_info['lead_offsets']
-        tmp = zip(all_labels, all_timedeltas)
-        valid_labels = [(x, y) for x, y in tmp if y in ds.lead_time.values]
-        ds = ds.sel(lead_time=[y for x, y in valid_labels])
-
-        # Rename lead times to lead_timedelta and set the new labels to lead time
-        ds = ds.rename({'lead_time': 'lead_timedelta'})
-        # Add lead label as a new coordinate
-        ds = ds.assign_coords(lead_time=('lead_timedelta', [x for x, y in valid_labels]))
-        ds = ds.swap_dims({'lead_timedelta': 'lead_time'})
+        # Convert to standard lead
+        ds = convert_to_standard_lead(ds, lead)
 
         # Apply masking and clip to region
         ds = apply_mask(ds, mask, var=variable, grid=grid)
