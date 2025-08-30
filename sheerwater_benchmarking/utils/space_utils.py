@@ -4,6 +4,7 @@ import xarray as xr
 import geopandas as gpd
 import rioxarray  # noqa: F401 - needed to enable .rio attribute
 
+from .data_utils import regrid
 from .general_utils import load_object
 
 
