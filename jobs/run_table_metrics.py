@@ -44,6 +44,4 @@ def run_metrics_table(combo):
 
 
 if __name__ == "__main__":
-    # run_in_parallel(run_metrics_table, combos, parallelism)
-    import pdb; pdb.set_trace()
-    run_metrics_table(combos[0])
+    run_in_parallel(run_metrics_table, combos, parallelism)

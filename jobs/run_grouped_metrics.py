@@ -40,5 +40,4 @@ def run_grouped(combo):
 
 
 if __name__ == "__main__":
-    # run_in_parallel(run_grouped, combos, parallelism)
-    run_grouped(combos[0])
+    run_in_parallel(run_grouped, combos, parallelism)
