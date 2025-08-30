@@ -2,13 +2,13 @@
 from .caching import cacheable
 from .remote import dask_remote, start_remote
 from .secrets import cdsapi_secret, ecmwf_secret, salient_secret, salient_auth, tahmo_secret, gap_secret
-from .data_utils import (roll_and_agg, get_anomalies, is_valid)
+from .data_utils import (roll_and_agg, get_anomalies, is_valid, regrid)
 from .general_utils import (load_netcdf, write_zarr, load_zarr, load_object, plot_ds,
                             plot_ds_map, run_in_parallel, get_datasource_fn)
 
 from .space_utils import (get_grid, get_grid_ds, is_wrapped, get_region,
                           base360_to_base180, base180_to_base360, check_bases, clip_region,
-                          lon_base_change, get_globe_slice, apply_mask, regrid,  get_admin_level,
+                          lon_base_change, get_globe_slice, apply_mask, get_admin_level,
                           get_region_labels)
 
 from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_dates,
