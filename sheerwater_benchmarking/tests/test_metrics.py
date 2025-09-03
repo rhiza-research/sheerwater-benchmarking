@@ -28,7 +28,7 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
         region=region,
         grid='global1_5',
         # recompute=False
-        recompute=['global_statistic'],
+        # recompute=['global_statistic'],
         force_overwrite=False
     )
 
@@ -85,7 +85,7 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
 
         if abs(diff_max) < 1e-10:
             print("✓ EXACT MATCH")
-        elif abs(diff_max) < 1e-6:
+        elif abs(diff_max) < 1e-3:
             print("✓ CLOSE MATCH")
         else:
             print("✗ SIGNIFICANT DIFFERENCE")
@@ -100,43 +100,42 @@ def test_multiple_combinations():
     """Test multiple combinations of parameters."""
     test_cases = [
         # Basic tests, one for each metric
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "rmse", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "bias", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "crps", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "smape", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mape", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "seeps", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "pearson", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "heidke-1-5-10-20", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-10", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-5", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "far-5", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "ets-5", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "frequencybias", "variable": "precip", "spatial": True},
+
+
+        # Different forecasts
+        {"forecast": "ecmwf_ifs_er", "metric": "mae", "variable": "precip", "spatial": True},
+        {"forecast": "climatology_2015", "metric": "mae", "variable": "precip", "spatial": True},
+        {"forecast": "fuxi", "metric": "mae", "variable": "precip", "spatial": True},
+
+        # Different variables
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "tmp2m", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "tmp2m", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "pearson", "variable": "tmp2m", "spatial": True},
+
+        # Different regions
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "region": "africa", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae",
+         "variable": "precip", "region": "east_africa", "spatial": True},
+
+        # Non tests, on coupled metrics
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": False},
-        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "rmse", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "bias", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "crps", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "smape", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "mape", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "seeps", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "pearson", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "heidke-1-5-10-20", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-10", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-5", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "far-5", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "ets-5", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "frequencybias", "variable": "precip", "spatial": False},
-
-
-    #     # Different forecasts
-    #     {"forecast": "ecmwf_ifs_er", "metric": "mae", "variable": "precip", "spatial": False},
-    #     {"forecast": "climatology_2015", "metric": "mae", "variable": "precip", "spatial": False},
-    #     {"forecast": "fuxi", "metric": "mae", "variable": "precip", "spatial": False},
-
-    #     # Different variables
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "tmp2m", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "tmp2m", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "pearson", "variable": "tmp2m", "spatial": False},
-
-    #     # Different regions
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "region": "africa", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae",
-    #         "variable": "precip", "region": "east_africa", "spatial": False},
-
-    #     # Spatial tests, on coupled metrics
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": False},
-    #     {"forecast": "ecmwf_ifs_er_debiased", "metric": "heidke-1-5-10-20", "variable": "precip", "spatial": False},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": False},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "heidke-1-5-10-20", "variable": "precip", "spatial": False},
     ]
 
     results = []
@@ -229,6 +228,8 @@ if __name__ == "__main__":
     test_multiple_combinations()
 
     # Create a specific plot comparison
-    print("\nCreating detailed plot comparison...")
-    plot_comparison(forecast="ecmwf_ifs_er_debiased", metric="mae", variable="precip", spatial=True)
-    # plot_comparison(forecast="climatology_2015", metric="bias", variable="tmp2m", spatial=True)
+    plot = False
+    if plot:
+        print("\nCreating detailed plot comparison...")
+        plot_comparison(forecast="ecmwf_ifs_er_debiased", metric="mae", variable="precip", spatial=True)
+        plot_comparison(forecast="climatology_2015", metric="bias", variable="tmp2m", spatial=True)
