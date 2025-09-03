@@ -13,8 +13,7 @@ from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            get_lead_info,
                                            get_admin_level,
                                            get_time_level,
-                                           get_datasource_fn,
-                                           apply_mask)
+                                           get_datasource_fn)
 from sheerwater_benchmarking.masks import region_labels
 from .metric_factory import metric_factory
 
