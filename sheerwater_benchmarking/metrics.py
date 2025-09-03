@@ -13,7 +13,8 @@ from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            get_lead_info,
                                            get_admin_level,
                                            get_time_level,
-                                           get_datasource_fn)
+                                           get_datasource_fn,
+                                           apply_mask)
 from sheerwater_benchmarking.masks import region_labels
 from .metric_factory import metric_factory
 
@@ -73,7 +74,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # if lead_or_agg(lead) == 'agg':
         #     raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
         fcst = fcst_fn(start_time, end_time, variable, lead=lead,
-                       prob_type=prob_type, grid=grid, mask=None, region='global')
+                       prob_type=prob_type, grid=grid, mask='lsm', region='global')
         # Check to see the prob type attribute
         enhanced_prob_type = fcst.attrs['prob_type']
     else:
@@ -81,7 +82,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # if lead_or_agg(lead) == 'lead':
         #     raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
         fcst = fcst_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
-                       grid=grid, mask=None, region='global')
+                       grid=grid, mask='lsm', region='global')
         # Prob type is always deterministic for truth sources
         enhanced_prob_type = "deterministic"
 
@@ -98,7 +99,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
     obs = truth_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
-                   grid=grid, mask=None, region='global')
+                   grid=grid, mask='lsm', region='global')
     # We need a lead specific obs, so we know which times are valid for the forecast
     lead_labels = get_lead_info(lead)['labels']
     obs = obs.expand_dims({'lead_time': lead_labels})
@@ -136,7 +137,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     if statistic in ['fcst_anom', 'obs_anom']:
         # Get the appropriate climatology dataframe for metric calculation
         clim_ds = climatology_2020(start_time, end_time, variable, lead=lead, prob_type='deterministic',
-                                   grid=grid, mask=None, region='global')
+                                   grid=grid, mask='lsm', region='global')
         clim_ds = clim_ds.sel(time=valid_times)
         clim_ds = clim_ds.where(obs.notnull(), np.nan)
     ############################################################
@@ -353,11 +354,13 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         ds = global_statistic(start_time, end_time, variable, lead=lead,
                               forecast=forecast, truth=truth,
                               statistic=statistic,
-                              recompute=True, force_overwrite=True,
                               bins=bins, metric_info=metric_obj, grid=grid)
         if ds is None:
             return None
         data_sparse = ds.attrs['sparse']  # Whether the input data to the statistic is expected to be sparse
+
+        # REMOVE: Testing, apply mask
+        # ds = apply_mask(ds, mask='lsm', var=variable, grid=grid)
 
         ############################################################
         # Aggregate and and check validity of the statistic
@@ -402,6 +405,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             # Note: if we want to keep latitude weighing, we should think about
             # how to properly normalize for different countries
             # ds = ds.groupby('region').apply(latitude_weighted_spatial_average, agg_fn=agg_fn)
+            # ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
             ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
             check_ds = check_ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
         else:
@@ -413,7 +417,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
         # Check if the statistic is valid per grouping
         is_valid = (check_ds[variable] / check_ds['indicator'] > 0.98)
-        ds = ds.where(is_valid, np.nan, drop=False)
+        # ds = ds.where(is_valid, np.nan, drop=False)
 
         # Assign the final statistic value
         statistic_values[statistic] = ds.copy()

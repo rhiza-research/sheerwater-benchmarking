@@ -4,7 +4,6 @@ import xarray as xr
 import geopandas as gpd
 import rioxarray  # noqa: F401 - needed to enable .rio attribute
 
-from .data_utils import regrid
 from .general_utils import load_object
 
 
@@ -146,6 +145,7 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
             mask_ds = land_sea_mask(grid=grid).compute()
         else:
             # TODO: Should implement a more resolved land-sea mask for the other grids
+            from sheerwater_benchmarking.utils.data_utils import regrid
             mask_ds = land_sea_mask(grid='global0_25')
             mask_ds = regrid(mask_ds, grid, method='nearest').compute()
     else:
