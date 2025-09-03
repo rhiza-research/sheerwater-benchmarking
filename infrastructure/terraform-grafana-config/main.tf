@@ -109,10 +109,6 @@ data "google_secret_manager_secret_version" "postgres_read_password" {
   secret = "sheerwater-postgres-read-password"
 }
 
-# Gcloud secrets for influx read user
-data "google_secret_manager_secret_version" "tahmo_influx_read_password" {
-  secret = "tahmo-influx-read-password"
-}
 
 # Gcloud secrets for Single sign on
 data "google_secret_manager_secret_version" "sheerwater_oauth_client_id" {
@@ -205,108 +201,6 @@ resource "grafana_data_source" "postgres" {
 
 }
 
-resource "grafana_organization" "tahmo" {
-  name = "TAHMO"
-  admin_user = "admin"
-
-  # lifecycle {
-  #   ignore_changes = [admins, viewers, editors]
-  # }
-}
-
-# import {
-#   to = grafana_organization_preferences.light_preference_tahmo
-#   id = "2"
-# }
-
-resource "grafana_organization_preferences" "light_preference_tahmo" {
-  theme = "light"
-  timezone = "utc"
-  week_start = "sunday"
-
-  lifecycle {
-    ignore_changes = [home_dashboard_uid, ]
-    replace_triggered_by = [grafana_organization.tahmo.id]
-  }
-
-  org_id = grafana_organization.tahmo.id
-
-  depends_on = [grafana_organization.tahmo]
-}
-
-
-# import {
-#   to = grafana_data_source.postgres_tahmo
-#   id = "cegueq2crd3wge"
-# }
-
-# Connect grafana to the read user with a datasource
-resource "grafana_data_source" "postgres_tahmo" {
-  type = "grafana-postgresql-datasource"
-  name = "postgres"
-  url = local.postgres_url
-  username = "read"
-  uid = "cegueq2crd3wge"
-
-  secure_json_data_encoded = jsonencode({
-    password = data.google_secret_manager_secret_version.postgres_read_password.secret_data
-  })
-
-  json_data_encoded = jsonencode({
-    database = "postgres"
-    sslmode = "disable"
-    postgresVersion = 1500
-    timescaledb = true
-  })
-
-  lifecycle {
-    replace_triggered_by = [grafana_organization.tahmo]
-  }
-
-  org_id = grafana_organization.tahmo.id
-
-  depends_on = [grafana_organization.tahmo]
-
-
-}
-
-# TODO: where is https://heavy-d24620b1.influxcloud.net:8086 configured?
-
-# Connect grafana to the read user with a datasource
-resource "grafana_data_source" "influx_tahmo" {
-  type = "influxdb"
-  name = "influx"
-  url = "https://heavy-d24620b1.influxcloud.net:8086"
-  basic_auth_enabled = true
-  basic_auth_username = "RhizaResearch"
-  database_name = "TAHMO"
-  uid = "eepjuov1zfi0wb"
-
-  secure_json_data_encoded = jsonencode({
-    basicAuthPassword = data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data
-  })
-
-  json_data_encoded = jsonencode({
-    dbname = "TAHMO"
-    basicAuthPassword = data.google_secret_manager_secret_version.tahmo_influx_read_password.secret_data
-    authType = "default"
-    query_language = "SQL"
-  })
-
-  org_id = grafana_organization.tahmo.id
-
-  depends_on = [grafana_organization.tahmo]
-
-  lifecycle {
-
-    replace_triggered_by = [grafana_organization.tahmo.id]
-  }
-
-}
-
-# TODO: add a datasource for the missing tahmo database
-# other tahmodatasource uid = 'cer8o24n0lfy8b'
-
 
 # Create dashboards
 resource "grafana_dashboard" "dashboards" {
@@ -319,7 +213,7 @@ resource "grafana_dashboard" "dashboards" {
   overwrite = true
   org_id = grafana_organization.benchmarking.id
 
-  depends_on = [grafana_data_source.postgres, grafana_data_source.postgres_tahmo, grafana_data_source.influx_tahmo]
+  depends_on = [grafana_data_source.postgres]
 }
 
 
