@@ -407,22 +407,24 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             # ds = ds.groupby('region').apply(latitude_weighted_spatial_average, agg_fn=agg_fn)
             # ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
             # Apply weights for latitude weighting
-            test = ds.copy()
-            import matplotlib.pyplot as plt
-            import pdb
-            pdb.set_trace()
             weights = latitude_weights(ds, lat_dim='lat')
             ds = ds * weights
             ds['weights'] = weights
-            ds['n_valid'] = xr.ones_like(weights)
+            ds['weights_sum'] = xr.ones_like(weights)
+            ds['n_valid'] = xr.ones_like(ds[variable]) * ds[variable].notnull()
 
             # ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
-            ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
+            ds = ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
             check_ds = check_ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
 
+            import pdb
+            pdb.set_trace()
+
             # Correct weighted sum to be a proper average or sum
-            ds[variable] = ds[variable] * (ds['n_valid'] / ds['weights'])
-            ds = ds.drop_vars(['weights', 'n_valid'])
+            ds[variable] = ds[variable] * (ds['weights_sum'] / ds['weights'])
+            if agg_fn == 'mean':
+                ds[variable] = ds[variable] / ds['n_valid']
+            ds = ds.drop_vars(['weights', 'n_valid', 'weights_sum'])
         else:
             # Mask and drop the region coordinate
             region_clip = (ds.region == region).compute()
