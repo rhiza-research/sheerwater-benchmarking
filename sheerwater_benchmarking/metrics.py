@@ -362,7 +362,6 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
         # TODO: extend to other masks and weighting functions
         ds = apply_mask(ds, mask='lsm', var=variable, grid=grid)
-
         ############################################################
         # Aggregate and and check validity of the statistic
         ############################################################
@@ -407,13 +406,28 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             # how to properly normalize for different countries
             # ds = ds.groupby('region').apply(latitude_weighted_spatial_average, agg_fn=agg_fn)
             # ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
+            # Apply weights for latitude weighting
+            test = ds.copy()
+            import matplotlib.pyplot as plt
+            import pdb
+            pdb.set_trace()
+            weights = latitude_weights(ds, lat_dim='lat')
+            ds = ds * weights
+            ds['weights'] = weights
+            ds['n_valid'] = xr.ones_like(weights)
+
+            # ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
             ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
             check_ds = check_ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
+
+            # Correct weighted sum to be a proper average or sum
+            ds[variable] = ds[variable] * (ds['n_valid'] / ds['weights'])
+            ds = ds.drop_vars(['weights', 'n_valid'])
         else:
             # Mask and drop the region coordinate
-            mask = (ds.region == region).compute()
-            ds = ds.where(mask, drop=True)
-            check_ds = check_ds.where(mask, drop=True)
+            region_clip = (ds.region == region).compute()
+            ds = ds.where(region_clip, drop=True)
+            check_ds = check_ds.where(region_clip, drop=True)
             ds = ds.drop_vars('region')
 
         # Check if the statistic is valid per grouping
@@ -642,8 +656,8 @@ def groupby_time(ds, time_grouping, agg_fn='mean'):
     return ds
 
 
-def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon', agg_fn='mean'):
-    """Compute latitude-weighted spatial average of a dataset.
+def latitude_weights(ds, lat_dim='lat'):
+    """Return latitude weights as an xarray DataArray.
 
     This function weights each latitude band by the actual cell area,
     which accounts for the fact that grid cells near the poles are smaller
@@ -663,19 +677,30 @@ def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon', agg_fn='
 
     # Normalize weights
     weights /= np.mean(weights)
+    # Return an xarray DataArray with dimensions lat
+    weights = xr.DataArray(weights, coords=[ds[lat_dim]], dims=[lat_dim])
     return weights
 
-    # # Create weights array
-    # weights = ds[lat_dim].copy(data=weights)
-    # if f'stacked_{lat_dim}_{lon_dim}' in ds.coords:
-    #     agg_dims = [f'stacked_{lat_dim}_{lon_dim}']
-    # else:
-    #     agg_dims = [lat_dim, lon_dim]
-    # if agg_fn == 'mean':
-    #     weighted = ds.weighted(weights).mean(agg_dims, skipna=True)
-    # else:
-    #     weighted = ds.weighted(weights).sum(agg_dims, skipna=True)
-    # return weighted
+
+def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon', agg_fn='mean'):
+    """Compute latitude-weighted spatial average of a dataset.
+
+    This function weights each latitude band by the actual cell area,
+    which accounts for the fact that grid cells near the poles are smaller
+    in area than those near the equator.
+    """
+    weights = latitude_weights(ds, lat_dim)
+    # Create weights array
+    weights = ds[lat_dim].copy(data=weights)
+    if f'stacked_{lat_dim}_{lon_dim}' in ds.coords:
+        agg_dims = [f'stacked_{lat_dim}_{lon_dim}']
+    else:
+        agg_dims = [lat_dim, lon_dim]
+    if agg_fn == 'mean':
+        weighted = ds.weighted(weights).mean(agg_dims, skipna=True)
+    else:
+        weighted = ds.weighted(weights).sum(agg_dims, skipna=True)
+    return weighted
 
 
 __all__ = ['global_statistic', 'grouped_metric', 'skill_metric',

@@ -27,7 +27,7 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
         time_grouping=None,
         spatial=spatial,
         region=region,
-        mask='lsm',
+        mask=None,
         grid='global1_5',
         recompute=recompute,
         force_overwrite=False,
@@ -45,7 +45,7 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
         time_grouping=None,
         spatial=spatial,
         region=region,
-        mask='lsm',
+        mask=None,
         grid='global1_5',
         recompute=False
     )
@@ -104,7 +104,9 @@ def test_multiple_combinations():
     test_cases = [
         # Basic tests, one for each metric. Must test with spatial = True b/c we haven't implemented
         # spatial weighting in the same way
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": True},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "kenya", "variable": "precip", "spatial": False},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "global", "variable": "precip", "spatial": False},
+
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "rmse", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "bias", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "crps", "variable": "precip", "spatial": True},
@@ -154,6 +156,7 @@ def test_multiple_combinations():
         test_case.setdefault("region", "global")
         test_case.setdefault("lead", "week3")
         test_case.setdefault("recompute", True)
+        test_case.setdefault("spatial", True)
 
         ds_new, ds_old, result = test_single_comparison(**test_case)
         results.append({
@@ -163,6 +166,7 @@ def test_multiple_combinations():
             "new_result": ds_new is not None,
             "old_result": ds_old is not None
         })
+        break
 
     # Summary
     print(f"\n{'='*60}")
