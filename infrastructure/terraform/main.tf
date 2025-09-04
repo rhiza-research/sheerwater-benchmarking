@@ -269,8 +269,13 @@ data "google_secret_manager_secret_version" "sheerwater_sendgrid_api_key" {
   secret = "sheerwater-sendgrid-api-key"
 }
 
-# grafana password
+# grafana password (prod and ephemeral)
 resource "random_password" "grafana_admin_password" {
+  length = 16
+  special = true
+}
+
+resource "random_password" "grafana_ephemeral_admin_password" {
   length = 16
   special = true
 }
@@ -281,12 +286,23 @@ resource "google_secret_manager_secret" "grafana_admin_password" {
     auto {}
   }
 }
+resource "google_secret_manager_secret" "grafana_ephemeral_admin_password" {
+  secret_id = "sheerwater-grafana-ephemeral-admin-password"
+  replication {
+    auto {}
+  }
+}
+
 
 resource "google_secret_manager_secret_version" "grafana_admin_password" {
   secret = google_secret_manager_secret.grafana_admin_password.id
   secret_data = random_password.grafana_admin_password.result
 }
 
+resource "google_secret_manager_secret_version" "grafana_ephemeral_admin_password" {
+  secret = google_secret_manager_secret.grafana_ephemeral_admin_password.id
+  secret_data = random_password.grafana_ephemeral_admin_password.result
+}
 
 # Create a domain name and IP address
 resource "google_compute_global_address" "grafana_address" {

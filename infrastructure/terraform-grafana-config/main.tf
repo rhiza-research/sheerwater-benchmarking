@@ -93,11 +93,11 @@ provider "grafana" {
   # - prod:      https://benchmarks.sheerwater.rhizaresearch.org
   # - ephemeral: https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
   url = local.grafana_url
-  #auth = "admin:${data.google_secret_manager_secret_version.grafana_admin_password.secret_data}"
+  auth = "admin:${data.google_secret_manager_secret_version.grafana_ephemeral_admin_password.secret_data}"
   # TODO: for now I have to use the default password because 
   # the correct password is not working. It is being set but I think 
   # there is some urlencoding happening somewhere breaking the password.
-  auth = "admin:admin"
+  #auth = "admin:admin"
 }
 
 output "grafana_url" {
@@ -137,11 +137,13 @@ resource "grafana_sso_settings" "google_sso_settings" {
   }
 }
 
-
-import {
-  to = grafana_organization.benchmarking
-  id = "1"
-}
+# handled via import.sh
+# import {
+#   to = grafana_organization.benchmarking
+#   id = local.is_prod ? "1" : "1"
+#   # in prod, the benchmarking org is the main org (id 1)
+#   # in ephemeral, the benchmarking org is the main org (id 1)
+# }
 
 resource "grafana_organization" "benchmarking" {
   name = "Main Org."
@@ -155,10 +157,12 @@ resource "grafana_organization" "benchmarking" {
   }
 }
 
-import {
-  to = grafana_organization_preferences.light_preference_benchmarking
-  id = "1"
-}
+# handled via import.sh
+# import {
+#   to = grafana_organization_preferences.light_preference_benchmarking
+#   id = "1"
+# }
+
 
 resource "grafana_organization_preferences" "light_preference_benchmarking" {
   theme = "light"
@@ -168,11 +172,11 @@ resource "grafana_organization_preferences" "light_preference_benchmarking" {
   home_dashboard_uid = local.home_dashboard_uid
   org_id = grafana_organization.benchmarking.id
 
-  # lifecycle {
-  #   ignore_changes = [home_dashboard_uid, ]
-  # }
+  lifecycle {
+    ignore_changes = [home_dashboard_uid, ]
+  }
 
-  depends_on = [grafana_organization.benchmarking]
+  depends_on = [grafana_organization.benchmarking, grafana_dashboard.dashboards]
 
 }
 
