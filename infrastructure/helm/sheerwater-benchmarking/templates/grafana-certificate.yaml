@@ -1,7 +1,0 @@
-apiVersion: networking.gke.io/v1
-kind: ManagedCertificate
-metadata:
-  name: {{ include "sheerwater-benchmarking.fullname" . }}-grafana
-spec:
-  domains:
-    - {{ .Values.grafana.domain_name }}
