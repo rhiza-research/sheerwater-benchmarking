@@ -13,6 +13,7 @@ from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            get_lead_info,
                                            get_admin_level,
                                            apply_mask,
+                                           get_mask,
                                            get_time_level,
                                            get_datasource_fn)
 from sheerwater_benchmarking.masks import region_labels
@@ -361,7 +362,8 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         data_sparse = ds.attrs['sparse']  # Whether the input data to the statistic is expected to be sparse
 
         # TODO: extend to other masks and weighting functions
-        ds = apply_mask(ds, mask=mask, var=variable, grid=grid)
+        mask_ds = get_mask(mask, grid)
+        # ds = apply_mask(ds, mask=mask_ds, var=variable, grid=grid)
         ############################################################
         # Aggregate and and check validity of the statistic
         ############################################################
@@ -407,14 +409,17 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             # ds = ds.groupby('region').apply(latitude_weighted_spatial_average, agg_fn=agg_fn)
             # ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
             # Apply weights for latitude weighting
-            weights = latitude_weights(ds, lat_dim='lat')
+            weights = latitude_weights(mask_ds, lat_dim='lat', lon_dim='lon')
+            # ds['var_weighted'] = ds[variable] * weights
+            test = ds.copy()
             ds = ds * weights
             ds['weights'] = weights
-            ds['weights_sum'] = xr.ones_like(weights)
-            ds['n_valid'] = xr.ones_like(ds[variable]) * ds[variable].notnull()
+            ds['weights_sum'] = xr.ones_like(weights) 
 
             # ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
             ds = ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
+            test_mean = test.groupby('region').apply(mean_or_sum, agg_fn='mean', dims='stacked_lat_lon')
+            test_sum = test.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
             check_ds = check_ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
 
             import pdb
@@ -423,8 +428,8 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             # Correct weighted sum to be a proper average or sum
             ds[variable] = ds[variable] * (ds['weights_sum'] / ds['weights'])
             if agg_fn == 'mean':
-                ds[variable] = ds[variable] / ds['n_valid']
-            ds = ds.drop_vars(['weights', 'n_valid', 'weights_sum'])
+                ds[variable] = ds[variable] / ds['weights_sum']
+            ds = ds.drop_vars(['weights', 'weights_sum'])
         else:
             # Mask and drop the region coordinate
             region_clip = (ds.region == region).compute()
@@ -434,7 +439,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
         # Check if the statistic is valid per grouping
         is_valid = (check_ds[variable] / check_ds['indicator'] > 0.98)
-        # ds = ds.where(is_valid, np.nan, drop=False)
+        ds = ds.where(is_valid, np.nan, drop=False)
 
         # Assign the final statistic value
         statistic_values[statistic] = ds.copy()
@@ -658,7 +663,7 @@ def groupby_time(ds, time_grouping, agg_fn='mean'):
     return ds
 
 
-def latitude_weights(ds, lat_dim='lat'):
+def latitude_weights(mask_ds, lat_dim='lat', lon_dim='lon'):
     """Return latitude weights as an xarray DataArray.
 
     This function weights each latitude band by the actual cell area,
@@ -666,7 +671,7 @@ def latitude_weights(ds, lat_dim='lat'):
     in area than those near the equator.
     """
     # Calculate latitude cell bounds
-    lat_rad = np.deg2rad(ds[lat_dim].values)
+    lat_rad = np.deg2rad(mask_ds[lat_dim].values)
     # Get the centerpoint of each latitude band
     pi_over_2 = np.array([np.pi / 2], dtype=lat_rad.dtype)
     bounds = np.concatenate([-pi_over_2, (lat_rad[:-1] + lat_rad[1:]) / 2, pi_over_2])
@@ -680,7 +685,12 @@ def latitude_weights(ds, lat_dim='lat'):
     # Normalize weights
     weights /= np.mean(weights)
     # Return an xarray DataArray with dimensions lat
-    weights = xr.DataArray(weights, coords=[ds[lat_dim]], dims=[lat_dim])
+    weights = xr.DataArray(weights, coords=[mask_ds[lat_dim]], dims=[lat_dim])
+    weights = weights.expand_dims({lon_dim: mask_ds[lon_dim]})
+
+    # import pdb; pdb.set_trace()
+    # weights = weights.where(mask_ds.mask.notnull(), np.nan)
+    weights = weights * mask_ds.mask
     return weights
 
 

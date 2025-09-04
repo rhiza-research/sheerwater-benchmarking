@@ -9,7 +9,7 @@ from .general_utils import (load_netcdf, write_zarr, load_zarr, load_object, plo
 from .space_utils import (get_grid, get_grid_ds, is_wrapped, get_region,
                           base360_to_base180, base180_to_base360, check_bases, clip_region,
                           lon_base_change, get_globe_slice, apply_mask, get_admin_level,
-                          get_region_labels)
+                          get_region_labels, get_mask)
 
 from .time_utils import (is_valid_forecast_date, generate_dates_in_between, get_dates,
                          pad_with_leapdays, add_dayofyear,

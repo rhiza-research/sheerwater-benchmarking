@@ -123,6 +123,23 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat', drop=False, keep_shape
     return ds
 
 
+def get_mask(mask, grid='global1_5'):
+    """Get a mask dataset."""
+    if mask == 'lsm':
+        # Import here to avoid circular imports
+        from sheerwater_benchmarking.masks import land_sea_mask
+        if grid == 'global1_5' or grid == 'global0_25':
+            mask_ds = land_sea_mask(grid=grid).compute()
+        else:
+            # TODO: Should implement a more resolved land-sea mask for the other grids
+            from sheerwater_benchmarking.utils.data_utils import regrid
+            mask_ds = land_sea_mask(grid='global0_25')
+            mask_ds = regrid(mask_ds, grid, method='nearest').compute()
+    else:
+        raise NotImplementedError("Only land-sea mask is implemented.")
+    return mask_ds
+
+
 def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
     """Apply a mask to a dataset.
 
@@ -138,18 +155,10 @@ def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
     if mask is None:
         return ds
 
-    if mask == 'lsm':
-        # Import here to avoid circular imports
-        from sheerwater_benchmarking.masks import land_sea_mask
-        if grid == 'global1_5' or grid == 'global0_25':
-            mask_ds = land_sea_mask(grid=grid).compute()
-        else:
-            # TODO: Should implement a more resolved land-sea mask for the other grids
-            from sheerwater_benchmarking.utils.data_utils import regrid
-            mask_ds = land_sea_mask(grid='global0_25')
-            mask_ds = regrid(mask_ds, grid, method='nearest').compute()
+    if isinstance(mask, str):
+        mask_ds = get_mask(mask, grid)
     else:
-        raise NotImplementedError("Only land-sea mask is implemented.")
+        mask_ds = mask
 
     # Check that the mask and dataset have the same dimensions
     if not all([dim in ds.dims for dim in mask_ds.dims]):

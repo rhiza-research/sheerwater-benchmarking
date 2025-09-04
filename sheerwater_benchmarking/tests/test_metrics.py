@@ -66,6 +66,8 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
     # Both datasets exist
     new_data = ds_new[variable].compute()
     old_data = ds_old[variable].compute()
+    import pdb
+    pdb.set_trace()
 
     print(f"New function result shape: {new_data.shape}")
     print(f"Old function result shape: {old_data.shape}")
@@ -104,8 +106,8 @@ def test_multiple_combinations():
     test_cases = [
         # Basic tests, one for each metric. Must test with spatial = True b/c we haven't implemented
         # spatial weighting in the same way
-        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "kenya", "variable": "precip", "spatial": False},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "global", "variable": "precip", "spatial": False},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "kenya", "variable": "precip", "spatial": False},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "global", "variable": "precip", "spatial": False},
 
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "rmse", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "bias", "variable": "precip", "spatial": True},
