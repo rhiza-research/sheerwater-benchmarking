@@ -361,7 +361,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         data_sparse = ds.attrs['sparse']  # Whether the input data to the statistic is expected to be sparse
 
         # TODO: extend to other masks and weighting functions
-        ds = apply_mask(ds, mask='lsm', var=variable, grid=grid)
+        ds = apply_mask(ds, mask=mask, var=variable, grid=grid)
         ############################################################
         # Aggregate and and check validity of the statistic
         ############################################################
