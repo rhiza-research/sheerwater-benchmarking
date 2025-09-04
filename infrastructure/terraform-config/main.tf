@@ -42,6 +42,10 @@ provider "google" {
   project = "sheerwater"
 }
 
+data "google_secret_manager_secret_version" "grafana_ephemeral_admin_password" {
+  secret = "sheerwater-grafana-ephemeral-admin-password"
+}
+
 data "google_secret_manager_secret_version" "postgres_admin_password" {
   secret = "sheerwater-postgres-admin-password"
 }
