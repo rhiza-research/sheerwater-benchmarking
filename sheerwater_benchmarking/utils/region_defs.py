@@ -10,7 +10,7 @@ The keys are the names of the regions, and the values are dictionaries with the 
 
 The regions are defined as follows:
 - countries
-- african_regions
+- regional_areas 
 - continents
 - meterological_zones
 - hemispheres

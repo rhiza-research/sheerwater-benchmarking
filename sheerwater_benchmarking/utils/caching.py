@@ -29,9 +29,6 @@ from sheerwater_benchmarking.utils.secrets import postgres_write_password, postg
 
 logger = logging.getLogger(__name__)
 
-# Global variable for memoizing land-sea mask
-memoized = {}
-
 CHUNK_SIZE_UPPER_LIMIT_MB = 300
 CHUNK_SIZE_LOWER_LIMIT_MB = 30
 
@@ -597,9 +594,9 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
             temp_table_name = f"temp_{uuid.uuid4().hex[:6]}"
 
             if isinstance(df, pd.DataFrame):
-                df.to_sql(temp_table_name, engine, index=True)
+                df.to_sql(temp_table_name, engine, index=False)
             elif isinstance(df, dd.DataFrame):
-                df.to_sql(temp_table_name, uri=uri, index=True, parallel=True, chunksize=10000)
+                df.to_sql(temp_table_name, uri=uri, index=False, parallel=True, chunksize=10000)
             else:
                 raise RuntimeError("Did not return dataframe type.")
 
@@ -648,9 +645,9 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
                 exists = 'replace'
 
             if isinstance(df, pd.DataFrame):
-                df.to_sql(new_table_name, engine, if_exists=exists, index=True)
+                df.to_sql(new_table_name, engine, if_exists=exists, index=False)
             elif isinstance(df, dd.DataFrame):
-                df.to_sql(new_table_name, uri=uri, if_exists=exists, index=True, parallel=True, chunksize=10000)
+                df.to_sql(new_table_name, uri=uri, if_exists=exists, index=False, parallel=True, chunksize=10000)
             else:
                 raise RuntimeError("Did not return dataframe type.")
 
@@ -840,9 +837,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
     def create_cacheable(func):
         @wraps(func)
         def cacheable_wrapper(*args, **kwargs):
-            # Global declarations for variables used in conditional blocks
-            global memoized
-
             # Proper variable scope for the decorator args
             data_type = nonlocals['data_type']
             cache_args = nonlocals['cache_args']
@@ -898,7 +892,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     force_overwrite = global_force_overwrite
                 if global_validate_cache_timeseries is not None:
                     validate_cache_timeseries = global_validate_cache_timeseries
-                if global_retry_null_cache is not None:
+                if global_retry_null_cache is not None: 
                     retry_null_cache = global_retry_null_cache
                 if global_recompute:
                     if func.__name__ in global_recompute or global_recompute == '_all':
@@ -1058,11 +1052,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 read_cache_map = fs.get_mapper(read_cache_path)
                 read_fs = fsspec.core.url_to_fs(read_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
 
-            # Check for memoized land-sea mask
-            if cache_key in memoized and memoized[cache_key] is not None:
-                print(f"Found memoized result for {cache_key}")
-                return memoized[cache_key]
-
             # Now check if the cache exists
             if not recompute and not upsert and cache:
                 if cache_exists(backend, cache_path, verify_path,
@@ -1122,14 +1111,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                          chunks={}, decode_timedelta=True)
                             else:
                                 ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
-
-                            # Check for memoized land-sea mask
-                            # if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
-                            # if cache_key not in memoized and ds is not None and cache == True:
-                            # if cache_key not in memoized and ds is not None:
-                            if cache_key not in memoized and ds is not None and 'global_statistic' in cache_key:
-                                print(f"Memoizing {cache_key}")
-                                memoized[cache_key] = ds.persist()
 
                             if validate_cache_timeseries and timeseries is not None:
                                 # Check to see if the dataset extends roughly the full time series set
@@ -1241,12 +1222,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                     ##### IF NOT EXISTS ######
                     ds = func(*args, **kwargs)
-                    # Check for memoized land-sea mask
-                    # if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
-                    if cache_key not in memoized and ds is not None and 'global_statistic' in cache_key:
-                    # if cache_key not in memoized and ds is not None:
-                        print(f"Memoizing {cache_key}")
-                        memoized[cache_key] = ds.persist()
                     ##########################
 
                 # Store the result

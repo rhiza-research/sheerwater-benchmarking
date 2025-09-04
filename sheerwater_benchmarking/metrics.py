@@ -4,7 +4,7 @@ from inspect import signature
 import xarray as xr
 import pandas as pd
 
-import weatherbench2
+from weatherbench2.metrics import SpatialQuantileCRPS, SpatialSEEPS
 import xskillscore
 
 
@@ -12,6 +12,7 @@ from sheerwater_benchmarking.climatology import climatology_2020, seeps_wet_thre
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            get_lead_info,
                                            get_admin_level,
+                                           apply_mask,
                                            get_time_level,
                                            get_datasource_fn)
 from sheerwater_benchmarking.masks import region_labels
@@ -33,7 +34,7 @@ from .metric_factory import metric_factory
                # We only need to cache statistics that are very expensive to recompute, b/c memoization will
                # handle most of the rest. We cache statistics that are used multiple times or probabilistic
                # and thus more expensive to compute
-               # -fcst_anom, obs_anom, fcst_digitized, obs_digitized, crps, and brier
+               # fcst_anom, obs_anom, fcst_digitized, obs_digitized, crps, seeps, and brier
                'statistic': ['fcst', 'obs',
                              'squared_fcst_anom', 'squared_obs_anom',
                              'anom_covariance', 'false_positives',
@@ -73,7 +74,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # if lead_or_agg(lead) == 'agg':
         #     raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
         fcst = fcst_fn(start_time, end_time, variable, lead=lead,
-                       prob_type=prob_type, grid=grid, mask='lsm', region='global')
+                       prob_type=prob_type, grid=grid, mask=None, region='global')
         # Check to see the prob type attribute
         enhanced_prob_type = fcst.attrs['prob_type']
     else:
@@ -81,7 +82,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # if lead_or_agg(lead) == 'lead':
         #     raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
         fcst = fcst_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
-                       grid=grid, mask='lsm', region='global')
+                       grid=grid, mask=None, region='global')
         # Prob type is always deterministic for truth sources
         enhanced_prob_type = "deterministic"
 
@@ -98,7 +99,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
     obs = truth_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
-                   grid=grid, mask='lsm', region='global')
+                   grid=grid, mask=None, region='global')
     # We need a lead specific obs, so we know which times are valid for the forecast
     lead_labels = get_lead_info(lead)['labels']
     obs = obs.expand_dims({'lead_time': lead_labels})
@@ -116,6 +117,13 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     # for metrics like ACC to work
     # TODO: This will probably break with sparse forecaster and dense observations
     no_null = obs.notnull() & fcst.notnull()
+    # Drop all vars except lat, lon, time, and lead_time from no_null
+    if 'member' in no_null.dims:
+        # Squeeze the member dimension. A note, things like ACC won't work well across
+        no_null = no_null.isel(member=0).drop('member')
+        # Drop all other coords except lat, lon, time, and lead_time
+        no_null = no_null.drop_vars([var for var in no_null.coords if var not in [
+                                    'lat', 'lon', 'time', 'lead_time']], errors='ignore')
     fcst = fcst.where(no_null, np.nan)
     obs = obs.where(no_null, np.nan)
 
@@ -136,7 +144,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     if statistic in ['fcst_anom', 'obs_anom']:
         # Get the appropriate climatology dataframe for metric calculation
         clim_ds = climatology_2020(start_time, end_time, variable, lead=lead, prob_type='deterministic',
-                                   grid=grid, mask='lsm', region='global')
+                                   grid=grid, mask=None, region='global')
         clim_ds = clim_ds.sel(time=valid_times)
         clim_ds = clim_ds.where(obs.notnull(), np.nan)
     ############################################################
@@ -147,7 +155,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         m_ds = obs
     elif statistic == 'fcst':
         m_ds = fcst
-    elif statistic == 'brier' and prob_type == 'ensemble':
+    elif statistic == 'brier' and enhanced_prob_type == 'ensemble':
         fcst_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_digitized')
         obs_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_digitized')
         fcst_event_prob = (fcst_digitized == 2).mean(dim='member')
@@ -160,11 +168,11 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         dry_fraction = seeps_dry_fraction(first_year=1991, last_year=2020,
                                           agg_days=get_lead_info(lead)['agg_days'], grid=grid)
         clim_ds = xr.merge([wet_threshold, dry_fraction])
-        m_ds = weatherbench2.metrics.SpatialSEEPS(climatology=clim_ds,
-                                                  dry_threshold_mm=0.25,
-                                                  precip_name='precip',
-                                                  min_p1=0.03,
-                                                  max_p1=0.93) \
+        m_ds = SpatialSEEPS(climatology=clim_ds,
+                            dry_threshold_mm=0.25,
+                            precip_name='precip',
+                            min_p1=0.03,
+                            max_p1=0.93) \
             .compute(forecast=fcst, truth=obs,
                      avg_time=False, skipna=True)
         m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
@@ -238,19 +246,13 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         m_ds = fcst**2
     elif statistic == 'squared_obs':
         m_ds = obs**2
-    elif statistic == 'fcst_mean':
-        m_ds = fcst.mean()
-    elif statistic == 'obs_mean':
-        m_ds = obs.mean()
     elif statistic == 'covariance':
         m_ds = fcst * obs
-    elif statistic == 'crps' and prob_type == 'ensemble':
-        fcst = fcst.chunk(member=-1, time=1, lat=250, lon=250)  # member must be -1 to succeed
-        m_ds = xskillscore.crps_ensemble(observations=obs, forecasts=fcst, mean=False, dim='time')
-    elif statistic == 'crps' and prob_type == 'quantile':
-        m_ds = weatherbench2.metrics.SpatialQuantileCRPS(quantile_dim='member') \
-                            .compute(forecast=fcst, truth=obs,
-                                     avg_time=False, skipna=True)
+    elif statistic == 'crps' and enhanced_prob_type == 'ensemble':
+        fcst = fcst.chunk(member=-1, time=1, lead_time=1, lat=250, lon=250)  # member must be -1 to succeed
+        m_ds = xskillscore.crps_ensemble(observations=obs, forecasts=fcst, mean=False, dim=['time', 'lead_time'])
+    elif statistic == 'crps' and enhanced_prob_type == 'quantile':
+        m_ds = SpatialQuantileCRPS(quantile_dim='member').compute(forecast=fcst, truth=obs, avg_time=False, skipna=True)
         m_ds = m_ds.rename({'latitude': 'lat', 'longitude': 'lon'})
     elif statistic == 'mape':
         m_ds = abs(fcst - obs) / np.maximum(abs(obs), 1e-10)
@@ -300,7 +302,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
 @dask_remote
 @cacheable(data_type='array',
            cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth',
-                       'metric', 'time_grouping', 'spatial', 'grid', 'region'],
+                       'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
            chunking={"lat": 121, "lon": 240, "time": 30, 'region': 300, 'lead_time': -1},
            chunk_by_arg={
                'grid': {
@@ -310,7 +312,7 @@ def grouped_metric(start_time, end_time, variable, lead, forecast, truth,
            cache=True)
 def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
                        metric, time_grouping=None, spatial=False, grid="global1_5",
-                       region='countries'):
+                       mask='lsm', region='countries'):
     """Compute a grouped metric for a forecast at a specific lead."""
     # Use the metric registry to get the metric class
     metric_obj = metric_factory(metric)()
@@ -358,8 +360,8 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             return None
         data_sparse = ds.attrs['sparse']  # Whether the input data to the statistic is expected to be sparse
 
-        # REMOVE: Testing, apply mask
-        # ds = apply_mask(ds, mask='lsm', var=variable, grid=grid)
+        # TODO: extend to other masks and weighting functions
+        ds = apply_mask(ds, mask='lsm', var=variable, grid=grid)
 
         ############################################################
         # Aggregate and and check validity of the statistic
@@ -376,10 +378,10 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
             if 'lead' in signature(fcst_fn).parameters:
                 check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
-                                   prob_type=metric_obj.prob_type, grid=grid, mask=None, region='global')
+                                   prob_type=metric_obj.prob_type, grid=grid, mask='lsm', region='global')
             else:
                 check_ds = fcst_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
-                                   grid=grid, mask=None, region='global')
+                                   grid=grid, mask='lsm', region='global')
         else:
             check_ds = ds.copy()
         check_ds = check_ds.notnull()
@@ -661,18 +663,19 @@ def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon', agg_fn='
 
     # Normalize weights
     weights /= np.mean(weights)
+    return weights
 
-    # Create weights array
-    weights = ds[lat_dim].copy(data=weights)
-    if f'stacked_{lat_dim}_{lon_dim}' in ds.coords:
-        agg_dims = [f'stacked_{lat_dim}_{lon_dim}']
-    else:
-        agg_dims = [lat_dim, lon_dim]
-    if agg_fn == 'mean':
-        weighted = ds.weighted(weights).mean(agg_dims, skipna=True)
-    else:
-        weighted = ds.weighted(weights).sum(agg_dims, skipna=True)
-    return weighted
+    # # Create weights array
+    # weights = ds[lat_dim].copy(data=weights)
+    # if f'stacked_{lat_dim}_{lon_dim}' in ds.coords:
+    #     agg_dims = [f'stacked_{lat_dim}_{lon_dim}']
+    # else:
+    #     agg_dims = [lat_dim, lon_dim]
+    # if agg_fn == 'mean':
+    #     weighted = ds.weighted(weights).mean(agg_dims, skipna=True)
+    # else:
+    #     weighted = ds.weighted(weights).sum(agg_dims, skipna=True)
+    # return weighted
 
 
 __all__ = ['global_statistic', 'grouped_metric', 'skill_metric',

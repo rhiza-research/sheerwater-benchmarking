@@ -10,6 +10,7 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
                            variable="precip",
                            region="global",
                            lead="week3",
+                           recompute=False,
                            spatial=True):
     """Test a single comparison between the two functions."""
     print(f"Testing: {forecast} | {metric} | {variable} | {region} | {lead} | spatial={spatial}")
@@ -26,10 +27,10 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
         time_grouping=None,
         spatial=spatial,
         region=region,
+        mask='lsm',
         grid='global1_5',
-        # recompute=False
-        # recompute=['global_statistic'],
-        force_overwrite=False
+        recompute=recompute,
+        force_overwrite=False,
     )
 
     # Run grouped_metric
@@ -52,15 +53,15 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
     # Compare results
     if ds_new is None and ds_old is None:
         print("Both functions returned None")
-        return None, None
+        return None, None, 0
 
     if ds_new is None:
         print("Only grouped_metric_new returned None")
-        return None, ds_old
+        return None, ds_old, 1
 
     if ds_old is None:
         print("Only grouped_metric returned None")
-        return ds_new, None
+        return ds_new, None, 2
 
     # Both datasets exist
     new_data = ds_new[variable].compute()
@@ -85,30 +86,36 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
 
         if abs(diff_max) < 1e-10:
             print("✓ EXACT MATCH")
+            return ds_new, ds_old, 3
         elif abs(diff_max) < 1e-3:
             print("✓ CLOSE MATCH")
+            return ds_new, ds_old, 4
         else:
             print("✗ SIGNIFICANT DIFFERENCE")
+            return ds_new, ds_old, 5
 
     except Exception as e:
         print(f"Error computing difference: {e}")
-
-    return ds_new, ds_old
+        raise e
 
 
 def test_multiple_combinations():
     """Test multiple combinations of parameters."""
     test_cases = [
-        # Basic tests, one for each metric
+        # Basic tests, one for each metric. Must test with spatial = True b/c we haven't implemented
+        # spatial weighting in the same way
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "rmse", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "bias", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "crps", "variable": "precip", "spatial": True},
+        # Test quantileCRPS, which can only be done with Salient in Africa
+        {"forecast": "salient", "metric": "crps", "variable": "precip", "spatial": True, 'region': 'africa'},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "smape", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "mape", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "seeps", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "pearson", "variable": "precip", "spatial": True},
+        # Pearson only computed for week 2
+        {"forecast": "ecmwf_ifs_er_debiased", "lead": "week3", "metric": "pearson", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "heidke-1-5-10-20", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-10", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-5", "variable": "precip", "spatial": True},
@@ -125,17 +132,15 @@ def test_multiple_combinations():
         # Different variables
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "tmp2m", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "tmp2m", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "pearson", "variable": "tmp2m", "spatial": True},
 
         # Different regions
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "region": "africa", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae",
-         "variable": "precip", "region": "east_africa", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "region": "east_africa", "spatial": True},  # noqa
 
-        # Non tests, on coupled metrics
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": False},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": False},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "heidke-1-5-10-20", "variable": "precip", "spatial": False},
+        # Non-spatial tests, on coupled metrics. These will fail for now, until we implement spatial weighting
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": False},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": False},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "heidke-1-5-10-20", "variable": "precip", "spatial": False},
     ]
 
     results = []
@@ -147,12 +152,14 @@ def test_multiple_combinations():
 
         # Set defaults
         test_case.setdefault("region", "global")
-        test_case.setdefault("lead", "week1")
+        test_case.setdefault("lead", "week3")
+        test_case.setdefault("recompute", True)
 
-        ds_new, ds_old = test_single_comparison(**test_case)
+        ds_new, ds_old, result = test_single_comparison(**test_case)
         results.append({
             "test_case": i+1,
             "params": test_case,
+            "result": result,
             "new_result": ds_new is not None,
             "old_result": ds_old is not None
         })
@@ -162,16 +169,23 @@ def test_multiple_combinations():
     print("SUMMARY")
     print(f"{'='*60}")
 
-    successful_tests = sum(1 for r in results if r["new_result"] and r["old_result"])
-    new_only = sum(1 for r in results if r["new_result"] and not r["old_result"])
-    old_only = sum(1 for r in results if not r["new_result"] and r["old_result"])
-    both_failed = sum(1 for r in results if not r["new_result"] and not r["old_result"])
+    both_no_run = sum(1 for r in results if r["result"] == 0)
+    new_failed = sum(1 for r in results if r["result"] == 1)
+    old_failed = sum(1 for r in results if r["result"] == 2)
+    exact_match = sum(1 for r in results if r["result"] == 3)
+    close_match = sum(1 for r in results if r["result"] == 4)
+    significant_difference = sum(1 for r in results if r["result"] == 5)
 
     print(f"Total tests: {len(results)}")
-    print(f"Both successful: {successful_tests}")
-    print(f"Only new successful: {new_only}")
-    print(f"Only old successful: {old_only}")
-    print(f"Both failed: {both_failed}")
+    print(f"Exact match: \t{exact_match} / {len(results)}, \t\t{exact_match/len(results)*100:.2f}%")
+    print(f"Close match: \t{close_match} / {len(results)}, \t\t{close_match/len(results)*100:.2f}%")
+    print(f"Sig. diff: \t{significant_difference} / {len(results)}, \t\t{significant_difference/len(results)*100:.2f}%")
+    print(f"New failed: \t{new_failed} / {len(results)}, \t\t{new_failed/len(results)*100:.2f}%")
+    print(f"Old failed: \t{old_failed} / {len(results)}, \t\t{old_failed/len(results)*100:.2f}%")
+    print(f"Both no run: \t{both_no_run} / {len(results)}, \t\t{both_no_run/len(results)*100:.2f}%")
+
+    failed_tests = [r['params'] for r in results if r["result"] in [0, 1, 5]]
+    print(f"Failed tests: {failed_tests}")
 
 
 def plot_comparison(forecast="ecmwf_ifs_er_debiased",

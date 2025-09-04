@@ -160,12 +160,12 @@ class Pearson(Metric):
     """
     @property
     def statistics(self):
-        return ['fcst_mean', 'obs_mean', 'squared_fcst', 'squared_obs', 'covariance']
+        return ['fcst', 'obs', 'squared_fcst', 'squared_obs', 'covariance']
 
     def compute(self, statistic_values):
-        numerator = statistic_values['covariance'] - statistic_values['fcst_mean'] * statistic_values['obs_mean']
-        denominator = (statistic_values['squared_fcst'] - statistic_values['fcst_mean']**2) ** 0.5 * \
-            (statistic_values['squared_obs'] - statistic_values['obs_mean']**2) ** 0.5
+        numerator = statistic_values['covariance'] - statistic_values['fcst'] * statistic_values['obs']
+        denominator = (statistic_values['squared_fcst'] - statistic_values['fcst']**2) ** 0.5 * \
+            (statistic_values['squared_obs'] - statistic_values['obs']**2) ** 0.5
         return numerator / denominator
 
 

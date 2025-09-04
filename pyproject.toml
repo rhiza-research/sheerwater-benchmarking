@@ -45,6 +45,7 @@ name = "sheerwater-benchmarking"
 version = "0.1.0"
 description = "Equitable weather and climate forecasting benchmarking package."
 authors = [
+    { name = "Genevieve Flaspohler", email = "genevieve@rhizaresearch.org" },
     { name = "Joshua Adkins", email = "josh@rhizaresearch.org" }
 ]
 dependencies = [
