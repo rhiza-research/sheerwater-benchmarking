@@ -111,7 +111,8 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         sparse |= obs.attrs['sparse']
 
     # Drop all times not in fcst
-    import pdb; pdb.set_trace()
+    import pdb
+    pdb.set_trace()
     valid_times = set(obs.time.values).intersection(set(fcst.time.values))
     valid_times = list(valid_times)
     valid_times.sort()
@@ -431,7 +432,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             ds = ds.where(mask_ds.mask, np.nan, drop=False)
             # ds = ds.where(mask_ds.mask, np.nan, drop=False)
             # ds = ds.where((ds.region == region).compute(), drop=True)
-            ds = apply_mask(ds,'lsm', grid=grid)
+            ds = apply_mask(ds, 'lsm', grid=grid)
             ds = ds.drop_vars('region')
 
         # Check if the statistic is valid per grouping
