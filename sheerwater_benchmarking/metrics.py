@@ -77,7 +77,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # if lead_or_agg(lead) == 'agg':
         #     raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
         fcst = fcst_fn(start_time, end_time, variable, lead=lead,
-                        prob_type=prob_type, grid=grid, mask=None, region='global')
+                       prob_type=prob_type, grid=grid, mask=None, region='global')
         # Check to see the prob type attribute
         enhanced_prob_type = fcst.attrs['prob_type']
     else:
@@ -85,7 +85,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # if lead_or_agg(lead) == 'lead':
         #     raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
         fcst = fcst_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
-                        grid=grid, mask=None, region='global')
+                       grid=grid, mask=None, region='global')
         # Prob type is always deterministic for truth sources
         enhanced_prob_type = "deterministic"
 
@@ -102,7 +102,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
     obs = truth_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
-                    grid=grid, mask=None, region='global')
+                   grid=grid, mask=None, region='global')
     # We need a lead specific obs, so we know which times are valid for the forecast
     lead_labels = get_lead_info(lead)['labels']
     obs = obs.expand_dims({'lead_time': lead_labels})
@@ -111,6 +111,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         sparse |= obs.attrs['sparse']
 
     # Drop all times not in fcst
+    import pdb; pdb.set_trace()
     valid_times = set(obs.time.values).intersection(set(fcst.time.values))
     valid_times = list(valid_times)
     valid_times.sort()
@@ -131,15 +132,13 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     if statistic in ['fcst_anom', 'obs_anom']:
         # Get the appropriate climatology dataframe for metric calculation
         clim_ds = climatology_2020(start_time, end_time, variable, lead=lead, prob_type='deterministic',
-                                    grid=grid, mask=None, region='global')
+                                   grid=grid, mask=None, region='global')
         clim_ds = clim_ds.sel(time=valid_times)
-        # clim_ds = clim_ds.where(no_null, np.nan, drop=False)
-        clim_ds = clim_ds.where(obs.notnull(), np.nan)
+        clim_ds = clim_ds.where(no_null, np.nan, drop=False)
 
-    # fcst = fcst.where(no_null, np.nan, drop=False)
-    # obs = obs.where(no_null, np.nan, drop=False)
-    fcst = fcst.where(obs.notnull(), np.nan)
-
+    # Ensure a matching null pattern
+    fcst = fcst.where(no_null, np.nan, drop=False)
+    obs = obs.where(no_null, np.nan, drop=False)
 
     # For the case where obs and forecast are datetime objects, do a special conversion to seconds since epoch
     # TODO: This is a hack to get around the fact that the metrics library doesn't support datetime objects
@@ -394,8 +393,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         # Statistic aggregation
         ############################################################
         # Group by time
-        # ds = groupby_time(ds, time_level, agg_fn=agg_fn)
-        ds = groupby_time(ds, time_level, agg_fn='sum')
+        ds = groupby_time(ds, time_level, agg_fn=agg_fn)
 
         # For any lat / lon / lead where there is at least one non-null value, reset to one for space validation
         ds['non_null'] = (ds['non_null'] > 0.0).astype(float)
@@ -431,7 +429,9 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         else:
             # Mask and drop the region coordinate
             ds = ds.where(mask_ds.mask, np.nan, drop=False)
-            ds = ds.where((ds.region == region).compute(), drop=True)
+            # ds = ds.where(mask_ds.mask, np.nan, drop=False)
+            # ds = ds.where((ds.region == region).compute(), drop=True)
+            ds = apply_mask(ds,'lsm', grid=grid)
             ds = ds.drop_vars('region')
 
         # Check if the statistic is valid per grouping
