@@ -111,24 +111,26 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         sparse |= obs.attrs['sparse']
 
     # Drop all times not in fcst
-    import pdb
-    pdb.set_trace()
     valid_times = set(obs.time.values).intersection(set(fcst.time.values))
     valid_times = list(valid_times)
     valid_times.sort()
     obs = obs.sel(time=valid_times)
     fcst = fcst.sel(time=valid_times)
+
+    # Ensure a matching null pattern
     # If the observations are sparse, the forecaster and the obs must be the same length
     # for metrics like ACC to work
-    # TODO: This will probably break with sparse forecaster and dense observations
     no_null = obs.notnull() & fcst.notnull()
-    # Drop all vars except lat, lon, time, and lead_time from no_null
     if 'member' in no_null.dims:
+        # TODO: This will probably break with sparse forecaster and dense observations
+        # Drop all vars except lat, lon, time, and lead_time from no_null
         # Squeeze the member dimension. A note, things like ACC won't work well across members
         no_null = no_null.isel(member=0).drop('member')
         # Drop all other coords except lat, lon, time, and lead_time
         no_null = no_null.drop_vars([var for var in no_null.coords if var not in [
                                     'lat', 'lon', 'time', 'lead_time']], errors='ignore')
+    fcst = fcst.where(no_null, np.nan, drop=False)
+    obs = obs.where(no_null, np.nan, drop=False)
 
     if statistic in ['fcst_anom', 'obs_anom']:
         # Get the appropriate climatology dataframe for metric calculation
@@ -136,10 +138,6 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
                                    grid=grid, mask=None, region='global')
         clim_ds = clim_ds.sel(time=valid_times)
         clim_ds = clim_ds.where(no_null, np.nan, drop=False)
-
-    # Ensure a matching null pattern
-    fcst = fcst.where(no_null, np.nan, drop=False)
-    obs = obs.where(no_null, np.nan, drop=False)
 
     # For the case where obs and forecast are datetime objects, do a special conversion to seconds since epoch
     # TODO: This is a hack to get around the fact that the metrics library doesn't support datetime objects
@@ -407,8 +405,6 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
         # Aggregate in space
         mask_ds = get_mask(mask, grid)
-
-        # Apply the mask
         if not spatial:
             if agg_fn == 'mean':
                 # Group by region and average in space, while applying weighting for mask
@@ -430,9 +426,7 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         else:
             # Mask and drop the region coordinate
             ds = ds.where(mask_ds.mask, np.nan, drop=False)
-            # ds = ds.where(mask_ds.mask, np.nan, drop=False)
-            # ds = ds.where((ds.region == region).compute(), drop=True)
-            ds = apply_mask(ds, 'lsm', grid=grid)
+            ds = ds.where((ds.region == region).compute(), drop=True)
             ds = ds.drop_vars('region')
 
         # Check if the statistic is valid per grouping
