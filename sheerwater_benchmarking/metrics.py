@@ -127,15 +127,19 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # Drop all other coords except lat, lon, time, and lead_time
         no_null = no_null.drop_vars([var for var in no_null.coords if var not in [
                                     'lat', 'lon', 'time', 'lead_time']], errors='ignore')
-    fcst = fcst.where(no_null, np.nan, drop=False)
-    obs = obs.where(no_null, np.nan, drop=False)
 
     if statistic in ['fcst_anom', 'obs_anom']:
         # Get the appropriate climatology dataframe for metric calculation
         clim_ds = climatology_2020(start_time, end_time, variable, lead=lead, prob_type='deterministic',
                                     grid=grid, mask=None, region='global')
         clim_ds = clim_ds.sel(time=valid_times)
-        clim_ds = clim_ds.where(no_null, np.nan, drop=False)
+        # clim_ds = clim_ds.where(no_null, np.nan, drop=False)
+        clim_ds = clim_ds.where(obs.notnull(), np.nan)
+
+    # fcst = fcst.where(no_null, np.nan, drop=False)
+    # obs = obs.where(no_null, np.nan, drop=False)
+    fcst = fcst.where(obs.notnull(), np.nan)
+
 
     # For the case where obs and forecast are datetime objects, do a special conversion to seconds since epoch
     # TODO: This is a hack to get around the fact that the metrics library doesn't support datetime objects
@@ -390,7 +394,8 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
         # Statistic aggregation
         ############################################################
         # Group by time
-        ds = groupby_time(ds, time_level, agg_fn=agg_fn)
+        # ds = groupby_time(ds, time_level, agg_fn=agg_fn)
+        ds = groupby_time(ds, time_level, agg_fn='sum')
 
         # For any lat / lon / lead where there is at least one non-null value, reset to one for space validation
         ds['non_null'] = (ds['non_null'] > 0.0).astype(float)

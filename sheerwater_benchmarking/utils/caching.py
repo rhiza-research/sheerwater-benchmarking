@@ -471,7 +471,17 @@ def write_to_zarr(ds, cache_path, verify_path):
         fs.rm(cache_path, recursive=True)
 
     cache_map = fs.get_mapper(cache_path)
-    ds.to_zarr(store=cache_map, mode='w')
+    try:
+        ds.to_zarr(store=cache_map, mode='w')
+    except Exception as e:
+        print(f"Error writing to zarr: {e}")
+        # For any coordinate of type object, convert to type string
+        # I'm getting an error writing lead time dimension: 
+        # *** TypeError: expected unicode string, found 1 xarray to zarr
+        for dim in ds.coords:
+            if ds[dim].dtype == object:
+                ds = ds.assign_coords({dim: np.asarray(ds[dim].values, dtype=object).astype(str)})
+        ds.to_zarr(store=cache_map, mode='w')
 
     # Add a lock file to the cache to verify cache integrity, with the current timestamp
     fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -1126,7 +1136,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                             # Check for memoized land-sea mask
                             # if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
                             # if cache_key not in memoized and ds is not None and cache == True:
-                            if cache_key not in memoized and ds is not None:
+                            if cache_key not in memoized and ds is not None and ('global_statistic' in cache_key or 'ecmwf_ifs_er' in cache_key or 'lsm' in cache_key) and 'grouped_metric' not in cache_key:
                             # if cache_key not in memoized and ds is not None and 'global_statistic' in cache_key:
                                 print(f"Memoizing {cache_key}")
                                 memoized[cache_key] = ds.persist()
@@ -1243,8 +1253,8 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     ds = func(*args, **kwargs)
                     # Check for memoized land-sea mask
                     # if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
+                    if cache_key not in memoized and ds is not None and ('global_statistic' in cache_key or 'ecmwf_ifs_er' in cache_key or 'lsm' in cache_key) and 'grouped_metric' not in cache_key:
                     # if cache_key not in memoized and ds is not None and 'global_statistic' in cache_key:
-                    if cache_key not in memoized and ds is not None:
                         print(f"Memoizing {cache_key}")
                         memoized[cache_key] = ds.persist()
                     ##########################
