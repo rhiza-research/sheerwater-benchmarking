@@ -198,9 +198,9 @@ class Heidke(Metric):
 
     @property
     def statistics(self):
-        stats = [('n_correct', 'sum'), ('n_valid', 'sum')]
-        stats += [(f'n_fcst_bin_{i}', 'sum') for i in range(1, len(self.config_dict['bins']))]
-        stats += [(f'n_obs_bin_{i}', 'sum') for i in range(1, len(self.config_dict['bins']))]
+        stats = ['n_correct', 'n_valid']
+        stats += [f'n_fcst_bin_{i}' for i in range(1, len(self.config_dict['bins']))]
+        stats += [f'n_obs_bin_{i}' for i in range(1, len(self.config_dict['bins']))]
         return stats
 
     def compute(self, statistic_values):

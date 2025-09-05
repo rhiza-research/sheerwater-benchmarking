@@ -1,23 +1,25 @@
 """Verification metrics for forecasters and reanalyses."""
+from .metric_factory import metric_factory
+from sheerwater_benchmarking.masks import region_labels
+from sheerwater_benchmarking.utils import (cacheable, dask_remote,
+                                           get_lead_info,
+                                           get_admin_level,
+                                           apply_mask,
+                                           clip_region,
+                                           get_mask,
+                                           get_time_level,
+                                           get_datasource_fn)
+from sheerwater_benchmarking.climatology import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
+import xskillscore
+from weatherbench2.metrics import _spatial_average
+from weatherbench2.metrics import SpatialQuantileCRPS, SpatialSEEPS
 import numpy as np
 from inspect import signature
 import xarray as xr
 import pandas as pd
 
-from weatherbench2.metrics import SpatialQuantileCRPS, SpatialSEEPS
-import xskillscore
-
-
-from sheerwater_benchmarking.climatology import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
-from sheerwater_benchmarking.utils import (cacheable, dask_remote,
-                                           get_lead_info,
-                                           get_admin_level,
-                                           apply_mask,
-                                           get_mask,
-                                           get_time_level,
-                                           get_datasource_fn)
-from sheerwater_benchmarking.masks import region_labels
-from .metric_factory import metric_factory
+# Disable scientific notation globally
+np.set_printoptions(suppress=True)
 
 
 @dask_remote
@@ -75,7 +77,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # if lead_or_agg(lead) == 'agg':
         #     raise ValueError("Evaluating the function {forecast} must be called with a lead, not an aggregation")
         fcst = fcst_fn(start_time, end_time, variable, lead=lead,
-                       prob_type=prob_type, grid=grid, mask=None, region='global')
+                        prob_type=prob_type, grid=grid, mask=None, region='global')
         # Check to see the prob type attribute
         enhanced_prob_type = fcst.attrs['prob_type']
     else:
@@ -83,7 +85,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # if lead_or_agg(lead) == 'lead':
         #     raise "Evaluating the function {forecast} must be called with an aggregation, but not at a lead."
         fcst = fcst_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
-                       grid=grid, mask=None, region='global')
+                        grid=grid, mask=None, region='global')
         # Prob type is always deterministic for truth sources
         enhanced_prob_type = "deterministic"
 
@@ -100,7 +102,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     # Get the truth to compare against
     truth_fn = get_datasource_fn(truth)
     obs = truth_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
-                   grid=grid, mask=None, region='global')
+                    grid=grid, mask=None, region='global')
     # We need a lead specific obs, so we know which times are valid for the forecast
     lead_labels = get_lead_info(lead)['labels']
     obs = obs.expand_dims({'lead_time': lead_labels})
@@ -120,13 +122,20 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     no_null = obs.notnull() & fcst.notnull()
     # Drop all vars except lat, lon, time, and lead_time from no_null
     if 'member' in no_null.dims:
-        # Squeeze the member dimension. A note, things like ACC won't work well across
+        # Squeeze the member dimension. A note, things like ACC won't work well across members
         no_null = no_null.isel(member=0).drop('member')
         # Drop all other coords except lat, lon, time, and lead_time
         no_null = no_null.drop_vars([var for var in no_null.coords if var not in [
                                     'lat', 'lon', 'time', 'lead_time']], errors='ignore')
-    fcst = fcst.where(no_null, np.nan)
-    obs = obs.where(no_null, np.nan)
+    fcst = fcst.where(no_null, np.nan, drop=False)
+    obs = obs.where(no_null, np.nan, drop=False)
+
+    if statistic in ['fcst_anom', 'obs_anom']:
+        # Get the appropriate climatology dataframe for metric calculation
+        clim_ds = climatology_2020(start_time, end_time, variable, lead=lead, prob_type='deterministic',
+                                    grid=grid, mask=None, region='global')
+        clim_ds = clim_ds.sel(time=valid_times)
+        clim_ds = clim_ds.where(no_null, np.nan, drop=False)
 
     # For the case where obs and forecast are datetime objects, do a special conversion to seconds since epoch
     # TODO: This is a hack to get around the fact that the metrics library doesn't support datetime objects
@@ -138,16 +147,6 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         # NaT get's converted to -9.22337204e+09, so filter that to a proper nan
         obs = obs.where(obs > -1e9, np.nan)
         fcst = fcst.where(fcst > -1e9, np.nan)
-
-    ###########################################################################
-    # Prepare and preprocess the data necessary to compute the statistics
-    ###########################################################################
-    if statistic in ['fcst_anom', 'obs_anom']:
-        # Get the appropriate climatology dataframe for metric calculation
-        clim_ds = climatology_2020(start_time, end_time, variable, lead=lead, prob_type='deterministic',
-                                   grid=grid, mask=None, region='global')
-        clim_ds = clim_ds.sel(time=valid_times)
-        clim_ds = clim_ds.where(obs.notnull(), np.nan)
     ############################################################
     # Call the statistic
     ############################################################
@@ -159,6 +158,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     elif statistic == 'brier' and enhanced_prob_type == 'ensemble':
         fcst_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_digitized')
         obs_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_digitized')
+        sparse = fcst_digitized.attrs['sparse'] | obs_digitized.attrs['sparse']
         fcst_event_prob = (fcst_digitized == 2).mean(dim='member')
         obs_event_prob = (obs_digitized == 2)
         m_ds = (fcst_event_prob - obs_event_prob)**2
@@ -267,6 +267,7 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
         m_ds = fcst - obs
     elif statistic == 'n_valid':
         m_ds = xr.ones_like(fcst)
+        m_ds = m_ds.where(fcst.notnull(), 0.0, drop=False).astype(float)
     else:
         raise ValueError(f"Statistic {statistic} not implemented")
 
@@ -361,9 +362,6 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
             return None
         data_sparse = ds.attrs['sparse']  # Whether the input data to the statistic is expected to be sparse
 
-        # TODO: extend to other masks and weighting functions
-        mask_ds = get_mask(mask, grid)
-        # ds = apply_mask(ds, mask=mask_ds, var=variable, grid=grid)
         ############################################################
         # Aggregate and and check validity of the statistic
         ############################################################
@@ -385,61 +383,56 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
                                    grid=grid, mask='lsm', region='global')
         else:
             check_ds = ds.copy()
-        check_ds = check_ds.notnull()
-        # Create an indicator variable that is 1 for all dimensions
-        check_ds['indicator'] = xr.ones_like(check_ds[variable])
-
+        check_ds = check_ds.notnull().astype(float)
+        # Create a non_null indicator
+        ds['non_null'] = check_ds[variable]
         ############################################################
         # Statistic aggregation
         ############################################################
         # Group by time
         ds = groupby_time(ds, time_level, agg_fn=agg_fn)
-        check_ds = groupby_time(check_ds, time_level, agg_fn='sum')
+
+        # For any lat / lon / lead where there is at least one non-null value, reset to one for space validation
+        ds['non_null'] = (ds['non_null'] > 0.0).astype(float)
+        # Create an indicator variable that is 1 for all dimensions
+        ds['indicator'] = xr.ones_like(ds['non_null'])
 
         # Add the region coordinate to the statistic
         region_ds = region_labels(grid=grid, admin_level=admin_level)
         ds = ds.assign_coords(region=region_ds.region)
-        check_ds = check_ds.assign_coords(region=region_ds.region)
 
-        # Average in space
+        # Aggregate in space
+        mask_ds = get_mask(mask, grid)
+
+        # Apply the mask
         if not spatial:
-            # Group by region and average in space
-            # Note: if we want to keep latitude weighing, we should think about
-            # how to properly normalize for different countries
-            # ds = ds.groupby('region').apply(latitude_weighted_spatial_average, agg_fn=agg_fn)
-            # ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
-            # Apply weights for latitude weighting
-            weights = latitude_weights(mask_ds, lat_dim='lat', lon_dim='lon')
-            # ds['var_weighted'] = ds[variable] * weights
-            test = ds.copy()
-            ds = ds * weights
-            ds['weights'] = weights
-            ds['weights_sum'] = xr.ones_like(weights) 
-
-            # ds = ds.groupby('region').apply(mean_or_sum, agg_fn=agg_fn, dims='stacked_lat_lon')
-            ds = ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
-            test_mean = test.groupby('region').apply(mean_or_sum, agg_fn='mean', dims='stacked_lat_lon')
-            test_sum = test.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
-            check_ds = check_ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
-
-            import pdb
-            pdb.set_trace()
-
-            # Correct weighted sum to be a proper average or sum
-            ds[variable] = ds[variable] * (ds['weights_sum'] / ds['weights'])
             if agg_fn == 'mean':
-                ds[variable] = ds[variable] / ds['weights_sum']
-            ds = ds.drop_vars(['weights', 'weights_sum'])
+                # Group by region and average in space, while applying weighting for mask
+                # and latitudes
+                weights = latitude_weights(ds, lat_dim='lat', lon_dim='lon')
+                ds['weights'] = weights * mask_ds.mask
+            else:
+                ds['weights'] = mask_ds.mask
+
+            ds[variable] = ds[variable] * ds['weights']
+            ds['non_null'] = ds['non_null'] * mask_ds.mask
+            ds['indicator'] = ds['indicator'] * mask_ds.mask
+
+            ds = ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
+            if agg_fn == 'mean':
+                # Normalize by weights
+                ds[variable] = ds[variable] / ds['weights']
+            ds = ds.drop_vars(['weights'])
         else:
             # Mask and drop the region coordinate
-            region_clip = (ds.region == region).compute()
-            ds = ds.where(region_clip, drop=True)
-            check_ds = check_ds.where(region_clip, drop=True)
+            ds = ds.where(mask_ds.mask, np.nan, drop=False)
+            ds = ds.where((ds.region == region).compute(), drop=True)
             ds = ds.drop_vars('region')
 
         # Check if the statistic is valid per grouping
-        is_valid = (check_ds[variable] / check_ds['indicator'] > 0.98)
+        is_valid = (ds['non_null'] / ds['indicator'] > 0.98)
         ds = ds.where(is_valid, np.nan, drop=False)
+        ds = ds.drop_vars(['indicator', 'non_null'])
 
         # Assign the final statistic value
         statistic_values[statistic] = ds.copy()
@@ -663,7 +656,7 @@ def groupby_time(ds, time_grouping, agg_fn='mean'):
     return ds
 
 
-def latitude_weights(mask_ds, lat_dim='lat', lon_dim='lon'):
+def latitude_weights(ds, lat_dim='lat', lon_dim='lon'):
     """Return latitude weights as an xarray DataArray.
 
     This function weights each latitude band by the actual cell area,
@@ -671,7 +664,7 @@ def latitude_weights(mask_ds, lat_dim='lat', lon_dim='lon'):
     in area than those near the equator.
     """
     # Calculate latitude cell bounds
-    lat_rad = np.deg2rad(mask_ds[lat_dim].values)
+    lat_rad = np.deg2rad(ds[lat_dim].values)
     # Get the centerpoint of each latitude band
     pi_over_2 = np.array([np.pi / 2], dtype=lat_rad.dtype)
     bounds = np.concatenate([-pi_over_2, (lat_rad[:-1] + lat_rad[1:]) / 2, pi_over_2])
@@ -685,12 +678,8 @@ def latitude_weights(mask_ds, lat_dim='lat', lon_dim='lon'):
     # Normalize weights
     weights /= np.mean(weights)
     # Return an xarray DataArray with dimensions lat
-    weights = xr.DataArray(weights, coords=[mask_ds[lat_dim]], dims=[lat_dim])
-    weights = weights.expand_dims({lon_dim: mask_ds[lon_dim]})
-
-    # import pdb; pdb.set_trace()
-    # weights = weights.where(mask_ds.mask.notnull(), np.nan)
-    weights = weights * mask_ds.mask
+    weights = xr.DataArray(weights, coords=[ds[lat_dim]], dims=[lat_dim])
+    weights = weights.expand_dims({lon_dim: ds[lon_dim]})
     return weights
 
 

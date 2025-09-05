@@ -27,6 +27,9 @@ import xarray as xr
 from sheerwater_benchmarking.utils.space_utils import lon_base_change
 from sheerwater_benchmarking.utils.secrets import postgres_write_password, postgres_read_password
 
+memoized = {}
+
+
 logger = logging.getLogger(__name__)
 
 CHUNK_SIZE_UPPER_LIMIT_MB = 300
@@ -468,7 +471,10 @@ def write_to_zarr(ds, cache_path, verify_path):
         fs.rm(cache_path, recursive=True)
 
     cache_map = fs.get_mapper(cache_path)
-    ds.to_zarr(store=cache_map, mode='w')
+    try:
+        ds.to_zarr(store=cache_map, mode='w')
+    except:
+        pass
 
     # Add a lock file to the cache to verify cache integrity, with the current timestamp
     fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())

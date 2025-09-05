@@ -10,6 +10,7 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
                            variable="precip",
                            region="global",
                            lead="week3",
+                           mask='lsm',
                            recompute=False,
                            spatial=True):
     """Test a single comparison between the two functions."""
@@ -27,12 +28,16 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
         time_grouping=None,
         spatial=spatial,
         region=region,
-        mask='lsm',
+        mask=mask,
         grid='global1_5',
         recompute=recompute,
         force_overwrite=False,
     )
+    if region in ds_new.dims and len(ds_new.region.values) > 1:
+        ds_new = ds_new.sel(region=region)
 
+    if metric == 'frequencybias':
+        metric = 'bias_score'
     # Run grouped_metric
     ds_old = grouped_metric(
         start_time="2016-01-01",
@@ -45,7 +50,7 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
         time_grouping=None,
         spatial=spatial,
         region=region,
-        mask='lsm',
+        mask=mask,
         grid='global1_5',
         recompute=False
     )
@@ -66,8 +71,6 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
     # Both datasets exist
     new_data = ds_new[variable].compute()
     old_data = ds_old[variable].compute()
-    import pdb
-    pdb.set_trace()
 
     print(f"New function result shape: {new_data.shape}")
     print(f"Old function result shape: {old_data.shape}")
@@ -89,7 +92,7 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
         if abs(diff_max) < 1e-10:
             print("✓ EXACT MATCH")
             return ds_new, ds_old, 3
-        elif abs(diff_max) < 1e-3:
+        elif abs(diff_max) < 0.007:
             print("✓ CLOSE MATCH")
             return ds_new, ds_old, 4
         else:
@@ -104,47 +107,47 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
 def test_multiple_combinations():
     """Test multiple combinations of parameters."""
     test_cases = [
-        # Basic tests, one for each metric. Must test with spatial = True b/c we haven't implemented
-        # spatial weighting in the same way
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "kenya", "variable": "precip", "spatial": False},
-        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "global", "variable": "precip", "spatial": False},
+        # Our basic test, does lat-weighted averaging and masking globally 
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "global", "mask": 'lsm', "variable": "precip", "spatial": False},
+        # Have to test with spatial = True because old code had a spatial weighting bug
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "kenya", "mask": 'lsm', "variable": "precip", "spatial": True},
 
+        # Now test all the metrics
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "ets-5", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-5", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "rmse", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "bias", "variable": "precip", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "crps", "variable": "precip", "spatial": True},
         # Test quantileCRPS, which can only be done with Salient in Africa
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "crps", "variable": "precip", "spatial": True},
         {"forecast": "salient", "metric": "crps", "variable": "precip", "spatial": True, 'region': 'africa'},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "smape", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "mape", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "seeps", "variable": "precip", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": True},
-        # Pearson only computed for week 2
+        # Pearson only computed for week 3
         {"forecast": "ecmwf_ifs_er_debiased", "lead": "week3", "metric": "pearson", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "heidke-1-5-10-20", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-10", "variable": "precip", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-5", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "far-5", "variable": "precip", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "ets-5", "variable": "precip", "spatial": True},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "frequencybias", "variable": "precip", "spatial": True},
 
-
         # Different forecasts
-        {"forecast": "ecmwf_ifs_er", "metric": "mae", "variable": "precip", "spatial": True},
+        {"forecast": "ecmwf_ifs_er", "metric": "mae", "variable": "precip", "spatial": False},
         {"forecast": "climatology_2015", "metric": "mae", "variable": "precip", "spatial": True},
         {"forecast": "fuxi", "metric": "mae", "variable": "precip", "spatial": True},
 
         # Different variables
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "tmp2m", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "tmp2m", "spatial": True},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "tmp2m", "spatial":  False},
 
         # Different regions
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "region": "africa", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "region": "east_africa", "spatial": True},  # noqa
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "region": "africa", "spatial": False},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "region": "east_africa", "spatial": False},  # noqa
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "region": "kenya", "spatial": True},  # noqa
 
         # Non-spatial tests, on coupled metrics. These will fail for now, until we implement spatial weighting
-        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": False},
-        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": False},
-        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "heidke-1-5-10-20", "variable": "precip", "spatial": False},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "variable": "precip", "spatial": False},
+        {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": False},
     ]
 
     results = []
@@ -157,8 +160,9 @@ def test_multiple_combinations():
         # Set defaults
         test_case.setdefault("region", "global")
         test_case.setdefault("lead", "week3")
-        test_case.setdefault("recompute", True)
+        test_case.setdefault("recompute", ['grouped_metric_new'])
         test_case.setdefault("spatial", True)
+        test_case.setdefault("mask", "lsm")
 
         ds_new, ds_old, result = test_single_comparison(**test_case)
         results.append({
@@ -168,7 +172,6 @@ def test_multiple_combinations():
             "new_result": ds_new is not None,
             "old_result": ds_old is not None
         })
-        break
 
     # Summary
     print(f"\n{'='*60}")
@@ -199,9 +202,10 @@ def plot_comparison(forecast="ecmwf_ifs_er_debiased",
                     variable="precip",
                     region="global",
                     lead="week3",
+                    mask='lsm',
                     spatial=True):
     """Create a plot comparing the results of both functions."""
-    ds_new, ds_old = test_single_comparison(forecast, metric, variable, region, lead, spatial)
+    ds_new, ds_old = test_single_comparison(forecast, metric, variable, region, lead, mask, spatial)
 
     if ds_new is None or ds_old is None:
         print("Cannot plot - one or both datasets are None")

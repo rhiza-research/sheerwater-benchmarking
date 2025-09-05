@@ -124,8 +124,20 @@ def clip_region(ds, region, lon_dim='lon', lat_dim='lat', drop=False, keep_shape
 
 
 def get_mask(mask, grid='global1_5'):
-    """Get a mask dataset."""
-    if mask == 'lsm':
+    """Get a mask dataset.
+
+    Args:
+        mask (str): The mask to apply. One of: 'lsm', None
+            To get different land-sea masks, use 'lsm-<value>'. For example, 'lsm-0.5' will return a mask
+            where the mask is greater than 0.5. Defaults to 0.0.
+        grid (str): The grid resolution of the dataset.
+
+    Returns:
+        xr.Dataset: Mask dataset.
+    """
+    if mask is None:
+        return get_grid_ds(grid)
+    elif 'lsm' in mask:
         # Import here to avoid circular imports
         from sheerwater_benchmarking.masks import land_sea_mask
         if grid == 'global1_5' or grid == 'global0_25':
@@ -135,9 +147,15 @@ def get_mask(mask, grid='global1_5'):
             from sheerwater_benchmarking.utils.data_utils import regrid
             mask_ds = land_sea_mask(grid='global0_25')
             mask_ds = regrid(mask_ds, grid, method='nearest').compute()
+
+        val = 0.0
+        if '-' in mask:
+            # Convert to boolean mask
+            val = float(mask.split('-')[1])
+        mask_ds['mask'] = mask_ds['mask'] > val
+        return mask_ds
     else:
-        raise NotImplementedError("Only land-sea mask is implemented.")
-    return mask_ds
+        raise NotImplementedError("Only land-sea or None mask is implemented.")
 
 
 def apply_mask(ds, mask, var=None, val=0.0, grid='global1_5'):
