@@ -160,7 +160,6 @@ def global_statistic(start_time, end_time, variable, lead, forecast, truth,
     elif statistic == 'brier' and enhanced_prob_type == 'ensemble':
         fcst_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='fcst_digitized')
         obs_digitized = global_statistic(start_time, end_time, **cache_kwargs, statistic='obs_digitized')
-        sparse = fcst_digitized.attrs['sparse'] | obs_digitized.attrs['sparse']
         fcst_event_prob = (fcst_digitized == 2).mean(dim='member')
         obs_event_prob = (obs_digitized == 2)
         m_ds = (fcst_event_prob - obs_event_prob)**2
