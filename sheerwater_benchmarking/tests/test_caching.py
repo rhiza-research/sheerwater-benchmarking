@@ -24,6 +24,18 @@ def simple_timeseries(start_time, end_time, name, species='coraciidae', stride='
     return ds
 
 
+@cacheable(data_type='array',
+           timeseries='time',
+           cache_args=['name', 'species', 'stride'])
+def simple_kwargs_timeseries(start_time=None, end_time=None, name='test', species='coraciidae', stride='day'):
+    """Generate a simple timeseries dataset for testing."""
+    times = get_dates(start_time, end_time, stride=stride, return_string=False)
+    obs = np.random.randint(0, 10, size=(len(times),))
+    ds = xr.Dataset({'obs': ('time', obs)}, coords={'time': times})
+    ds.attrs['name'] = name
+    ds.attrs['species'] = species
+    return ds
+
 @cacheable(data_type='tabular',
            backend='parquet',
            timeseries='time',
@@ -105,6 +117,12 @@ def test_validate_timeseries():
         force_overwrite=True,
     )
     assert len(ds1.time) < len(ds4.time)
+
+
+def test_kwargs_timeseries():
+    """Test that timeseries can be passed as kwargs."""
+    ds = simple_kwargs_timeseries(start_time="2018-01-01", end_time="2019-01-01")
+    assert ds is not None
 
 
 @cacheable(data_type='tabular',

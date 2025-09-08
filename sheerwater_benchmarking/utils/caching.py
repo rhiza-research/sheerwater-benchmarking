@@ -912,10 +912,14 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     raise ValueError(
                         "Time series functions must not place their time arguments in cacheable_args!")
 
-                if 'start_time' not in params or 'end_time' not in params:
-                    raise ValueError(
-                        "Time series functions must have the parameters 'start_time' and 'end_time'")
-                else:
+                if 'start_time' in kwargs or 'end_time' in kwargs:
+                    start_time = kwargs['start_time']
+                    end_time = kwargs['end_time']
+                    if 'start_time' not in params:
+                        del kwargs['start_time']
+                    if 'end_time' not in params:
+                        del kwargs['end_time']
+                elif 'start_time'in params and 'end_time' in params:
                     keys = [item for item in params]
                     try:
                         start_time = args[keys.index('start_time')]
@@ -923,6 +927,10 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     except IndexError:
                         raise ValueError("'start_time' and 'end_time' must be passed as positional arguments, not "
                                          "keyword arguments")
+                else:
+                    raise ValueError(
+                        "Time series functions must have the parameters or be passed 'start_time' and 'end_time'")
+
 
             # Handle keying based on cache arguments
             cache_arg_values = {}
