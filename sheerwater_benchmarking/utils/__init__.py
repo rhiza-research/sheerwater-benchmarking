@@ -83,4 +83,5 @@ __all__ = [
     "get_forecast_start_end",
     "convert_to_standard_lead",
     "get_datasource_fn",
+    "get_mask",
 ]

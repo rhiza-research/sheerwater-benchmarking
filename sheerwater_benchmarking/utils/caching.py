@@ -1135,10 +1135,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
 
                             # Check for memoized land-sea mask
-                            # if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
-                            # if cache_key not in memoized and ds is not None and cache == True:
-                            if cache_key not in memoized and ds is not None and ('global_statistic' in cache_key or 'ecmwf_ifs_er' in cache_key or 'lsm' in cache_key) and 'grouped_metric' not in cache_key:
-                                # if cache_key not in memoized and ds is not None and 'global_statistic' in cache_key:
+                            if cache_key not in memoized and ds is not None:
                                 print(f"Memoizing {cache_key}")
                                 memoized[cache_key] = ds.persist()
 
@@ -1252,11 +1249,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                     ##### IF NOT EXISTS ######
                     ds = func(*args, **kwargs)
-                    # if cache_key not in memoized and 'land_sea_mask' in cache_key and ds is not None:
-                    # if cache_key not in memoized and ds is not None and ('global_statistic' in cache_key or 'ecmwf_ifs_er' in cache_key or 'lsm' in cache_key) and 'grouped_metric' not in cache_key:
-                        # if cache_key not in memoized and ds is not None and 'global_statistic' in cache_key:
-                        # print(f"Memoizing {cache_key}")
-                        # memoized[cache_key] = ds.persist()
+                    if cache_key not in memoized and ds is not None:
+                        print(f"Memoizing {cache_key}")
+                        memoized[cache_key] = ds.persist()
                     ##########################
 
                 # Store the result

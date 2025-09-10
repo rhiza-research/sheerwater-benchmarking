@@ -1,9 +1,9 @@
 """Library of statistics implementations for verification."""
-# flake8: noqa: D102
+# flake8: noqa: D102, ARG001, D103
+
 import xarray as xr
 import numpy as np
 from functools import wraps
-from typing import Callable
 
 import xskillscore
 from weatherbench2.metrics import SpatialQuantileCRPS, SpatialSEEPS
@@ -15,7 +15,7 @@ SHEERWATER_STATISTIC_REGISTRY = {}
 
 
 def statistic(cache: bool = True, **cacheable_overrides):
-    """A unifed statistics decorator. 
+    """A unifed statistics decorator.
 
     With this decorator, you can define a statistic function that will be cached and used to compute the statistic
     for a given forecast and observation. The statistic function will be provided with the forecast, observation, and

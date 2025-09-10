@@ -231,7 +231,6 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
         raise ValueError(f"Lead {lead} not valid for variable {variable}")
     lead_info = get_lead_info(lead)
     agg_days = lead_info['agg_days']
-    all_labels = lead_info['labels']
 
     # The earliest and latest forecast dates for the set of all leads
     forecast_start, forecast_end = get_forecast_start_end(lead, start_time, end_time)

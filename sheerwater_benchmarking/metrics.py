@@ -1,22 +1,14 @@
 """Verification metrics for forecasters and reanalyses."""
 from .metrics_library import metric_factory
-from sheerwater_benchmarking.masks import region_labels
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            get_lead_info,
-                                           get_admin_level,
-                                           apply_mask,
-                                           clip_region,
-                                           get_mask,
-                                           get_time_level,
                                            get_datasource_fn)
 from sheerwater_benchmarking.climatology import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 import xskillscore
-from weatherbench2.metrics import _spatial_average
 from weatherbench2.metrics import SpatialQuantileCRPS, SpatialSEEPS
 import numpy as np
 from inspect import signature
 import xarray as xr
-import pandas as pd
 
 # Disable scientific notation globally
 np.set_printoptions(suppress=True)
@@ -338,145 +330,6 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
 
 @dask_remote
 @cacheable(data_type='array',
-           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth',
-                       'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
-           chunking={"lat": 121, "lon": 240, "time": 30, 'region': 300, 'lead_time': -1},
-           chunk_by_arg={
-               'grid': {
-                   'global0_25': {"lat": 721, "lon": 1440, "time": 30}
-               },
-           },
-           cache=True)
-def grouped_metric_old(start_time, end_time, variable, lead, forecast, truth,
-                       metric, time_grouping=None, spatial=False, grid="global1_5",
-                       mask='lsm', region='countries'):
-    """Compute a grouped metric for a forecast at a specific lead."""
-    # Use the metric registry to get the metric class
-    metric_obj = metric_factory(metric)()
-
-    # Check that the variable is valid for the metric
-    if metric_obj.valid_variables and variable not in metric_obj.valid_variables:
-        raise ValueError(f"Variable {variable} is not valid for metric {metric}")
-
-    # Get admin level for grouping
-    admin_level, is_admin = get_admin_level(region)
-    if is_admin and spatial:
-        raise ValueError(f"Cannot compute spatial metrics for admin level '{region}'. " +
-                         "Pass in a specific region instead.")
-
-    # Get time level for grouping
-    time_level = get_time_level(time_grouping)
-
-    # Set up sparsity for the metric
-    metric_sparse = metric_obj.sparse
-
-    # Statistics needed to calculate the metrics, incrementally populated
-    statistic_values = {}
-    statistic_values['spatial'] = spatial  # whether the metric is spatially aggregated
-
-    # If metric is categorical, store the bins
-    if metric_obj.categorical:
-        bins = metric[metric.find('-')+1:]
-        statistic_values['bins'] = bins
-    else:
-        bins = 'none'
-
-    # Iterate through the statistics and compute them
-    for statistic in metric_obj.statistics:
-        # Statistics can be a tuple of (statistic, agg_fn), or just a statistic with default mean agg
-        if isinstance(statistic, tuple):
-            statistic, agg_fn = statistic
-        else:
-            agg_fn = 'mean'
-
-        ds = global_statistic(start_time, end_time, variable, lead=lead,
-                              forecast=forecast, truth=truth,
-                              statistic=statistic,
-                              bins=bins, metric_info=metric_obj, grid=grid)
-        if ds is None:
-            return None
-        data_sparse = ds.attrs['sparse']  # Whether the input data to the statistic is expected to be sparse
-
-        ############################################################
-        # Aggregate and and check validity of the statistic
-        ############################################################
-        # Drop any extra random coordinates that shouldn't be there
-        for coord in ds.coords:
-            if coord not in ['time', 'lead_time', 'lat', 'lon']:
-                ds = ds.reset_coords(coord, drop=True)
-
-        # Prepare the check_ds for validity checking, considering sparsity
-        if data_sparse or metric_sparse:
-            print("Metric is sparse, need to check the underlying forecast validity directly.")
-            fcst_fn = get_datasource_fn(forecast)
-
-            if 'lead' in signature(fcst_fn).parameters:
-                check_ds = fcst_fn(start_time, end_time, variable, lead=lead,
-                                   prob_type=metric_obj.prob_type, grid=grid, mask='lsm', region='global')
-            else:
-                check_ds = fcst_fn(start_time, end_time, variable, agg_days=get_lead_info(lead)['agg_days'],
-                                   grid=grid, mask='lsm', region='global')
-        else:
-            check_ds = ds.copy()
-        check_ds = check_ds.notnull().astype(float)
-        # Create a non_null indicator
-        ds['non_null'] = check_ds[variable]
-        ############################################################
-        # Statistic aggregation
-        ############################################################
-        # Group by time
-        ds = groupby_time(ds, time_level, agg_fn=agg_fn)
-
-        # For any lat / lon / lead where there is at least one non-null value, reset to one for space validation
-        ds['non_null'] = (ds['non_null'] > 0.0).astype(float)
-        # Create an indicator variable that is 1 for all dimensions
-        ds['indicator'] = xr.ones_like(ds['non_null'])
-
-        # Add the region coordinate to the statistic
-        region_ds = region_labels(grid=grid, admin_level=admin_level)
-        ds = ds.assign_coords(region=region_ds.region)
-
-        # Aggregate in space
-        mask_ds = get_mask(mask, grid)
-        if not spatial:
-            if agg_fn == 'mean':
-                # Group by region and average in space, while applying weighting for mask
-                # and latitudes
-                weights = latitude_weights(ds, lat_dim='lat', lon_dim='lon')
-                ds['weights'] = weights * mask_ds.mask
-            else:
-                ds['weights'] = mask_ds.mask
-
-            ds[variable] = ds[variable] * ds['weights']
-            ds['non_null'] = ds['non_null'] * mask_ds.mask
-            ds['indicator'] = ds['indicator'] * mask_ds.mask
-
-            ds = ds.groupby('region').apply(mean_or_sum, agg_fn='sum', dims='stacked_lat_lon')
-            if agg_fn == 'mean':
-                # Normalize by weights
-                ds[variable] = ds[variable] / ds['weights']
-            ds = ds.drop_vars(['weights'])
-        else:
-            # Mask and drop the region coordinate
-            ds = ds.where(mask_ds.mask, np.nan, drop=False)
-            ds = ds.where((ds.region == region).compute(), drop=True)
-            ds = ds.drop_vars('region')
-
-        # Check if the statistic is valid per grouping
-        is_valid = (ds['non_null'] / ds['indicator'] > 0.98)
-        ds = ds.where(is_valid, np.nan, drop=False)
-        ds = ds.drop_vars(['indicator', 'non_null'])
-
-        # Assign the final statistic value
-        statistic_values[statistic] = ds.copy()
-
-    # Finally, compute the metric based on the aggregated statistic values
-    m_ds = metric_obj.compute(statistic_values)
-    return m_ds
-
-
-@dask_remote
-@cacheable(data_type='array',
            cache_args=['variable', 'lead', 'forecast', 'truth', 'metric', 'baseline',
                        'time_grouping', 'spatial', 'grid', 'region'],
            cache=False)
@@ -641,27 +494,6 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
-
-
-def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon', agg_fn='mean'):
-    """Compute latitude-weighted spatial average of a dataset.
-
-    This function weights each latitude band by the actual cell area,
-    which accounts for the fact that grid cells near the poles are smaller
-    in area than those near the equator.
-    """
-    weights = latitude_weights(ds, lat_dim)
-    # Create weights array
-    weights = ds[lat_dim].copy(data=weights)
-    if f'stacked_{lat_dim}_{lon_dim}' in ds.coords:
-        agg_dims = [f'stacked_{lat_dim}_{lon_dim}']
-    else:
-        agg_dims = [lat_dim, lon_dim]
-    if agg_fn == 'mean':
-        weighted = ds.weighted(weights).mean(agg_dims, skipna=True)
-    else:
-        weighted = ds.weighted(weights).sum(agg_dims, skipna=True)
-    return weighted
 
 
 __all__ = ['global_statistic', 'grouped_metric', 'skill_metric',

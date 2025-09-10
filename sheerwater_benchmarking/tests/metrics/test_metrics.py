@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from sheerwater_benchmarking.utils import start_remote
-from sheerwater_benchmarking.metrics_library import get_bins, metric_factory, MAE
+from sheerwater_benchmarking.metrics_library import get_bins, metric_factory
 
 start_remote(remote_config='large_cluster')
 
@@ -35,14 +35,7 @@ def test_metric_factory():
 
     met = metric_factory('heidke-1-5-10-20', **cache_kwargs)
     test = met.compute()
-
-    import pdb
-    pdb.set_trace()
-    # assert metric_factory('mae') is MAE
-    # assert metric_factory('pod-5') is POD
-    # assert metric_factory('pod-5-10') is POD
-    # with pytest.raises(ValueError):
-    #     metric_factory('pod-abc')
+    assert test is not None
 
 
 if __name__ == "__main__":

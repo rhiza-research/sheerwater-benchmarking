@@ -79,7 +79,7 @@ def region_labels(grid='global1_5', admin_level='countries'):
 
     Available admin levels are 'country', 'region', 'continent', and 'world'.
 
-    # NOTE: this is a slow function. Doesn't really matter, b/c we 
+    # NOTE: this is a slow function. Doesn't really matter, b/c we
     compute it once and cache, but lots of benefit of parallelizing better.
 
     Args:

@@ -8,7 +8,7 @@ import dask
 import xarray_regrid  # noqa: F401, import needed for regridding
 
 
-from .space_utils import get_grid_ds, clip_region
+from .space_utils import get_grid_ds
 from .time_utils import add_dayofyear
 
 
@@ -70,41 +70,6 @@ def regrid(ds, output_grid, method='conservative', base="base180", output_chunks
     regridder = getattr(ds.regrid, method)
     ds = regridder(ds_out, **kwargs)
     return ds
-
-
-def is_valid(ds, var, mask, region, grid, valid_threshold=0.5):
-    """Check if the dataset is valid in the given region and mask.
-    # TODO: could delete, we're no longer using
-
-    If there are dimensions other than lat and lon, the function will
-    check the minimum number of valid data points in the dataset.
-
-    Args:
-        ds (xr.Dataset): Dataset to check.
-        var (str): Variable to check.
-        mask (str): The mask to apply. One of: 'lsm', None
-        region (str): The region to clip to.
-        grid (str): The grid resolution of the dataset.
-        valid_threshold (float): The minimum fraction of valid data points
-            required for the dataset to be considered valid.
-    """
-    if mask == 'lsm':
-        # Import here to avoid circular imports
-        from sheerwater_benchmarking.masks import land_sea_mask
-        mask_ds = land_sea_mask(grid=grid).compute()
-    elif mask is None:
-        mask_ds = get_grid_ds(grid_id=grid).compute()
-    else:
-        raise ValueError("Only land-sea mask is implemented.")
-
-    mask_ds = clip_region(mask_ds, region)
-
-    data_count = (~ds[var].where(mask_ds > 0.0).isnull()).sum(dim=['lat', 'lon']).min()['mask'].compute().values
-    mask_count = int((mask_ds['mask'] > 0.0).sum().compute().values)
-
-    if data_count < mask_count * valid_threshold:
-        return False
-    return True
 
 
 def get_anomalies(ds, clim, var, time_dim='time'):

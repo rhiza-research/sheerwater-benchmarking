@@ -9,7 +9,7 @@ import pandas as pd
 
 from sheerwater_benchmarking.statistics_library import statistic_factory
 from sheerwater_benchmarking.utils import (get_datasource_fn, get_lead_info,
-                                           get_admin_level, get_time_level, get_time_level,
+                                           get_admin_level, get_time_level,
                                            get_mask)
 from sheerwater_benchmarking.climatology import climatology_2020, seeps_wet_threshold, seeps_dry_fraction
 from sheerwater_benchmarking.masks import region_labels
@@ -37,6 +37,7 @@ def get_bins(bin_str: str) -> np.ndarray:
 
 
 def mean_or_sum(ds, agg_fn, dims=['lat', 'lon']):
+    """A light wrapper around standard groupby aggregation functions."""
     # Note, for some reason:
     # ds.groupby('region').mean(['lat', 'lon'], skipna=True).compute()
     # raises:
@@ -123,7 +124,7 @@ class Metric(ABC):
     If you want to sum instead of mean the statistics, you can set self.statistics = [('mae', 'sum')].
 
     If a metric depends on a non-linear calculation involving multiple statistics, simply define those statistics
-    in a list, e.g,. 
+    in a list, e.g,.
         self.statistics = ['squared_fcst_anom', 'squared_obs_anom', 'anom_covariance']
     Again, this assumes each of the statistics is implemented by the global_statistic function. The metric
     will be provided with the mean value of each statistic in each grouping at runtime to operate on and return
@@ -204,7 +205,8 @@ class Metric(ABC):
         # Make sure the prob type is consistent
         if enhanced_prob_type == 'deterministic' and self.prob_type == 'probabilistic':
             raise ValueError("Cannot run probabilistic metric on deterministic forecasts.")
-        elif (enhanced_prob_type == 'ensemble' or enhanced_prob_type == 'quantile') and self.prob_type == 'deterministic':
+        elif (enhanced_prob_type == 'ensemble' or enhanced_prob_type == 'quantile') \
+                and self.prob_type == 'deterministic':
             raise ValueError("Cannot run deterministic metric on probabilistic forecasts.")
         aux_data['prob_type'] = enhanced_prob_type
 
