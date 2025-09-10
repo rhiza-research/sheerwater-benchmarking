@@ -10,7 +10,7 @@ import dateparser
 from sheerwater_benchmarking.metrics import get_datasource_fn
 from sheerwater_benchmarking.utils import is_valid, dask_remote
 from sheerwater_benchmarking import forecasts as fcst_mod
-from sheerwater_benchmarking import baselines as baseline_mod
+from sheerwater_benchmarking import climatology as baseline_mod
 
 
 forecasts = fcst_mod.__forecasts__ + baseline_mod.__forecasts__

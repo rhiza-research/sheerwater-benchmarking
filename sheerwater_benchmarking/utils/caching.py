@@ -24,10 +24,13 @@ from pandas.api.types import is_datetime64_any_dtype as is_datetime
 import dask.dataframe as dd
 import xarray as xr
 
-from sheerwater_benchmarking.utils.data_utils import lon_base_change
+from sheerwater_benchmarking.utils.space_utils import lon_base_change
 from sheerwater_benchmarking.utils.secrets import postgres_write_password, postgres_read_password
 
 logger = logging.getLogger(__name__)
+
+# Global variable for memoizing land-sea mask
+memoized = {}
 
 CHUNK_SIZE_UPPER_LIMIT_MB = 300
 CHUNK_SIZE_LOWER_LIMIT_MB = 30
@@ -379,9 +382,8 @@ def write_to_parquet(df, cache_path, verify_path, upsert=False, primary_keys=Non
             elif df[key].dtype != existing_df[key].dtype:
                 df[key] = df[key].astype(existing_df[key].dtype)
 
-
-        outer_join = existing_df.merge(df, how = 'outer', on=primary_keys, indicator = True, suffixes=('_drop',''))
-        new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis = 1)
+        outer_join = existing_df.merge(df, how='outer', on=primary_keys, indicator=True, suffixes=('_drop', ''))
+        new_rows = outer_join[(outer_join._merge == 'right_only')].drop('_merge', axis=1)
         cols_to_drop = [x for x in new_rows.columns if x.endswith('_drop')]
         new_rows = new_rows.drop(columns=cols_to_drop)
 
@@ -469,7 +471,17 @@ def write_to_zarr(ds, cache_path, verify_path):
         fs.rm(cache_path, recursive=True)
 
     cache_map = fs.get_mapper(cache_path)
-    ds.to_zarr(store=cache_map, mode='w')
+    try:
+        ds.to_zarr(store=cache_map, mode='w')
+    except Exception as e:
+        print(f"Error writing to zarr: {e}")
+        # For any coordinate of type object, convert to type string
+        # I'm getting an error writing lead time dimension:
+        # *** TypeError: expected unicode string, found 1 xarray to zarr
+        for dim in ds.coords:
+            if ds[dim].dtype == object:
+                ds = ds.assign_coords({dim: np.asarray(ds[dim].values, dtype=object).astype(str)})
+        ds.to_zarr(store=cache_map, mode='w')
 
     # Add a lock file to the cache to verify cache integrity, with the current timestamp
     fs.open(verify_path, 'w').write(datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -575,7 +587,6 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
     uri = f'postgresql://write:{pgwrite_pass}@{POSTGRES_IP}:5432/postgres'
     engine = sqlalchemy.create_engine(uri)
 
-
     if upsert and check_exists_postgres(table_name, hash_table_name=hash_table_name):
         if primary_keys is None or not isinstance(primary_keys, list):
             raise ValueError("Upsert may only be performed with primary keys specified as a list.")
@@ -596,9 +607,9 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
             temp_table_name = f"temp_{uuid.uuid4().hex[:6]}"
 
             if isinstance(df, pd.DataFrame):
-                df.to_sql(temp_table_name, engine, index=False)
+                df.to_sql(temp_table_name, engine, index=True)
             elif isinstance(df, dd.DataFrame):
-                df.to_sql(temp_table_name, uri=uri, index=False, parallel=True, chunksize=10000)
+                df.to_sql(temp_table_name, uri=uri, index=True, parallel=True, chunksize=10000)
             else:
                 raise RuntimeError("Did not return dataframe type.")
 
@@ -617,7 +628,7 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
             # To add if not exists must drop if exists and then add. In a transaction this is consistent
 
             # Constraint IDs need to be globally unique to not conflict in the database
-            constraint_id =  hashlib.md5(table_name.encode()).hexdigest()[:10]
+            constraint_id = hashlib.md5(table_name.encode()).hexdigest()[:10]
             query_pk = f"""
             ALTER TABLE "{new_table_name}" DROP CONSTRAINT IF EXISTS unique_constraint_for_{constraint_id} CASCADE;
             """
@@ -647,9 +658,9 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
                 exists = 'replace'
 
             if isinstance(df, pd.DataFrame):
-                df.to_sql(new_table_name, engine, if_exists=exists, index=False)
+                df.to_sql(new_table_name, engine, if_exists=exists, index=True)
             elif isinstance(df, dd.DataFrame):
-                df.to_sql(new_table_name, uri=uri, if_exists=exists, index=False, parallel=True, chunksize=10000)
+                df.to_sql(new_table_name, uri=uri, if_exists=exists, index=True, parallel=True, chunksize=10000)
             else:
                 raise RuntimeError("Did not return dataframe type.")
 
@@ -748,6 +759,7 @@ def write_to_terracotta(cache_key, ds):
         else:
             write_individual_raster(driver, bucket, ds, cache_key)
 
+
 def cache_exists(backend, cache_path, verify_path=None, hash_postgres_table_name=True):
     """Check if a cache exists generically."""
     if backend in ['zarr', 'delta', 'pickle', 'terracotta', 'parquet']:
@@ -823,7 +835,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "cache": None,
         "validate_cache_timeseries": None,
         "force_overwrite": None,
-        "retry_null_cache": False,
+        "retry_null_cache": None,
         "backend": None,
         "storage_backend": None,
         "auto_rechunk":  None,
@@ -838,6 +850,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
     def create_cacheable(func):
         @wraps(func)
         def cacheable_wrapper(*args, **kwargs):
+            # Global declarations for variables used in conditional blocks
+            global memoized
+
             # Proper variable scope for the decorator args
             data_type = nonlocals['data_type']
             cache_args = nonlocals['cache_args']
@@ -938,6 +953,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 for i, p in enumerate(params):
                     if (a == p and len(args) > i and
                             (params[p].kind == Parameter.VAR_POSITIONAL or
+                             params[p].kind == Parameter.POSITIONAL_ONLY or
                              params[p].kind == Parameter.POSITIONAL_OR_KEYWORD)):
                         cache_arg_values[a] = args[i]
                         found = True
@@ -1053,6 +1069,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                 read_cache_map = fs.get_mapper(read_cache_path)
                 read_fs = fsspec.core.url_to_fs(read_cache_path, **LOCAL_CACHE_STORAGE_OPTIONS)[0]
 
+            # Check for memoized land-sea mask
+            if cache_key in memoized and memoized[cache_key] is not None:
+                print(f"Found memoized result for {cache_key}")
+                return memoized[cache_key]
+
             # Now check if the cache exists
             if not recompute and not upsert and cache:
                 if cache_exists(backend, cache_path, verify_path,
@@ -1112,6 +1133,11 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                                          chunks={}, decode_timedelta=True)
                             else:
                                 ds = xr.open_dataset(read_cache_map, engine='zarr', chunks={}, decode_timedelta=True)
+
+                            # Check for memoized land-sea mask
+                            if cache_key not in memoized and ds is not None:
+                                print(f"Memoizing {cache_key}")
+                                memoized[cache_key] = ds.persist()
 
                             if validate_cache_timeseries and timeseries is not None:
                                 # Check to see if the dataset extends roughly the full time series set
@@ -1223,6 +1249,9 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
 
                     ##### IF NOT EXISTS ######
                     ds = func(*args, **kwargs)
+                    if cache_key not in memoized and ds is not None:
+                        print(f"Memoizing {cache_key}")
+                        memoized[cache_key] = ds.persist()
                     ##########################
 
                 # Store the result
@@ -1243,7 +1272,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                     if data_type == 'array':
                         if storage_backend == 'zarr':
                             if (cache_exists(storage_backend, cache_path, verify_path)
-                                and force_overwrite is None):
+                                    and force_overwrite is None):
                                 inp = input(f'A cache already exists at {
                                             cache_path}. Are you sure you want to overwrite it? (y/n)')
                                 if inp == 'y' or inp == 'Y':
@@ -1428,7 +1457,6 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
                                 else:
                                     end_time = end_time.tz_convert(time_col_tz)
                                 ds = ds[ds[time_col] <= end_time]
-
 
                 return ds
 

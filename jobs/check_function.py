@@ -1,7 +1,7 @@
 """Generate land-sea masks for all grids and bases."""
 from itertools import product
 # from importlib import import_module
-from sheerwater_benchmarking.baselines import climatology_2015
+from sheerwater_benchmarking.climatology import climatology_2015
 
 # import argparse
 

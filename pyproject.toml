@@ -45,6 +45,7 @@ name = "sheerwater-benchmarking"
 version = "0.1.0"
 description = "Equitable weather and climate forecasting benchmarking package."
 authors = [
+    { name = "Genevieve Flaspohler", email = "genevieve@rhizaresearch.org" },
     { name = "Joshua Adkins", email = "josh@rhizaresearch.org" }
 ]
 dependencies = [
@@ -101,7 +102,7 @@ dependencies = [
     "huggingface_hub",
     "py7zr",
     "tqdm",
-    "numcodecs<0.16.0"
+    "numcodecs<0.16.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

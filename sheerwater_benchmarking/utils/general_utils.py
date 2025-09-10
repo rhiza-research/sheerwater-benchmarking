@@ -7,8 +7,32 @@ import itertools
 import multiprocessing
 import tqdm
 import dask
+from importlib import import_module
 
 import plotly.graph_objects as go
+
+
+def get_datasource_fn(datasource):
+    """Import the datasource function from any available source."""
+    try:
+        mod = import_module("sheerwater_benchmarking.reanalysis")
+        fn = getattr(mod, datasource)
+    except (ImportError, AttributeError):
+        try:
+            mod = import_module("sheerwater_benchmarking.forecasts")
+            fn = getattr(mod, datasource)
+        except (ImportError, AttributeError):
+            try:
+                mod = import_module("sheerwater_benchmarking.climatology")
+                fn = getattr(mod, datasource)
+            except (ImportError, AttributeError):
+                try:
+                    mod = import_module("sheerwater_benchmarking.data")
+                    fn = getattr(mod, datasource)
+                except (ImportError, AttributeError):
+                    raise ImportError(f"Could not find datasource {datasource}.")
+
+    return fn
 
 
 def load_object(filepath):

@@ -6,9 +6,9 @@ import pandas as pd
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
                                            lon_base_change,
-                                           target_date_to_forecast_date,
-                                           shift_forecast_date_to_target_date,
-                                           lead_to_agg_days, roll_and_agg, regrid)
+                                           get_lead_info, roll_and_agg, regrid, forecast,
+                                           convert_lead_to_valid_time, convert_to_standard_lead,
+                                           get_forecast_start_end)
 
 
 @dask_remote
@@ -175,7 +175,7 @@ def graphcast_daily_wb(start_time, end_time, variable, init_hour=0, grid='global
            },
            validate_cache_timeseries=False)
 def graphcast_daily_regrid(start_time, end_time, variable, init_hour=0, grid='global0_25'):  # noqa: ARG001
-    """Regrid for the original weathernext datasource."""
+    """Regrid for the original Weathernext datasource."""
     ds = graphcast_daily(start_time, end_time, variable, init_hour=init_hour, grid='global0_25')
     if grid == 'global0_25':
         return ds
@@ -206,21 +206,7 @@ def graphcast_wb_rolled(start_time, end_time, variable, agg_days, grid='global0_
     return ds
 
 
-def _process_lead(variable, lead):
-    """Helper function for interpreting lead for Graphcast forecasts."""
-    if variable not in ['precip', 'tmp2m']:
-        raise NotImplementedError(f"Variable {variable} not implemented for Graphcast forecasts.")
-    lead_params = {}
-    for i in range(10):
-        lead_params[f"day{i+1}"] = i
-    lead_params["week1"] = 0
-    lead_offset_days = lead_params.get(lead, None)
-    if lead_offset_days is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for Graphcast {variable} forecasts.")
-    agg_days = lead_to_agg_days(lead)
-    return agg_days, lead_offset_days
-
-
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
@@ -232,23 +218,20 @@ def graphcast(start_time, end_time, variable, lead, prob_type='deterministic',
     if prob_type != 'deterministic':
         raise NotImplementedError("Only deterministic forecast implemented for graphcast")
 
-    # Process the lead
-    agg_days, lead_offset_days = _process_lead(variable, lead)
-
-    # Convert start and end time to forecast start and end based on lead time
-    forecast_start = target_date_to_forecast_date(start_time, lead)
-    forecast_end = target_date_to_forecast_date(end_time, lead)
+    # Get the data with the right days
+    forecast_start, forecast_end = get_forecast_start_end(lead, start_time, end_time)
 
     # Get the data with the right days
+    agg_days = get_lead_info(lead)['agg_days']
     ds = graphcast_wb_rolled(forecast_start, forecast_end, variable, agg_days=agg_days, grid=grid)
     ds = ds.assign_attrs(prob_type="deterministic")
 
-    # Get specific lead
-    lead_shift = np.timedelta64(lead_offset_days, 'D')
-    ds = ds.sel(lead_time=lead_shift)
+    # Create a new coordinate for valid_time, that is the start_date plus the lead time
+    ds = ds.rename({'time': 'start_date'})
+    ds = convert_lead_to_valid_time(ds)
 
-    # Time shift - we want target date, instead of forecast date
-    ds = shift_forecast_date_to_target_date(ds, 'time', lead)
+    # Convert to standard lead
+    ds = convert_to_standard_lead(ds, lead)
 
     # Round the lats/lons to two decimal places to fix the precision issue
     # Can remove these once the caches are updates

@@ -62,7 +62,6 @@ def perpp_ecmwf(start_time, end_time, variable, lead="weeks56", grid="global1_5"
     ds = regrid(ds, grid, base='base180', method='conservative')
     return ds
 
-
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',

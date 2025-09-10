@@ -26,16 +26,18 @@ def run_grouped(combo):
 
     try:
         return grouped_metric(start_time, end_time, variable, lead, forecast, truth, metric,
-                       spatial=False, time_grouping=time_grouping, grid=grid, region=region,
-                       force_overwrite=True, filepath_only=True, recompute=recompute)
+                              spatial=False, time_grouping=time_grouping, grid=grid, region=region,
+                              force_overwrite=True, filepath_only=True, recompute=recompute,
+                              retry_null_cache=True)
     except KeyboardInterrupt as e:
-        raise(e)
+        raise (e)
     except NotImplementedError:
         print(f"Metric {forecast} {lead} {grid} {variable} {metric} not implemented: {traceback.format_exc()}")
         return "Not Impelemnted"
-    except: # noqa:E722
+    except:  # noqa:E722
         print(f"Failed to run global metric {forecast} {lead} {grid} {variable} {metric}: {traceback.format_exc()}")
         return None
+
 
 if __name__ == "__main__":
     run_in_parallel(run_grouped, combos, parallelism)

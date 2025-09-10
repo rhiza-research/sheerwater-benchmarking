@@ -16,9 +16,11 @@ from huggingface_hub.utils import EntryNotFoundError
 from sheerwater_benchmarking.utils.secrets import huggingface_read_token
 from sheerwater_benchmarking.utils import (dask_remote, cacheable,
                                            apply_mask, clip_region,
-                                           lon_base_change,
-                                           target_date_to_forecast_date,
-                                           shift_forecast_date_to_target_date, lead_to_agg_days, roll_and_agg)
+                                           lon_base_change, forecast,
+                                           get_forecast_start_end,
+                                           convert_to_standard_lead,
+                                           shift_forecast_date_to_target_date, get_lead_info,
+                                           roll_and_agg, convert_lead_to_valid_time)
 from sheerwater_benchmarking.tasks import spw_precip_preprocess, spw_rainy_onset
 
 
@@ -175,29 +177,6 @@ def fuxi_rolled(start_time, end_time, variable, agg_days=7, prob_type='probabili
     return ds
 
 
-def _process_lead(variable, lead):
-    """Helper function for interpreting lead for FuXI forecasts."""
-    lead_params = {}
-    if variable == 'rainy_onset':  # rainy onset only has daily leads out to day 34
-        lead_params = {f"day{i+1}": i for i in range(33)}
-    elif variable == 'rainy_onset_no_drought':
-        # need to add 11 days to the lead to handle drought condition
-        lead_params = {f"day{i+1}": i for i in range(20)}
-    else:
-        for i in range(41):
-            lead_params[f"day{i+1}"] = i
-        for i in [0, 7, 14, 21, 28, 35]:
-            lead_params[f"week{i//7+1}"] = i
-        for i in [0, 7, 14, 21, 28]:
-            lead_params[f"weeks{(i//7)+1}{(i//7)+2}"] = i
-    lead_offset_days = lead_params.get(lead, None)
-    if lead_offset_days is None:
-        raise NotImplementedError(f"Lead {lead} not implemented for FuXi {variable} forecasts.")
-
-    agg_days = lead_to_agg_days(lead)
-    return agg_days, lead_offset_days
-
-
 @dask_remote
 def fuxi_spw(start_time, end_time, lead,
              prob_type='probabilistic', prob_threshold=0.6,
@@ -214,7 +193,7 @@ def fuxi_spw(start_time, end_time, lead,
     def shift_fn(ds, shift_by_days):
         """Helper function for selecting and shifting lead for FuXi forecasts."""
         # Select the appropriate lead
-        lead_offset_days = _process_lead('precip', lead)[1]
+        lead_offset_days = get_lead_info(lead)['lead_offsets'] / np.timedelta64(1, 'D')
         lead_sel = {'lead_time': np.timedelta64(lead_offset_days + shift_by_days, 'D')}
         ds = ds.sel(**lead_sel)
         # Time shift - we want target date, instead of forecast date
@@ -236,6 +215,7 @@ def fuxi_spw(start_time, end_time, lead,
     return ds
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
@@ -247,11 +227,13 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
     if grid != 'global1_5':
         raise NotImplementedError("Only 1.5 grid implemented for FuXi.")
 
-    agg_days, lead_offset_days = _process_lead(variable, lead)
+    if lead not in ['weekly', 'biweekly'] and 'daily' not in lead:
+        raise ValueError(f"Lead {lead} not valid for variable {variable}")
+    lead_info = get_lead_info(lead)
+    agg_days = lead_info['agg_days']
 
-    # Convert start and end time to forecast start and end based on lead time
-    forecast_start = target_date_to_forecast_date(start_time, lead)
-    forecast_end = target_date_to_forecast_date(end_time, lead)
+    # The earliest and latest forecast dates for the set of all leads
+    forecast_start, forecast_end = get_forecast_start_end(lead, start_time, end_time)
 
     prob_label = prob_type if prob_type == 'deterministic' else 'ensemble'
     if variable == 'rainy_onset' or variable == 'rainy_onset_no_drought':
@@ -265,10 +247,13 @@ def fuxi(start_time, end_time, variable, lead, prob_type='deterministic',
         ds = ds.assign_attrs(sparse=True)
     else:
         ds = fuxi_rolled(forecast_start, forecast_end, variable=variable, prob_type=prob_type, agg_days=agg_days)
-        # Select the appropriate lead
-        lead_sel = {'lead_time': np.timedelta64(lead_offset_days, 'D')}
-        ds = ds.sel(**lead_sel)
-        ds = shift_forecast_date_to_target_date(ds, 'time', lead)
+
+        # Create a new coordinate for valid_time, that is the start_date plus the lead time
+        ds = ds.rename({'time': 'start_date'})
+        ds = convert_lead_to_valid_time(ds)
+
+        # Convert to standard lead
+        ds = convert_to_standard_lead(ds, lead)
 
         # Apply masking and clip to region
         ds = apply_mask(ds, mask, var=variable, grid=grid)

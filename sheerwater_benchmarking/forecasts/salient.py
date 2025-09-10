@@ -3,7 +3,8 @@ import xarray as xr
 import numpy as np
 
 from sheerwater_benchmarking.utils import (cacheable, dask_remote, get_variable, apply_mask, clip_region, regrid,
-                                           target_date_to_forecast_date, shift_forecast_date_to_target_date)
+                                           forecast, convert_lead_to_valid_time, convert_to_standard_lead,
+                                           get_forecast_start_end)
 
 
 @dask_remote
@@ -97,6 +98,7 @@ def salient_blend(start_time, end_time, variable, timescale="sub-seasonal", grid
 #     return ds
 
 
+@forecast
 @dask_remote
 @cacheable(data_type='array',
            timeseries='time',
@@ -109,26 +111,16 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
         raise NotImplementedError("Rainy onset forecasts not implemented for Salient.")
 
     lead_params = {
-        "week1": ("sub-seasonal", 1),
-        "week2": ("sub-seasonal", 2),
-        "week3": ("sub-seasonal", 3),
-        "week4": ("sub-seasonal", 4),
-        "week5": ("sub-seasonal", 5),
-        "month1": ("seasonal", np.timedelta64('1', 'D')),
-        "month2": ("seasonal", np.timedelta64('31', 'D')),
-        "month3": ("seasonal", np.timedelta64('61', 'D')),
-        "quarter1": ("long-range", 1),
-        "quarter2": ("long-range", 2),
-        "quarter3": ("long-range", 3),
-        "quarter4": ("long-range", 4),
+        "weekly": "sub-seasonal",
+        "monthly": "seasonal",
+        "quarterly": "long-range",
     }
-    timescale, lead_id = lead_params.get(lead, (None, None))
+    timescale = lead_params.get(lead, None)
     if timescale is None:
         raise NotImplementedError(f"Lead {lead} not implemented for Salient.")
 
-    # Convert start and end time to forecast start and end based on lead time
-    forecast_start = target_date_to_forecast_date(start_time, lead)
-    forecast_end = target_date_to_forecast_date(end_time, lead)
+    # Get the data with the right days
+    forecast_start, forecast_end = get_forecast_start_end(lead, start_time, end_time)
 
     ds = salient_blend(forecast_start, forecast_end, variable, timescale=timescale, grid=grid)
     if prob_type == 'deterministic':
@@ -144,12 +136,26 @@ def salient(start_time, end_time, variable, lead, prob_type='deterministic',
     else:
         raise ValueError("Invalid probabilistic type")
 
-    # Get specific lead
-    ds = ds.sel(lead=lead_id)
+    # Convert salient lead naming to match our standard
+    if timescale == "sub-seasonal":
+        ds = ds.assign_coords(lead_time=('lead', [np.timedelta64(i-1, 'W') for i in ds.lead.values]))
+    elif timescale == "long-range":
+        ds = ds.assign_coords(lead_time=('lead', [np.timedelta64((i-1)*120, 'D') for i in ds.lead.values]))
+    elif timescale == "seasonal":
+        # TODO: salient's monthly leads are 31 days, but we define them as 30 days
+        ds = ds.assign_coords(lead_time=('lead', [i-np.timedelta64(1, 'D') for i in ds.lead.values]))
+    else:
+        raise ValueError(f"Invalid timescale: {timescale}")
+    ds = ds.swap_dims({'lead': 'lead_time'})
+    ds = ds.drop_vars('lead')
+
+    # Create a new coordinate for valid_time, that is the start_date plus the lead time
+    ds = convert_lead_to_valid_time(ds, initialization_date_dim='forecast_date')
+
+    # Convert to standard lead
+    ds = convert_to_standard_lead(ds, lead)
 
     # Time shift - we want target date, instead of forecast date
-    ds = shift_forecast_date_to_target_date(ds, 'forecast_date', lead)
-    ds = ds.rename({'forecast_date': 'time'})
     ds = ds.sortby(ds.time)
 
     # Apply masking

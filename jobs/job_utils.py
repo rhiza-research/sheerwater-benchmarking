@@ -5,8 +5,8 @@ import itertools
 import multiprocessing
 import tqdm
 
-from sheerwater_benchmarking.metrics import is_precip_only
-from sheerwater_benchmarking.metrics import is_coupled
+from sheerwater_benchmarking.metric_factory import metric_factory
+
 
 def parse_args():
     """Parses arguments for jobs."""
@@ -52,15 +52,19 @@ def parse_args():
         truth = args.truth
 
     if args.station_evaluation:
-        metrics = ["mae", "rmse", "bias", "acc", "smape", "seeps", "pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+        metrics = ["mae", "rmse", "bias", "acc", "smape", "seeps", "pod-1", "pod-5", "pod-10",
+                   "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
     else:
-        metrics = ["mae", "crps", "acc", "rmse", "bias",  "smape", "seeps", "pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+        metrics = ["mae", "crps", "acc", "rmse", "bias",  "smape", "seeps", "pod-1", "pod-5",
+                   "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
 
     if args.metric:
         if args.metric == ['contingency']:
-            metrics = ["pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+            metrics = ["pod-1", "pod-5", "pod-10", "far-1", "far-5",
+                       "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
         elif args.metric == ['coupled']:
-            metrics = ["acc", "pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+            metrics = ["acc", "pod-1", "pod-5", "pod-10", "far-1", "far-5",
+                       "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
         else:
             metrics = args.metric
 
@@ -99,6 +103,7 @@ def parse_args():
             regions, leads, time_groupings, args.parallelism,
             args.recompute, args.backend, args.remote_name, args.remote, remote_config)
 
+
 def prune_metrics(combos, global_run=False):
     """Prunes a list of metrics combinations.
 
@@ -108,17 +113,19 @@ def prune_metrics(combos, global_run=False):
     for combo in combos:
         metric, variable, grid, region, lead, forecast, time_grouping, truth = combo
 
+        metric_obj = metric_factory(metric)
+
         if not global_run and 'tahmo' in truth and region != 'east_africa':
             continue
 
         if global_run:
-            if is_coupled(metric):
+            if metric_obj.coupled:
                 continue
         else:
-            if is_coupled(metric) and time_grouping is not None:
+            if metric_obj.coupled and time_grouping is not None:
                 continue
 
-        if is_precip_only(metric) and variable != 'precip':
+        if metric_obj.valid_variables and variable not in metric_obj.valid_variables:
             continue
 
         if metric == 'seeps' and grid == 'global0_25':

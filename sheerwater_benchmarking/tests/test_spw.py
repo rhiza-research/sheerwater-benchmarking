@@ -3,7 +3,7 @@ import numpy as np
 from sheerwater_benchmarking.metrics import get_datasource_fn
 from sheerwater_benchmarking.utils import start_remote
 from sheerwater_benchmarking.forecasts.ecmwf_er import ecmwf_ifs_spw
-from sheerwater_benchmarking.baselines.climatology import climatology_spw
+from sheerwater_benchmarking.forecasts.climatology import climatology_spw
 
 
 def test_spw():
