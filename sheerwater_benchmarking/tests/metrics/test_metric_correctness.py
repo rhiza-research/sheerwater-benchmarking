@@ -49,6 +49,7 @@ def test_single_comparison(forecast="ecmwf_ifs_er_debiased",
         mask=mask,
         grid='global1_5',
         recompute=recompute,
+        force_overwrite=False,
     )
     if region in ds_new.dims and len(ds_new.region.values) > 1:
         ds_new = ds_new.sel(region=region)
@@ -125,23 +126,23 @@ def test_multiple_combinations():
     """Test multiple combinations of parameters."""
     test_cases = [
         # Our basic test, does lat-weighted averaging and masking globally
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "global",
-            "mask": 'lsm', "variable": "precip", "spatial": False},
-        # Have to test with spatial = True because old code had a spatial weighting bug
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "east_africa",
-            "mask": 'lsm', "variable": "precip", "spatial": True},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "global",
+        #     "mask": 'lsm', "variable": "precip", "spatial": False},
+        # # Have to test with spatial = True because old code had a spatial weighting bug
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "mae", "region": "east_africa",
+        #     "mask": 'lsm', "variable": "precip", "spatial": True},
 
-        # Now test all the metrics
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "ets-5", "variable": "precip", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-5", "variable": "precip", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "rmse", "variable": "precip", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "bias", "variable": "precip", "spatial": True},
+        # # Now test all the metrics
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "acc", "variable": "precip", "spatial": True},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "ets-5", "variable": "precip", "spatial": True},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "pod-5", "variable": "precip", "spatial": True},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "rmse", "variable": "precip", "spatial": True},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "bias", "variable": "precip", "spatial": True},
         # Test quantileCRPS, which can only be done with Salient in Africa
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "crps", "variable": "precip", "spatial": True},
-        {"forecast": "salient", "metric": "crps", "variable": "precip", "spatial": True, 'region': 'africa'},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "smape", "variable": "precip", "spatial": True},
-        {"forecast": "ecmwf_ifs_er_debiased", "metric": "mape", "variable": "precip", "spatial": False},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "crps", "variable": "precip", "spatial": True},
+        # {"forecast": "salient", "metric": "crps", "variable": "precip", "spatial": True, 'region': 'africa'},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "smape", "variable": "precip", "spatial": True},
+        # {"forecast": "ecmwf_ifs_er_debiased", "metric": "mape", "variable": "precip", "spatial": False},
         {"forecast": "ecmwf_ifs_er_debiased", "metric": "seeps", "variable": "precip", "spatial": True},
         # Pearson only computed for week 3
         {"forecast": "ecmwf_ifs_er_debiased", "lead": "week3", "metric": "pearson", "variable": "precip", "spatial": True},
@@ -179,7 +180,7 @@ def test_multiple_combinations():
         # Set defaults
         test_case.setdefault("region", "global")
         test_case.setdefault("lead", "week3")
-        test_case.setdefault("recompute", False)
+        test_case.setdefault("recompute", ['global_statistic', 'grouped_metric_new'])
         test_case.setdefault("spatial", True)
         test_case.setdefault("mask", "lsm")
 

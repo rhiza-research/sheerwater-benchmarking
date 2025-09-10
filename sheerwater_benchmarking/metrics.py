@@ -1,5 +1,5 @@
 """Verification metrics for forecasters and reanalyses."""
-from .metric_factory import metric_factory
+from .metrics_library import metric_factory
 from sheerwater_benchmarking.masks import region_labels
 from sheerwater_benchmarking.utils import (cacheable, dask_remote,
                                            get_lead_info,
@@ -318,6 +318,40 @@ def grouped_metric_new(start_time, end_time, variable, lead, forecast, truth,
                        mask='lsm', region='countries'):
     """Compute a grouped metric for a forecast at a specific lead."""
     # Use the metric registry to get the metric class
+    cache_kwargs = {
+        'start_time': start_time,
+        'end_time': end_time,
+        'variable': variable,
+        'lead': lead,
+        'forecast': forecast,
+        'truth': truth,
+        'time_grouping': time_grouping,
+        'spatial': spatial,
+        'grid': grid,
+        'mask': mask,
+        'region': region,
+    }
+    metric_obj = metric_factory(metric, **cache_kwargs)
+    m_ds = metric_obj.compute()
+    return m_ds
+
+
+@dask_remote
+@cacheable(data_type='array',
+           cache_args=['start_time', 'end_time', 'variable', 'lead', 'forecast', 'truth',
+                       'metric', 'time_grouping', 'spatial', 'grid', 'mask', 'region'],
+           chunking={"lat": 121, "lon": 240, "time": 30, 'region': 300, 'lead_time': -1},
+           chunk_by_arg={
+               'grid': {
+                   'global0_25': {"lat": 721, "lon": 1440, "time": 30}
+               },
+           },
+           cache=True)
+def grouped_metric_old(start_time, end_time, variable, lead, forecast, truth,
+                       metric, time_grouping=None, spatial=False, grid="global1_5",
+                       mask='lsm', region='countries'):
+    """Compute a grouped metric for a forecast at a specific lead."""
+    # Use the metric registry to get the metric class
     metric_obj = metric_factory(metric)()
 
     # Check that the variable is valid for the metric
@@ -607,79 +641,6 @@ def biweekly_summary_metrics_table(start_time, end_time, variable,
 
     print(df)
     return df
-
-
-def mean_or_sum(ds, agg_fn, dims=['lat', 'lon']):
-    # Note, for some reason:
-    # ds.groupby('region').mean(['lat', 'lon'], skipna=True).compute()
-    # raises:
-    # *** AttributeError: 'bool' object has no attribute 'blockwise'
-    # or
-    # *** TypeError: reindex_intermediates() missing 1 required positional argument: 'array_type'
-    # So we have to do it via apply
-    if agg_fn == 'mean':
-        return ds.mean(dims, skipna=True)
-    else:
-        return ds.sum(dims, skipna=True)
-
-
-def groupby_time(ds, time_grouping, agg_fn='mean'):
-    """Aggregate a statistic over time."""
-    if time_grouping is not None:
-        if time_grouping == 'month_of_year':
-            coords = [f'M{x:02d}' for x in ds.time.dt.month.values]
-        elif time_grouping == 'year':
-            coords = [f'Y{x:04d}' for x in ds.time.dt.year.values]
-        elif time_grouping == 'quarter_of_year':
-            coords = [f'Q{x:02d}' for x in ds.time.dt.quarter.values]
-        elif time_grouping == 'day_of_year':
-            coords = [f'D{x:03d}' for x in ds.time.dt.dayofyear.values]
-        elif time_grouping == 'month':
-            coords = [f'{pd.to_datetime(x).year:04d}-{pd.to_datetime(x).month:02d}-01' for x in ds.time.values]
-        else:
-            raise ValueError("Invalid time grouping")
-        ds = ds.assign_coords(group=("time", coords))
-        ds = ds.groupby("group").apply(mean_or_sum, agg_fn=agg_fn, dims='time')
-        # Rename the group coordinate to time
-        ds = ds.rename({"group": "time"})
-    else:
-        # Average in time
-        if agg_fn == 'mean':
-            ds = ds.mean(dim="time")
-        elif agg_fn == 'sum':
-            ds = ds.sum(dim="time")
-        else:
-            raise ValueError(f"Invalid aggregation function {agg_fn}")
-    # TODO: we can convert this to a groupby_time call when we're ready
-    # ds = groupby_time(ds, grouping=time_grouping, agg_fn=xr.DataArray.mean, dim='time')
-    return ds
-
-
-def latitude_weights(ds, lat_dim='lat', lon_dim='lon'):
-    """Return latitude weights as an xarray DataArray.
-
-    This function weights each latitude band by the actual cell area,
-    which accounts for the fact that grid cells near the poles are smaller
-    in area than those near the equator.
-    """
-    # Calculate latitude cell bounds
-    lat_rad = np.deg2rad(ds[lat_dim].values)
-    # Get the centerpoint of each latitude band
-    pi_over_2 = np.array([np.pi / 2], dtype=lat_rad.dtype)
-    bounds = np.concatenate([-pi_over_2, (lat_rad[:-1] + lat_rad[1:]) / 2, pi_over_2])
-    # Calculate the area of each latitude band
-    # Calculate cell areas from latitude bounds
-    upper = bounds[1:]
-    lower = bounds[:-1]
-    # normalized cell area: integral from lower to upper of cos(latitude)
-    weights = np.sin(upper) - np.sin(lower)
-
-    # Normalize weights
-    weights /= np.mean(weights)
-    # Return an xarray DataArray with dimensions lat
-    weights = xr.DataArray(weights, coords=[ds[lat_dim]], dims=[lat_dim])
-    weights = weights.expand_dims({lon_dim: ds[lon_dim]})
-    return weights
 
 
 def latitude_weighted_spatial_average(ds, lat_dim='lat', lon_dim='lon', agg_fn='mean'):
