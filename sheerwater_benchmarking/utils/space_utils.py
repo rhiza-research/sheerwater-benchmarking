@@ -121,8 +121,17 @@ def get_region(region):
         lats = np.array([-90.0, 90.0])
         data = (lons, lats)
     else:
-        raise NotImplementedError(
-            f"Region {region} has not been implemented.")
+        filepath = f'gs://sheerwater-datalake/regions/world_countries.geojson'
+        gdf = gpd.read_file(load_object(filepath))
+        # Make name lowercase
+        gdf = gdf[gdf['name'].str.lower() == region.lower()]
+        if len(gdf) == 0:
+            raise NotImplementedError(
+                f"Region {region} has not been implemented.")
+        tol = 0.01
+        lons = np.array([gdf['geometry'].bounds['minx'].values[0]-tol, gdf['geometry'].bounds['maxx'].values[0] + tol])
+        lats = np.array([gdf['geometry'].bounds['miny'].values[0]-tol, gdf['geometry'].bounds['maxy'].values[0] + tol])
+        data = (lons, lats, gdf)
     return data
 
 
