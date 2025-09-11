@@ -29,7 +29,15 @@ terraform {
 # }
 
 
+resource "google_project" "project" {
+  name       = "Sheerwater"
+  project_id = "sheerwater"
+  org_id     = "636990752070" # Rhiza org id
 
+  lifecycle {
+    prevent_destroy = true
+  }
+}
 
 
 
@@ -45,6 +53,7 @@ terraform {
 
 data "google_secret_manager_secret_version" "postgres_read_password" {
   secret = "sheerwater-postgres-read-password"
+  project = google_project.project.project_id
 }
 
 resource "postgresql_role" "read" {
@@ -64,6 +73,7 @@ resource "random_password" "postgres_write_password" {
 
 resource "google_secret_manager_secret" "postgres_write_password" {
   secret_id = "sheerwater-postgres-write-password"
+  project = google_project.project.project_id
   replication {
     auto {}
   }

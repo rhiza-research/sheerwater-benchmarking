@@ -2,7 +2,7 @@
 # This file is used to configure the prod and ephemeral grafana instances based on workspace name
 # 
 # Workspace naming convention:
-# - the "default" workspace configures the prod instance at benchmarks.sheerwater.rhizaresearch.org
+# - the "default" workspace configures the prod instance at dashboards.rhizaresearch.org
 # - any other workspace is an ephemeral instance and should be named with the format "grafana-pr-<pr_number>"
 # 
 # It is used to create/configure:
@@ -43,7 +43,8 @@ provider "google" {
 }
 
 data "google_secret_manager_secret_version" "grafana_ephemeral_admin_password" {
-  secret = "sheerwater-grafana-ephemeral-admin-password"
+  secret = "grafana-ephemeral-admin-password"
+  project = "rhiza-shared"
 }
 
 data "google_secret_manager_secret_version" "postgres_admin_password" {
@@ -70,9 +71,9 @@ locals {
   pr_number = local.is_prod ? "" : element(split("-", terraform.workspace), length(split("-", terraform.workspace)) - 1)
 
   # Base URLs
-  # - prod:      https://benchmarks.sheerwater.rhizaresearch.org
-  # - ephemeral: https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
-  grafana_url = local.is_prod ? "https://benchmarks.sheerwater.rhizaresearch.org" : "https://dev.sheerwater.rhizaresearch.org/${local.repo_name}/${local.pr_number}"
+  # - prod:      https://dashboards.rhizaresearch.org
+  # - ephemeral: https://dev.shared.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
+  grafana_url = local.is_prod ? "https://dashboards.rhizaresearch.org" : "https://dev.shared.rhizaresearch.org/${local.repo_name}/${local.pr_number}"
 
   # Postgres connection URL - different for prod vs ephemeral
   # TODO: this url should be built from other resource values 
@@ -94,8 +95,8 @@ locals {
 }
 provider "grafana" {
   # Base URLs
-  # - prod:      https://benchmarks.sheerwater.rhizaresearch.org
-  # - ephemeral: https://dev.sheerwater.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
+  # - prod:      https://dashboards.rhizaresearch.org
+  # - ephemeral: https://dev.shared.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
   url = local.grafana_url
   auth = "admin:${data.google_secret_manager_secret_version.grafana_ephemeral_admin_password.secret_data}"
   # TODO: for now I have to use the default password because 
@@ -241,3 +242,24 @@ resource "grafana_dashboard" "dashboards" {
 #     #title = "Home"
 #   }
 # }
+
+
+# TODO: sheerwater.rhizaresearch.org should forward to dashboards.rhizaresearch.org/orgId=1 (or whatever the sheerwater-benchmarking orgId is in production)
+# this would require something like an nginx proxy in the k8s cluster to forward the requests to the correct orgId
+
+# resource "google_dns_managed_zone" "sheerwater" {
+#   #depends_on = [google_project.sheerwater]
+#   name = "sheerwater"
+#   dns_name = "sheerwater.rhizaresearch.org."
+#   project = "sheerwater"
+
+#   description = "sheerwater dns zone"
+
+#   lifecycle {
+#     prevent_destroy = true
+#   }
+# }
+
+# resource nginx proxy {
+#  forward google_dns_managed_zone.sheerwater to dashboards.rhizaresearch.org/orgId=1
+#}

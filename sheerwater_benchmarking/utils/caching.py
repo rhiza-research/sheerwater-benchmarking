@@ -48,7 +48,7 @@ CACHE_STORAGE_OPTIONS = {
     'token': 'google_default',
     'cache_timeout': 0
 }
-POSTGRES_IP = "postgres.sheerwater.rhizaresearch.org"
+POSTGRES_IP = "postgres.shared.rhizaresearch.org"
 # Local dir for all caches, except for postgres and terracotta
 LOCAL_CACHE_ROOT_DIR = os.path.expanduser("~/.cache/sheerwater/caches/")
 LOCAL_CACHE_STORAGE_OPTIONS = {}
