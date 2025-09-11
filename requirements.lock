@@ -889,7 +889,7 @@ urllib3==2.3.0
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit
-weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@3c95b54a74a0fc92193901310f75014dcef9f448
+weatherbench2 @ git+https://github.com/rhiza-research/weatherbench2@600f6ad63752378914991ae675cf0848500742f4
     # via sheerwater-benchmarking
 webcolors==24.11.1
     # via jsonschema
