@@ -30,10 +30,10 @@ terraform {
 
 
 resource "google_project" "project" {
-  name       = "Sheerwater"
+  name       = "sheerwater"
   project_id = "sheerwater"
   org_id     = "636990752070" # Rhiza org id
-
+  billing_account = "010A80-225887-239CE0"
   lifecycle {
     prevent_destroy = true
   }
@@ -66,6 +66,7 @@ resource "postgresql_role" "read" {
 # Write role for postgres
 ################################################
 
+# TODO: move the random-gsm-secret module somewhere that it can be used here.
 resource "random_password" "postgres_write_password" {
   length = 16
   special = true
