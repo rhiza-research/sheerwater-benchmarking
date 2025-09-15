@@ -337,7 +337,7 @@ def write_parquet_helper(df, path, partition_on=None):
         partition_on=partition_on,
         engine="pyarrow",
         write_metadata_file=True,
-        write_index=False,
+        write_index=True,
     )
 
 
@@ -596,9 +596,9 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
             temp_table_name = f"temp_{uuid.uuid4().hex[:6]}"
 
             if isinstance(df, pd.DataFrame):
-                df.to_sql(temp_table_name, engine, index=False)
+                df.to_sql(temp_table_name, engine, index=True)
             elif isinstance(df, dd.DataFrame):
-                df.to_sql(temp_table_name, uri=uri, index=False, parallel=True, chunksize=10000)
+                df.to_sql(temp_table_name, uri=uri, index=True, parallel=True, chunksize=10000)
             else:
                 raise RuntimeError("Did not return dataframe type.")
 
@@ -647,9 +647,9 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
                 exists = 'replace'
 
             if isinstance(df, pd.DataFrame):
-                df.to_sql(new_table_name, engine, if_exists=exists, index=False)
+                df.to_sql(new_table_name, engine, if_exists=exists, index=True)
             elif isinstance(df, dd.DataFrame):
-                df.to_sql(new_table_name, uri=uri, if_exists=exists, index=False, parallel=True, chunksize=10000)
+                df.to_sql(new_table_name, uri=uri, if_exists=exists, index=True, parallel=True, chunksize=10000)
             else:
                 raise RuntimeError("Did not return dataframe type.")
 
@@ -823,7 +823,7 @@ def cacheable(data_type, cache_args, timeseries=None, chunking=None, chunk_by_ar
         "cache": None,
         "validate_cache_timeseries": None,
         "force_overwrite": None,
-        "retry_null_cache": False,
+        "retry_null_cache": None,
         "backend": None,
         "storage_backend": None,
         "auto_rechunk":  None,

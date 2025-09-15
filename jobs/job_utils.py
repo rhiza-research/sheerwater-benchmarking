@@ -8,6 +8,7 @@ import tqdm
 from sheerwater_benchmarking.metrics import is_precip_only
 from sheerwater_benchmarking.metrics import is_coupled
 
+
 def parse_args():
     """Parses arguments for jobs."""
     parser = argparse.ArgumentParser()
@@ -52,15 +53,21 @@ def parse_args():
         truth = args.truth
 
     if args.station_evaluation:
-        metrics = ["mae", "rmse", "bias", "acc", "smape", "seeps", "pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+        metrics = ["mae", "rmse", "bias", "acc", "smape", "seeps", "pod-1", "pod-5", "pod-10",
+                   "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
     else:
-        metrics = ["mae", "crps", "acc", "rmse", "bias",  "smape", "seeps", "pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+        metrics = ["mae", "crps", "acc", "rmse", "bias",  "smape", "seeps", "pod-1", "pod-5",
+                   "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
 
     if args.metric:
         if args.metric == ['contingency']:
-            metrics = ["pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+            metrics = ["pod-1", "pod-5", "pod-10", "far-1", "far-5",
+                       "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
         elif args.metric == ['coupled']:
-            metrics = ["acc", "pod-1", "pod-5", "pod-10", "far-1", "far-5", "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+            metrics = ["acc", "pod-1", "pod-5", "pod-10", "far-1", "far-5",
+                       "far-10", "ets-1", "ets-5", "ets-10", "heidke-1-5-10-20"]
+        elif args.metric == ['no-contingency']:
+            metrics = ["mae", 'crps', "rmse", "bias", "acc", "smape", "seeps"]
         else:
             metrics = args.metric
 
@@ -72,7 +79,8 @@ def parse_args():
     if args.grid:
         grids = args.grid
 
-    regions = ["africa", "east_africa", "global", "conus"]
+    # regions = ["africa", "east_africa", "global", "conus"]
+    regions = ["africa", "east_africa", "conus"]
     if args.region:
         regions = args.region
 
@@ -98,6 +106,7 @@ def parse_args():
     return (args.start_time, args.end_time, forecasts, truth, metrics, variables, grids,
             regions, leads, time_groupings, args.parallelism,
             args.recompute, args.backend, args.remote_name, args.remote, remote_config)
+
 
 def prune_metrics(combos, global_run=False):
     """Prunes a list of metrics combinations.
