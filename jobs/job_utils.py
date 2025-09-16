@@ -80,7 +80,7 @@ def parse_args():
         grids = args.grid
 
     # regions = ["africa", "east_africa", "global", "conus"]
-    regions = ["africa", "east_africa", "conus"]
+    regions = ["africa", "east_africa", "conus", "bangladesh", "chile", "nigeria", "ethiopia", "kenya"]
     if args.region:
         regions = args.region
 
