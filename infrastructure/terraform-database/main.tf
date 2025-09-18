@@ -164,7 +164,7 @@ resource "postgresql_grant" "write_public" {
 # Terracotta: Read role grants
 ################################################
 resource "postgresql_default_privileges" "read_only_default_terracotta" {
-  database = "terracotta"
+  database = var.terracotta_database_name
   role = postgresql_role.read.name
   schema = "public"
   owner = "write"
@@ -173,7 +173,7 @@ resource "postgresql_default_privileges" "read_only_default_terracotta" {
 }
 
 resource "postgresql_default_privileges" "read_only_default_admin_terracotta" {
-  database = "terracotta"
+  database = var.terracotta_database_name
   role = postgresql_role.read.name
   schema = "public"
   owner = "postgres"
@@ -182,7 +182,7 @@ resource "postgresql_default_privileges" "read_only_default_admin_terracotta" {
 }
 
 resource "postgresql_grant" "readonly_public_terracotta" {
-  database = "terracotta"
+  database = var.terracotta_database_name
   role = postgresql_role.read.name
   schema = "public"
   object_type = "table"
@@ -192,19 +192,20 @@ resource "postgresql_grant" "readonly_public_terracotta" {
 ################################################
 # Terracotta: Write role grants
 ################################################
-resource "postgresql_grant" "write_public_terracotta" {
-  database = "terracotta"
-  role = postgresql_role.write.name
-  schema = "public"
-  object_type = "table"
-  privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
-}
+
+# resource "postgresql_grant" "write_public_terracotta" {
+#   database = var.terracotta_database_name
+#   role = postgresql_role.write.name
+#   schema = "public"
+#   object_type = "table"
+#   privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "REFERENCES", "TRIGGER"]
+# }
 
 resource "postgresql_grant" "write_public_terracottads" {
-  database = "terracotta"
+  database = var.terracotta_database_name
   role = postgresql_role.write.name
   schema = "public"
   object_type = "table"
   objects = ["datasets"]
-  privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+  privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "REFERENCES", "TRIGGER"]
 }
