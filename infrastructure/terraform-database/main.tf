@@ -22,13 +22,6 @@ terraform {
   }
 }
 
-
-
-# data "google_secret_manager_secret_version" "postgres_admin_password" {
-#   secret = "sheerwater-postgres-admin-password"
-# }
-
-
 resource "google_project" "project" {
   name       = "sheerwater"
   project_id = "sheerwater"
@@ -39,26 +32,23 @@ resource "google_project" "project" {
   }
 }
 
-
-
-
 ################################################
 # Sheerwater: Postgres roles and grants
 ################################################
 
-# TODO: why are the read and write credentials handled differently
 ################################################
 # Read role for postgres
 ################################################
 
-data "google_secret_manager_secret_version" "postgres_read_password" {
-  secret = "sheerwater-postgres-read-password"
-  project = google_project.project.project_id
+module "random_password_postgres_read" {
+   source = "git@github.com:rhiza-research/infrastructure.git//terraform/modules/random-gsm-secret?ref=argocd"
+   random_password_secret_name = "postgres-read-password"
+   project = google_project.project.project_id
 }
 
 resource "postgresql_role" "read" {
-  name = "read"
-  password = data.google_secret_manager_secret_version.postgres_read_password.secret_data
+  name = "sheerwater_read"
+  password = module.random_password_postgres_read.random_password_value
   login = true
 }
 
@@ -66,42 +56,17 @@ resource "postgresql_role" "read" {
 # Write role for postgres
 ################################################
 
-# TODO: move the random-gsm-secret module somewhere that it can be used here.
-resource "random_password" "postgres_write_password" {
-  length = 16
-  special = true
-}
-
-resource "google_secret_manager_secret" "postgres_write_password" {
-  secret_id = "sheerwater-postgres-write-password"
-  project = google_project.project.project_id
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret_version" "postgres_write_password" {
-  secret = google_secret_manager_secret.postgres_write_password.id
-  secret_data = random_password.postgres_write_password.result
+module "random_password_postgres_write" {
+   source = "git@github.com:rhiza-research/infrastructure.git//terraform/modules/random-gsm-secret?ref=argocd"
+   random_password_secret_name = "postgres-write-password"
+   project = google_project.project.project_id
 }
 
 resource "postgresql_role" "write" {
-  name = "write"
-  password = random_password.postgres_write_password.result
+  name = "sheerwater_write"
+  password = module.random_password_postgres_read.random_password_value
   login = true
   create_database = true
-}
-
-
-################################################
-# Postgres: Public grants
-################################################
-resource "postgresql_grant" "public_schema_public" {
-  database = "postgres"
-  role = "public"
-  schema = "public"
-  object_type = "schema"
-  privileges = ["CREATE", "USAGE"]
 }
 
 ################################################
@@ -115,20 +80,11 @@ resource "postgresql_grant" "readonly_public" {
   privileges = ["SELECT"]
 }
 
-resource "postgresql_default_privileges" "read_only_default_admin" {
+resource "postgresql_default_privileges" "readonly_default" {
   database = "postgres"
   role = postgresql_role.read.name
   schema = "public"
-  owner = "postgres"
-  object_type = "table"
-  privileges = ["SELECT"]
-}
-
-resource "postgresql_default_privileges" "read_only_default" {
-  database = "postgres"
-  role = postgresql_role.read.name
-  schema = "public"
-  owner = "write"
+  owner = postgresql_role.write.name
   object_type = "table"
   privileges = ["SELECT"]
 }
@@ -136,14 +92,6 @@ resource "postgresql_default_privileges" "read_only_default" {
 ################################################
 # Postgres: Write role grants
 ################################################
-resource "postgresql_grant" "write_database_public" {
-  database = "postgres"
-  role = postgresql_role.write.name
-  schema = "public"
-  object_type = "database"
-  privileges = ["CREATE"]
-}
-
 resource "postgresql_grant" "write_schema_public" {
   database = "postgres"
   role = postgresql_role.write.name
@@ -163,24 +111,6 @@ resource "postgresql_grant" "write_public" {
 ################################################
 # Terracotta: Read role grants
 ################################################
-resource "postgresql_default_privileges" "read_only_default_terracotta" {
-  database = var.terracotta_database_name
-  role = postgresql_role.read.name
-  schema = "public"
-  owner = "write"
-  object_type = "table"
-  privileges = ["SELECT"]
-}
-
-resource "postgresql_default_privileges" "read_only_default_admin_terracotta" {
-  database = var.terracotta_database_name
-  role = postgresql_role.read.name
-  schema = "public"
-  owner = "postgres"
-  object_type = "table"
-  privileges = ["SELECT"]
-}
-
 resource "postgresql_grant" "readonly_public_terracotta" {
   database = var.terracotta_database_name
   role = postgresql_role.read.name
@@ -192,15 +122,6 @@ resource "postgresql_grant" "readonly_public_terracotta" {
 ################################################
 # Terracotta: Write role grants
 ################################################
-
-# resource "postgresql_grant" "write_public_terracotta" {
-#   database = var.terracotta_database_name
-#   role = postgresql_role.write.name
-#   schema = "public"
-#   object_type = "table"
-#   privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "REFERENCES", "TRIGGER"]
-# }
-
 resource "postgresql_grant" "write_public_terracottads" {
   database = var.terracotta_database_name
   role = postgresql_role.write.name
