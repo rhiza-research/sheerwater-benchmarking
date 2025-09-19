@@ -117,7 +117,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -279,7 +280,7 @@
         "syncTimeRange": false,
         "timeCol": ""
       },
-      "pluginVersion": "1.8.2",
+      "pluginVersion": "1.8.1",
       "targets": [
         {
           "datasource": {
@@ -423,7 +424,7 @@
         "syncTimeRange": false,
         "timeCol": ""
       },
-      "pluginVersion": "1.8.2",
+      "pluginVersion": "1.8.1",
       "targets": [
         {
           "datasource": {
@@ -567,7 +568,7 @@
         "syncTimeRange": false,
         "timeCol": ""
       },
-      "pluginVersion": "1.8.2",
+      "pluginVersion": "1.8.1",
       "targets": [
         {
           "datasource": {
@@ -711,7 +712,7 @@
         "syncTimeRange": false,
         "timeCol": ""
       },
-      "pluginVersion": "1.8.2",
+      "pluginVersion": "1.8.1",
       "targets": [
         {
           "datasource": {

@@ -168,7 +168,7 @@
         },
         "onclick": "console.log(event)\ndocument.last_zoom = event.data['map.zoom'];\ndocument.last_center = event.data['map.center'];",
         "resScale": 2,
-        "script": "forecast = variables.forecast.current.value\nmetric = variables.metric.current.value\ngrid = variables.grid.current.value\nregion = variables.region.current.value\nlead = variables.lead.current.value\ntime_grouping = variables.time_grouping.current.value\ntime =  variables.time_filter.current.value\n\nif (time == 'None') {\n  time = '';\n} else {\n  time = '_' + time;\n}\n\ntry {\n  var xmlHttp = new XMLHttpRequest();\n  url = `https://terracotta.sheerwater.rhizaresearch.org/metadata/grouped_metric_2022-12-31_${forecast}_${grid}_${lead}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_tmp2m${time}`\n  xmlHttp.open( \"GET\", url, false ); // false for synchronous request\n  xmlHttp.send( null );\n\n  if(xmlHttp.status != 200) {\n    console.log(\"Error getting dataset metadata\");\n    return {};\n  }\n\n  console.log(\"Dataset exists\");\n} catch (error) {\n  // If we can't get this metric just return early\n  console.log(\"Error getting dataset metadata\");\n  console.log(error)\n  return {}\n}\n\n// For each forecast get the metadata so that we can construct a color bar\nif (variables.standardize_forecast_colors.current.value == \"true\") {\n  forecasts = variables.forecast.options.map((x) => x.value)\n} else {\n  forecasts = [forecast]\n}\n\n// For each forecast get the metadata so that we can construct a color bar\nif (variables.standardize_lead_colors.current.value == \"true\") {\n  leads = variables.lead.options.map((x) => x.value)\n} else {\n  leads = [lead]\n}\n\n\ncolor_min = 1e8\ncolor_max = 0\nforecasts.forEach(function(i) {\n  leads.forEach(function(j) {\n    try {\n      var xmlHttp = new XMLHttpRequest();\n      url = `https://terracotta.sheerwater.rhizaresearch.org/metadata/grouped_metric_2022-12-31_${i}_${grid}_${j}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_tmp2m${time}`\n      xmlHttp.open( \"GET\", url, false ); // false for synchronous request\n      xmlHttp.send( null );\n\n      f = JSON.parse(xmlHttp.responseText).percentiles[4]\n      if (f < color_min) {\n        color_min = f\n      }\n\n      nf = JSON.parse(xmlHttp.responseText).percentiles[94]\n      if (nf > color_max) {\n        color_max = nf\n      }\n    } catch (error) {\n   \n    }\n    \n  });\n});\n\nconsole.log(color_min)\nconsole.log(color_max)\n\nif (variables.metric.current.value == 'bias' ) {\n  if(Math.abs(color_min) > color_max) {\n    color_max = Math.abs(color_min)\n  } else {\n    color_min = color_max*-1\n  }\n  console.log(color_min)\n  console.log(color_max)\n  tera_cscale='rdbu_r'\n} else if (variables.metric.current.value == 'acc' ){\n  color_min = -1\n  color_max = 1\n  tera_cscale = 'rdbu'\n} else {\n  // set the terracotta colorscale\n  tera_cscale = 'reds'\n}\nstretch = `colormap=${tera_cscale}&stretch_range=[${color_min},${color_max}]`\n\n//Query the color scale\nvar xmlHttp = new XMLHttpRequest();\nurl = `https://terracotta.sheerwater.rhizaresearch.org/colormap?colormap=${tera_cscale}&stretch_range=[${color_min},${color_max}]&num_values=10`\nxmlHttp.open( \"GET\", url, false ); // false for synchronous request\nxmlHttp.send( null );\n\nf = JSON.parse(xmlHttp.responseText)\ncscale = []\nfor(var i = 0; i < f.colormap.length; i++) {\n  rgb = `rgb(${f.colormap[i].rgba[0]},${f.colormap[i].rgba[1]},${f.colormap[i].rgba[2]})`\n  cscale.push([i/f.colormap.length + i*(.1/(f.colormap.length-1)), rgb])\n}\n\nstretch = `colormap=${tera_cscale}&stretch_range=[${color_min},${color_max}]`\n\nvar units = \"\"\nif (metric == 'mae' || metric == 'bias' || metric == 'crps' || metric == 'rmse') {\n    units = \" (C)\"\n}\n\ncenter = {'lat': 0, 'lon': 0};\nzoom = 0\nif(document.last_zoom) {\n  zoom = document.last_zoom\n}\nif(document.last_center) {\n  center = document.last_center\n}\n\nreturn {\n  data: [{\n    type: 'scattermap',\n    lat: ['45.5017', '46.9027'],\n    lon: ['-73.5673', '-73.5673'],\n    mode: 'markers',\n    marker: {\n      size: 0,\n      showscale: true,\n      colorscale: cscale,\n      cmin: color_min,\n      cmax: color_max,\n      colorbar: {\n        tickmode: 'auto'\n      }\n    },\n  }],\n  layout: \n  {\n    dragmode: 'zoom',\n    map: {\n      style: 'open-street-map',\n      layers: [\n        {\n          opacity: 0.7,\n          sourcetype: \"raster\",\n          source: [\n            `https://terracotta.sheerwater.rhizaresearch.org/singleband/grouped_metric_2022-12-31_${forecast}_${grid}_${lead}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_tmp2m${time}/{z}/{x}/{y}.png?${stretch}`\n          ],\n          below: \"traces\",\n        },\n      ],\n      center: center, \n      zoom: zoom,\n    },\n    margin: {r: 0, t: 30, b: 0, l: 0},\n    showlegend: false,\n    title: {\n        text: \"Temperature results\" + units,\n        xanchor: 'left',\n        x: 0\n    }\n  }\n}\n  ",
+        "script": "forecast = variables.forecast.current.value\nmetric = variables.metric.current.value\ngrid = variables.grid.current.value\nregion = variables.forecast.current.value === \"salient\" \n  ? \"africa\" \n  : \"global\";\n\nlead = variables.lead.current.value\ntime_grouping = variables.time_grouping.current.value\ntime =  variables.time_filter.current.value\n\nif (time == 'None') {\n  time = '';\n} else {\n  time = '_' + time;\n}\n\ntry {\n  var xmlHttp = new XMLHttpRequest();\n  url = `https://terracotta.sheerwater.rhizaresearch.org/metadata/grouped_metric_2022-12-31_${forecast}_${grid}_${lead}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_tmp2m${time}`\n  xmlHttp.open( \"GET\", url, false ); // false for synchronous request\n  xmlHttp.send( null );\n\n  if(xmlHttp.status != 200) {\n    console.log(\"Error getting dataset metadata\");\n    return {};\n  }\n\n  console.log(\"Dataset exists\");\n} catch (error) {\n  // If we can't get this metric just return early\n  console.log(\"Error getting dataset metadata\");\n  console.log(error)\n  return {}\n}\n\n// For each forecast get the metadata so that we can construct a color bar\nif (variables.standardize_forecast_colors.current.value == \"true\") {\n  forecasts = variables.forecast.options.map((x) => x.value)\n} else {\n  forecasts = [forecast]\n}\n\n// For each forecast get the metadata so that we can construct a color bar\nif (variables.standardize_lead_colors.current.value == \"true\") {\n  leads = variables.lead.options.map((x) => x.value)\n} else {\n  leads = [lead]\n}\n\n\ncolor_min = 1e8\ncolor_max = 0\nforecasts.forEach(function(i) {\n  leads.forEach(function(j) {\n    try {\n      var xmlHttp = new XMLHttpRequest();\n      url = `https://terracotta.sheerwater.rhizaresearch.org/metadata/grouped_metric_2022-12-31_${i}_${grid}_${j}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_tmp2m${time}`\n      xmlHttp.open( \"GET\", url, false ); // false for synchronous request\n      xmlHttp.send( null );\n\n      f = JSON.parse(xmlHttp.responseText).percentiles[4]\n      if (f < color_min) {\n        color_min = f\n      }\n\n      nf = JSON.parse(xmlHttp.responseText).percentiles[94]\n      if (nf > color_max) {\n        color_max = nf\n      }\n    } catch (error) {\n   \n    }\n    \n  });\n});\n\nconsole.log(color_min)\nconsole.log(color_max)\n\nif (variables.metric.current.value == 'bias' ) {\n  if(Math.abs(color_min) > color_max) {\n    color_max = Math.abs(color_min)\n  } else {\n    color_min = color_max*-1\n  }\n  console.log(color_min)\n  console.log(color_max)\n  tera_cscale='rdbu_r'\n} else if (variables.metric.current.value == 'acc' ){\n  color_min = -1\n  color_max = 1\n  tera_cscale = 'rdbu'\n} else {\n  // set the terracotta colorscale\n  tera_cscale = 'reds'\n}\nstretch = `colormap=${tera_cscale}&stretch_range=[${color_min},${color_max}]`\n\n//Query the color scale\nvar xmlHttp = new XMLHttpRequest();\nurl = `https://terracotta.sheerwater.rhizaresearch.org/colormap?colormap=${tera_cscale}&stretch_range=[${color_min},${color_max}]&num_values=10`\nxmlHttp.open( \"GET\", url, false ); // false for synchronous request\nxmlHttp.send( null );\n\nf = JSON.parse(xmlHttp.responseText)\ncscale = []\nfor(var i = 0; i < f.colormap.length; i++) {\n  rgb = `rgb(${f.colormap[i].rgba[0]},${f.colormap[i].rgba[1]},${f.colormap[i].rgba[2]})`\n  cscale.push([i/f.colormap.length + i*(.1/(f.colormap.length-1)), rgb])\n}\n\nstretch = `colormap=${tera_cscale}&stretch_range=[${color_min},${color_max}]`\n\nvar units = \"\"\nif (metric == 'mae' || metric == 'bias' || metric == 'crps' || metric == 'rmse') {\n    units = \" (C)\"\n}\n\ncenter = {'lat': 0, 'lon': 0};\nzoom = 0\nif(document.last_zoom) {\n  zoom = document.last_zoom\n}\nif(document.last_center) {\n  center = document.last_center\n}\n\nreturn {\n  data: [{\n    type: 'scattermap',\n    lat: ['45.5017', '46.9027'],\n    lon: ['-73.5673', '-73.5673'],\n    mode: 'markers',\n    marker: {\n      size: 0,\n      showscale: true,\n      colorscale: cscale,\n      cmin: color_min,\n      cmax: color_max,\n      colorbar: {\n        tickmode: 'auto'\n      }\n    },\n  }],\n  layout: \n  {\n    dragmode: 'zoom',\n    map: {\n      style: 'open-street-map',\n      layers: [\n        {\n          opacity: 0.7,\n          sourcetype: \"raster\",\n          source: [\n            `https://terracotta.sheerwater.rhizaresearch.org/singleband/grouped_metric_2022-12-31_${forecast}_${grid}_${lead}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_tmp2m${time}/{z}/{x}/{y}.png?${stretch}`\n          ],\n          below: \"traces\",\n        },\n      ],\n      center: center, \n      zoom: zoom,\n    },\n    margin: {r: 0, t: 30, b: 0, l: 0},\n    showlegend: false,\n    title: {\n        text: \"Temperature results\" + units,\n        xanchor: 'left',\n        x: 0\n    }\n  }\n}\n  ",
         "syncTimeRange": false,
         "timeCol": ""
       },
@@ -182,7 +182,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "select * from (values ('${forecast}${lead}${metric}${region}${standardize_lead_colors}${standardize_forecast_colors}${time_grouping}${time_filter}') ) v(t)",
+          "rawSql": "-- select * from (values ('${forecast}${lead}${metric}${region}${standardize_lead_colors}${standardize_forecast_colors}${time_grouping}${time_filter}') ) v(t)\nselect *\nfrom (\n    values (\n        '${forecast}${lead}${metric}'\n        ||\n        case when '${forecast}' = 'salient'\n             then 'africa'\n             else 'global'\n        end\n        || '${standardize_lead_colors}${standardize_forecast_colors}${time_grouping}${time_filter}'\n    )\n) v(t);",
           "refId": "A",
           "sql": {
             "columns": [
@@ -211,7 +211,7 @@
           "format": "table",
           "hide": false,
           "rawQuery": true,
-          "rawSql": "select '${forecast} ${grid} ${metric} ${ground_truth} ${region} ${time_grouping} ${time_filter} ${standardize_forecast_colors} ${standardize_lead_colors}'",
+          "rawSql": "-- select '${forecast} ${grid} ${metric} ${ground_truth} ${region} ${time_grouping} ${time_filter} ${standardize_forecast_colors} ${standardize_lead_colors}'\nselect \n  '${forecast} ${grid} ${metric} ${ground_truth} ' ||\n  case when '${forecast}' = 'salient'\n       then 'africa'\n       else 'global'\n  end || \n  ' ${time_grouping} ${time_filter} ${standardize_forecast_colors} ${standardize_lead_colors}';\n",
           "refId": "C",
           "sql": {
             "columns": [
@@ -307,7 +307,7 @@
         },
         "onclick": "console.log(event)\ndocument.last_zoom = event.data['map.zoom'];\ndocument.last_center = event.data['map.center'];\n",
         "resScale": 2,
-        "script": "forecast = variables.forecast.current.value\nmetric = variables.metric.current.value\ngrid = variables.grid.current.value\nregion = variables.region.current.value\nlead = variables.lead.current.value\ntime_grouping = variables.time_grouping.current.value\ntime =  variables.time_filter.current.value\n\n\nif (time == 'None') {\n  time = '';\n} else {\n  time = '_' + time;\n}\n\ntry {\n  var xmlHttp = new XMLHttpRequest();\n  url = `https://terracotta.sheerwater.rhizaresearch.org/metadata/grouped_metric_2022-12-31_${forecast}_${grid}_${lead}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_precip${time}`\n  xmlHttp.open( \"GET\", url, false ); // false for synchronous request\n  xmlHttp.send( null );\n\n  if(xmlHttp.status != 200) {\n    console.log(\"Error getting dataset metadata\");\n    return {};\n  }\n\n  console.log(\"Dataset exists\");\n} catch (error) {\n  // If we can't get this metric just return early\n  console.log(\"Error getting dataset metadata\");\n  console.log(error)\n  return {}\n}\n\n// For each forecast get the metadata so that we can construct a color bar\nif (variables.standardize_forecast_colors.current.value == \"true\") {\n  forecasts = variables.forecast.options.map((x) => x.value)\n} else {\n  forecasts = [forecast]\n}\n\n// For each forecast get the metadata so that we can construct a color bar\nif (variables.standardize_lead_colors.current.value == \"true\") {\n  leads = variables.lead.options.map((x) => x.value)\n} else {\n  leads = [lead]\n}\n\n\ncolor_min = 1e8\ncolor_max = 0\nforecasts.forEach(function(i) {\n  leads.forEach(function(j) {\n    try {\n      var xmlHttp = new XMLHttpRequest();\n      url = `https://terracotta.sheerwater.rhizaresearch.org/metadata/grouped_metric_2022-12-31_${i}_${grid}_${j}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_precip${time}`\n      xmlHttp.open( \"GET\", url, false ); // false for synchronous request\n      xmlHttp.send( null );\n\n      f = JSON.parse(xmlHttp.responseText)\n      console.log(f);\n\n      f = JSON.parse(xmlHttp.responseText).percentiles[4]\n      if (f < color_min) {\n        color_min = f\n      }\n\n      nf = JSON.parse(xmlHttp.responseText).percentiles[94]\n      if (nf > color_max) {\n        color_max = nf\n      }\n    } catch (error) {\n\n    }\n    \n  });\n});\n\nconsole.log(color_min)\nconsole.log(color_max)\n\nif (variables.metric.current.value == 'bias' ) {\n  if(Math.abs(color_min) > color_max) {\n    color_max = Math.abs(color_min)\n  } else {\n    color_min = color_max*-1\n  }\n  console.log(color_min)\n  console.log(color_max)\n  tera_cscale='brbg'\n} else if (variables.metric.current.value == 'acc' ){\n  color_min = -1\n  color_max = 1\n  tera_cscale = 'rdbu'\n} else if(variables.metric.current.value == 'seeps' ){\n  tera_cscale = 'reds'\n  color_min = 0\n  color_max = 3\n}else {\n  // set the terracotta colorscale\n  tera_cscale = 'reds'\n}\nstretch = `colormap=${tera_cscale}&stretch_range=[${color_min},${color_max}]`\n\n//Query the color scale\nvar xmlHttp = new XMLHttpRequest();\nurl = `https://terracotta.sheerwater.rhizaresearch.org/colormap?colormap=${tera_cscale}&stretch_range=[${color_min},${color_max}]&num_values=10`\nxmlHttp.open( \"GET\", url, false ); // false for synchronous request\nxmlHttp.send( null );\n\nf = JSON.parse(xmlHttp.responseText)\ncscale = []\nfor(var i = 0; i < f.colormap.length; i++) {\n  rgb = `rgb(${f.colormap[i].rgba[0]},${f.colormap[i].rgba[1]},${f.colormap[i].rgba[2]})`\n  cscale.push([i/f.colormap.length + i*(.1/(f.colormap.length-1)), rgb])\n}\n\nconsole.log(cscale)\nconsole.log(color_min)\nconsole.log(color_max)\n\nvar units = \"\"\nif (metric == 'mae' || metric == 'bias' || metric == 'crps' || metric == 'rmse') {\n    units = \" (mm/day)\"\n}\n\ncenter = {'lat': 0, 'lon': 0};\nzoom = 0\nif(document.last_zoom) {\n  zoom = document.last_zoom\n}\nif(document.last_center) {\n  center = document.last_center\n}\n\nreturn {\n  data: [{\n    type: 'scattermap',\n    lat: ['45.5017', '46.9027'],\n    lon: ['-73.5673', '-73.5673'],\n    mode: 'markers',\n    marker: {\n      size: 0,\n      showscale: true,\n      colorscale: cscale,\n      cmin: color_min,\n      cmax: color_max\n    }\n  }],\n  layout: \n  {\n    dragmode: 'zoom',\n    map: {\n      style: 'open-street-map',\n      layers: [\n        {\n          opacity: 0.7,\n          sourcetype: \"raster\",\n          source: [\n            `https://terracotta.sheerwater.rhizaresearch.org/singleband/grouped_metric_2022-12-31_${forecast}_${grid}_${lead}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_precip${time}/{z}/{x}/{y}.png?${stretch}`\n          ],\n          below: \"traces\",\n        },\n      ],\n      center: center, \n      zoom: zoom\n    },\n    margin: {r: 0, t: 30, b: 0, l: 0},\n    title: {\n        text: \"Precipitation results\" + units,\n        xanchor: 'left',\n        x: 0\n    }\n\n  }\n}\n  ",
+        "script": "forecast = variables.forecast.current.value\nmetric = variables.metric.current.value\ngrid = variables.grid.current.value\n// region = variables.region.current.value\nregion = variables.forecast.current.value === \"salient\" \n  ? \"africa\" \n  : \"global\";\nlead = variables.lead.current.value\ntime_grouping = variables.time_grouping.current.value\ntime =  variables.time_filter.current.value\n\n\nif (time == 'None') {\n  time = '';\n} else {\n  time = '_' + time;\n}\n\ntry {\n  var xmlHttp = new XMLHttpRequest();\n  url = `https://terracotta.sheerwater.rhizaresearch.org/metadata/grouped_metric_2022-12-31_${forecast}_${grid}_${lead}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_precip${time}`\n  xmlHttp.open( \"GET\", url, false ); // false for synchronous request\n  xmlHttp.send( null );\n\n  if(xmlHttp.status != 200) {\n    console.log(\"Error getting dataset metadata\");\n    return {};\n  }\n\n  console.log(\"Dataset exists\");\n} catch (error) {\n  // If we can't get this metric just return early\n  console.log(\"Error getting dataset metadata\");\n  console.log(error)\n  return {}\n}\n\n// For each forecast get the metadata so that we can construct a color bar\nif (variables.standardize_forecast_colors.current.value == \"true\") {\n  forecasts = variables.forecast.options.map((x) => x.value)\n} else {\n  forecasts = [forecast]\n}\n\n// For each forecast get the metadata so that we can construct a color bar\nif (variables.standardize_lead_colors.current.value == \"true\") {\n  leads = variables.lead.options.map((x) => x.value)\n} else {\n  leads = [lead]\n}\n\n\ncolor_min = 1e8\ncolor_max = 0\nforecasts.forEach(function(i) {\n  leads.forEach(function(j) {\n    try {\n      var xmlHttp = new XMLHttpRequest();\n      url = `https://terracotta.sheerwater.rhizaresearch.org/metadata/grouped_metric_2022-12-31_${i}_${grid}_${j}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_precip${time}`\n      xmlHttp.open( \"GET\", url, false ); // false for synchronous request\n      xmlHttp.send( null );\n\n      f = JSON.parse(xmlHttp.responseText)\n      console.log(f);\n\n      f = JSON.parse(xmlHttp.responseText).percentiles[4]\n      if (f < color_min) {\n        color_min = f\n      }\n\n      nf = JSON.parse(xmlHttp.responseText).percentiles[94]\n      if (nf > color_max) {\n        color_max = nf\n      }\n    } catch (error) {\n\n    }\n    \n  });\n});\n\nconsole.log(color_min)\nconsole.log(color_max)\n\nif (variables.metric.current.value == 'bias' ) {\n  if(Math.abs(color_min) > color_max) {\n    color_max = Math.abs(color_min)\n  } else {\n    color_min = color_max*-1\n  }\n  console.log(color_min)\n  console.log(color_max)\n  tera_cscale='brbg'\n} else if (variables.metric.current.value == 'acc' ){\n  color_min = -1\n  color_max = 1\n  tera_cscale = 'rdbu'\n} else if(variables.metric.current.value == 'seeps' ){\n  tera_cscale = 'reds'\n  color_min = 0\n  color_max = 3\n}else {\n  // set the terracotta colorscale\n  tera_cscale = 'reds'\n}\nstretch = `colormap=${tera_cscale}&stretch_range=[${color_min},${color_max}]`\n\n//Query the color scale\nvar xmlHttp = new XMLHttpRequest();\nurl = `https://terracotta.sheerwater.rhizaresearch.org/colormap?colormap=${tera_cscale}&stretch_range=[${color_min},${color_max}]&num_values=10`\nxmlHttp.open( \"GET\", url, false ); // false for synchronous request\nxmlHttp.send( null );\n\nf = JSON.parse(xmlHttp.responseText)\ncscale = []\nfor(var i = 0; i < f.colormap.length; i++) {\n  rgb = `rgb(${f.colormap[i].rgba[0]},${f.colormap[i].rgba[1]},${f.colormap[i].rgba[2]})`\n  cscale.push([i/f.colormap.length + i*(.1/(f.colormap.length-1)), rgb])\n}\n\nconsole.log(cscale)\nconsole.log(color_min)\nconsole.log(color_max)\n\nvar units = \"\"\nif (metric == 'mae' || metric == 'bias' || metric == 'crps' || metric == 'rmse') {\n    units = \" (mm/day)\"\n}\n\ncenter = {'lat': 0, 'lon': 0};\nzoom = 0\nif(document.last_zoom) {\n  zoom = document.last_zoom\n}\nif(document.last_center) {\n  center = document.last_center\n}\n\nreturn {\n  data: [{\n    type: 'scattermap',\n    lat: ['45.5017', '46.9027'],\n    lon: ['-73.5673', '-73.5673'],\n    mode: 'markers',\n    marker: {\n      size: 0,\n      showscale: true,\n      colorscale: cscale,\n      cmin: color_min,\n      cmax: color_max\n    }\n  }],\n  layout: \n  {\n    dragmode: 'zoom',\n    map: {\n      style: 'open-street-map',\n      layers: [\n        {\n          opacity: 0.7,\n          sourcetype: \"raster\",\n          source: [\n            `https://terracotta.sheerwater.rhizaresearch.org/singleband/grouped_metric_2022-12-31_${forecast}_${grid}_${lead}_lsm_${metric}_${region}_True_2016-01-01_${time_grouping}_era5_precip${time}/{z}/{x}/{y}.png?${stretch}`\n          ],\n          below: \"traces\",\n        },\n      ],\n      center: center, \n      zoom: zoom\n    },\n    margin: {r: 0, t: 30, b: 0, l: 0},\n    title: {\n        text: \"Precipitation results\" + units,\n        xanchor: 'left',\n        x: 0\n    }\n\n  }\n}\n  ",
         "syncTimeRange": false,
         "timeCol": ""
       },
@@ -321,7 +321,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "select * from (values ('${forecast}${lead}${metric}${region}${standardize_lead_colors}${standardize_forecast_colors}${time_grouping}${time_filter}') ) v(t)",
+          "rawSql": "-- select * from (values ('${forecast}${lead}${metric}${region}${standardize_lead_colors}${standardize_forecast_colors}${time_grouping}${time_filter}') ) v(t)\nselect *\nfrom (\n    values (\n        '${forecast}${lead}${metric}'\n        ||\n        case when '${forecast}' = 'salient'\n             then 'africa'\n             else 'global'\n        end\n        || '${standardize_lead_colors}${standardize_forecast_colors}${time_grouping}${time_filter}'\n    )\n) v(t);",
           "refId": "A",
           "sql": {
             "columns": [
@@ -350,7 +350,7 @@
           "format": "table",
           "hide": false,
           "rawQuery": true,
-          "rawSql": "select '${forecast} ${grid} ${metric} ${ground_truth} ${region} ${time_grouping} ${time_filter} ${standardize_forecast_colors} ${standardize_lead_colors}'",
+          "rawSql": "-- select '${forecast} ${grid} ${metric} ${ground_truth} ${region} ${time_grouping} ${time_filter} ${standardize_forecast_colors} ${standardize_lead_colors}'\nselect \n  '${forecast} ${grid} ${metric} ${ground_truth} ' ||\n  case when '${forecast}' = 'salient'\n       then 'africa'\n       else 'global'\n  end || \n  ' ${time_grouping} ${time_filter} ${standardize_forecast_colors} ${standardize_lead_colors}';",
           "refId": "B",
           "sql": {
             "columns": [
@@ -384,20 +384,20 @@
     "list": [
       {
         "current": {
-          "text": "salient",
-          "value": "salient"
+          "text": "ecmwf_ifs_er",
+          "value": "ecmwf_ifs_er"
         },
         "includeAll": false,
         "label": "Forecast",
         "name": "forecast",
         "options": [
           {
-            "selected": true,
-            "text": "Salient",
+            "selected": false,
+            "text": "AI-Enhanced NWP",
             "value": "salient"
           },
           {
-            "selected": false,
+            "selected": true,
             "text": "ECMWF IFS ER",
             "value": "ecmwf_ifs_er"
           },
@@ -437,20 +437,20 @@
             "value": "gencast"
           }
         ],
-        "query": "Salient : salient, ECMWF IFS ER : ecmwf_ifs_er, ECMWF IFS ER Debiased : ecmwf_ifs_er_debiased, Clim 1985-2014 : climatology_2015, Clim + Trend : climatology_trend_2015, Clim Rolling : climatology_rolling, FuXi : fuxi, GraphCast : graphcast, GenCast : gencast",
+        "query": "AI-Enhanced NWP : salient, ECMWF IFS ER : ecmwf_ifs_er, ECMWF IFS ER Debiased : ecmwf_ifs_er_debiased, Clim 1985-2014 : climatology_2015, Clim + Trend : climatology_trend_2015, Clim Rolling : climatology_rolling, FuXi : fuxi, GraphCast : graphcast, GenCast : gencast",
         "type": "custom"
       },
       {
         "current": {
-          "text": "acc",
-          "value": "acc"
+          "text": "mae",
+          "value": "mae"
         },
         "includeAll": false,
         "label": "Metric",
         "name": "metric",
         "options": [
           {
-            "selected": false,
+            "selected": true,
             "text": "MAE",
             "value": "mae"
           },
@@ -465,7 +465,7 @@
             "value": "rmse"
           },
           {
-            "selected": true,
+            "selected": false,
             "text": "ACC",
             "value": "acc"
           },
@@ -540,15 +540,15 @@
       },
       {
         "current": {
-          "text": "week3",
-          "value": "week3"
+          "text": "week1",
+          "value": "week1"
         },
         "includeAll": false,
         "label": "Lead",
         "name": "lead",
         "options": [
           {
-            "selected": false,
+            "selected": true,
             "text": "Week 1",
             "value": "week1"
           },
@@ -558,7 +558,7 @@
             "value": "week2"
           },
           {
-            "selected": true,
+            "selected": false,
             "text": "Week 3",
             "value": "week3"
           },
@@ -601,20 +601,20 @@
       },
       {
         "current": {
-          "text": "global1_5",
-          "value": "global1_5"
+          "text": "global0_25",
+          "value": "global0_25"
         },
         "includeAll": false,
         "label": "Grid",
         "name": "grid",
         "options": [
           {
-            "selected": true,
+            "selected": false,
             "text": "1.5",
             "value": "global1_5"
           },
           {
-            "selected": false,
+            "selected": true,
             "text": "0.25",
             "value": "global0_25"
           }
@@ -627,32 +627,23 @@
           "text": "africa",
           "value": "africa"
         },
+        "hide": 2,
         "includeAll": false,
         "label": "Region",
         "name": "region",
         "options": [
-          {
-            "selected": true,
-            "text": "Africa",
-            "value": "africa"
-          },
-          {
-            "selected": false,
-            "text": "East Africa",
-            "value": "east_africa"
-          },
           {
             "selected": false,
             "text": "Global",
             "value": "global"
           },
           {
-            "selected": false,
-            "text": "CONUS",
-            "value": "conus"
+            "selected": true,
+            "text": "Africa",
+            "value": "africa"
           }
         ],
-        "query": "Africa : africa, East Africa : east_africa, Global : global, CONUS : conus",
+        "query": " Global : global, Africa : africa",
         "type": "custom"
       },
       {
@@ -743,8 +734,8 @@
       },
       {
         "current": {
-          "text": "ded8af931c81e7f097229a75c4e4d0f0",
-          "value": "ded8af931c81e7f097229a75c4e4d0f0"
+          "text": "cadb29ce01f5c97c2662cde36e74d4c9",
+          "value": "cadb29ce01f5c97c2662cde36e74d4c9"
         },
         "datasource": {
           "type": "grafana-postgresql-datasource",
@@ -810,6 +801,6 @@
   "timezone": "utc",
   "title": "Forecast Evaluation Maps",
   "uid": "ae39q2k3jv668d",
-  "version": 83,
+  "version": 90,
   "weekStart": ""
 }
