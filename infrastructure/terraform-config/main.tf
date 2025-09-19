@@ -30,6 +30,11 @@ terraform {
       source = "grafana/grafana"
       version = "4.5.1"
     }
+
+    external = {
+      source = "hashicorp/external"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -169,56 +174,3 @@ resource "grafana_data_source" "postgres" {
 
 }
 
-
-# Create dashboards
-resource "grafana_dashboard" "dashboards" {
-  # only create dashboards for the ephemeral workspaces (for now)
-  for_each = local.dashboards_by_uid
-  config_json = file(each.value)
-  message = "Modified by terraform from https://github.com/rhiza-research/${local.repo_name}/pull/${local.pr_number}"
-  #is_starred = each.value == local.home_dashboard_uid
-
-  overwrite = true
-  org_id = grafana_organization.benchmarking.id
-
-  depends_on = [grafana_data_source.postgres]
-}
-
-
-# resource "grafana_apps_dashboard_dashboard_v1beta1" "home" {
-#   #name = "Home"
-#   metadata {
-#     uid = "ee4mze492j0n4d"
-#     #folder_uid = "dashboards"
-#   }
-#   # options {
-#   #   #overwrite = true
-#   #   #path = "dashboards/home"
-#   # }
-#   spec {
-#     json = file("${path.module}/../../dashboards/build/Home.json")
-#     #tags = []
-#     #title = "Home"
-#   }
-# }
-
-
-# TODO: sheerwater.rhizaresearch.org should forward to dashboards.rhizaresearch.org/orgId=1 (or whatever the sheerwater-benchmarking orgId is in production)
-# this would require something like an nginx proxy in the k8s cluster to forward the requests to the correct orgId
-
-# resource "google_dns_managed_zone" "sheerwater" {
-#   #depends_on = [google_project.sheerwater]
-#   name = "sheerwater"
-#   dns_name = "sheerwater.rhizaresearch.org."
-#   project = "sheerwater"
-
-#   description = "sheerwater dns zone"
-
-#   lifecycle {
-#     prevent_destroy = true
-#   }
-# }
-
-# resource nginx proxy {
-#  forward google_dns_managed_zone.sheerwater to dashboards.rhizaresearch.org/orgId=1
-#}
