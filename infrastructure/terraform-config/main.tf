@@ -17,7 +17,7 @@ terraform {
 
   backend "gcs" {
     bucket = "rhiza-terraform-state"
-    prefix = "sheerwater-benchmarking-config"
+    prefix = "sheerwater-config"
   }
 
   required_providers {
@@ -29,11 +29,6 @@ terraform {
     grafana = {
       source = "grafana/grafana"
       version = "4.5.1"
-    }
-
-    postgresql = {
-      source = "cyrilgdn/postgresql"
-      version = "1.23.0"
     }
   }
 }
@@ -47,18 +42,9 @@ data "google_secret_manager_secret_version" "grafana_ephemeral_admin_password" {
   project = "rhiza-shared"
 }
 
-data "google_secret_manager_secret_version" "postgres_admin_password" {
-  secret = "sheerwater-postgres-admin-password"
-}
-
-provider "postgresql" {
-  host = "sheerwater-benchmarking-postgres"
-  port = 5432
-  database = "postgres"
-  username = "postgres"
-  password = data.google_secret_manager_secret_version.postgres_admin_password.secret_data
-  sslmode = "disable"
-  connect_timeout = 15
+data "google_secret_manager_secret_version" "grafana_admin_password" {
+  secret = "grafana-admin-password"
+  project = "rhiza-shared"
 }
 
 locals {
@@ -74,6 +60,7 @@ locals {
   # - prod:      https://dashboards.rhizaresearch.org
   # - ephemeral: https://dev.shared.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
   grafana_url = local.is_prod ? "https://dashboards.rhizaresearch.org" : "https://dev.shared.rhizaresearch.org/${local.repo_name}/${local.pr_number}"
+  grafana_auth = local.is_prod ? "admin:${data.google_secret_manager_secret_version.grafana_admin_password.secret_data}" : "admin:${data.google_secret_manager_secret_version.grafana_ephemeral_admin_password.secret_data}"
 
   # Postgres connection URL - different for prod vs ephemeral
   # TODO: this url should be built from other resource values 
@@ -81,7 +68,7 @@ locals {
   # sheerwater-benchmarking = infrastructure.terraform-config.sheerwater_k8s_namespace
   # svc.cluster.local = ?
   # port = ?
-  postgres_url = terraform.workspace == "default" ? "postgres:5432" : "postgres.sheerwater-benchmarking.svc.cluster.local:5432"
+  postgres_url = terraform.workspace == "default" ? "postgres:5432" : "postgres.shared.rhizaresearch.org:5432"
 
   # Collect dashboards and key them by UID so filename changes don't disturb state
   dashboard_files = fileset("${path.module}/../../dashboards/build", "*.json")
@@ -91,14 +78,14 @@ locals {
     d.uid => "${path.module}/../../dashboards/build/${f}"
     if try(d.uid, "") != ""
   }
-  home_dashboard_uid = "ee4mze492j0n4d"
+  home_dashboard_uid = local.is_prod ? null : "ee4mze492j0n4d"
 }
 provider "grafana" {
   # Base URLs
   # - prod:      https://dashboards.rhizaresearch.org
   # - ephemeral: https://dev.shared.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
   url = local.grafana_url
-  auth = "admin:${data.google_secret_manager_secret_version.grafana_ephemeral_admin_password.secret_data}"
+  auth = local.grafana_auth
   # TODO: for now I have to use the default password because 
   # the correct password is not working. It is being set but I think 
   # there is some urlencoding happening somewhere breaking the password.
@@ -111,35 +98,7 @@ output "grafana_url" {
 
 # Gcloud secrets for postgres read user
 data "google_secret_manager_secret_version" "postgres_read_password" {
-  secret = "sheerwater-postgres-read-password"
-}
-
-
-# Gcloud secrets for Single sign on
-data "google_secret_manager_secret_version" "sheerwater_oauth_client_id" {
-  secret = "sheerwater-oauth-client-id"
-}
-
-data "google_secret_manager_secret_version" "sheerwater_oauth_client_secret" {
-  secret = "sheerwater-oauth-client-secret"
-}
-
-# Enable google oauth
-resource "grafana_sso_settings" "google_sso_settings" {
-  count = local.is_prod ? 1 : 0 # only enable for the prod instance because sso is already enabled via keycloak for the ephemeral instances
-  provider_name = "google"
-  oauth2_settings {
-    name = "Google"
-    client_id = data.google_secret_manager_secret_version.sheerwater_oauth_client_id.secret_data
-    client_secret = data.google_secret_manager_secret_version.sheerwater_oauth_client_secret.secret_data
-    allow_sign_up = true
-    auto_login = false
-    #allow_assign_grafana_admin = true
-    scopes = "openid email profile"
-    allowed_domains = "rhizaresearch.org"
-    skip_org_role_sync = true
-    use_pkce = true
-  }
+  secret = "postgres-read-password" 
 }
 
 # handled via import.sh
@@ -151,7 +110,7 @@ resource "grafana_sso_settings" "google_sso_settings" {
 # }
 
 resource "grafana_organization" "benchmarking" {
-  name = "Main Org."
+  name = "SheerWater"
   # Note: changing the name will disable anonymous access because they are given access by org name.
   #name = "benchmarking"
   #admin_user = "admin"
@@ -190,7 +149,7 @@ resource "grafana_data_source" "postgres" {
   type = "grafana-postgresql-datasource"
   name = "postgres"
   url = local.postgres_url
-  username = "read"
+  username = "sheerwater_read"
   uid = "bdz3m3xs99p1cf"
 
   secure_json_data_encoded = jsonencode({
