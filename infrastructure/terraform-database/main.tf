@@ -12,7 +12,7 @@ terraform {
 
     google = {
       source = "hashicorp/google"
-      version = "6.4.0"
+      version = "7.3.0"
     }
 
     postgresql = {
