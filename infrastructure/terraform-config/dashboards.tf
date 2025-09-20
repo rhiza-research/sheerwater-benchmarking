@@ -11,7 +11,7 @@
 
 # Get directories using external data source
 data "external" "folder_detection" {
-  program = ["sh", "-c", "echo '{\"dirs\":\"'$(find ${path.module}/../../dashboards/build -maxdepth 1 -type d -name '*-*' -exec basename {} \\; | tr '\n' ',' | sed 's/,$//')'\"}' "]
+  program = ["sh", "-c", "echo '{\"dirs\":\"'$(find ${path.module}/../../dashboards/build/ -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; | tr '\n' ',' | sed 's/,$//')'\"}' "]
 }
 
 locals {
@@ -25,10 +25,9 @@ locals {
   # Parse folder information from directory names
   folders = {
     for dir in local.folder_dirs : dir => {
-      uid   = split("-", dir)[0]
-      slug  = join("-", slice(split("-", dir), 1, length(split("-", dir))))
-      # Extract title by removing UID prefix and converting slug to title case
-      title = title(replace(join("-", slice(split("-", dir), 1, length(split("-", dir)))), "-", " "))
+      uid   = substr(sha256(dir), 0, 14)
+      slug  = dir
+      title = title(dir)
       path  = "${local.dashboards_base_path}/${dir}"
     }
   }
