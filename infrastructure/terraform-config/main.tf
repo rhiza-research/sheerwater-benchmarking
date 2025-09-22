@@ -67,12 +67,7 @@ locals {
   grafana_url = local.is_prod ? "https://dashboards.rhizaresearch.org" : "https://dev.shared.rhizaresearch.org/${local.repo_name}/${local.pr_number}"
   grafana_auth = local.is_prod ? "admin:${data.google_secret_manager_secret_version.grafana_admin_password.secret_data}" : "admin:${data.google_secret_manager_secret_version.grafana_ephemeral_admin_password.secret_data}"
 
-  # Postgres connection URL - different for prod vs ephemeral
-  # TODO: this url should be built from other resource values 
-  # postgres = ?
-  # sheerwater-benchmarking = infrastructure.terraform-config.sheerwater_k8s_namespace
-  # svc.cluster.local = ?
-  # port = ?
+  # Postgres connection URL - different for prod vs ephemeral - ephemeral using a different namespace so use the full address
   postgres_url = terraform.workspace == "default" ? "postgres:5432" : "postgres.shared.rhizaresearch.org:5432"
 
   # Collect dashboards and key them by UID so filename changes don't disturb state
@@ -91,10 +86,6 @@ provider "grafana" {
   # - ephemeral: https://dev.shared.rhizaresearch.org/sheerwater-benchmarking/<pr_number>
   url = local.grafana_url
   auth = local.grafana_auth
-  # TODO: for now I have to use the default password because 
-  # the correct password is not working. It is being set but I think 
-  # there is some urlencoding happening somewhere breaking the password.
-  #auth = "admin:admin"
 }
 
 output "grafana_url" {
@@ -106,32 +97,14 @@ data "google_secret_manager_secret_version" "postgres_read_password" {
   secret = "postgres-read-password" 
 }
 
-# handled via import.sh
-# import {
-#   to = grafana_organization.benchmarking
-#   id = local.is_prod ? "1" : "1"
-#   # in prod, the benchmarking org is the main org (id 1)
-#   # in ephemeral, the benchmarking org is the main org (id 1)
-# }
-
 resource "grafana_organization" "benchmarking" {
   name = "SheerWater"
-  # Note: changing the name will disable anonymous access because they are given access by org name.
-  #name = "benchmarking"
-  #admin_user = "admin"
 
   lifecycle {
     ignore_changes = [admins, viewers, editors]
     prevent_destroy = true
   }
 }
-
-# handled via import.sh
-# import {
-#   to = grafana_organization_preferences.light_preference_benchmarking
-#   id = "1"
-# }
-
 
 resource "grafana_organization_preferences" "light_preference_benchmarking" {
   theme = "light"
