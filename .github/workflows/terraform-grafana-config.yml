@@ -23,7 +23,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: sheerwater-benchmarking/infrastructure/terraform-config
+        working-directory: ./infrastructure/terraform-config
     steps:
       - name: Checkout
         uses: actions/checkout@v4
