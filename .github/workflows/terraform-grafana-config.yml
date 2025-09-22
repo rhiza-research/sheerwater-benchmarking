@@ -45,9 +45,10 @@ jobs:
       - name: Terraform Init
         run: terraform init -input=false
 
-      - name: Select or create workspace
-        run: |
-          terraform workspace select "$TF_WORKSPACE" || terraform workspace new "$TF_WORKSPACE"
+          # This isn't necessary if TF_WORKSPACE is set
+          #- name: Select or create workspace
+          #  run: |
+          #    terraform workspace select "$TF_WORKSPACE" || terraform workspace new "$TF_WORKSPACE"
 
       - name: Terraform Plan
         run: terraform plan -input=false
