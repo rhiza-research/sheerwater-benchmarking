@@ -30,7 +30,9 @@ jobs:
       - name: Auth to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          token_format: 'access_token'
+          workload_identity_provider: "projects/730596460290/locations/global/workloadIdentityPools/rhiza-github/providers/rhiza-github"
+          service_account: "rhiza-github-action@rhiza-shared.iam.gserviceaccount.com"
           export_environment_variables: true
 
       - name: Setup gcloud
