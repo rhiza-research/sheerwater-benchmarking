@@ -135,5 +135,5 @@ resource "postgresql_grant" "write_public_terracottads" {
 resource "google_project_iam_member" "access-terraform-state" {
   project = google_project.project.project_id
   role    = "roles/secretmanager.secretAccess"
-  member = "serviceAccount:${google_service_account.rhiza_github_account.email}"
+  member = "serviceAccount:${var.service_account_email}"
 }
