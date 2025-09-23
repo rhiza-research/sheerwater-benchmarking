@@ -83,9 +83,9 @@ resource "grafana_folder" "folders" {
   uid   = each.value.uid
   title = each.value.title
 
-  org_id = grafana_organization.benchmarking.id
+  org_id = grafana_organization.org.id
 
-  depends_on = [grafana_organization.benchmarking]
+  depends_on = [grafana_organization.org]
 }
 
 # Create dashboards dynamically, placing them in folders as needed
@@ -101,7 +101,7 @@ resource "grafana_dashboard" "dashboards" {
   message = "Modified by terraform from https://github.com/rhiza-research/${local.repo_name}/pull/${local.pr_number}"
 
   overwrite = true
-  org_id    = grafana_organization.benchmarking.id
+  org_id    = grafana_organization.org.id
 
   depends_on = [
     grafana_data_source.postgres,
