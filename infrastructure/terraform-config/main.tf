@@ -97,7 +97,7 @@ data "google_secret_manager_secret_version" "postgres_read_password" {
   secret = "postgres-read-password" 
 }
 
-resource "grafana_organization" "benchmarking" {
+resource "grafana_organization" "org" {
   name = "SheerWater"
 
   lifecycle {
@@ -106,19 +106,19 @@ resource "grafana_organization" "benchmarking" {
   }
 }
 
-resource "grafana_organization_preferences" "light_preference_benchmarking" {
+resource "grafana_organization_preferences" "preferences" {
   theme = "light"
   timezone = "utc"
   week_start = "sunday"
   # only set the home dashboard uid on the first run
   home_dashboard_uid = local.home_dashboard_uid
-  org_id = grafana_organization.benchmarking.id
+  org_id = grafana_organization.org.id
 
   #lifecycle {
   #  ignore_changes = [home_dashboard_uid, ]
   #}
 
-  depends_on = [grafana_organization.benchmarking, grafana_dashboard.dashboards]
+  depends_on = [grafana_organization.org, grafana_dashboard.dashboards]
 
 }
 
@@ -141,9 +141,9 @@ resource "grafana_data_source" "postgres" {
     timescaledb = true
   })
 
-  org_id = grafana_organization.benchmarking.id
+  org_id = grafana_organization.org.id
 
-  depends_on = [grafana_organization.benchmarking]
+  depends_on = [grafana_organization.org]
 
 }
 
