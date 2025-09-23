@@ -61,7 +61,7 @@ jobs:
           timeout 10m ./wait-for-grafana.sh $EPHEMERAL_GRAFANA_URL
           
       - name: Terraform Import
-        run: ./import.sh
+        run: ./import.sh || true
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve
