@@ -19,10 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: 'write'
     defaults:
       run:
         shell: bash
-        working-directory: sheerwater-benchmarking/infrastructure/terraform-config
+        working-directory: ./infrastructure/terraform-config
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,12 +45,13 @@ jobs:
       - name: Terraform Init
         run: terraform init -input=false
 
-      - name: Select or create workspace
-        run: |
-          terraform workspace select "$TF_WORKSPACE" || terraform workspace new "$TF_WORKSPACE"
+          # This isn't necessary if TF_WORKSPACE is set
+          #- name: Select or create workspace
+          #  run: |
+          #    terraform workspace select "$TF_WORKSPACE" || terraform workspace new "$TF_WORKSPACE"
 
-      - name: Terraform Plan
-        run: terraform plan -input=false
+      - name: Terraform Apply Org
+        run: terraform apply -input=false -auto-approve -target grafana_organization.benchmarking
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve
