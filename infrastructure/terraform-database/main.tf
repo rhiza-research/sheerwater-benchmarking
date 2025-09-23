@@ -134,6 +134,6 @@ resource "postgresql_grant" "write_public_terracottads" {
 ### Access for the github action to deploy terraform
 resource "google_project_iam_member" "access-terraform-state" {
   project = google_project.project.project_id
-  role    = "roles/secretmanager.secretAccess"
+  role    = "roles/secretmanager.secretAccessor"
   member = "serviceAccount:${var.service_account_email}"
 }
