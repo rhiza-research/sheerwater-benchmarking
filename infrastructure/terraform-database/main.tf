@@ -138,7 +138,7 @@ resource "google_project_iam_member" "access-terraform-state" {
   member = "serviceAccount:${var.service_account_email}"
 }
 
-resource "google_project_iam_member" "access-terraform-state" {
+resource "google_project_iam_member" "view-secrets" {
   project = google_project.project.project_id
   role    = "roles/secretmanager.viewer"
   member = "serviceAccount:${var.service_account_email}"
