@@ -50,8 +50,11 @@ jobs:
           #  run: |
           #    terraform workspace select "$TF_WORKSPACE" || terraform workspace new "$TF_WORKSPACE"
 
-      - name: Terraform Plan
-        run: terraform plan -input=false
+          #- name: Terraform Plan
+          #run: terraform plan -input=false
+
+      - name: Terraform Apply Org
+        run: terraform apply -input=false -auto-approve -target grafana_organization.benchmarking
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve
