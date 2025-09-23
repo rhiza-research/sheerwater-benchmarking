@@ -11,6 +11,7 @@ concurrency:
 env:
   TF_IN_AUTOMATION: "true"
   TF_WORKSPACE: grafana-pr-${{ github.event.pull_request.number }}
+  EPHEMERAL_GRAFANA_URL: https://dev.shared.rhizaresearch.org/${{ github.event.repository.name }}/${{ github.event.pull_request.number }}
 
 jobs:
   apply:
@@ -19,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
+      issues: write
       id-token: 'write'
     defaults:
       run:
@@ -42,18 +45,33 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init
+      - name: Init backend only
+        env:
+          TF_WORKSPACE: default
         run: terraform init -input=false
 
-          # This isn't necessary if TF_WORKSPACE is set
-          #- name: Select or create workspace
-          #  run: |
-          #    terraform workspace select "$TF_WORKSPACE" || terraform workspace new "$TF_WORKSPACE"
+      - name: Select or create workspace
+        run: terraform workspace new $TF_WORKSPACE || true
 
+      - name: Terraform Init with workspace
+        run: terraform init -input=false
+
+      - name: Wait for Ephemeral Grafana
+        run: |
+          timeout 10m ./wait-for-grafana.sh $EPHEMERAL_GRAFANA_URL
+          
       - name: Terraform Apply Org
         run: terraform apply -input=false -auto-approve -target grafana_organization.benchmarking
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve
+
+      - name: Create or Update comment
+        uses: mikedloss/create-update-comment@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          unique-identifier: ${{ github.event.repository.name }}-${{ github.event.pull_request.number }}
+          message: |
+            Ephemeral grafana up and running at <a href="${{ env.EPHEMERAL_GRAFANA_URL }}" target="_blank">${{ env.EPHEMERAL_GRAFANA_URL }}</a>
 
 
