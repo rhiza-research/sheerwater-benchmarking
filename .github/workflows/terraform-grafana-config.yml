@@ -60,8 +60,8 @@ jobs:
         run: |
           timeout 10m ./wait-for-grafana.sh $EPHEMERAL_GRAFANA_URL
           
-      - name: Terraform Apply Org
-        run: terraform apply -input=false -auto-approve -target grafana_organization.benchmarking
+      - name: Terraform Import
+        run: ./import.sh
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve
