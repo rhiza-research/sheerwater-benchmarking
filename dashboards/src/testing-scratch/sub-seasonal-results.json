@@ -1,0 +1,842 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 6,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "default": true,
+        "type": "grafana-postgresql-datasource",
+        "uid": "bdz3m3xs99p1cf"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "color-background"
+            },
+            "inspect": false,
+            "minWidth": 50
+          },
+          "mappings": [],
+          "noValue": "-",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#cbcbcb",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "forecast"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "transparent",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 178
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "forecast"
+            },
+            "properties": [
+              {
+                "id": "custom.minWidth",
+                "value": 150
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "bdz3m3xs99p1cf"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select forecast, week1, week2, week3, week4, week5,\nCASE\n    WHEN week1_skill > 0 THEN '#FF' || lpad(to_hex(cast((1 - week1_skill) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week1_skill) * 255 as integer))::text, 2, '0') || '99'\n    ELSE '#' || lpad(to_hex(cast((1 - week1_skill*-1) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week1_skill*-1) * 255 as integer))::text, 2, '0') || 'FF99'\nEND week1_skill,\nCASE\n    WHEN week2_skill > 0 THEN '#FF' || lpad(to_hex(cast((1 - week2_skill) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week2_skill) * 255 as integer))::text, 2, '0') || '99'\n    ELSE '#' || lpad(to_hex(cast((1 - week2_skill*-1) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week2_skill*-1) * 255 as integer))::text, 2, '0') || 'FF99'\nEND week2_skill,\nCASE\n    WHEN week3_skill > 0 THEN '#FF' || lpad(to_hex(cast((1 - week3_skill) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week3_skill) * 255 as integer))::text, 2, '0') || '99'\n    ELSE '#' || lpad(to_hex(cast((1 - week3_skill*-1) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week3_skill*-1) * 255 as integer))::text, 2, '0') || 'FF99'\nEND week3_skill,\nCASE\n    WHEN week4_skill > 0 THEN '#FF' || lpad(to_hex(cast((1 - week4_skill) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week4_skill) * 255 as integer))::text, 2, '0') || '99'\n    ELSE '#' || lpad(to_hex(cast((1 - week4_skill*-01) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week4_skill*-1) * 255 as integer))::text, 2, '0') || 'FF99'\nEND week4_skill,\nCASE\n    WHEN week5_skill > 0 THEN '#FF' || lpad(to_hex(cast((1 - week5_skill) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week5_skill) * 255 as integer))::text, 2, '0') || '99'\n    ELSE '#' || lpad(to_hex(cast((1 - week5_skill*-1) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week5_skill*-1) * 255 as integer))::text, 2, '0') || 'FF99'\nEND week5_skill\n from \"$tmp2m_tab_name\"\n ${time_filter_query}",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Temperature (2m) Results (C)",
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "week1"
+            },
+            "configRefId": "A",
+            "mappings": [
+              {
+                "fieldName": "week1",
+                "handlerKey": "mappings.value"
+              },
+              {
+                "fieldName": "week1_skill",
+                "handlerKey": "mappings.color"
+              },
+              {
+                "fieldName": "week2",
+                "handlerKey": "__ignore"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "week2"
+            },
+            "configRefId": "A",
+            "mappings": [
+              {
+                "fieldName": "week2",
+                "handlerKey": "mappings.value"
+              },
+              {
+                "fieldName": "week2_skill",
+                "handlerKey": "mappings.color"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "week3"
+            },
+            "configRefId": "A",
+            "mappings": [
+              {
+                "fieldName": "week2",
+                "handlerKey": "__ignore"
+              },
+              {
+                "fieldName": "week3_skill",
+                "handlerKey": "mappings.color"
+              },
+              {
+                "fieldName": "week3",
+                "handlerKey": "mappings.value"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "week4"
+            },
+            "configRefId": "A",
+            "mappings": [
+              {
+                "fieldName": "week4",
+                "handlerKey": "mappings.value"
+              },
+              {
+                "fieldName": "week4_skill",
+                "handlerKey": "mappings.color"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {}
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "week5"
+            },
+            "configRefId": "A",
+            "mappings": [
+              {
+                "fieldName": "week5",
+                "handlerKey": "mappings.value"
+              },
+              {
+                "fieldName": "week5_skill",
+                "handlerKey": "mappings.color"
+              }
+            ]
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "week1",
+                "week2",
+                "week3",
+                "week4",
+                "week5",
+                "forecast"
+              ]
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "default": true,
+        "type": "grafana-postgresql-datasource",
+        "uid": "bdz3m3xs99p1cf"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "color-background"
+            },
+            "inspect": false,
+            "minWidth": 50
+          },
+          "mappings": [],
+          "noValue": "-",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#d6d6d6",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "forecast"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "transparent",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 176
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "forecast"
+            },
+            "properties": [
+              {
+                "id": "custom.minWidth",
+                "value": 150
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "bdz3m3xs99p1cf"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "hide": false,
+          "rawQuery": true,
+          "rawSql": "select forecast, week1, week2, week3, week4, week5,\nCASE\n    WHEN week1_skill > 0 THEN '#FF' || lpad(to_hex(cast((1 - week1_skill) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week1_skill) * 255 as integer))::text, 2, '0') || '99'\n    WHEN week1_skill < -1 THEN '#0000FF99' \n    ELSE '#' || lpad(to_hex(cast((1 - week1_skill*-1) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week1_skill*-1) * 255 as integer))::text, 2, '0') || 'FF99'\nEND week1_skill,\nCASE\n    WHEN week2_skill > 0 THEN '#FF' || lpad(to_hex(cast((1 - week2_skill) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week2_skill) * 255 as integer))::text, 2, '0') || '99'\n   WHEN week2_skill < -1 THEN '#0000FF99' \n   ELSE '#' || lpad(to_hex(cast((1 - week2_skill*-1) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week2_skill*-1) * 255 as integer))::text, 2, '0') || 'FF99'\nEND week2_skill,\nCASE\n    WHEN week3_skill > 0 THEN '#FF' || lpad(to_hex(cast((1 - week3_skill) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week3_skill) * 255 as integer))::text, 2, '0') || '99'\n    WHEN week3_skill < -1 THEN '#0000FF99' \n    ELSE '#' || lpad(to_hex(cast((1 - week3_skill*-1) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week3_skill*-1) * 255 as integer))::text, 2, '0') || 'FF99'\nEND week3_skill,\nCASE\n    WHEN week4_skill > 0 THEN '#FF' || lpad(to_hex(cast((1 - week4_skill) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week4_skill) * 255 as integer))::text, 2, '0') || '99'\n    WHEN week4_skill < -1 THEN '#0000FF99' \n    ELSE '#' || lpad(to_hex(cast((1 - week4_skill*-01) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week4_skill*-1) * 255 as integer))::text, 2, '0') || 'FF99'\nEND week4_skill,\nCASE\n    WHEN week5_skill > 0 THEN '#FF' || lpad(to_hex(cast((1 - week5_skill) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week5_skill) * 255 as integer))::text, 2, '0') || '99'\n    WHEN week5_skill < -1 THEN '#0000FF99' \n    ELSE '#' || lpad(to_hex(cast((1 - week5_skill*-1) * 255 as integer))::text, 2, '0') || lpad(to_hex(cast((1-week5_skill*-1) * 255 as integer))::text, 2, '0') || 'FF99'\nEND week5_skill\n from \"$precip_tab_name\"\n${time_filter_query}",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Precipitation Results (mm)",
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "week1"
+            },
+            "configRefId": "A",
+            "mappings": [
+              {
+                "fieldName": "week1",
+                "handlerKey": "mappings.value"
+              },
+              {
+                "fieldName": "week1_skill",
+                "handlerKey": "mappings.color"
+              },
+              {
+                "fieldName": "week2",
+                "handlerKey": "__ignore"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "week2"
+            },
+            "configRefId": "A",
+            "mappings": [
+              {
+                "fieldName": "week2",
+                "handlerKey": "mappings.value"
+              },
+              {
+                "fieldName": "week2_skill",
+                "handlerKey": "mappings.color"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "week3"
+            },
+            "configRefId": "A",
+            "mappings": [
+              {
+                "fieldName": "week2",
+                "handlerKey": "__ignore"
+              },
+              {
+                "fieldName": "week3_skill",
+                "handlerKey": "mappings.color",
+                "reducerId": "allValues"
+              },
+              {
+                "fieldName": "week3",
+                "handlerKey": "mappings.value",
+                "reducerId": "allValues"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "week4"
+            },
+            "configRefId": "A",
+            "mappings": [
+              {
+                "fieldName": "week4",
+                "handlerKey": "mappings.value"
+              },
+              {
+                "fieldName": "week4_skill",
+                "handlerKey": "mappings.color"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {}
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "week5"
+            },
+            "configRefId": "A",
+            "mappings": [
+              {
+                "fieldName": "week5",
+                "handlerKey": "mappings.value"
+              },
+              {
+                "fieldName": "week5_skill",
+                "handlerKey": "mappings.color"
+              }
+            ]
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "forecast",
+                "week1",
+                "week2",
+                "week3",
+                "week4",
+                "week5"
+              ]
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "table"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "MAE",
+          "value": "mae"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Metric",
+        "multi": false,
+        "name": "metric",
+        "options": [
+          {
+            "selected": true,
+            "text": "MAE",
+            "value": "mae"
+          },
+          {
+            "selected": false,
+            "text": "CRPS",
+            "value": "crps"
+          }
+        ],
+        "query": "MAE : mae, CRPS : crps",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "ECMWF IFS ER",
+          "value": "ecmwf_ifs_er"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Baseline",
+        "multi": false,
+        "name": "baseline",
+        "options": [
+          {
+            "selected": false,
+            "text": "Clim 1985-2015",
+            "value": "climatology_2015"
+          },
+          {
+            "selected": false,
+            "text": "Clim + Trend",
+            "value": "climatology_trend_2015"
+          },
+          {
+            "selected": true,
+            "text": "ECMWF IFS ER",
+            "value": "ecmwf_ifs_er"
+          },
+          {
+            "selected": false,
+            "text": "ECMWF IFS ER Debiased",
+            "value": "ecmwf_ifs_er_debiased"
+          }
+        ],
+        "query": "Clim 1985-2015 : climatology_2015, Clim + Trend : climatology_trend_2015, ECMWF IFS ER : ecmwf_ifs_er, ECMWF IFS ER Debiased : ecmwf_ifs_er_debiased",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "ERA5",
+          "value": "era5"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Ground Truth",
+        "multi": false,
+        "name": "truth",
+        "options": [
+          {
+            "selected": true,
+            "text": "ERA5",
+            "value": "era5"
+          }
+        ],
+        "query": "ERA5 : era5",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "1.5",
+          "value": "global1_5"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Grid",
+        "multi": false,
+        "name": "grid",
+        "options": [
+          {
+            "selected": true,
+            "text": "1.5",
+            "value": "global1_5"
+          },
+          {
+            "selected": false,
+            "text": "0.25",
+            "value": "global0_25"
+          }
+        ],
+        "query": "1.5 : global1_5, 0.25 : global0_25",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "Africa",
+          "value": "africa"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Region",
+        "multi": false,
+        "name": "region",
+        "options": [
+          {
+            "selected": true,
+            "text": "Africa",
+            "value": "africa"
+          },
+          {
+            "selected": false,
+            "text": "East Africa",
+            "value": "east_africa"
+          },
+          {
+            "selected": false,
+            "text": "Global",
+            "value": "global"
+          }
+        ],
+        "query": "Africa : africa, East Africa : east_africa, Global : global",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "None",
+          "value": "None"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Time Grouping",
+        "multi": false,
+        "name": "time_grouping",
+        "options": [
+          {
+            "selected": true,
+            "text": "None",
+            "value": "None"
+          },
+          {
+            "selected": false,
+            "text": "Month of Year",
+            "value": "month_of_year"
+          },
+          {
+            "selected": false,
+            "text": "Year",
+            "value": "year"
+          }
+        ],
+        "query": "None : None, Month of Year : month_of_year, Year : year",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "892ea747c79a968f14a17d8eb8185b1c",
+          "value": "892ea747c79a968f14a17d8eb8185b1c"
+        },
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "bdz3m3xs99p1cf"
+        },
+        "definition": "select * from md5('summary_metrics_table_${baseline}_2023-01-01_${grid}_lsm_${metric}_${region}_2016-01-01_${time_grouping}_${truth}_tmp2m')",
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "tmp2m_tab_name",
+        "options": [],
+        "query": "select * from md5('summary_metrics_table_${baseline}_2023-01-01_${grid}_lsm_${metric}_${region}_2016-01-01_${time_grouping}_${truth}_tmp2m')",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "db152643d40513b4e60f2e3708b14708",
+          "value": "db152643d40513b4e60f2e3708b14708"
+        },
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "bdz3m3xs99p1cf"
+        },
+        "definition": "select * from md5('summary_metrics_table_${baseline}_2023-01-01_${grid}_lsm_${metric}_${region}_2016-01-01_${time_grouping}_${truth}_precip')",
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "precip_tab_name",
+        "options": [],
+        "query": "select * from md5('summary_metrics_table_${baseline}_2023-01-01_${grid}_lsm_${metric}_${region}_2016-01-01_${time_grouping}_${truth}_precip')",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "select v.* from (values ('None')) v(t)",
+          "value": "select v.* from (values ('None')) v(t)"
+        },
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "bdz3m3xs99p1cf"
+        },
+        "definition": "select \nCASE\n    WHEN v.g = 'None' THEN 'select v.* from (values (''None'')) v(t)'\n    ELSE 'select distinct time from \"${precip_tab_name}\"'\nEND\nfrom (values ('$time_grouping')) v(g)",
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "time_filter_filter_query",
+        "options": [],
+        "query": "select \nCASE\n    WHEN v.g = 'None' THEN 'select v.* from (values (''None'')) v(t)'\n    ELSE 'select distinct time from \"${precip_tab_name}\"'\nEND\nfrom (values ('$time_grouping')) v(g)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "isNone": true,
+          "selected": false,
+          "text": "None",
+          "value": ""
+        },
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "bdz3m3xs99p1cf"
+        },
+        "definition": "${time_filter_filter_query:raw}",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Time Filter",
+        "multi": false,
+        "name": "time_filter",
+        "options": [],
+        "query": "${time_filter_filter_query:raw}",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 3,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "bdz3m3xs99p1cf"
+        },
+        "definition": "select \nCASE\n    WHEN v.g = 'None' THEN ''\n    ELSE 'where time = ' || v.t\nEND\nfrom (values ('$time_filter', '$time_grouping')) v(t, g)",
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "time_filter_query",
+        "options": [],
+        "query": "select \nCASE\n    WHEN v.g = 'None' THEN ''\n    ELSE 'where time = ' || v.t\nEND\nfrom (values ('$time_filter', '$time_grouping')) v(t, g)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Sub-Seasonal Results",
+  "uid": "ce2ggkm852fi8b",
+  "version": 9,
+  "weekStart": ""
+}

@@ -6,6 +6,7 @@ import sys
 import time
 import json
 import glob
+import shutil
 import subprocess
 from pathlib import Path
 from watchdog.observers import Observer
@@ -21,16 +22,16 @@ def run_command(command):
         raise Exception(f"Command failed with exit code {process.returncode}")
     return process.stdout.strip()
 
-def deploy_to_grafana(build_dir, config_file):
-    """Deploy dashboards to Grafana using grafanactl"""
-    try:
-        # Push all dashboards from the build directory
-        run_command(f"grafanactl --config {config_file} resources push --path {build_dir}")
-        print(f"Successfully deployed dashboards from {build_dir}")
-        return True
-    except Exception as e:
-        print(f"Error deploying dashboards: {e}")
-        return False
+# def deploy_to_grafana(build_dir, config_file):
+#     """Deploy dashboards to Grafana using grafanactl"""
+#     try:
+#         # Push all dashboards from the build directory
+#         run_command(f"grafanactl --config {config_file} resources push --path {build_dir}")
+#         print(f"Successfully deployed dashboards from {build_dir}")
+#         return True
+#     except Exception as e:
+#         print(f"Error deploying dashboards: {e}")
+#         return False
 
 class DashboardHandler(FileSystemEventHandler):
     def __init__(self, source_dir, build_dir, config_file):
@@ -92,35 +93,55 @@ class DashboardHandler(FileSystemEventHandler):
             
             remove_null_options(dashboard_dict)
             
-            # Save to build directory with proper resource manifest structure
-            build_path = os.path.join(self.build_dir, f"{dashboard_uid}.json")
-            resource_manifest = {
-                "apiVersion": "dashboard.grafana.app/v1beta1",
-                "kind": "Dashboard",
-                "metadata": {
-                    "name": dashboard_uid
-                },
-                "spec": dashboard_dict
-            }
+            # Calculate relative path from source directory and create corresponding build path
+            rel_path = os.path.relpath(src_path, self.source_dir)
+            # Replace .py extension with .json
+            rel_path = os.path.splitext(rel_path)[0] + '.json'
+            build_path = os.path.join(self.build_dir, rel_path)
+            
+            # Create destination directory if it doesn't exist
+            os.makedirs(os.path.dirname(build_path), exist_ok=True)
+            # resource_manifest = {
+            #     "apiVersion": "dashboard.grafana.app/v1beta1",
+            #     "kind": "Dashboard",
+            #     "metadata": {
+            #         "name": dashboard_uid
+            #     },
+            #     "spec": dashboard_dict
+            # }
             
             with open(build_path, 'w') as f:
-                json.dump(resource_manifest, f, indent=2)
+                json.dump(dashboard_dict, f, indent=2)
                 
             print(f"Built dashboard: {dashboard_name} -> {build_path}")
             
             # Deploy all dashboards using grafanactl
-            deploy_to_grafana(self.build_dir, self.config_file)
+            #deploy_to_grafana(self.build_dir, self.config_file)
             
         except Exception as e:
             print(f"Error building dashboard {src_path}: {e}")
 
     def build_all_dashboards(self):
-        """Build all dashboards in the dashboards directory"""
-        dashboard_files = glob.glob(f'{self.source_dir}/*.py')
+        """Build all dashboards in the dashboards directory and subdirectories"""
+        # Find all Python files recursively
+        dashboard_files = glob.glob(f'{self.source_dir}/**/*.py', recursive=True)
         
         print(f"Building {len(dashboard_files)} dashboards...")
         for dashboard_file in dashboard_files:
             self.build_dashboard(dashboard_file)
+
+        # Find all JSON files recursively
+        dashboard_json_files = glob.glob(f'{self.source_dir}/**/*.json', recursive=True)
+        print(f"Copying {len(dashboard_json_files)} dashboard JSON files...")
+        for dashboard_json_file in dashboard_json_files:
+            # Calculate relative path from source directory
+            rel_path = os.path.relpath(dashboard_json_file, self.source_dir)
+            # Create corresponding path in build directory
+            dest_path = os.path.join(self.build_dir, rel_path)
+            # Create destination directory if it doesn't exist
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            # Copy the file
+            shutil.copy(dashboard_json_file, dest_path)
 
     def watch_dashboards(self):
         """Watch for changes in dashboard files and rebuild them"""
@@ -129,7 +150,7 @@ class DashboardHandler(FileSystemEventHandler):
 
         # then watch for changes
         observer = Observer()
-        observer.schedule(self, self.source_dir, recursive=False)
+        observer.schedule(self, self.source_dir, recursive=True)
         observer.start()
         
         print("Watching for dashboard changes... Press Ctrl+C to stop")
