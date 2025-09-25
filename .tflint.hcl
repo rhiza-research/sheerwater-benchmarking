@@ -1,6 +1,6 @@
 plugin "terraform" {
   enabled = true
-  preset  = "recommended"
+  preset  = "all"
 }
 
 plugin "google" {
@@ -12,7 +12,7 @@ plugin "google" {
 plugin "trailing-comma" {
   enabled = true
 
-  version = "0.1.0"
+  version = "0.2.0"
   source  = "github.com/Gaardsholt/tflint-ruleset-trailing-comma"
 
   signing_key = <<-KEY

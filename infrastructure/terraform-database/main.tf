@@ -1,15 +1,6 @@
 terraform {
   required_version = ">= 1.5.7"
   required_providers {
-    null = {
-      source = "hashicorp/null"
-      version = "3.2.4"
-    }
-
-    random = {
-      source = "hashicorp/random"
-      version = "3.7.2"
-    }
 
     google = {
       source = "hashicorp/google"
@@ -106,7 +97,15 @@ resource "postgresql_grant" "write_public" {
   role = postgresql_role.write.name
   schema = "public"
   object_type = "table"
-  privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+  privileges = [
+    "DELETE",
+    "INSERT",
+    "REFERENCES",
+    "SELECT",
+    "TRIGGER",
+    "TRUNCATE",
+    "UPDATE",
+  ]
 }
 
 ################################################
@@ -129,16 +128,26 @@ resource "postgresql_grant" "write_public_terracottads" {
   schema = "public"
   object_type = "table"
   objects = ["datasets"]
-  privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "REFERENCES", "TRIGGER"]
+  privileges = [
+    "DELETE",
+    "INSERT",
+    "REFERENCES",
+    "SELECT",
+    "TRIGGER",
+    "UPDATE",
+  ]
 }
 
 ### Access for the github action to deploy terraform
+
+# tflint-ignore: terraform_naming_convention
 resource "google_project_iam_member" "access-terraform-state" {
   project = google_project.project.project_id
   role = "roles/secretmanager.secretAccessor"
   member = "serviceAccount:${var.service_account_email}"
 }
 
+# tflint-ignore: terraform_naming_convention
 resource "google_project_iam_member" "view-secrets" {
   project = google_project.project.project_id
   role = "roles/secretmanager.viewer"

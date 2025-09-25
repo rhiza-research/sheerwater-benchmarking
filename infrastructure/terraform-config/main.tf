@@ -80,10 +80,6 @@ provider "grafana" {
   auth = local.grafana_auth
 }
 
-output "grafana_url" {
-  value = local.grafana_url
-}
-
 # Gcloud secrets for postgres read user
 data "google_secret_manager_secret_version" "postgres_read_password" {
   secret = "postgres-read-password"

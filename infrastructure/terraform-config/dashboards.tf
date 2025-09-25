@@ -105,6 +105,6 @@ resource "grafana_dashboard" "dashboards" {
 
   depends_on = [
     grafana_data_source.postgres,
-    grafana_folder.folders
+    grafana_folder.folders,
   ]
 }

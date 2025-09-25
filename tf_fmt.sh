@@ -16,27 +16,51 @@ for file in $files; do
   rm $file.bak;
 done
 
-# run tflint with our custom ruleset to fix or report any linting errors
-tflint --fix --recursive
-
 # validate specific terraform projects
 tf_projects=(
   "infrastructure/terraform-config"
   "infrastructure/terraform-database"
 )
 
+tflint_config=$(realpath ".tflint.hcl")
+
 for project in "${tf_projects[@]}"; do
   (
-    cd "$project" 
+    cd "$project"
+    
+    # run tflint with our custom ruleset to fix or report any linting errors
+    tflint --fix --recursive --config=$tflint_config
 
-    # check if the project has been initialized
+    echo "validating $project"
     if [ ! -d ".terraform" ]; then
-      # initialize the project without a backend (no state) just for validation
+      # initialize the project
       echo "initializing $module"
-      terraform init -backend=false
+      terraform init -upgrade -backend=false
     fi
-
-    echo "validating $project" 
     terraform validate
   )
 done
+
+# if modules exist, validate them
+if [ -d "terraform/modules" ]; then
+
+  # validate modules
+  for module in $(ls terraform/modules); do
+    (
+      cd "terraform/modules/$module" 
+      # check if the module has been initialized
+      if [ ! -d ".terraform" ]; then
+        # initialize the module without a backend (no state) just for validation
+        echo "initializing $module"
+        terraform init -upgrade -backend=false
+      fi
+      
+      # run tflint with our custom ruleset to fix or report any linting errors
+      tflint --fix --recursive --config=$tflint_config
+
+      # validate the module
+      echo "validating $module"
+      terraform validate
+    )
+  done
+fi
