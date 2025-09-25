@@ -25,10 +25,10 @@ locals {
   # Parse folder information from directory names
   folders = {
     for dir in local.folder_dirs : dir => {
-      uid   = substr(sha256(dir), 0, 14)
-      slug  = dir
+      uid = substr(sha256(dir), 0, 14)
+      slug = dir
       title = title(dir)
-      path  = "${local.dashboards_base_path}/${dir}"
+      path = "${local.dashboards_base_path}/${dir}"
     }
   }
 
@@ -43,10 +43,10 @@ locals {
     for folder_dir, folder_info in local.folders : {
       for file in fileset(folder_info.path, "*.json") :
       "${folder_dir}/${file}" => {
-        file       = file
+        file = file
         folder_uid = folder_info.uid
         folder_dir = folder_dir
-        full_path  = "${folder_info.path}/${file}"
+        full_path = "${folder_info.path}/${file}"
       }
     }
   ]...)
@@ -57,9 +57,9 @@ locals {
     {
       for file in local.root_dashboard_files :
       jsondecode(file("${local.dashboards_base_path}/${file}")).uid => {
-        path       = "${local.dashboards_base_path}/${file}"
+        path = "${local.dashboards_base_path}/${file}"
         folder_uid = null
-        json       = jsondecode(file("${local.dashboards_base_path}/${file}"))
+        json = jsondecode(file("${local.dashboards_base_path}/${file}"))
       }
       if can(jsondecode(file("${local.dashboards_base_path}/${file}")).uid)
     },
@@ -67,9 +67,9 @@ locals {
     {
       for key, info in local.folder_dashboard_files :
       jsondecode(file(info.full_path)).uid => {
-        path       = info.full_path
+        path = info.full_path
         folder_uid = info.folder_uid
-        json       = jsondecode(file(info.full_path))
+        json = jsondecode(file(info.full_path))
       }
       if can(jsondecode(file(info.full_path)).uid)
     }
@@ -80,7 +80,7 @@ locals {
 resource "grafana_folder" "folders" {
   for_each = local.folders
 
-  uid   = each.value.uid
+  uid = each.value.uid
   title = each.value.title
 
   org_id = grafana_organization.org.id
@@ -101,7 +101,7 @@ resource "grafana_dashboard" "dashboards" {
   message = "Modified by terraform from https://github.com/rhiza-research/${local.repo_name}/pull/${local.pr_number}"
 
   overwrite = true
-  org_id    = grafana_organization.org.id
+  org_id = grafana_organization.org.id
 
   depends_on = [
     grafana_data_source.postgres,

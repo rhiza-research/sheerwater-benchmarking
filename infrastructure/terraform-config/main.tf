@@ -70,14 +70,6 @@ locals {
   # Postgres connection URL - different for prod vs ephemeral - ephemeral using a different namespace so use the full address
   postgres_url = terraform.workspace == "default" ? "postgres:5432" : "postgres.shared.rhizaresearch.org:5432"
 
-  # Collect dashboards and key them by UID so filename changes don't disturb state
-  dashboard_files = fileset("${path.module}/../../dashboards/build", "*.json")
-  dashboards_parsed = { for f in local.dashboard_files : f => jsondecode(file("${path.module}/../../dashboards/build/${f}")) }
-  dashboards_by_uid = {
-    for f, d in local.dashboards_parsed :
-    d.uid => "${path.module}/../../dashboards/build/${f}"
-    if try(d.uid, "") != ""
-  }
   home_dashboard_uid = "ee4mze492j0n4d"
 }
 provider "grafana" {
@@ -94,7 +86,7 @@ output "grafana_url" {
 
 # Gcloud secrets for postgres read user
 data "google_secret_manager_secret_version" "postgres_read_password" {
-  secret = "postgres-read-password" 
+  secret = "postgres-read-password"
 }
 
 resource "grafana_organization" "org" {

@@ -4,7 +4,7 @@
 # then apply tflint to fix or report any linting errors
 
 # files to format/lint
-files=$(find . -type f -name "*.tf")
+files=$(find . -type f -name "*.tf" -not -path "*/.terraform/*")
 
 for file in $files; do
   # format the file with the standard terraform fmt command
@@ -21,11 +21,22 @@ tflint --fix --recursive
 
 # validate specific terraform projects
 tf_projects=(
-  "infrastructure/terraform"
-  "infrastructure/terraform-grafana-config"
-  "infrastructure/terraform-database-config"
+  "infrastructure/terraform-config"
+  "infrastructure/terraform-database"
 )
 
 for project in "${tf_projects[@]}"; do
-  (cd "$project" && echo "validating $project" && terraform validate)
+  (
+    cd "$project" 
+
+    # check if the project has been initialized
+    if [ ! -d ".terraform" ]; then
+      # initialize the project without a backend (no state) just for validation
+      echo "initializing $module"
+      terraform init -backend=false
+    fi
+
+    echo "validating $project" 
+    terraform validate
+  )
 done

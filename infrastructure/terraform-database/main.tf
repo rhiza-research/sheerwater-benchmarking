@@ -1,4 +1,5 @@
 terraform {
+  required_version = ">= 1.5.7"
   required_providers {
     null = {
       source = "hashicorp/null"
@@ -23,9 +24,9 @@ terraform {
 }
 
 resource "google_project" "project" {
-  name       = "sheerwater"
+  name = "sheerwater"
   project_id = "sheerwater"
-  org_id     = "636990752070" # Rhiza org id
+  org_id = "636990752070" # Rhiza org id
   billing_account = "010A80-225887-239CE0"
   lifecycle {
     prevent_destroy = true
@@ -41,9 +42,9 @@ resource "google_project" "project" {
 ################################################
 
 module "random_password_postgres_read" {
-   source = "git@github.com:rhiza-research/infrastructure.git//terraform/modules/random-gsm-secret?ref=argocd"
-   random_password_secret_name = "postgres-read-password"
-   project = google_project.project.project_id
+  source = "git@github.com:rhiza-research/infrastructure.git//terraform/modules/random-gsm-secret?ref=argocd"
+  random_password_secret_name = "postgres-read-password"
+  project = google_project.project.project_id
 }
 
 resource "postgresql_role" "read" {
@@ -57,9 +58,9 @@ resource "postgresql_role" "read" {
 ################################################
 
 module "random_password_postgres_write" {
-   source = "git@github.com:rhiza-research/infrastructure.git//terraform/modules/random-gsm-secret?ref=argocd"
-   random_password_secret_name = "postgres-write-password"
-   project = google_project.project.project_id
+  source = "git@github.com:rhiza-research/infrastructure.git//terraform/modules/random-gsm-secret?ref=argocd"
+  random_password_secret_name = "postgres-write-password"
+  project = google_project.project.project_id
 }
 
 resource "postgresql_role" "write" {
@@ -134,12 +135,12 @@ resource "postgresql_grant" "write_public_terracottads" {
 ### Access for the github action to deploy terraform
 resource "google_project_iam_member" "access-terraform-state" {
   project = google_project.project.project_id
-  role    = "roles/secretmanager.secretAccessor"
+  role = "roles/secretmanager.secretAccessor"
   member = "serviceAccount:${var.service_account_email}"
 }
 
 resource "google_project_iam_member" "view-secrets" {
   project = google_project.project.project_id
-  role    = "roles/secretmanager.viewer"
+  role = "roles/secretmanager.viewer"
   member = "serviceAccount:${var.service_account_email}"
 }
