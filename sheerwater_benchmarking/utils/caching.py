@@ -524,7 +524,7 @@ def read_from_postgres(table_name, hash_table_name=True):
 
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on the
-                           tailnet and can see sheerwater-benchmarking-postgres.""")
+                           tailnet and can see postgres.shared.rhizaresearch.org.""")
 
 
 def check_exists_postgres(table_name, hash_table_name=True):
@@ -547,7 +547,7 @@ def check_exists_postgres(table_name, hash_table_name=True):
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on
-                           the tailnet and can see sheerwater-benchmarking-postgres.""")
+                           the tailnet and can see postgres.shared.rhizaresearch.org.""")
 
 
 def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_keys=None, hash_table_name=True):
@@ -660,7 +660,7 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
 
         except sqlalchemy.exc.InterfaceError:
             raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
-                               and can see sheerwater-benchmarking-postgres.""")
+                               and can see postgres.shared.rhizaresearch.org.""")
 
 
 def write_to_terracotta(cache_key, ds):
@@ -721,7 +721,7 @@ def write_to_terracotta(cache_key, ds):
     # Register with terracotta
     tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
     if not hasattr(write_to_terracotta, 'driver'):
-        driver = tc.get_driver("postgresql://{POSTGRES_IP}:5432/terracotta")
+        driver = tc.get_driver(f"postgresql://{POSTGRES_IP}:5432/terracotta")
         write_to_terracotta.driver = driver
     else:
         driver = write_to_terracotta.driver

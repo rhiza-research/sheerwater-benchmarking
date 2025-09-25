@@ -7,7 +7,7 @@ It is used to create/configure:
 - postgres grants
 - postgres default privileges
 
-This module is imported and executed by the (private) `rhiza-research/infrastructure.git//infrastructure/terraform/30-database-config` module. 
+This module is imported and executed by the (private) `rhiza-research/infrastructure.git//infrastructure/terraform/modules/rhiza-shared/database_config.tf`. 
 
 This module is executed in the `default` terraform workspace.
 
