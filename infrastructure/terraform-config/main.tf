@@ -35,6 +35,11 @@ terraform {
       source = "hashicorp/external"
       version = "~> 2.0"
     }
+
+    local = {
+      source = "hashicorp/local"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -136,8 +141,8 @@ resource "grafana_data_source" "postgres" {
 }
 
 resource "local_file" "datasource_config" {
-  content  = jsonencode({
-    "${grafana_data_source.postgres.type}" : "${grafana_data_source.postgres.uid}"
+  content = jsonencode({
+    (grafana_data_source.postgres.type) : grafana_data_source.postgres.uid
   })
   filename = "${path.module}/../../dashboards/datasource_config.json"
 }
