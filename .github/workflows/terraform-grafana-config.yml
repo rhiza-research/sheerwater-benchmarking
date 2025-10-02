@@ -1,0 +1,77 @@
+name: Terraform apply (grafana-config per PR)
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+concurrency:
+  group: tf-grafana-config-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_WORKSPACE: grafana-pr-${{ github.event.pull_request.number }}
+  EPHEMERAL_GRAFANA_URL: https://dev.shared.rhizaresearch.org/${{ github.event.repository.name }}/${{ github.event.pull_request.number }}
+
+jobs:
+  apply:
+    if: contains(github.event.pull_request.labels.*.name, 'PR-env')
+    name: Apply terraform for PR ${{ github.event.pull_request.number }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: 'write'
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./infrastructure/terraform-config
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: "projects/730596460290/locations/global/workloadIdentityPools/rhiza-github/providers/rhiza-github"
+          service_account: "rhiza-github-action@rhiza-shared.iam.gserviceaccount.com"
+          export_environment_variables: true
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Init backend only
+        env:
+          TF_WORKSPACE: default
+        run: terraform init -input=false
+
+      - name: Select or create workspace
+        run: terraform workspace new $TF_WORKSPACE || true
+
+      - name: Terraform Init with workspace
+        run: terraform init -input=false
+
+      - name: Wait for Ephemeral Grafana
+        run: |
+          timeout 10m ./wait-for-grafana.sh $EPHEMERAL_GRAFANA_URL
+          
+      - name: Terraform Import
+        run: ./import.sh || true
+
+      - name: Terraform Apply
+        run: terraform apply -input=false -auto-approve
+
+      - name: Create or Update comment
+        uses: mikedloss/create-update-comment@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          unique-identifier: ${{ github.event.repository.name }}-${{ github.event.pull_request.number }}
+          message: |
+            Ephemeral grafana up and running at <a href="${{ env.EPHEMERAL_GRAFANA_URL }}" target="_blank">${{ env.EPHEMERAL_GRAFANA_URL }}</a>
+
+

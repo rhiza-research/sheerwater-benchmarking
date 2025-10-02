@@ -1,0 +1,113 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 15,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "default": true,
+        "type": "grafana-postgresql-datasource",
+        "uid": "bdz3m3xs99p1cf"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 19,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "SVGBaseFix": true,
+        "add100Percentage": true,
+        "calcsMutation": "none",
+        "centerAlignContent": true,
+        "codeData": "{\n  \"text\": \"\"\n}",
+        "css": "div {\n    font-family: 'Karla', Helvetica, Arial, sans-serif;\n}\n\n.container {\n    text-align: center;\n    width: 100%;\n    margin: 40px auto;\n    padding-bottom: 20px;\n}\n\n.title {\n    border-radius: 25px;\n    width: 70%;\n    margin: 20px auto;\n    padding: 15px 20px;\n    font-size: 28px;\n    font-weight: 700; /* Bold weight for title */\n    color: #323232; /* Darker for contrast */\n    background-color: transparent; /* No box */\n    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); /* Subtle text shadow */\n}\n\n.info {\n    font-size: 16px;\n    font-weight: 400; /* Regular weight for readability */\n    color: #4a4a4a; /* Softer contrast */\n    margin: 10px auto 30px auto; /* Space below title and above the next section */\n    line-height: 1.6; /* Improved readability */\n    max-width: 80%; /* Limit paragraph width for better legibility */\n}\n\n.fixed {\n    width: 220px;\n    height: 200px; /* Ensure consistent height */\n    display: inline-block;\n    margin: 30px;\n    text-align: center; /* Center-align contents */\n}\n\n.fixed .label {\n    font-size: 18px;\n    font-weight: 600; /* Slightly bold for emphasis */\n    color: #585858;\n    margin: 0 0 10px 0; /* Add space between label and image */\n}\n\n.met-table,\n.met-map,\n.rain-graph,\n.spw-plot,\n.coming-soon {\n    border-radius: 20px;\n    width: 220px;\n    height: 200px; /* Ensure consistent height for all containers */\n    margin: 0 auto;\n    border: 2px solid rgba(200, 200, 200, 0.7); /* Use a semi-transparent border */\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    background-color: #f1f1f1; /* Clean white background */\n    text-align: center;\n    position: relative; /* To manage the positioning of the pseudo-element */\n}\n\n.coming-soon::before {\n    content: \"Coming Soon\";\n    font-size: 18px; /* Larger text */\n    font-weight: 600; /* Bold for readability */\n    color: #888; /* Neutral color for text */\n    text-transform: uppercase; /* Make text uppercase */\n    letter-spacing: 1.2px; /* Improve readability */\n    position: absolute;\n    top: 50%;\n    left: 50%;\n    transform: translate(-50%, -50%); /* Perfectly center the text */\n}\n\n.met-table {\n    background-image: url(\"https://storage.googleapis.com/sheerwater-public/grafana_table_icon.png\");\n    background-size: cover;\n    background-position: center;\n}\n\n.met-map {\n    background-image: url(\"https://storage.googleapis.com/sheerwater-public/grafana_map_icon.png\");\n    background-size: cover;\n    background-position: center;\n}\n\n.rain-graph {\n    background-image: url(\"https://storage.googleapis.com/sheerwater-public/rainfall-graph.png\");\n    background-size: cover;\n    background-position: center;    \n}\n\n.spw-plot {\n    background-image: url(\"https://storage.googleapis.com/sheerwater-public/kenya-map.png\");\n    background-size: cover;\n    background-position: center;    \n}\n.met-table:hover,\n.met-map:hover,\n.rain-graph:hover,\n.spw-plot:hover,\n.coming-soon:hover {\n    transform: scale(1.05);\n    border-color: #aaa; /* Change border color on hover */\n}\n",
+        "dynamicData": false,
+        "dynamicFieldDisplayValues": false,
+        "dynamicHtmlGraphics": false,
+        "dynamicProps": false,
+        "html": "<div class=\"container\">\n    <div class=\"title\">The SheerWater Benchmark: Preliminary Results</div>\n    <p class=\"info\">Estimating the size of the ground truth and forecasting problems, regionally and task-specifically.</p>\n    \n    <!-- <a href=\"d/eeu7f55ajbvnkb/aim-for-scale-benchmarking\">    -->\n    <!-- <div class=\"fixed\"> -->\n        <!-- <p class=\"label\">Aim for Scale<br>Benchmark Tables</p> -->\n        <!-- <div class=\"coming-soon\"></div> -->\n        <!-- <div class=\"met-table\"></div> -->\n    <!-- </div></a>  -->\n\n    <!-- <div class=\"fixed\">\n        <p class=\"label\">Comparing ERA5<br>to Local Data</p>\n        <div class=\"coming-soon\"></div>\n    </div> -->\n\n    <a href=\"d/ce6tgp4j3d9fkf/reanalysis-metrics\">   \n    <div class=\"fixed\">\n        <p class=\"label\">Comparing Stations to<br>\"Ground Truth\" Data</p>\n        <div class=\"rain-graph\"></div>\n    </div></a>     \n\n    <a href=\"d/ee2jzeymn1o8wf/summary-results-tables?orgId=1\">   \n    <div class=\"fixed\">\n        <p class=\"label\">Forecast<br>Evaluation Tables</p>\n        <div class=\"met-table\"></div>\n    </div></a> \n    \n    <a href=\"d/ae39q2k3jv668d/metrics-maps\">\n    <div class=\"fixed\">\n        <p class=\"label\">Forecast<br>Evaluation Maps</p>\n        <div class=\"met-map\"></div>\n    </div></a>\n\n    <a href=\"d/dea0hyle4eby8c/suitable-planting-window\">\n    <div class=\"fixed\">\n        <p class=\"label\">Suitable Planting<br>Window Evaluation</p>\n        <div class=\"spw-plot\"></div>\n    </div></a>    \n    \n    <!-- <div class=\"fixed\">\n        <p class=\"label\">Task Evaluation</p>\n        <div class=\"coming-soon\"></div>\n    </div> -->\n</div>\n",
+        "onInit": "\n",
+        "onInitOnResize": false,
+        "onRender": "",
+        "overflow": "visible",
+        "panelupdateOnMount": false,
+        "reduceOptions": {
+          "calcs": []
+        },
+        "renderOnMount": false,
+        "rootCSS": "",
+        "useGrafanaScrollbar": true
+      },
+      "pluginVersion": "2.1.1",
+      "targets": [
+        {
+          "refId": "A"
+        }
+      ],
+      "title": "",
+      "transparent": true,
+      "type": "gapit-htmlgraphics-panel"
+    }
+  ],
+  "preload": false,
+  "refresh": "",
+  "schemaVersion": 40,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {
+    "hidden": true
+  },
+  "timezone": "utc",
+  "title": "Home",
+  "uid": "ee4mze492j0n4d",
+  "version": 34,
+  "weekStart": ""
+}

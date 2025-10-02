@@ -721,7 +721,7 @@ def write_to_terracotta(cache_key, ds):
     # Register with terracotta
     tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
     if not hasattr(write_to_terracotta, 'driver'):
-        driver = tc.get_driver("postgresql://{POSTGRES_IP}:5432/terracotta")
+        driver = tc.get_driver(f"postgresql://{POSTGRES_IP}:5432/terracotta")
         write_to_terracotta.driver = driver
     else:
         driver = write_to_terracotta.driver

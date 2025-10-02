@@ -1,7 +1,0 @@
-apiVersion: networking.gke.io/v1
-kind: ManagedCertificate
-metadata:
-  name: {{ include "sheerwater-benchmarking.fullname" . }}-terracotta
-spec:
-  domains:
-    - {{ .Values.terracotta.domain_name }}

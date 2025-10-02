@@ -1,0 +1,14 @@
+#!/bin/bash
+
+workspace=`terraform workspace show`
+
+if [ "$workspace" == "default" ]; then
+    # this is production, so the benchmarking org is the main org (id 1)
+    #terraform import grafana_organization.benchmarking 1
+    #terraform import grafana_organization_preferences.light_preference_benchmarking 1
+    true
+else
+    # this is ephemeral, so the benchmarking org is the main org (id 1)
+    terraform import grafana_organization.org 1
+    terraform import grafana_organization_preferences.preferences 1
+fi
