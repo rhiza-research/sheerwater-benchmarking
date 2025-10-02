@@ -18,8 +18,8 @@ done
 
 # validate specific terraform projects
 tf_projects=(
-  "infrastructure/terraform-config"
-  "infrastructure/terraform-database"
+  "terraform-config"
+  "terraform-database"
 )
 
 tflint_config=$(realpath ".tflint.hcl")
