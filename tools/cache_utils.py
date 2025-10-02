@@ -12,8 +12,6 @@ from sheerwater_benchmarking.utils import dask_remote
 from sheerwater_benchmarking.utils.secrets import postgres_write_password
 from sheerwater_benchmarking.utils.caching import read_from_postgres
 
-POSTGRES_IP = "postgres.shared.rhizaresearch.org"
-
 
 @dask_remote
 def cache_list_null(name, glob, null_frac=0.0):
@@ -88,7 +86,7 @@ def cache_list(backend, name, glob):
             return fs.glob(full_glob)
     elif backend == 'terracotta':
         tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
-        driver = tc.get_driver(f"postgresql://{POSTGRES_IP}:5432/terracotta")
+        driver = tc.get_driver("postgresql://sheerwater-benchmarking-postgres:5432/terracotta")
 
         ds = driver.get_datasets()
 
@@ -160,7 +158,7 @@ def _gui_cache_delete(to_delete, backend):
         return len(to_delete)
     elif backend == 'terracotta':
         tc.update_settings(SQL_USER="write", SQL_PASSWORD=postgres_write_password())
-        driver = tc.get_driver(f"postgresql://{POSTGRES_IP}:5432/terracotta")
+        driver = tc.get_driver("postgresql://sheerwater-benchmarking-postgres:5432/terracotta")
 
         click.echo(to_delete)
 
@@ -184,7 +182,7 @@ def _gui_cache_delete(to_delete, backend):
         # Delete the cache keys
         pgwrite_pass = postgres_write_password()
         engine = sqlalchemy.create_engine(
-            f'postgresql://write:{pgwrite_pass}@{POSTGRES_IP}:5432/postgres')
+            f'postgresql://write:{pgwrite_pass}@sheerwater-benchmarking-postgres:5432/postgres')
 
         click.echo(to_delete)
         ls = len(keys_to_delete)
@@ -229,6 +227,8 @@ def cache_verify(backend, name, glob):
 
 def rename_postgres(old_name, new_name):
     pgwrite_pass = postgres_write_password()
+
+    POSTGRES_IP = "34.59.163.82"
 
     uri = f'postgresql://write:{pgwrite_pass}@{POSTGRES_IP}:5432/postgres'
     engine = sqlalchemy.create_engine(uri)

@@ -48,7 +48,7 @@ CACHE_STORAGE_OPTIONS = {
     'token': 'google_default',
     'cache_timeout': 0
 }
-POSTGRES_IP = "postgres.shared.rhizaresearch.org"
+POSTGRES_IP = "postgres.sheerwater.rhizaresearch.org"
 # Local dir for all caches, except for postgres and terracotta
 LOCAL_CACHE_ROOT_DIR = os.path.expanduser("~/.cache/sheerwater/caches/")
 LOCAL_CACHE_STORAGE_OPTIONS = {}
@@ -524,7 +524,7 @@ def read_from_postgres(table_name, hash_table_name=True):
 
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on the
-                           tailnet and can see postgres.shared.rhizaresearch.org.""")
+                           tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
 def check_exists_postgres(table_name, hash_table_name=True):
@@ -547,7 +547,7 @@ def check_exists_postgres(table_name, hash_table_name=True):
         return insp.has_table(table_name)
     except sqlalchemy.exc.InterfaceError:
         raise RuntimeError("""Error connecting to database. Make sure you are on
-                           the tailnet and can see postgres.shared.rhizaresearch.org.""")
+                           the tailnet and can see sheerwater-benchmarking-postgres.""")
 
 
 def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_keys=None, hash_table_name=True):
@@ -660,7 +660,7 @@ def write_to_postgres(df, table_name, overwrite=False, upsert=False, primary_key
 
         except sqlalchemy.exc.InterfaceError:
             raise RuntimeError("""Error connecting to database. Make sure you are on the tailnet
-                               and can see postgres.shared.rhizaresearch.org.""")
+                               and can see sheerwater-benchmarking-postgres.""")
 
 
 def write_to_terracotta(cache_key, ds):
