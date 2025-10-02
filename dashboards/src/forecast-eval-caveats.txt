@@ -1,0 +1,21 @@
+ - Models are evaluated from 2016-01-01 through 2022-12-31
+ - All metrics are computed with the ECMWF land-sea mask that includes any cell with non-zero land coverage. 
+ - Spatial averages use latitude-based weighting.
+
+ - Conservative regridding is used for both upscaling and downscaling forecasts. 
+ 
+ - ECMWF and FuXi S2S forecasts are native 1.5x1.5. 
+ 
+ - Salient, Graphcast, and Gencast are native 0.25x0.25.
+
+ - Salient is conservatively regridded from their native 0.125 shifted grid to our round 0.25/1.5 grid. 
+
+ - All metrics are computed deterministically except for CRPS
+
+ - Deterministic forecasts are derived from ensemble forecasts (ECMWF, FuXi, Gencast) through taking the average of the ensemble members
+
+ - Deterministic forecasts are derived from quantile forecasts (Salient) by taking the median quantile.
+
+ - The source for Gencast temperature forecasts was corrupted so they have been excluded.
+
+ - Metrics that cannot be globally computed and then reduced (such as ACC, POD, FAR, ETC) are not available with time groupings.
